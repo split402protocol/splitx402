@@ -29,7 +29,8 @@ protocol package and deterministic test vectors from `splitx402/ffff`. The curre
 slice begins architecture Milestone 1 by adding the `@split402/x402-extension`
 package used to advertise signed offers, validate attribution, and return signed
 receipts around x402 settlement, the `@split402/express` request-context adapter,
-and the first `apps/demo-merchant` runtime.
+the first `apps/demo-merchant` runtime, and the `@split402/agent-sdk` buyer-side
+client for offer inspection, referral claims, and receipt verification.
 
 No production contracts or mainnet payment flows exist yet.
 
