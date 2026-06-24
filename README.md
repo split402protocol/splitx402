@@ -96,6 +96,7 @@ mainnet payment flows exist yet.
 | Route draft/sign/activate APIs | Started |
 | PostgreSQL route persistence | Started |
 | Outbox event persistence | Started |
+| Outbox claim/retry/dead-letter APIs | Started |
 | Live PostgreSQL migration/integration harness | Started |
 | Chain verification worker and payout engine | Not implemented |
 | `$SPLIT` bonding and atomic split settlement | Later research |
@@ -242,7 +243,8 @@ PostgreSQL, keyed by route id and canonical referral-claim hash so exact duplica
 activation is idempotent while conflicting claims are rejected. Accepted receipts
 also create pending outbox events in the same PostgreSQL transaction, giving future
 workers a durable feed for chain verification, payout selection, dashboards, and
-webhooks.
+webhooks. The PostgreSQL outbox store can claim ready events, mark them delivered,
+or reschedule/dead-letter failures without creating duplicate worker work.
 
 ## MVP Rules
 

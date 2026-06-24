@@ -149,6 +149,8 @@ Current slice:
   claim, and duplicate-claim persistence;
 - PostgreSQL outbox event persistence committed atomically with accepted receipts
   and accounting rows;
+- PostgreSQL outbox claiming, retry scheduling, delivery marking, and dead-letter
+  state transitions;
 - packaged PostgreSQL migration runner with checksum tracking and an opt-in live
   integration harness;
 - receipt verifier key resolution through registered merchant service keys.

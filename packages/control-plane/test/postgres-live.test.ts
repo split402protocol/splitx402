@@ -17,6 +17,7 @@ import {
   loadControlPlaneMigrations,
   PostgresCampaignRegistry,
   PostgresMerchantRegistry,
+  PostgresOutboxEventStore,
   PostgresReceiptIngestionStore,
   PostgresRouteRegistry,
   PostgresWalletAuthStore,
@@ -106,6 +107,7 @@ describeLive("live PostgreSQL control-plane persistence", () => {
     const routeRegistry = new PostgresRouteRegistry(pool, {
       now: () => new Date("2026-06-24T00:00:00Z")
     });
+    const outboxStore = new PostgresOutboxEventStore(pool);
     const authenticator = createAuthenticator(pool);
     const ingestor = new ReceiptIngestor(new PostgresReceiptIngestionStore(pool), {
       resolveMerchantPublicKey: createMerchantReceiptKeyResolver(merchantRegistry),
@@ -187,6 +189,15 @@ describeLive("live PostgreSQL control-plane persistence", () => {
       receipt: bundle.artifacts.receipt,
       source: "buyer"
     });
+    const claimedOutboxEvent = await outboxStore.claimNext({
+      now: "2026-06-24T00:03:00Z"
+    });
+    if (claimedOutboxEvent === undefined) {
+      throw new Error("expected a ready outbox event");
+    }
+    const deliveredOutboxEvent = await outboxStore.markDelivered({
+      eventId: claimedOutboxEvent.id
+    });
     const counts = await readTableCounts(pool, [
       "merchants",
       "merchant_origins",
@@ -214,6 +225,9 @@ describeLive("live PostgreSQL control-plane persistence", () => {
     expect(ingestion.accrual?.amountAtomic).toBe("2000");
     expect(ingestion.ledgerTransaction?.entries).toHaveLength(3);
     expect(duplicate.status).toBe("duplicate");
+    expect(claimedOutboxEvent.status).toBe("processing");
+    expect(claimedOutboxEvent.attempts).toBe(1);
+    expect(deliveredOutboxEvent?.status).toBe("delivered");
     expect(counts).toEqual({
       merchants: 1,
       merchant_origins: 1,
