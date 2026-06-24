@@ -7,6 +7,8 @@ import {
 import express from "express";
 import type { NextFunction, Request, Response, Router } from "express";
 
+import { isReceiptIngestionPersistenceConflict } from "./errors.js";
+
 export type ReceiptIngestSource = "buyer" | "merchant" | "relay" | "unknown";
 export type ReceiptVerificationState =
   | "signature_verified"
@@ -216,7 +218,25 @@ export class ReceiptIngestor {
       receiptHash,
       input.source ?? "unknown"
     );
-    await this.store.save(snapshot);
+    try {
+      await this.store.save(snapshot);
+    } catch (error) {
+      if (!isReceiptIngestionPersistenceConflict(error)) {
+        throw error;
+      }
+
+      const duplicateAfterConflict = await this.store.getByReceiptHash(receiptHash);
+      if (duplicateAfterConflict !== undefined) {
+        return { status: "duplicate", statusCode: 200, ...duplicateAfterConflict };
+      }
+
+      const writeConflict = await this.findConflict(receipt, receiptHash);
+      if (writeConflict !== undefined) {
+        return writeConflict;
+      }
+
+      throw error;
+    }
     return { status: "created", statusCode: 201, ...snapshot };
   }
 
@@ -518,3 +538,6 @@ function readHttpErrorStatus(error: unknown): number | undefined {
     ? status
     : undefined;
 }
+
+export * from "./errors.js";
+export * from "./postgres.js";

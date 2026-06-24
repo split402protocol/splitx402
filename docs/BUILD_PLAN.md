@@ -175,8 +175,12 @@ Current slice:
 - verify submitted Split402 receipts with merchant service public keys;
 - expose a control-plane app and `POST /v1/receipts` route for public receipt
   submission;
-- define the receipt ingestion store interface needed by the future PostgreSQL
-  adapter;
+- define the receipt ingestion store interface for durable receipt persistence;
+- add the PostgreSQL receipt ingestion store;
+- persist receipt, accrual, ledger transaction, and ledger entry rows in one
+  transaction;
+- map database uniqueness conflicts back into the existing duplicate/conflict
+  ingestion response path;
 - persist the receipt ingestion shape behind an in-memory store for the first
   behavior tests;
 - make identical receipt submission idempotent;
