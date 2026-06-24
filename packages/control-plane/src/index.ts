@@ -82,6 +82,7 @@ export interface CommissionAccrual {
   asset: string;
   amountAtomic: string;
   status: AccrualStatus;
+  availableAt?: string;
   createdAt: string;
 }
 
@@ -145,6 +146,20 @@ export interface OutboxEventStore {
   markFailed(
     input: MarkOutboxEventFailedInput
   ): Promise<OutboxEventRecord | undefined> | OutboxEventRecord | undefined;
+}
+
+export interface MarkReceiptChainVerifiedInput {
+  receiptId: string;
+  verifiedAt: string;
+}
+
+export interface ReceiptChainVerificationStore {
+  getReceiptForChainVerification(
+    receiptId: string
+  ): Promise<ReceiptIngestionSnapshot | undefined> | ReceiptIngestionSnapshot | undefined;
+  markReceiptChainVerified(
+    input: MarkReceiptChainVerifiedInput
+  ): Promise<ReceiptIngestionSnapshot | undefined> | ReceiptIngestionSnapshot | undefined;
 }
 
 export interface ReceiptIngestionSnapshot {
@@ -1525,6 +1540,7 @@ export * from "./merchants.js";
 export * from "./migrations.js";
 export * from "./postgres.js";
 export * from "./routes.js";
+export * from "./workers.js";
 
 function isMerchantAuthRequired(
   options: Pick<ControlPlaneAppOptions, "auth">

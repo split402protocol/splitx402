@@ -257,6 +257,35 @@ describe("PostgresReceiptIngestionStore", () => {
       await outboxStore.claimNext({ now: "2026-06-24T00:10:00Z" })
     ).toBeUndefined();
   });
+
+  it("marks chain-verified receipts and accruals available", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const fakePool = new FakePostgresPool();
+    const store = new PostgresReceiptIngestionStore(fakePool);
+    const ingestor = new ReceiptIngestor(store, {
+      resolveMerchantPublicKey: () => bundle.keys.merchantPublicKey,
+      now: () => new Date("2026-06-24T00:02:00Z")
+    });
+    await ingestor.ingest({ receipt: bundle.artifacts.receipt, source: "merchant" });
+
+    const verified = await store.markReceiptChainVerified({
+      receiptId: bundle.artifacts.receipt.receiptId,
+      verifiedAt: "2026-06-24T00:04:00Z"
+    });
+    const replayed = await store.markReceiptChainVerified({
+      receiptId: bundle.artifacts.receipt.receiptId,
+      verifiedAt: "2026-06-24T00:05:00Z"
+    });
+
+    expect(verified?.receipt.verificationState).toBe("signature_verified");
+    expect(verified?.accrual).toEqual(
+      expect.objectContaining({
+        status: "available",
+        availableAt: "2026-06-24T00:04:00Z"
+      })
+    );
+    expect(replayed?.accrual?.availableAt).toBe("2026-06-24T00:04:00Z");
+  });
 });
 
 describe("PostgresMerchantRegistry", () => {
@@ -781,6 +810,14 @@ class FakePostgresClient implements PostgresTransactionClient {
         this.database.consumeWalletAuthChallenge(values) as unknown as Row[]
       );
     }
+    if (normalized.startsWith("update payment_receipts")) {
+      this.database.markReceiptChainVerified(values);
+      return result([]);
+    }
+    if (normalized.startsWith("update commission_accruals")) {
+      this.database.markAccrualChainVerified(values);
+      return result([]);
+    }
     if (
       normalized.startsWith("update outbox_events") &&
       normalized.includes("attempts = attempts + 1")
@@ -916,6 +953,7 @@ class FakePostgresDatabase {
       asset_mint: readString(values[7]),
       amount_atomic: readString(values[8]),
       status: readString(values[9]),
+      available_at: null,
       created_at: readString(values[10])
     });
   }
@@ -1049,6 +1087,29 @@ class FakePostgresDatabase {
       (row) => row.receipt_id === readString(receiptId)
     );
     return accrual === undefined ? [] : [accrual];
+  }
+
+  markReceiptChainVerified(values: readonly unknown[]): void {
+    const receipt = this.receipts.find((row) => row.id === readString(values[0]));
+    if (
+      receipt !== undefined &&
+      receipt.verification_state === "pending_chain_verification"
+    ) {
+      receipt.verification_state = "signature_verified";
+    }
+  }
+
+  markAccrualChainVerified(values: readonly unknown[]): void {
+    const accrual = this.accruals.find(
+      (row) => row.receipt_id === readString(values[0])
+    );
+    if (
+      accrual !== undefined &&
+      accrual.status === "pending_chain_verification"
+    ) {
+      accrual.status = "available";
+      accrual.available_at = readString(values[1]);
+    }
   }
 
   selectLedgerTransaction(accrualId: unknown): StoredLedgerTransactionRow[] {
@@ -1449,6 +1510,7 @@ type StoredAccrualRow = QueryResultRow & {
   asset_mint: string;
   amount_atomic: string;
   status: string;
+  available_at: string | null;
   created_at: string;
 };
 

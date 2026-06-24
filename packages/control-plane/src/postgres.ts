@@ -75,6 +75,8 @@ import type {
   ReceiptIngestSource,
   ReceiptIngestionSnapshot,
   ReceiptIngestionStore,
+  ReceiptChainVerificationStore,
+  MarkReceiptChainVerifiedInput,
   ReceiptRecord,
   ReceiptVerificationState
 } from "./index.js";
@@ -115,6 +117,7 @@ interface CommissionAccrualRow extends QueryResultRow {
   asset_mint: string;
   amount_atomic: string;
   status: string;
+  available_at: Date | string | null;
   created_at: Date | string;
 }
 
@@ -273,7 +276,8 @@ export interface PostgresOutboxEventStoreOptions {
 
 export type PostgresRouteRegistryOptions = InMemoryRouteRegistryOptions;
 
-export class PostgresReceiptIngestionStore implements ReceiptIngestionStore {
+export class PostgresReceiptIngestionStore
+  implements ReceiptIngestionStore, ReceiptChainVerificationStore {
   constructor(
     private readonly db: PostgresPool | PostgresQueryExecutor,
     private readonly options: PostgresReceiptIngestionStoreOptions = {}
@@ -301,6 +305,35 @@ export class PostgresReceiptIngestionStore implements ReceiptIngestionStore {
     signature: string
   ): Promise<ReceiptIngestionSnapshot | undefined> {
     return this.loadSnapshot("settlement_tx_signature = $1", [signature]);
+  }
+
+  getReceiptForChainVerification(
+    receiptId: string
+  ): Promise<ReceiptIngestionSnapshot | undefined> {
+    return this.getByReceiptId(receiptId);
+  }
+
+  async markReceiptChainVerified(
+    input: MarkReceiptChainVerifiedInput
+  ): Promise<ReceiptIngestionSnapshot | undefined> {
+    await this.withTransaction(async (client) => {
+      await client.query(
+        `update payment_receipts
+            set verification_state = 'signature_verified'
+          where id = $1
+            and verification_state = 'pending_chain_verification'`,
+        [input.receiptId]
+      );
+      await client.query(
+        `update commission_accruals
+            set status = 'available',
+                available_at = $2
+          where receipt_id = $1
+            and status = 'pending_chain_verification'`,
+        [input.receiptId, input.verifiedAt]
+      );
+    });
+    return this.getByReceiptId(input.receiptId);
   }
 
   async save(snapshot: ReceiptIngestionSnapshot): Promise<void> {
@@ -357,7 +390,8 @@ export class PostgresReceiptIngestionStore implements ReceiptIngestionStore {
   ): Promise<CommissionAccrual | undefined> {
     const accrualResult = await this.db.query<CommissionAccrualRow>(
       `select id, receipt_id, merchant_id, campaign_id, route_id, referrer_wallet,
-              payout_wallet, asset_mint, amount_atomic, status, created_at
+              payout_wallet, asset_mint, amount_atomic, status, available_at,
+              created_at
          from commission_accruals
         where receipt_id = $1
         limit 1`,
@@ -1515,6 +1549,7 @@ function mapAccrual(row: CommissionAccrualRow): CommissionAccrual {
     asset: row.asset_mint,
     amountAtomic: row.amount_atomic,
     status: readAccrualStatus(row.status),
+    ...(row.available_at === null ? {} : { availableAt: toIsoString(row.available_at) }),
     createdAt: toIsoString(row.created_at)
   };
 }

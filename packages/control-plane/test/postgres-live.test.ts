@@ -108,8 +108,9 @@ describeLive("live PostgreSQL control-plane persistence", () => {
       now: () => new Date("2026-06-24T00:00:00Z")
     });
     const outboxStore = new PostgresOutboxEventStore(pool);
+    const receiptStore = new PostgresReceiptIngestionStore(pool);
     const authenticator = createAuthenticator(pool);
-    const ingestor = new ReceiptIngestor(new PostgresReceiptIngestionStore(pool), {
+    const ingestor = new ReceiptIngestor(receiptStore, {
       resolveMerchantPublicKey: createMerchantReceiptKeyResolver(merchantRegistry),
       now: () => new Date("2026-06-24T00:02:00Z")
     });
@@ -195,6 +196,10 @@ describeLive("live PostgreSQL control-plane persistence", () => {
     if (claimedOutboxEvent === undefined) {
       throw new Error("expected a ready outbox event");
     }
+    const verifiedSnapshot = await receiptStore.markReceiptChainVerified({
+      receiptId: bundle.artifacts.receipt.receiptId,
+      verifiedAt: "2026-06-24T00:04:00Z"
+    });
     const deliveredOutboxEvent = await outboxStore.markDelivered({
       eventId: claimedOutboxEvent.id
     });
@@ -227,6 +232,9 @@ describeLive("live PostgreSQL control-plane persistence", () => {
     expect(duplicate.status).toBe("duplicate");
     expect(claimedOutboxEvent.status).toBe("processing");
     expect(claimedOutboxEvent.attempts).toBe(1);
+    expect(verifiedSnapshot?.receipt.verificationState).toBe("signature_verified");
+    expect(verifiedSnapshot?.accrual?.status).toBe("available");
+    expect(verifiedSnapshot?.accrual?.availableAt).toBe("2026-06-24T00:04:00Z");
     expect(deliveredOutboxEvent?.status).toBe("delivered");
     expect(counts).toEqual({
       merchants: 1,
