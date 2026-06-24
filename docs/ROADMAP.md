@@ -88,6 +88,8 @@ Current slice:
 
 ## Phase 4: Control Plane And Persistent Ingestion
 
+Status: started.
+
 Goal: implement architecture Milestone 2.
 
 Deliverables:
@@ -101,6 +103,19 @@ Deliverables:
 - chain verification worker;
 - accrual and zero-sum ledger;
 - outbox events.
+
+Current slice:
+
+- `@split402/control-plane` package;
+- public receipt ingestion domain that verifies merchant-signed receipts;
+- in-memory store for the first deterministic idempotency tests;
+- duplicate detection by receipt hash;
+- conflict detection by receipt id, payment id, and settlement transaction;
+- commission accrual creation only for credited attributed receipts;
+- zero-sum ledger transaction model for merchant commission liability, referrer
+  payable, and protocol fee payable;
+- initial PostgreSQL migration for receipts, accruals, ledger transactions, and
+  ledger entries.
 
 ## Phase 5: Production Merchant SDK
 

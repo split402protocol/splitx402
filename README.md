@@ -24,16 +24,16 @@ The MVP rule is:
 
 ## Status
 
-Phase 3 has started. Phase 2 implemented architecture Milestone 0 by importing the
-protocol package and deterministic test vectors from `splitx402/ffff`. The current
-slice begins architecture Milestone 1 by adding the `@split402/x402-extension`
-package used to advertise signed offers, validate attribution, and return signed
-receipts around x402 settlement, the `@split402/express` request-context adapter,
-the first `apps/demo-merchant` runtime, and the `@split402/agent-sdk` buyer-side
-client for offer inspection, referral claims, and receipt verification. The current
-slice also includes `apps/demo-agent`, the runnable Devnet setup, preflight, offer
-inspection, and paid-suite harness. An existing-token Devnet paid-suite proof is
-recorded in [`docs/proofs/phase3-paid-suite-2026-06-24.md`](docs/proofs/phase3-paid-suite-2026-06-24.md).
+Phase 4 has started. Phase 2 implemented architecture Milestone 0 by importing the
+protocol package and deterministic test vectors from `splitx402/ffff`. Phase 3
+implemented the x402 extension, Express adapter, demo merchant, agent SDK, demo
+agent, and Devnet paid-suite proof. The current Phase 4 slice adds the first
+`@split402/control-plane` receipt ingestion domain for signed receipt verification,
+idempotent accrual creation, duplicate/conflict handling, and a zero-sum ledger
+model, plus the first PostgreSQL receipt/accrual/ledger migration.
+
+An existing-token Devnet paid-suite proof is recorded in
+[`docs/proofs/phase3-paid-suite-2026-06-24.md`](docs/proofs/phase3-paid-suite-2026-06-24.md).
 
 No production contracts or mainnet payment flows exist yet.
 
@@ -45,6 +45,7 @@ No production contracts or mainnet payment flows exist yet.
 - [Phase 1 status](docs/PHASE_1.md)
 - [Phase 2 status](docs/PHASE_2.md)
 - [Phase 3 status](docs/PHASE_3.md)
+- [Phase 4 status](docs/PHASE_4.md)
 - [MVP build plan](docs/BUILD_PLAN.md)
 - [Architecture baseline decision](docs/decisions/0003-adopt-architecture-and-ffff-baseline.md)
 - [Roadmap](docs/ROADMAP.md)
