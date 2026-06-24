@@ -87,6 +87,7 @@ mainnet payment flows exist yet.
 | Campaign draft/version APIs | Started |
 | Campaign activation APIs | Started |
 | PostgreSQL campaign persistence | Started |
+| Live PostgreSQL migration/integration harness | Started |
 | Chain verification worker and payout engine | Not implemented |
 | `$SPLIT` bonding and atomic split settlement | Later research |
 
@@ -244,6 +245,13 @@ corepack pnpm test
 corepack pnpm build
 corepack pnpm vectors:check
 corepack pnpm audit --audit-level high
+```
+
+Run the optional live PostgreSQL harness against an empty test database:
+
+```powershell
+$env:SPLIT402_TEST_DATABASE_URL="postgresql://split402:split402@localhost:5432/split402_test"
+corepack pnpm test:postgres
 ```
 
 Run the demo merchant and agent flows:

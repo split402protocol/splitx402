@@ -202,6 +202,8 @@ Current slice:
   merchant service-key signature verification;
 - add the PostgreSQL campaign registry adapter and migration for durable campaign,
   immutable version, operation, and activation state;
+- add the packaged PostgreSQL migration runner and opt-in live integration harness
+  for real database validation;
 - resolve receipt verification keys through registered merchant service keys by
   `merchantId` and `kid`;
 - add the PostgreSQL merchant registry adapter for durable merchant, origin, and
