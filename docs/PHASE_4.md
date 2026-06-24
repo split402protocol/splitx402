@@ -48,6 +48,10 @@ Status: started.
   service-key signature.
 - Added campaign activation checks for active merchant status, verified merchant
   origin ownership, valid service-key window, and immutable version signatures.
+- Added `PostgresCampaignRegistry` for durable campaign, version, activation, and
+  operation persistence.
+- Added `0004_campaigns.sql` for campaign, campaign version, and campaign
+  operation tables.
 - Added merchant service-key resolution for receipt verification by `merchantId`,
   `kid`, purpose, and receipt issue time.
 - Added `0002_merchants_keys_origins.sql` for merchant, origin, and key tables.
@@ -79,6 +83,8 @@ Status: started.
 - Added campaign registry and HTTP tests for immutable version creation, terms
   hashes, signing bytes, owner-authenticated campaign mutations, and merchant
   signature activation.
+- Added PostgreSQL campaign registry tests for draft persistence, immutable
+  version persistence, operation rows, activation state, and conflict mapping.
 - Reworked the README with protocol diagrams, package graph, control-plane flow,
   endpoint overview, and usage examples.
 
@@ -95,7 +101,6 @@ a zero-sum ledger transaction.
 - Live PostgreSQL integration test harness.
 - Wallet-auth refresh token flow.
 - Production auth policy wiring for the deployable runtime.
-- PostgreSQL-backed campaign registry adapter.
 - Route draft, sign, and activate flow.
 - Deployable control-plane runtime wiring.
 - Chain verification worker.

@@ -12,6 +12,22 @@ import type {
   WalletAuthChallengeRecord,
   WalletAuthStore
 } from "./auth.js";
+import {
+  CampaignRegistryConflictError,
+  CampaignRegistryValidationError,
+  createCampaignVersionRecord,
+  verifyCampaignTermsSignature,
+  type ActivateCampaignVersionInput,
+  type CampaignOperation,
+  type CampaignProfile,
+  type CampaignRecord,
+  type CampaignRegistry,
+  type CampaignStatus,
+  type CampaignTerms,
+  type CampaignVersionRecord,
+  type CreateCampaignInput,
+  type CreateCampaignVersionInput
+} from "./campaigns.js";
 import { ReceiptIngestionPersistenceConflictError } from "./errors.js";
 import {
   MerchantRegistryConflictError,
@@ -156,9 +172,43 @@ interface WalletAuthSessionRow extends QueryResultRow {
   expires_at: Date | string;
 }
 
+interface CampaignRow extends QueryResultRow {
+  id: string;
+  merchant_id: string;
+  resource_origin: string;
+  status: string;
+  current_version: number;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+interface CampaignVersionRow extends QueryResultRow {
+  campaign_id: string;
+  version: number;
+  terms_hash: `sha256:${string}`;
+  terms_json: unknown;
+  signing_bytes_hex: string;
+  network: string;
+  asset_mint: string;
+  commission_bps: number;
+  protocol_fee_bps: number;
+  payout_threshold_atomic: string;
+  starts_at: Date | string;
+  ends_at: Date | string | null;
+  merchant_kid: string | null;
+  merchant_signature: string | null;
+  activated_at: Date | string | null;
+  created_at: Date | string;
+}
+
 export interface PostgresMerchantRegistryOptions {
   now?: () => Date;
   merchantIdFactory?: () => string;
+}
+
+export interface PostgresCampaignRegistryOptions {
+  now?: () => Date;
+  campaignIdFactory?: () => string;
 }
 
 export class PostgresReceiptIngestionStore implements ReceiptIngestionStore {
@@ -309,6 +359,295 @@ export class PostgresReceiptIngestionStore implements ReceiptIngestionStore {
       return this.db.connect();
     }
     return this.db;
+  }
+}
+
+export class PostgresCampaignRegistry implements CampaignRegistry {
+  constructor(
+    private readonly db: PostgresPool | PostgresQueryExecutor,
+    private readonly options: PostgresCampaignRegistryOptions = {}
+  ) {}
+
+  async createCampaign(input: CreateCampaignInput): Promise<CampaignProfile> {
+    const now = this.now();
+    const campaignId = assertCampaignSplit402Id(
+      input.id ?? this.options.campaignIdFactory?.() ?? createPrefixedId("cmp"),
+      "campaign id"
+    );
+    const merchantId = assertCampaignSplit402Id(input.merchantId, "merchant id");
+    const version = createCampaignVersionRecord(
+      { id: campaignId, merchantId },
+      1,
+      input,
+      now
+    );
+    const campaign: CampaignRecord = {
+      id: campaignId,
+      merchantId,
+      resourceOrigin: version.terms.resourceOrigin,
+      status: "draft",
+      currentVersion: 1,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    try {
+      await this.withTransaction(async (client) => {
+        await insertCampaign(client, campaign);
+        await insertCampaignVersion(client, version);
+        await insertCampaignOperations(client, version);
+      });
+    } catch (error) {
+      throw mapCampaignWriteError(error);
+    }
+
+    return { ...campaign, current: version };
+  }
+
+  async getCampaign(campaignId: string): Promise<CampaignProfile | undefined> {
+    const campaign = await this.loadCampaign(campaignId);
+    if (campaign === undefined) {
+      return undefined;
+    }
+    const current = await this.getCampaignVersion(
+      campaign.id,
+      campaign.currentVersion
+    );
+    if (current === undefined) {
+      throw new Error(`missing current campaign version: ${campaign.id}`);
+    }
+    return { ...campaign, current };
+  }
+
+  async getCampaignVersion(
+    campaignId: string,
+    version: number
+  ): Promise<CampaignVersionRecord | undefined> {
+    assertCampaignPositiveVersion(version);
+    const result = await this.db.query<CampaignVersionRow>(
+      `select campaign_id, version, terms_hash, terms_json, signing_bytes_hex,
+              network, asset_mint, commission_bps, protocol_fee_bps,
+              payout_threshold_atomic, starts_at, ends_at, merchant_kid,
+              merchant_signature, activated_at, created_at
+         from campaign_versions
+        where campaign_id = $1
+          and version = $2
+        limit 1`,
+      [campaignId, version]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapCampaignVersion(row);
+  }
+
+  async createCampaignVersion(
+    input: CreateCampaignVersionInput
+  ): Promise<CampaignVersionRecord> {
+    const campaign = await this.loadCampaign(input.campaignId);
+    if (campaign === undefined) {
+      throw new CampaignRegistryValidationError(
+        `unknown campaign: ${input.campaignId}`
+      );
+    }
+    if (campaign.status === "closed") {
+      throw new CampaignRegistryValidationError("closed campaigns cannot be versioned");
+    }
+
+    const now = this.now();
+    const nextVersion = campaign.currentVersion + 1;
+    const version = createCampaignVersionRecord(campaign, nextVersion, input, now);
+
+    try {
+      await this.withTransaction(async (client) => {
+        await insertCampaignVersion(client, version);
+        await insertCampaignOperations(client, version);
+        await client.query(
+          `update campaigns
+              set resource_origin = $2,
+                  status = 'draft',
+                  current_version = $3,
+                  updated_at = $4
+            where id = $1`,
+          [campaign.id, version.terms.resourceOrigin, nextVersion, now]
+        );
+      });
+    } catch (error) {
+      throw mapCampaignWriteError(error);
+    }
+
+    return version;
+  }
+
+  async activateCampaignVersion(
+    input: ActivateCampaignVersionInput
+  ): Promise<CampaignProfile> {
+    const campaign = await this.loadCampaign(input.campaignId);
+    if (campaign === undefined) {
+      throw new CampaignRegistryValidationError(`unknown campaign: ${input.campaignId}`);
+    }
+    if (campaign.status === "closed") {
+      throw new CampaignRegistryValidationError("closed campaigns cannot be activated");
+    }
+
+    const versionNumber = assertCampaignPositiveVersion(
+      input.version ?? campaign.currentVersion
+    );
+    if (versionNumber !== campaign.currentVersion) {
+      throw new CampaignRegistryValidationError(
+        "only the current campaign version can be activated"
+      );
+    }
+    const version = await this.getCampaignVersion(campaign.id, versionNumber);
+    if (version === undefined) {
+      throw new CampaignRegistryValidationError(
+        `unknown campaign version: ${campaign.id}:${versionNumber}`
+      );
+    }
+
+    const merchantKid = assertCampaignNonEmptyString(
+      input.merchantKid,
+      "merchantKid"
+    );
+    const merchantPublicKey = assertCampaignBase58PublicKey(
+      input.merchantPublicKey,
+      "merchantPublicKey"
+    );
+    const merchantSignature = assertCampaignNonEmptyString(
+      input.merchantSignature,
+      "merchantSignature"
+    );
+
+    if (
+      version.merchantKid !== undefined ||
+      version.merchantSignature !== undefined
+    ) {
+      if (
+        version.merchantKid === merchantKid &&
+        version.merchantSignature === merchantSignature
+      ) {
+        return { ...campaign, current: version };
+      }
+      throw new CampaignRegistryConflictError(
+        "campaign version is already activated with a different signature"
+      );
+    }
+
+    if (
+      !verifyCampaignTermsSignature(
+        version.terms,
+        merchantPublicKey,
+        merchantSignature
+      )
+    ) {
+      throw new CampaignRegistryValidationError("invalid campaign terms signature");
+    }
+
+    const now = this.now();
+    const activatedVersion: CampaignVersionRecord = {
+      ...version,
+      merchantKid,
+      merchantSignature,
+      activatedAt: now
+    };
+    const activatedCampaign: CampaignRecord = {
+      ...campaign,
+      status: "active",
+      updatedAt: now
+    };
+
+    let activationInserted = false;
+    try {
+      await this.withTransaction(async (client) => {
+        const activationResult = await client.query(
+          `update campaign_versions
+              set merchant_kid = $3,
+                  merchant_signature = $4,
+                  activated_at = $5
+            where campaign_id = $1
+              and version = $2
+              and merchant_kid is null
+              and merchant_signature is null
+              and activated_at is null`,
+          [campaign.id, versionNumber, merchantKid, merchantSignature, now]
+        );
+        activationInserted = activationResult.rowCount === 1;
+        if (!activationInserted) {
+          return;
+        }
+        await client.query(
+          `update campaigns
+              set status = 'active',
+                  updated_at = $2
+            where id = $1`,
+          [campaign.id, now]
+        );
+      });
+    } catch (error) {
+      throw mapCampaignWriteError(error);
+    }
+
+    if (activationInserted) {
+      return { ...activatedCampaign, current: activatedVersion };
+    }
+
+    const latest = await this.getCampaign(campaign.id);
+    if (latest === undefined) {
+      throw new Error(`missing campaign after activation race: ${campaign.id}`);
+    }
+    if (
+      latest.current.merchantKid === merchantKid &&
+      latest.current.merchantSignature === merchantSignature
+    ) {
+      return latest;
+    }
+    throw new CampaignRegistryConflictError(
+      "campaign version is already activated with a different signature"
+    );
+  }
+
+  private async loadCampaign(campaignId: string): Promise<CampaignRecord | undefined> {
+    const result = await this.db.query<CampaignRow>(
+      `select id, merchant_id, resource_origin, status, current_version,
+              created_at, updated_at
+         from campaigns
+        where id = $1
+        limit 1`,
+      [campaignId]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapCampaign(row);
+  }
+
+  private async withTransaction(
+    operation: (client: PostgresQueryExecutor) => Promise<void>
+  ): Promise<void> {
+    const client = await this.createTransactionClient();
+    let transactionStarted = false;
+    try {
+      await client.query("begin");
+      transactionStarted = true;
+      await operation(client);
+      await client.query("commit");
+    } catch (error) {
+      if (transactionStarted) {
+        await rollbackQuietly(client);
+      }
+      throw error;
+    } finally {
+      client.release?.();
+    }
+  }
+
+  private async createTransactionClient(): Promise<
+    PostgresQueryExecutor & { release?: () => void }
+  > {
+    if (isPostgresPool(this.db)) {
+      return this.db.connect();
+    }
+    return this.db;
+  }
+
+  private now(): string {
+    return (this.options.now?.() ?? new Date()).toISOString();
   }
 }
 
@@ -638,6 +977,90 @@ export class PostgresWalletAuthStore implements WalletAuthStore {
   }
 }
 
+function insertCampaign(
+  client: PostgresQueryExecutor,
+  campaign: CampaignRecord
+): Promise<QueryResult> {
+  return client.query(
+    `insert into campaigns (
+       id, merchant_id, resource_origin, status, current_version, created_at,
+       updated_at
+     ) values (
+       $1, $2, $3, $4, $5, $6, $7
+     )`,
+    [
+      campaign.id,
+      campaign.merchantId,
+      campaign.resourceOrigin,
+      campaign.status,
+      campaign.currentVersion,
+      campaign.createdAt,
+      campaign.updatedAt
+    ]
+  );
+}
+
+function insertCampaignVersion(
+  client: PostgresQueryExecutor,
+  version: CampaignVersionRecord
+): Promise<QueryResult> {
+  return client.query(
+    `insert into campaign_versions (
+       campaign_id, version, terms_hash, terms_json, signing_bytes_hex, network,
+       asset_mint, commission_bps, protocol_fee_bps, payout_threshold_atomic,
+       starts_at, ends_at, merchant_kid, merchant_signature, activated_at,
+       created_at
+     ) values (
+       $1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+       $15, $16
+     )`,
+    [
+      version.campaignId,
+      version.version,
+      version.termsHash,
+      JSON.stringify(version.terms),
+      version.signingBytesHex,
+      version.terms.network,
+      version.terms.asset,
+      version.terms.commissionBps,
+      version.terms.protocolFeeBps,
+      version.terms.payoutThresholdAtomic,
+      version.terms.startsAt,
+      version.terms.endsAt,
+      version.merchantKid ?? null,
+      version.merchantSignature ?? null,
+      version.activatedAt ?? null,
+      version.createdAt
+    ]
+  );
+}
+
+async function insertCampaignOperations(
+  client: PostgresQueryExecutor,
+  version: CampaignVersionRecord
+): Promise<void> {
+  for (const operation of version.terms.operations) {
+    await client.query(
+      `insert into campaign_operations (
+         campaign_id, campaign_version, operation_id, method, path_template,
+         input_schema
+       ) values (
+         $1, $2, $3, $4, $5, $6::jsonb
+       )`,
+      [
+        version.campaignId,
+        version.version,
+        operation.operationId,
+        operation.method,
+        operation.pathTemplate,
+        operation.inputSchema === undefined
+          ? null
+          : JSON.stringify(operation.inputSchema)
+      ]
+    );
+  }
+}
+
 function insertReceipt(
   client: PostgresQueryExecutor,
   receiptRecord: ReceiptRecord
@@ -964,6 +1387,183 @@ function requiredRow<Row extends QueryResultRow>(result: QueryResult<Row>): Row 
   return row;
 }
 
+function mapCampaign(row: CampaignRow): CampaignRecord {
+  return {
+    id: row.id,
+    merchantId: row.merchant_id,
+    resourceOrigin: row.resource_origin,
+    status: readCampaignStatus(row.status),
+    currentVersion: row.current_version,
+    createdAt: toIsoString(row.created_at),
+    updatedAt: toIsoString(row.updated_at)
+  };
+}
+
+function mapCampaignVersion(row: CampaignVersionRow): CampaignVersionRecord {
+  return {
+    campaignId: row.campaign_id,
+    version: row.version,
+    terms: parseCampaignTermsJson(row.terms_json),
+    termsHash: row.terms_hash,
+    signingBytesHex: row.signing_bytes_hex,
+    ...(row.merchant_kid === null ? {} : { merchantKid: row.merchant_kid }),
+    ...(row.merchant_signature === null
+      ? {}
+      : { merchantSignature: row.merchant_signature }),
+    ...(row.activated_at === null
+      ? {}
+      : { activatedAt: toIsoString(row.activated_at) }),
+    createdAt: toIsoString(row.created_at)
+  };
+}
+
+function parseCampaignTermsJson(value: unknown): CampaignTerms {
+  const parsed = typeof value === "string" ? JSON.parse(value) : value;
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("campaign terms_json must be an object");
+  }
+  const terms = parsed as Record<string, unknown>;
+  return {
+    protocolVersion: readLiteral(terms.protocolVersion, "0.1", "protocolVersion"),
+    campaignId: readJsonString(terms.campaignId, "campaignId"),
+    campaignVersion: readJsonNumber(terms.campaignVersion, "campaignVersion"),
+    merchantId: readJsonString(terms.merchantId, "merchantId"),
+    resourceOrigin: readJsonString(terms.resourceOrigin, "resourceOrigin"),
+    operations: readCampaignOperationsJson(terms.operations),
+    network: readJsonString(terms.network, "network"),
+    asset: readJsonString(terms.asset, "asset"),
+    requiredAmountAtomic: readJsonString(
+      terms.requiredAmountAtomic,
+      "requiredAmountAtomic"
+    ),
+    payToWallet: readJsonString(terms.payToWallet, "payToWallet"),
+    commissionBps: readJsonNumber(terms.commissionBps, "commissionBps"),
+    protocolFeeBps: readJsonNumber(terms.protocolFeeBps, "protocolFeeBps"),
+    commissionBase: readLiteral(
+      terms.commissionBase,
+      "required_amount",
+      "commissionBase"
+    ),
+    settlementMode: readLiteral(terms.settlementMode, "accrual", "settlementMode"),
+    attributionRequired: readJsonBoolean(
+      terms.attributionRequired,
+      "attributionRequired"
+    ),
+    allowSelfReferral: readJsonBoolean(
+      terms.allowSelfReferral,
+      "allowSelfReferral"
+    ),
+    payoutThresholdAtomic: readJsonString(
+      terms.payoutThresholdAtomic,
+      "payoutThresholdAtomic"
+    ),
+    startsAt: readJsonString(terms.startsAt, "startsAt"),
+    endsAt: readJsonNullableString(terms.endsAt, "endsAt")
+  };
+}
+
+function readCampaignOperationsJson(value: unknown): CampaignOperation[] {
+  if (!Array.isArray(value)) {
+    throw new Error("campaign operations must be an array");
+  }
+  return value.map((item) => {
+    if (typeof item !== "object" || item === null || Array.isArray(item)) {
+      throw new Error("campaign operation must be an object");
+    }
+    const operation = item as Record<string, unknown>;
+    return {
+      operationId: readJsonString(operation.operationId, "operationId"),
+      method: readJsonString(operation.method, "method"),
+      pathTemplate: readJsonString(operation.pathTemplate, "pathTemplate"),
+      ...(operation.inputSchema === undefined
+        ? {}
+        : { inputSchema: operation.inputSchema })
+    };
+  });
+}
+
+function readJsonString(value: unknown, label: string): string {
+  if (typeof value !== "string") {
+    throw new Error(`${label} must be a string`);
+  }
+  return value;
+}
+
+function readJsonNullableString(value: unknown, label: string): string | null {
+  return value === null ? null : readJsonString(value, label);
+}
+
+function readJsonNumber(value: unknown, label: string): number {
+  if (typeof value !== "number") {
+    throw new Error(`${label} must be a number`);
+  }
+  return value;
+}
+
+function readJsonBoolean(value: unknown, label: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new Error(`${label} must be a boolean`);
+  }
+  return value;
+}
+
+function readLiteral<Value extends string>(
+  value: unknown,
+  expected: Value,
+  label: string
+): Value {
+  if (value !== expected) {
+    throw new Error(`${label} must be ${expected}`);
+  }
+  return expected;
+}
+
+function assertCampaignSplit402Id(value: string, label: string): string {
+  if (!Split402IdSchema.safeParse(value).success) {
+    throw new CampaignRegistryValidationError(`${label} must be a Split402 id`);
+  }
+  return value;
+}
+
+function assertCampaignBase58PublicKey(value: string, label: string): string {
+  if (!Base58PublicKeySchema.safeParse(value).success) {
+    throw new CampaignRegistryValidationError(
+      `${label} must be a base58 public key`
+    );
+  }
+  return value;
+}
+
+function assertCampaignNonEmptyString(value: string, label: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new CampaignRegistryValidationError(
+      `${label} must be a non-empty string`
+    );
+  }
+  return value;
+}
+
+function assertCampaignPositiveVersion(value: number): number {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new CampaignRegistryValidationError(
+      "version must be a positive integer"
+    );
+  }
+  return value;
+}
+
+function readCampaignStatus(value: string): CampaignStatus {
+  if (
+    value === "draft" ||
+    value === "active" ||
+    value === "paused" ||
+    value === "closed"
+  ) {
+    return value;
+  }
+  throw new Error(`unsupported campaign status: ${value}`);
+}
+
 function assertSplit402Id(value: string, label: string): string {
   if (!Split402IdSchema.safeParse(value).success) {
     throw new MerchantRegistryValidationError(`${label} must be a Split402 id`);
@@ -1097,5 +1697,11 @@ function readWalletAuthPurpose(value: string): "merchant-session" {
 function mapMerchantWriteError(error: unknown): unknown {
   return isUniqueViolation(error)
     ? new MerchantRegistryConflictError("merchant registry record already exists")
+    : error;
+}
+
+function mapCampaignWriteError(error: unknown): unknown {
+  return isUniqueViolation(error)
+    ? new CampaignRegistryConflictError("campaign registry record already exists")
     : error;
 }

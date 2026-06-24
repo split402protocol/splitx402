@@ -357,7 +357,7 @@ export function verifyCampaignTermsSignature(
   }
 }
 
-function createCampaignVersionRecord(
+export function createCampaignVersionRecord(
   campaign: Pick<CampaignRecord, "id" | "merchantId">,
   version: number,
   input: CampaignTermsInput,
