@@ -209,15 +209,16 @@ export class InMemoryMerchantRegistry implements MerchantRegistry {
 
   addKey(input: AddMerchantKeyInput): MerchantKeyRecord {
     this.assertMerchantExists(input.merchantId);
+    const now = this.now();
     const key: MerchantKeyRecord = {
       merchantId: input.merchantId,
       kid: assertNonEmptyString(input.kid, "kid"),
       publicKey: assertBase58PublicKey(input.publicKey, "publicKey"),
       algorithm: input.algorithm ?? "Ed25519",
       purpose: input.purpose ?? "offer_receipt",
-      validFrom: input.validFrom ?? this.now(),
+      validFrom: input.validFrom ?? now,
       ...(input.validUntil === undefined ? {} : { validUntil: assertUtcTimestamp(input.validUntil) }),
-      createdAt: this.now()
+      createdAt: now
     };
     assertMerchantKeyAlgorithm(key.algorithm);
     assertMerchantKeyPurpose(key.purpose);

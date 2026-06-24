@@ -1,10 +1,32 @@
 import {
+  Base58PublicKeySchema,
   Split402ReceiptV1Schema,
+  Split402IdSchema,
+  createPrefixedId,
   type Split402ReceiptV1
 } from "@split402/protocol";
 import type { QueryResult, QueryResultRow } from "pg";
 
 import { ReceiptIngestionPersistenceConflictError } from "./errors.js";
+import {
+  MerchantRegistryConflictError,
+  MerchantRegistryValidationError,
+  type AddMerchantKeyInput,
+  type AddMerchantOriginInput,
+  type CreateMerchantInput,
+  type MerchantKeyAlgorithm,
+  type MerchantKeyPurpose,
+  type MerchantKeyRecord,
+  type MerchantOriginRecord,
+  type MerchantOriginStatus,
+  type MerchantOriginVerificationMethod,
+  type MerchantProfile,
+  type MerchantRecord,
+  type MerchantRegistry,
+  type MerchantStatus,
+  type ResolveMerchantKeyInput,
+  type RevokeMerchantKeyInput
+} from "./merchants.js";
 import type {
   AccrualStatus,
   CommissionAccrual,
@@ -72,6 +94,43 @@ interface LedgerEntryRow extends QueryResultRow {
   account_reference: string;
   asset_mint: string;
   amount_atomic: string;
+}
+
+interface MerchantRow extends QueryResultRow {
+  id: string;
+  slug: string;
+  display_name: string;
+  owner_wallet: string;
+  status: string;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+interface MerchantOriginRow extends QueryResultRow {
+  merchant_id: string;
+  origin: string;
+  verification_method: string;
+  status: string;
+  verified_at: Date | string | null;
+  created_at: Date | string;
+}
+
+interface MerchantKeyRow extends QueryResultRow {
+  merchant_id: string;
+  kid: string;
+  algorithm: string;
+  public_key: string;
+  purpose: string;
+  valid_from: Date | string;
+  valid_until: Date | string | null;
+  revoked_at: Date | string | null;
+  revocation_reason: string | null;
+  created_at: Date | string;
+}
+
+export interface PostgresMerchantRegistryOptions {
+  now?: () => Date;
+  merchantIdFactory?: () => string;
 }
 
 export class PostgresReceiptIngestionStore implements ReceiptIngestionStore {
@@ -222,6 +281,237 @@ export class PostgresReceiptIngestionStore implements ReceiptIngestionStore {
       return this.db.connect();
     }
     return this.db;
+  }
+}
+
+export class PostgresMerchantRegistry implements MerchantRegistry {
+  constructor(
+    private readonly db: PostgresQueryExecutor,
+    private readonly options: PostgresMerchantRegistryOptions = {}
+  ) {}
+
+  async createMerchant(input: CreateMerchantInput): Promise<MerchantRecord> {
+    const now = this.now();
+    const merchant: MerchantRecord = {
+      id: assertSplit402Id(
+        input.id ?? this.options.merchantIdFactory?.() ?? createPrefixedId("mrc"),
+        "merchant id"
+      ),
+      slug: assertMerchantSlug(input.slug),
+      displayName: assertNonEmptyString(input.displayName, "displayName"),
+      ownerWallet: assertBase58PublicKey(input.ownerWallet, "ownerWallet"),
+      status: input.status ?? "pending",
+      createdAt: now,
+      updatedAt: now
+    };
+    assertMerchantStatus(merchant.status);
+
+    try {
+      const result = await this.db.query<MerchantRow>(
+        `insert into merchants (
+           id, slug, display_name, owner_wallet, status, created_at, updated_at
+         ) values (
+           $1, $2, $3, $4, $5, $6, $7
+         )
+         returning id, slug, display_name, owner_wallet, status, created_at, updated_at`,
+        [
+          merchant.id,
+          merchant.slug,
+          merchant.displayName,
+          merchant.ownerWallet,
+          merchant.status,
+          merchant.createdAt,
+          merchant.updatedAt
+        ]
+      );
+      return mapMerchant(requiredRow(result));
+    } catch (error) {
+      throw mapMerchantWriteError(error);
+    }
+  }
+
+  async getMerchantProfile(
+    merchantId: string
+  ): Promise<MerchantProfile | undefined> {
+    const merchantResult = await this.db.query<MerchantRow>(
+      `select id, slug, display_name, owner_wallet, status, created_at, updated_at
+         from merchants
+        where id = $1
+        limit 1`,
+      [merchantId]
+    );
+    const merchantRow = merchantResult.rows[0];
+    if (merchantRow === undefined) {
+      return undefined;
+    }
+
+    const originsResult = await this.db.query<MerchantOriginRow>(
+      `select merchant_id, origin, verification_method, status, verified_at, created_at
+         from merchant_origins
+        where merchant_id = $1
+        order by created_at, origin`,
+      [merchantId]
+    );
+    const keysResult = await this.db.query<MerchantKeyRow>(
+      `select merchant_id, kid, algorithm, public_key, purpose, valid_from,
+              valid_until, revoked_at, revocation_reason, created_at
+         from merchant_keys
+        where merchant_id = $1
+        order by created_at, kid`,
+      [merchantId]
+    );
+
+    return {
+      ...mapMerchant(merchantRow),
+      origins: originsResult.rows.map(mapMerchantOrigin),
+      keys: keysResult.rows.map(mapMerchantKey)
+    };
+  }
+
+  async addOrigin(
+    input: AddMerchantOriginInput
+  ): Promise<MerchantOriginRecord> {
+    await this.assertMerchantExists(input.merchantId);
+    const origin: MerchantOriginRecord = {
+      merchantId: input.merchantId,
+      origin: assertUrlOrigin(input.origin),
+      verificationMethod: input.verificationMethod ?? "well_known",
+      status: input.status ?? "pending",
+      ...(input.verifiedAt === undefined
+        ? {}
+        : { verifiedAt: assertUtcTimestamp(input.verifiedAt) }),
+      createdAt: this.now()
+    };
+    assertOriginVerificationMethod(origin.verificationMethod);
+    assertMerchantOriginStatus(origin.status);
+
+    try {
+      const result = await this.db.query<MerchantOriginRow>(
+        `insert into merchant_origins (
+           merchant_id, origin, verification_method, status, verified_at, created_at
+         ) values (
+           $1, $2, $3, $4, $5, $6
+         )
+         returning merchant_id, origin, verification_method, status, verified_at, created_at`,
+        [
+          origin.merchantId,
+          origin.origin,
+          origin.verificationMethod,
+          origin.status,
+          origin.verifiedAt ?? null,
+          origin.createdAt
+        ]
+      );
+      return mapMerchantOrigin(requiredRow(result));
+    } catch (error) {
+      throw mapMerchantWriteError(error);
+    }
+  }
+
+  async addKey(input: AddMerchantKeyInput): Promise<MerchantKeyRecord> {
+    await this.assertMerchantExists(input.merchantId);
+    const now = this.now();
+    const key: MerchantKeyRecord = {
+      merchantId: input.merchantId,
+      kid: assertNonEmptyString(input.kid, "kid"),
+      algorithm: input.algorithm ?? "Ed25519",
+      publicKey: assertBase58PublicKey(input.publicKey, "publicKey"),
+      purpose: input.purpose ?? "offer_receipt",
+      validFrom: input.validFrom ?? now,
+      ...(input.validUntil === undefined
+        ? {}
+        : { validUntil: assertUtcTimestamp(input.validUntil) }),
+      createdAt: now
+    };
+    assertMerchantKeyAlgorithm(key.algorithm);
+    assertMerchantKeyPurpose(key.purpose);
+    assertUtcTimestamp(key.validFrom);
+    assertChronologicalRange(key.validFrom, key.validUntil);
+
+    try {
+      const result = await this.db.query<MerchantKeyRow>(
+        `insert into merchant_keys (
+           merchant_id, kid, algorithm, public_key, purpose, valid_from,
+           valid_until, created_at
+         ) values (
+           $1, $2, $3, $4, $5, $6, $7, $8
+         )
+         returning merchant_id, kid, algorithm, public_key, purpose, valid_from,
+                   valid_until, revoked_at, revocation_reason, created_at`,
+        [
+          key.merchantId,
+          key.kid,
+          key.algorithm,
+          key.publicKey,
+          key.purpose,
+          key.validFrom,
+          key.validUntil ?? null,
+          key.createdAt
+        ]
+      );
+      return mapMerchantKey(requiredRow(result));
+    } catch (error) {
+      throw mapMerchantWriteError(error);
+    }
+  }
+
+  async revokeKey(
+    input: RevokeMerchantKeyInput
+  ): Promise<MerchantKeyRecord | undefined> {
+    const revokedAt = input.revokedAt ?? this.now();
+    assertUtcTimestamp(revokedAt);
+    const reason =
+      input.reason === undefined
+        ? undefined
+        : assertNonEmptyString(input.reason, "reason");
+
+    const result = await this.db.query<MerchantKeyRow>(
+      `update merchant_keys
+          set revoked_at = $3,
+              revocation_reason = $4
+        where merchant_id = $1
+          and kid = $2
+        returning merchant_id, kid, algorithm, public_key, purpose, valid_from,
+                  valid_until, revoked_at, revocation_reason, created_at`,
+      [input.merchantId, input.kid, revokedAt, reason ?? null]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapMerchantKey(row);
+  }
+
+  async resolveKey(
+    input: ResolveMerchantKeyInput
+  ): Promise<MerchantKeyRecord | undefined> {
+    const at = assertUtcTimestamp(input.at ?? this.now());
+    const result = await this.db.query<MerchantKeyRow>(
+      `select merchant_id, kid, algorithm, public_key, purpose, valid_from,
+              valid_until, revoked_at, revocation_reason, created_at
+         from merchant_keys
+        where merchant_id = $1
+          and kid = $2
+          and purpose = $3
+          and valid_from <= $4
+          and (valid_until is null or valid_until > $4)
+          and (revoked_at is null or revoked_at > $4)
+        limit 1`,
+      [input.merchantId, input.kid, input.purpose ?? "offer_receipt", at]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapMerchantKey(row);
+  }
+
+  private async assertMerchantExists(merchantId: string): Promise<void> {
+    const result = await this.db.query<Pick<MerchantRow, "id">>(
+      "select id from merchants where id = $1 limit 1",
+      [merchantId]
+    );
+    if (result.rows[0] === undefined) {
+      throw new MerchantRegistryValidationError(`unknown merchant: ${merchantId}`);
+    }
+  }
+
+  private now(): string {
+    return (this.options.now?.() ?? new Date()).toISOString();
   }
 }
 
@@ -471,4 +761,179 @@ function isUniqueViolation(error: unknown): boolean {
     error !== null &&
     (error as { code?: unknown }).code === "23505"
   );
+}
+
+function mapMerchant(row: MerchantRow): MerchantRecord {
+  return {
+    id: row.id,
+    slug: row.slug,
+    displayName: row.display_name,
+    ownerWallet: row.owner_wallet,
+    status: readMerchantStatus(row.status),
+    createdAt: toIsoString(row.created_at),
+    updatedAt: toIsoString(row.updated_at)
+  };
+}
+
+function mapMerchantOrigin(row: MerchantOriginRow): MerchantOriginRecord {
+  return {
+    merchantId: row.merchant_id,
+    origin: row.origin,
+    verificationMethod: readOriginVerificationMethod(row.verification_method),
+    status: readMerchantOriginStatus(row.status),
+    ...(row.verified_at === null ? {} : { verifiedAt: toIsoString(row.verified_at) }),
+    createdAt: toIsoString(row.created_at)
+  };
+}
+
+function mapMerchantKey(row: MerchantKeyRow): MerchantKeyRecord {
+  return {
+    merchantId: row.merchant_id,
+    kid: row.kid,
+    algorithm: readMerchantKeyAlgorithm(row.algorithm),
+    publicKey: row.public_key,
+    purpose: readMerchantKeyPurpose(row.purpose),
+    validFrom: toIsoString(row.valid_from),
+    ...(row.valid_until === null ? {} : { validUntil: toIsoString(row.valid_until) }),
+    ...(row.revoked_at === null ? {} : { revokedAt: toIsoString(row.revoked_at) }),
+    ...(row.revocation_reason === null ? {} : { revocationReason: row.revocation_reason }),
+    createdAt: toIsoString(row.created_at)
+  };
+}
+
+function requiredRow<Row extends QueryResultRow>(result: QueryResult<Row>): Row {
+  const row = result.rows[0];
+  if (row === undefined) {
+    throw new Error("database did not return a row");
+  }
+  return row;
+}
+
+function assertSplit402Id(value: string, label: string): string {
+  if (!Split402IdSchema.safeParse(value).success) {
+    throw new MerchantRegistryValidationError(`${label} must be a Split402 id`);
+  }
+  return value;
+}
+
+function assertBase58PublicKey(value: string, label: string): string {
+  if (!Base58PublicKeySchema.safeParse(value).success) {
+    throw new MerchantRegistryValidationError(`${label} must be a base58 public key`);
+  }
+  return value;
+}
+
+function assertNonEmptyString(value: string, label: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new MerchantRegistryValidationError(`${label} must be a non-empty string`);
+  }
+  return value;
+}
+
+function assertMerchantSlug(value: string): string {
+  if (!/^[a-z0-9][a-z0-9-]{2,62}$/u.test(value)) {
+    throw new MerchantRegistryValidationError(
+      "slug must be 3-63 lowercase URL-safe characters"
+    );
+  }
+  return value;
+}
+
+function assertUrlOrigin(value: string): string {
+  try {
+    const url = new URL(value);
+    if (url.origin !== value || !["http:", "https:"].includes(url.protocol)) {
+      throw new Error("invalid origin");
+    }
+    return value;
+  } catch {
+    throw new MerchantRegistryValidationError("origin must be an http(s) URL origin");
+  }
+}
+
+function assertUtcTimestamp(value: string): string {
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed) || !value.endsWith("Z")) {
+    throw new MerchantRegistryValidationError("timestamp must be UTC RFC3339");
+  }
+  return value;
+}
+
+function assertChronologicalRange(validFrom: string, validUntil?: string): void {
+  if (validUntil !== undefined && Date.parse(validUntil) <= Date.parse(validFrom)) {
+    throw new MerchantRegistryValidationError("validUntil must be after validFrom");
+  }
+}
+
+function assertMerchantStatus(value: MerchantStatus): void {
+  readMerchantStatus(value);
+}
+
+function assertOriginVerificationMethod(
+  value: MerchantOriginVerificationMethod
+): void {
+  readOriginVerificationMethod(value);
+}
+
+function assertMerchantOriginStatus(value: MerchantOriginStatus): void {
+  readMerchantOriginStatus(value);
+}
+
+function assertMerchantKeyAlgorithm(value: MerchantKeyAlgorithm): void {
+  readMerchantKeyAlgorithm(value);
+}
+
+function assertMerchantKeyPurpose(value: MerchantKeyPurpose): void {
+  readMerchantKeyPurpose(value);
+}
+
+function readMerchantStatus(value: string): MerchantStatus {
+  if (
+    value === "pending" ||
+    value === "active" ||
+    value === "suspended" ||
+    value === "closed"
+  ) {
+    return value;
+  }
+  throw new Error(`unsupported merchant status: ${value}`);
+}
+
+function readOriginVerificationMethod(value: string): MerchantOriginVerificationMethod {
+  if (value === "well_known" || value === "dns") {
+    return value;
+  }
+  throw new Error(`unsupported origin verification method: ${value}`);
+}
+
+function readMerchantOriginStatus(value: string): MerchantOriginStatus {
+  if (
+    value === "pending" ||
+    value === "verified" ||
+    value === "failed" ||
+    value === "revoked"
+  ) {
+    return value;
+  }
+  throw new Error(`unsupported merchant origin status: ${value}`);
+}
+
+function readMerchantKeyAlgorithm(value: string): MerchantKeyAlgorithm {
+  if (value === "Ed25519" || value === "ES256") {
+    return value;
+  }
+  throw new Error(`unsupported merchant key algorithm: ${value}`);
+}
+
+function readMerchantKeyPurpose(value: string): MerchantKeyPurpose {
+  if (value === "offer_receipt" || value === "webhook") {
+    return value;
+  }
+  throw new Error(`unsupported merchant key purpose: ${value}`);
+}
+
+function mapMerchantWriteError(error: unknown): unknown {
+  return isUniqueViolation(error)
+    ? new MerchantRegistryConflictError("merchant registry record already exists")
+    : error;
 }

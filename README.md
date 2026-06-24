@@ -81,6 +81,7 @@ mainnet payment flows exist yet.
 | Control-plane receipt ingestion API | Started |
 | PostgreSQL receipt, accrual, and ledger persistence | Started |
 | Merchant/key/origin registry APIs | Started |
+| PostgreSQL merchant/key/origin persistence | Started |
 | Chain verification worker and payout engine | Not implemented |
 | `$SPLIT` bonding and atomic split settlement | Later research |
 
@@ -159,6 +160,37 @@ POST /v1/merchants/:merchantId/origins
 POST /v1/merchants/:merchantId/keys
 POST /v1/merchants/:merchantId/keys/:kid/revoke
 ```
+
+## Persistence Layout
+
+```mermaid
+flowchart LR
+  API["Control-plane API"]
+  Registry["Merchant registry"]
+  Ingestion["Receipt ingestion store"]
+  Merchants[("merchants")]
+  Origins[("merchant_origins")]
+  Keys[("merchant_keys")]
+  Receipts[("payment_receipts")]
+  Accruals[("commission_accruals")]
+  LedgerTx[("ledger_transactions")]
+  LedgerEntries[("ledger_entries")]
+
+  API --> Registry
+  API --> Ingestion
+  Registry --> Merchants
+  Registry --> Origins
+  Registry --> Keys
+  Ingestion --> Receipts
+  Ingestion --> Accruals
+  Ingestion --> LedgerTx
+  LedgerTx --> LedgerEntries
+```
+
+Merchant profiles, origins, and service keys can run in memory for tests or through
+the PostgreSQL adapter for durable control-plane state. Receipt ingestion uses the
+same boundary: in-memory stores for deterministic behavior tests, PostgreSQL stores
+for durable receipt, accrual, and ledger rows.
 
 ## MVP Rules
 

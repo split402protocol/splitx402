@@ -7,6 +7,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   InMemoryReceiptIngestionStore,
+  MerchantRegistryConflictError,
+  PostgresMerchantRegistry,
   PostgresReceiptIngestionStore,
   ReceiptIngestionPersistenceConflictError,
   ReceiptIngestor,
@@ -84,6 +86,106 @@ describe("PostgresReceiptIngestionStore", () => {
   });
 });
 
+describe("PostgresMerchantRegistry", () => {
+  it("persists merchants, origins, keys, and profiles", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const fakePool = new FakePostgresPool();
+    const registry = createPostgresRegistry(fakePool);
+
+    const merchant = await registry.createMerchant({
+      id: bundle.artifacts.receipt.merchantId,
+      slug: "demo-merchant",
+      displayName: "Demo Merchant",
+      ownerWallet: bundle.keys.payerWallet,
+      status: "active"
+    });
+    const origin = await registry.addOrigin({
+      merchantId: merchant.id,
+      origin: bundle.artifacts.receipt.merchantOrigin,
+      status: "verified",
+      verifiedAt: "2026-06-24T00:00:00Z"
+    });
+    const key = await registry.addKey({
+      merchantId: merchant.id,
+      kid: bundle.artifacts.receipt.kid,
+      publicKey: bundle.keys.merchantPublicKey,
+      validFrom: "2026-06-24T00:00:00Z"
+    });
+    const profile = await registry.getMerchantProfile(merchant.id);
+
+    expect(origin.status).toBe("verified");
+    expect(key.purpose).toBe("offer_receipt");
+    expect(profile?.id).toBe(merchant.id);
+    expect(profile?.origins).toHaveLength(1);
+    expect(profile?.keys).toHaveLength(1);
+  });
+
+  it("resolves active service keys and respects revocation windows", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const fakePool = new FakePostgresPool();
+    const registry = createPostgresRegistry(fakePool);
+    await registry.createMerchant({
+      id: bundle.artifacts.receipt.merchantId,
+      slug: "demo-merchant",
+      displayName: "Demo Merchant",
+      ownerWallet: bundle.keys.payerWallet
+    });
+    await registry.addKey({
+      merchantId: bundle.artifacts.receipt.merchantId,
+      kid: bundle.artifacts.receipt.kid,
+      publicKey: bundle.keys.merchantPublicKey,
+      validFrom: "2026-06-24T00:00:00Z"
+    });
+
+    const beforeRevocation = await registry.resolveKey({
+      merchantId: bundle.artifacts.receipt.merchantId,
+      kid: bundle.artifacts.receipt.kid,
+      at: "2026-06-24T00:01:00Z"
+    });
+    await registry.revokeKey({
+      merchantId: bundle.artifacts.receipt.merchantId,
+      kid: bundle.artifacts.receipt.kid,
+      revokedAt: "2026-06-24T00:02:00Z",
+      reason: "rotation complete"
+    });
+    const historical = await registry.resolveKey({
+      merchantId: bundle.artifacts.receipt.merchantId,
+      kid: bundle.artifacts.receipt.kid,
+      at: "2026-06-24T00:01:30Z"
+    });
+    const afterRevocation = await registry.resolveKey({
+      merchantId: bundle.artifacts.receipt.merchantId,
+      kid: bundle.artifacts.receipt.kid,
+      at: "2026-06-24T00:02:01Z"
+    });
+
+    expect(beforeRevocation?.publicKey).toBe(bundle.keys.merchantPublicKey);
+    expect(historical?.publicKey).toBe(bundle.keys.merchantPublicKey);
+    expect(afterRevocation).toBeUndefined();
+  });
+
+  it("maps unique violations to merchant registry conflicts", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const fakePool = new FakePostgresPool();
+    const registry = createPostgresRegistry(fakePool);
+    await registry.createMerchant({
+      id: bundle.artifacts.receipt.merchantId,
+      slug: "demo-merchant",
+      displayName: "Demo Merchant",
+      ownerWallet: bundle.keys.payerWallet
+    });
+
+    await expect(
+      registry.createMerchant({
+        id: "mrc_ffffffffffffffffffffffffffffffff",
+        slug: "demo-merchant",
+        displayName: "Second Merchant",
+        ownerWallet: bundle.keys.payerWallet
+      })
+    ).rejects.toBeInstanceOf(MerchantRegistryConflictError);
+  });
+});
+
 async function createSnapshot(
   receipt: Split402ReceiptV1
 ): Promise<ReceiptIngestionSnapshot> {
@@ -98,6 +200,13 @@ async function createSnapshot(
     throw new Error("expected snapshot creation");
   }
   return result;
+}
+
+function createPostgresRegistry(fakePool: FakePostgresPool): PostgresMerchantRegistry {
+  return new PostgresMerchantRegistry(fakePool, {
+    now: () => new Date("2026-06-24T00:00:00Z"),
+    merchantIdFactory: () => "mrc_ffffffffffffffffffffffffffffffff"
+  });
 }
 
 class FakePostgresPool implements PostgresPool {
@@ -161,6 +270,18 @@ class FakePostgresClient implements PostgresTransactionClient {
       this.database.insertLedgerEntry(values);
       return result([]);
     }
+    if (normalized.startsWith("insert into merchants")) {
+      return result(this.database.insertMerchant(values) as unknown as Row[]);
+    }
+    if (normalized.startsWith("insert into merchant_origins")) {
+      return result(this.database.insertMerchantOrigin(values) as unknown as Row[]);
+    }
+    if (normalized.startsWith("insert into merchant_keys")) {
+      return result(this.database.insertMerchantKey(values) as unknown as Row[]);
+    }
+    if (normalized.startsWith("update merchant_keys")) {
+      return result(this.database.revokeMerchantKey(values) as unknown as Row[]);
+    }
     if (normalized.includes("from payment_receipts")) {
       return result(this.database.selectReceipt(normalized, values) as unknown as Row[]);
     }
@@ -175,6 +296,17 @@ class FakePostgresClient implements PostgresTransactionClient {
     if (normalized.includes("from ledger_entries")) {
       return result(this.database.selectLedgerEntries(values[0]) as unknown as Row[]);
     }
+    if (normalized.includes("from merchants")) {
+      return result(this.database.selectMerchant(normalized, values) as unknown as Row[]);
+    }
+    if (normalized.includes("from merchant_origins")) {
+      return result(this.database.selectMerchantOrigins(values[0]) as unknown as Row[]);
+    }
+    if (normalized.includes("from merchant_keys")) {
+      return result(
+        this.database.selectMerchantKeys(normalized, values) as unknown as Row[]
+      );
+    }
 
     throw new Error(`unsupported query: ${normalized}`);
   }
@@ -185,6 +317,9 @@ class FakePostgresDatabase {
   accruals: StoredAccrualRow[] = [];
   ledgerTransactions: StoredLedgerTransactionRow[] = [];
   ledgerEntries: StoredLedgerEntryRow[] = [];
+  merchants: StoredMerchantRow[] = [];
+  merchantOrigins: StoredMerchantOriginRow[] = [];
+  merchantKeys: StoredMerchantKeyRow[] = [];
   failNextInsertWithUniqueViolation = false;
 
   insertReceipt(values: readonly unknown[]): void {
@@ -295,6 +430,133 @@ class FakePostgresDatabase {
       (row) => row.transaction_id === readString(transactionId)
     );
   }
+
+  insertMerchant(values: readonly unknown[]): StoredMerchantRow[] {
+    const row: StoredMerchantRow = {
+      id: readString(values[0]),
+      slug: readString(values[1]),
+      display_name: readString(values[2]),
+      owner_wallet: readString(values[3]),
+      status: readString(values[4]),
+      created_at: readString(values[5]),
+      updated_at: readString(values[6])
+    };
+    if (
+      this.merchants.some(
+        (merchant) => merchant.id === row.id || merchant.slug === row.slug
+      )
+    ) {
+      throw Object.assign(new Error("duplicate key"), { code: "23505" });
+    }
+    this.merchants.push(row);
+    return [row];
+  }
+
+  insertMerchantOrigin(values: readonly unknown[]): StoredMerchantOriginRow[] {
+    const row: StoredMerchantOriginRow = {
+      merchant_id: readString(values[0]),
+      origin: readString(values[1]),
+      verification_method: readString(values[2]),
+      status: readString(values[3]),
+      verified_at: readNullableString(values[4]),
+      created_at: readString(values[5])
+    };
+    if (
+      this.merchantOrigins.some(
+        (origin) =>
+          origin.merchant_id === row.merchant_id && origin.origin === row.origin
+      )
+    ) {
+      throw Object.assign(new Error("duplicate key"), { code: "23505" });
+    }
+    this.merchantOrigins.push(row);
+    return [row];
+  }
+
+  insertMerchantKey(values: readonly unknown[]): StoredMerchantKeyRow[] {
+    const row: StoredMerchantKeyRow = {
+      merchant_id: readString(values[0]),
+      kid: readString(values[1]),
+      algorithm: readString(values[2]),
+      public_key: readString(values[3]),
+      purpose: readString(values[4]),
+      valid_from: readString(values[5]),
+      valid_until: readNullableString(values[6]),
+      revoked_at: null,
+      revocation_reason: null,
+      created_at: readString(values[7])
+    };
+    if (this.merchantKeys.some((key) => key.kid === row.kid)) {
+      throw Object.assign(new Error("duplicate key"), { code: "23505" });
+    }
+    this.merchantKeys.push(row);
+    return [row];
+  }
+
+  revokeMerchantKey(values: readonly unknown[]): StoredMerchantKeyRow[] {
+    const merchantId = readString(values[0]);
+    const kid = readString(values[1]);
+    const revokedAt = readString(values[2]);
+    const reason = readNullableString(values[3]);
+    const key = this.merchantKeys.find(
+      (row) => row.merchant_id === merchantId && row.kid === kid
+    );
+    if (key === undefined) {
+      return [];
+    }
+    key.revoked_at = revokedAt;
+    key.revocation_reason = reason;
+    return [key];
+  }
+
+  selectMerchant(
+    normalizedSql: string,
+    values: readonly unknown[]
+  ): QueryResultRow[] {
+    const merchantId = readString(values[0]);
+    const merchant = this.merchants.find((row) => row.id === merchantId);
+    if (merchant === undefined) {
+      return [];
+    }
+    return normalizedSql.startsWith("select id from merchants")
+      ? [{ id: merchant.id }]
+      : [merchant];
+  }
+
+  selectMerchantOrigins(merchantId: unknown): StoredMerchantOriginRow[] {
+    return this.merchantOrigins.filter(
+      (row) => row.merchant_id === readString(merchantId)
+    );
+  }
+
+  selectMerchantKeys(
+    normalizedSql: string,
+    values: readonly unknown[]
+  ): StoredMerchantKeyRow[] {
+    const merchantId = readString(values[0]);
+    if (normalizedSql.includes("where merchant_id = $1 and kid = $2")) {
+      const kid = readString(values[1]);
+      const purpose = readString(values[2]);
+      const at = Date.parse(readString(values[3]));
+      return this.merchantKeys.filter((row) => {
+        const validFrom = Date.parse(row.valid_from);
+        const validUntil =
+          row.valid_until === null ? undefined : Date.parse(row.valid_until);
+        const revokedAt =
+          row.revoked_at === null ? undefined : Date.parse(row.revoked_at);
+        return (
+          row.merchant_id === merchantId &&
+          row.kid === kid &&
+          row.purpose === purpose &&
+          validFrom <= at &&
+          (validUntil === undefined || validUntil > at) &&
+          (revokedAt === undefined || revokedAt > at)
+        );
+      });
+    }
+
+    return this.merchantKeys.filter((row) => row.merchant_id === merchantId);
+  }
 }
 
 type StoredReceiptRow = QueryResultRow & {
@@ -348,6 +610,38 @@ type StoredLedgerEntryRow = QueryResultRow & {
   created_at: string;
 };
 
+type StoredMerchantRow = QueryResultRow & {
+  id: string;
+  slug?: string;
+  display_name?: string;
+  owner_wallet?: string;
+  status?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+type StoredMerchantOriginRow = QueryResultRow & {
+  merchant_id: string;
+  origin: string;
+  verification_method: string;
+  status: string;
+  verified_at: string | null;
+  created_at: string;
+};
+
+type StoredMerchantKeyRow = QueryResultRow & {
+  merchant_id: string;
+  kid: string;
+  algorithm: string;
+  public_key: string;
+  purpose: string;
+  valid_from: string;
+  valid_until: string | null;
+  revoked_at: string | null;
+  revocation_reason: string | null;
+  created_at: string;
+};
+
 function result<Row extends QueryResultRow>(rows: Row[]): QueryResult<Row> {
   return {
     command: rows.length === 0 ? "INSERT" : "SELECT",
@@ -374,4 +668,11 @@ function readNumber(value: unknown): number {
     throw new Error("expected number query value");
   }
   return value;
+}
+
+function readNullableString(value: unknown): string | null {
+  if (value === null) {
+    return null;
+  }
+  return readString(value);
 }
