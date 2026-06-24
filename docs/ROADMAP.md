@@ -16,7 +16,7 @@ commission accrual, and merchant-funded payouts.
 
 ## Phase 1: Transitional Runnable Service
 
-Status: implemented in PR #1, pending review and merge.
+Status: implemented as a transitional slice.
 
 Goal: keep a minimal x402-shaped service online while the real Split402 protocol
 packages are ported.
@@ -32,7 +32,7 @@ Deliverables:
 
 ## Phase 2: Protocol Core And Test Vectors
 
-Status: started.
+Status: implemented.
 
 Goal: implement architecture Milestone 0 by importing and preserving the deterministic
 protocol package and test vectors from `ffff`.
@@ -52,6 +52,8 @@ Deliverables:
 
 ## Phase 3: Single Merchant Devnet Demo
 
+Status: started.
+
 Goal: implement architecture Milestone 1.
 
 Deliverables:
@@ -63,6 +65,15 @@ Deliverables:
 - demo merchant app;
 - buyer client with a valid referral claim;
 - signed settlement receipt.
+
+Current slice:
+
+- `@split402/x402-extension` package imported from `ffff`;
+- client payment payload enrichment;
+- resource-server offer enrichment;
+- attribution validation before x402 verification;
+- signed receipt enrichment after settlement;
+- extension tests for valid and invalid claims.
 
 ## Phase 4: Control Plane And Persistent Ingestion
 

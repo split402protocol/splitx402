@@ -2721,7 +2721,7 @@ Governance SHOULD NOT be able to alter historical receipts, reassign accrued com
 
 ## 22. First implementation backlog
 
-Ordered tickets suitable for an AI-assisted coding workflow:
+Ordered tickets suitable for an implementation workflow:
 
 1. Initialize pnpm monorepo and strict shared TypeScript config.
 2. Add lint, format, typecheck, unit-test, and migration CI jobs.
