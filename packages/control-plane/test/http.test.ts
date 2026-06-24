@@ -1,9 +1,11 @@
 import type { Express } from "express";
 import {
+  buildReferralClaimSigningBytes,
   createSampleProtocolArtifacts,
   deriveEd25519PublicKey,
   hexToBytes,
-  signEd25519Message
+  signEd25519Message,
+  type ReferralClaimV1
 } from "@split402/protocol";
 import request from "supertest";
 import { describe, expect, it } from "vitest";
@@ -13,12 +15,15 @@ import {
   InMemoryCampaignRegistry,
   InMemoryMerchantRegistry,
   InMemoryReceiptIngestionStore,
+  InMemoryRouteRegistry,
   InMemoryWalletAuthStore,
   ReceiptIngestor,
   WalletAuthenticator,
   createControlPlaneApp,
   type CampaignVersionRecord,
-  type CampaignTermsInput
+  type CampaignTermsInput,
+  type RouteDraft,
+  type UnsignedReferralClaim
 } from "../src/index.js";
 
 const OWNER_SEED = hexToBytes(
@@ -30,8 +35,16 @@ const OTHER_OWNER_SEED = hexToBytes(
 const MERCHANT_SEED = hexToBytes(
   "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
 );
+const REFERRER_SEED = hexToBytes(
+  "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
+);
+const PAYOUT_SEED = hexToBytes(
+  "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f"
+);
 const OWNER_WALLET = deriveEd25519PublicKey(OWNER_SEED);
 const OTHER_OWNER_WALLET = deriveEd25519PublicKey(OTHER_OWNER_SEED);
+const REFERRER_WALLET = deriveEd25519PublicKey(REFERRER_SEED);
+const PAYOUT_WALLET = deriveEd25519PublicKey(PAYOUT_SEED);
 const NETWORK = "solana:devnet";
 
 describe("control-plane HTTP API", () => {
@@ -407,6 +420,62 @@ describe("control-plane HTTP API", () => {
       "2026-06-24T00:02:00.000Z"
     );
   });
+
+  it("creates route drafts and activates signed route claims", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const { app } = createTestApp({
+      withCampaignRegistry: true,
+      withMerchantRegistry: true,
+      withRouteRegistry: true
+    });
+    await createActiveCampaign(app);
+
+    const draftResponse = await request(app)
+      .post("/v1/routes/drafts")
+      .send({
+        campaignId: bundle.artifacts.receipt.campaignId,
+        referrerWallet: REFERRER_WALLET,
+        payoutWallet: PAYOUT_WALLET,
+        operationIds: [bundle.artifacts.receipt.operationId],
+        expiresAt: "2026-06-25T00:00:00Z",
+        nonce: "route-nonce-http-0001"
+      })
+      .expect(201);
+    const draft = draftResponse.body.draft as RouteDraft;
+    const claim = signRouteDraft(draft);
+
+    await request(app)
+      .post("/v1/routes")
+      .send({
+        claim: {
+          ...claim,
+          signature: {
+            ...claim.signature,
+            value: mutateSignature(claim.signature.value)
+          }
+        }
+      })
+      .expect(400);
+    const routeResponse = await request(app)
+      .post("/v1/routes")
+      .send({ claim })
+      .expect(201);
+    const loadedResponse = await request(app)
+      .get(`/v1/routes/${draft.routeId}`)
+      .expect(200);
+
+    expect(draft.claim).toEqual(
+      expect.objectContaining({
+        routeId: "rte_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        campaignId: bundle.artifacts.receipt.campaignId,
+        operationIds: [bundle.artifacts.receipt.operationId]
+      })
+    );
+    expect(draft.signingBytesHex).toMatch(/^[0-9a-f]+$/u);
+    expect(routeResponse.body.route.status).toBe("active");
+    expect(routeResponse.body.route.claimHash).toMatch(/^sha256:[0-9a-f]{64}$/u);
+    expect(loadedResponse.body.route.id).toBe(draft.routeId);
+  });
 });
 
 function createTestApp(
@@ -414,6 +483,7 @@ function createTestApp(
     withAuth?: boolean;
     withCampaignRegistry?: boolean;
     withMerchantRegistry?: boolean;
+    withRouteRegistry?: boolean;
   } = {}
 ) {
   const bundle = createSampleProtocolArtifacts();
@@ -440,6 +510,15 @@ function createTestApp(
             })
           }
         : {}),
+      ...(options.withRouteRegistry === true
+        ? {
+            routeRegistry: new InMemoryRouteRegistry({
+              now: () => new Date("2026-06-24T00:02:00Z"),
+              routeIdFactory: () => "rte_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              nonceFactory: () => "route-nonce-http-0001"
+            })
+          }
+        : {}),
       ...(options.withAuth === true
         ? { auth: { authenticator: createAuthenticator() } }
         : {})
@@ -447,6 +526,55 @@ function createTestApp(
     store,
     receipt: bundle.artifacts.receipt
   };
+}
+
+async function createActiveCampaign(app: Express): Promise<void> {
+  const bundle = createSampleProtocolArtifacts();
+  await request(app)
+    .post("/v1/merchants")
+    .send({
+      id: bundle.artifacts.receipt.merchantId,
+      slug: "demo-merchant",
+      displayName: "Demo Merchant",
+      ownerWallet: OWNER_WALLET,
+      status: "active"
+    })
+    .expect(201);
+  await request(app)
+    .post(`/v1/merchants/${bundle.artifacts.receipt.merchantId}/origins`)
+    .send({
+      origin: bundle.artifacts.receipt.merchantOrigin,
+      verificationMethod: "well_known",
+      status: "verified",
+      verifiedAt: "2026-06-24T00:01:00Z"
+    })
+    .expect(201);
+  await request(app)
+    .post(`/v1/merchants/${bundle.artifacts.receipt.merchantId}/keys`)
+    .send({
+      kid: bundle.artifacts.receipt.kid,
+      publicKey: bundle.keys.merchantPublicKey,
+      validFrom: "2026-06-24T00:00:00Z"
+    })
+    .expect(201);
+  const campaignResponse = await request(app)
+    .post("/v1/campaigns")
+    .send({
+      id: bundle.artifacts.receipt.campaignId,
+      merchantId: bundle.artifacts.receipt.merchantId,
+      ...createCampaignBody()
+    })
+    .expect(201);
+  const signature = signCampaignTerms(
+    campaignResponse.body.campaign.current as CampaignVersionRecord
+  );
+  await request(app)
+    .post(`/v1/campaigns/${bundle.artifacts.receipt.campaignId}/activate`)
+    .send({
+      kid: bundle.artifacts.receipt.kid,
+      signature
+    })
+    .expect(200);
 }
 
 function createAuthenticator(): WalletAuthenticator {
@@ -525,6 +653,26 @@ function signCampaignTerms(version: CampaignVersionRecord): string {
   ).signature;
 }
 
+function signRouteDraft(draft: RouteDraft): ReferralClaimV1 {
+  return signUnsignedClaim(draft.claim);
+}
+
+function signUnsignedClaim(claim: UnsignedReferralClaim): ReferralClaimV1 {
+  const signed = signEd25519Message(
+    buildReferralClaimSigningBytes(claim),
+    REFERRER_SEED
+  );
+  return {
+    ...claim,
+    signature: {
+      type: "solana-ed25519",
+      publicKey: signed.publicKey,
+      value: signed.signature
+    }
+  };
+}
+
 function mutateSignature(signature: string): string {
-  return `${signature.slice(0, -1)}${signature.endsWith("A") ? "B" : "A"}`;
+  const first = signature[0] ?? "A";
+  return `${first === "A" ? "B" : "A"}${signature.slice(1)}`;
 }
