@@ -73,6 +73,42 @@ importers:
         specifier: 4.1.9
         version: 4.1.9(@types/node@22.20.0)(vite@8.1.0(@types/node@22.20.0)(esbuild@0.28.1)(tsx@4.22.4))
 
+  apps/demo-agent:
+    dependencies:
+      '@solana-program/token':
+        specifier: ^0.9.0
+        version: 0.9.0(@solana/kit@5.5.1(typescript@5.7.3))
+      '@solana-program/token-2022':
+        specifier: ^0.6.1
+        version: 0.6.1(@solana/kit@5.5.1(typescript@5.7.3))(@solana/sysvars@5.5.1(typescript@5.7.3))
+      '@solana/kit':
+        specifier: ^5.1.0
+        version: 5.5.1(typescript@5.7.3)
+      '@split402/agent-sdk':
+        specifier: workspace:*
+        version: link:../../packages/agent-sdk
+      '@split402/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@split402/x402-extension':
+        specifier: workspace:*
+        version: link:../../packages/x402-extension
+      '@x402/axios':
+        specifier: ^2.16.0
+        version: 2.16.0(axios@1.18.1)
+      '@x402/core':
+        specifier: ^2.16.0
+        version: 2.16.0
+      '@x402/svm':
+        specifier: ^2.16.0
+        version: 2.16.0(@solana/kit@5.5.1(typescript@5.7.3))(@solana/sysvars@5.5.1(typescript@5.7.3))
+      axios:
+        specifier: ^1.18.1
+        version: 1.18.1
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
+
   apps/demo-merchant:
     dependencies:
       '@split402/express':

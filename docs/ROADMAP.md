@@ -78,6 +78,8 @@ Current slice:
   config, local service signer, and `/v1/risk`;
 - `@split402/agent-sdk` buyer client for offer inspection, referral claim creation,
   paid JSON calls, and receipt verification;
+- demo agent app with buyer setup, offer inspection, preflight, and paid-suite
+  scripts for the Devnet receipt path;
 - attribution validation before x402 verification;
 - signed receipt enrichment after settlement;
 - extension, adapter, demo merchant, and agent SDK tests.
