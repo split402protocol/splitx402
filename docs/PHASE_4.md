@@ -13,6 +13,11 @@ Status: started.
 - Added `packages/control-plane`.
 - Added an in-memory receipt ingestion domain for the first control-plane behavior
   slice.
+- Added a receipt ingestion store interface for the future PostgreSQL-backed
+  implementation.
+- Added an Express control-plane app with `GET /v1/health`.
+- Added public `POST /v1/receipts` ingestion for buyer, merchant, relay, or
+  unknown receipt submissions.
 - Added merchant public-key resolution at ingestion time.
 - Added receipt schema parsing and merchant signature verification.
 - Added duplicate handling by canonical receipt hash.
@@ -24,6 +29,8 @@ Status: started.
   ledger entry tables.
 - Added focused ingestion tests for creation, duplicate submission, conflicts,
   invalid signatures, and unattributed zero-credit receipts.
+- Added HTTP tests for health, receipt creation, duplicate submission, invalid
+  source values, and malformed submission envelopes.
 
 ## Why This Comes Next
 
@@ -40,7 +47,7 @@ a zero-sum ledger transaction.
 - Merchant, key, and origin APIs.
 - Campaign version APIs.
 - Route draft, sign, and activate flow.
-- Public HTTP receipt ingestion endpoint.
+- Deployable control-plane runtime wiring.
 - Chain verification worker.
 - Outbox event persistence.
 - Immutable campaign and route history.
