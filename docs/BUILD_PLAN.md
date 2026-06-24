@@ -48,7 +48,7 @@ Exit criteria:
 
 ## Repository Phase 1: Transitional Runnable Service
 
-Status: implemented in PR #1, pending review and merge.
+Status: implemented as a transitional slice.
 
 Purpose: keep a minimal x402-shaped HTTP host available while v2 ports the real
 Split402 protocol packages from `ffff`.
@@ -75,7 +75,7 @@ Exit criteria:
 
 ## Repository Phase 2: Architecture Milestone 0
 
-Status: started.
+Status: implemented.
 
 Goal: implement the architecture spec's Milestone 0, using `ffff` as the compatibility
 baseline for deterministic protocol artifacts.
@@ -105,6 +105,8 @@ Exit criteria:
 
 ## Architecture Milestone 1: Single Merchant Devnet Demo
 
+Status: started.
+
 Goal: port and evolve the `ffff` merchant demo into a Solana/x402 Split402 demo.
 
 Deliverables:
@@ -116,6 +118,14 @@ Deliverables:
 - local merchant service signer;
 - buyer client with a valid referral claim;
 - signed receipt returned after settlement.
+
+Current slice:
+
+- port `@split402/x402-extension` from `ffff`;
+- preserve client-side attribution enrichment behavior;
+- preserve resource-server offer and receipt hooks;
+- validate required and optional attribution before settlement;
+- keep valid/invalid claim behavior covered by tests.
 
 Exit criteria:
 

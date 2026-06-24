@@ -5,7 +5,7 @@ a local host while the real Split402 protocol packages are ported from `ffff`.
 
 ## Current Status
 
-Status: implemented on `codex/phase-1-skeleton-service`, pending review and merge.
+Status: implemented as a transitional slice.
 
 ## What Exists
 

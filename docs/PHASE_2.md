@@ -10,7 +10,7 @@ Milestone 0 in the architecture spec:
 
 ## Current Status
 
-Status: started on `codex/v2-ffff-scope-phase-2`.
+Status: implemented as the protocol-core baseline.
 
 ## What Changed
 

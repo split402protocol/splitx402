@@ -81,6 +81,15 @@ importers:
 
   packages/test-vectors: {}
 
+  packages/x402-extension:
+    dependencies:
+      '@split402/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      '@x402/core':
+        specifier: ^2.16.0
+        version: 2.16.0
+
 packages:
 
   '@adraffy/ens-normalize@1.11.1':
