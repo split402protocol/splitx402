@@ -159,6 +159,7 @@ mainnet payment flows exist yet.
 | Outbox claim/retry/dead-letter APIs | Started |
 | Chain verification worker framework | Started |
 | Chain verification polling loop | Started |
+| Chain verification worker process entrypoint | Started |
 | Durable control-plane runtime factory | Started |
 | Production auth policy wiring | Started |
 | Solana RPC signature-status verifier | Started |
@@ -383,6 +384,17 @@ runtime.app.listen(process.env.PORT ?? 4020);
 The runtime reads `SPLIT402_DATABASE_URL` or `DATABASE_URL`, wires PostgreSQL
 merchant, campaign, route, auth, receipt, and outbox stores, and defaults
 `SPLIT402_CONTROL_PLANE_AUTH_POLICY` to `required` for merchant mutations.
+
+Run the deployable chain-verification worker process:
+
+```bash
+corepack pnpm worker:chain
+```
+
+The worker reads `SPLIT402_CHAIN_WORKER_NETWORK`,
+`SPLIT402_CHAIN_WORKER_SOLANA_RPC_URL`, and optional polling/retry settings from
+the environment, then claims `receipt.accepted.v1` outbox events and verifies
+Solana settlement receipts through JSON-RPC.
 
 Run the demo merchant and agent flows:
 

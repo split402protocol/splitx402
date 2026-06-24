@@ -215,6 +215,9 @@ Current slice:
   that makes confirmed accruals payout-eligible;
 - add a bounded/abortable chain-verification polling loop around the worker
   framework for deployable runtime wiring;
+- add a deployable chain-verification worker process entrypoint and package script
+  that compose PostgreSQL stores, the Solana verifier, and polling loop from
+  environment configuration;
 - add a durable control-plane runtime factory that wires PostgreSQL stores,
   receipt key resolution, wallet auth, and required-by-default merchant auth
   policy from runtime configuration;
