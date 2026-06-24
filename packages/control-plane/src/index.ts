@@ -1106,7 +1106,10 @@ export function createCampaignRegistryRouter(
 
 export function createRouteRegistryRouter(
   routeRegistry: RouteRegistry,
-  options: Pick<ControlPlaneAppOptions, "campaignRegistry" | "jsonLimit"> = {}
+  options: Pick<
+    ControlPlaneAppOptions,
+    "auth" | "campaignRegistry" | "jsonLimit" | "merchantRegistry"
+  > = {}
 ): Router {
   const router = express.Router();
   router.use(express.json({ limit: options.jsonLimit ?? "128kb" }));
@@ -1187,6 +1190,50 @@ export function createRouteRegistryRouter(
 
       const route = await routeRegistry.activateRoute({ claim });
       res.status(201).json({ route });
+    } catch (error) {
+      if (
+        !sendRouteRegistryError(res, error) &&
+        !sendCampaignRegistryError(res, error) &&
+        !sendMerchantRegistryError(res, error)
+      ) {
+        next(error);
+      }
+    }
+  });
+
+  router.post("/v1/routes/:routeId/suspend", async (req, res, next) => {
+    try {
+      const routeId = readRouteParam(req.params.routeId, "routeId");
+      const route = await routeRegistry.getRoute(routeId);
+      if (route === undefined) {
+        res.status(404).json({ error: "route_not_found" });
+        return;
+      }
+
+      if (isMerchantAuthRequired(options)) {
+        const campaignRegistry = requireRouteCampaignRegistry(options);
+        const campaign = await campaignRegistry.getCampaign(route.campaignId);
+        if (campaign === undefined) {
+          res.status(404).json({ error: "campaign_not_found" });
+          return;
+        }
+        const session = await requireMerchantOwnerForMerchantId(
+          req,
+          res,
+          options,
+          campaign.merchantId
+        );
+        if (session === undefined) {
+          return;
+        }
+      }
+
+      const suspended = await routeRegistry.suspendRoute({ routeId });
+      if (suspended === undefined) {
+        res.status(404).json({ error: "route_not_found" });
+        return;
+      }
+      res.json({ route: suspended });
     } catch (error) {
       if (
         !sendRouteRegistryError(res, error) &&

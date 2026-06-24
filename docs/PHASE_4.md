@@ -48,10 +48,11 @@ Status: started.
   service-key signature.
 - Added campaign activation checks for active merchant status, verified merchant
   origin ownership, valid service-key window, and immutable version signatures.
-- Added route draft/sign/activate registry types with canonical unsigned referral
-  claims, signing bytes, signature verification, and active route records.
-- Added `POST /v1/routes/drafts`, `POST /v1/routes`, and
-  `GET /v1/routes/:routeId`.
+- Added route draft/sign/activate/suspend registry types with canonical unsigned
+  referral claims, signing bytes, signature verification, active route records,
+  and idempotent route suspension.
+- Added `POST /v1/routes/drafts`, `POST /v1/routes`,
+  `POST /v1/routes/:routeId/suspend`, and `GET /v1/routes/:routeId`.
 - Added active campaign, resource origin, campaign version, and operation-scope
   checks around route draft creation and activation.
 - Added `PostgresRouteRegistry` for durable active route and signed referral-claim
@@ -120,12 +121,13 @@ Status: started.
   hashes, signing bytes, owner-authenticated campaign mutations, and merchant
   signature activation.
 - Added route registry and HTTP tests for unsigned draft creation, signed route
-  activation, duplicate activation idempotency, invalid signatures, and conflicting
-  route claims.
+  activation, duplicate activation idempotency, invalid signatures, conflicting
+  route claims, merchant-owner-authorized route suspension, and idempotent
+  suspension.
 - Added PostgreSQL campaign registry tests for draft persistence, immutable
   version persistence, operation rows, activation state, and conflict mapping.
 - Added PostgreSQL route registry tests for route persistence, duplicate claim
-  idempotency, and same-route/different-claim conflicts.
+  idempotency, same-route/different-claim conflicts, and idempotent suspension.
 - Extended the live PostgreSQL integration harness to apply the route migration
   and persist one activated route row.
 - Added PostgreSQL receipt-ingestion tests for committed outbox payloads and
@@ -165,7 +167,7 @@ a zero-sum ledger transaction.
 - Full x402 SVM settlement-verifier parity, including explicit associated token
   account derivation and multi-provider RPC hardening.
 - Webhook dispatch loop and deployable worker process entrypoints.
-- Route suspension, payout-wallet rotation, and route search history.
+- Payout-wallet rotation and route search history.
 
 ## Acceptance Checks
 
