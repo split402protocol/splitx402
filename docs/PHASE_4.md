@@ -30,6 +30,9 @@ Status: started.
 - Added wallet authentication challenge and session types.
 - Added in-memory single-use wallet authentication challenge/session storage.
 - Added `POST /v1/auth/challenges` and `POST /v1/auth/sessions`.
+- Added `PostgresWalletAuthStore` for durable single-use challenges and hashed
+  bearer sessions.
+- Added `0003_wallet_auth.sql` for auth challenge and session tables.
 - Added optional auth gating for merchant creation, origin registration,
   service-key registration, and service-key revocation.
 - Added merchant service-key resolution for receipt verification by `merchantId`,
@@ -58,6 +61,8 @@ Status: started.
   after later key rotation, and post-revocation receipt rejection.
 - Added wallet authentication tests for signed challenge exchange, challenge replay,
   session expiry, and auth-gated merchant mutations.
+- Added PostgreSQL wallet-auth tests for durable challenge consumption, token hash
+  persistence, and replay rejection.
 - Reworked the README with protocol diagrams, package graph, control-plane flow,
   endpoint overview, and usage examples.
 
@@ -72,7 +77,7 @@ a zero-sum ledger transaction.
 ## Remaining Milestone 2 Work
 
 - Live PostgreSQL integration test harness.
-- Persistent wallet-auth session storage and refresh.
+- Wallet-auth refresh token flow.
 - Production auth policy wiring for the deployable runtime.
 - Campaign version APIs.
 - Route draft, sign, and activate flow.

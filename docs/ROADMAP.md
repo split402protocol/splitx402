@@ -110,6 +110,8 @@ Current slice:
 - public receipt ingestion domain that verifies merchant-signed receipts;
 - wallet authentication challenge and session domain;
 - `POST /v1/auth/challenges` and `POST /v1/auth/sessions`;
+- PostgreSQL wallet-auth store for single-use challenges and hashed bearer
+  sessions;
 - Express control-plane app and `POST /v1/receipts` route for public receipt
   submissions;
 - store interface boundary for durable receipt persistence;
