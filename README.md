@@ -24,10 +24,11 @@ The MVP rule is:
 
 ## Status
 
-Phase 2 has started. It implements architecture Milestone 0 by importing the
-protocol package and deterministic test vectors from `splitx402/ffff`, converting
-the repo to a pnpm workspace, and keeping the Phase 1 HTTP skeleton as a temporary
-runnable host.
+Phase 3 has started. Phase 2 implemented architecture Milestone 0 by importing the
+protocol package and deterministic test vectors from `splitx402/ffff`. The current
+slice begins architecture Milestone 1 by adding the `@split402/x402-extension`
+package used to advertise signed offers, validate attribution, and return signed
+receipts around x402 settlement.
 
 No production contracts or mainnet payment flows exist yet.
 
@@ -38,6 +39,7 @@ No production contracts or mainnet payment flows exist yet.
 - [Phase 0 status](docs/PHASE_0.md)
 - [Phase 1 status](docs/PHASE_1.md)
 - [Phase 2 status](docs/PHASE_2.md)
+- [Phase 3 status](docs/PHASE_3.md)
 - [MVP build plan](docs/BUILD_PLAN.md)
 - [Architecture baseline decision](docs/decisions/0003-adopt-architecture-and-ffff-baseline.md)
 - [Roadmap](docs/ROADMAP.md)
