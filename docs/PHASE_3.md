@@ -6,7 +6,7 @@ merchant runtime, agent SDK, and demo agent from `ffff`.
 
 ## Current Status
 
-Status: started.
+Status: paid-suite proof recorded.
 
 ## What Changed
 
@@ -34,6 +34,9 @@ Status: started.
 - Added demo scripts for buyer setup, demo mint setup, existing-token setup,
   merchant offer inspection, preflight readiness checks, and the paid-suite receipt
   harness.
+- Added separate demo setup fee-payer support for demo mint creation.
+- Recorded a Solana Devnet existing-token paid-suite proof in
+  [`docs/proofs/phase3-paid-suite-2026-06-24.md`](proofs/phase3-paid-suite-2026-06-24.md).
 
 ## Why This Comes Next
 
@@ -46,8 +49,9 @@ same flow against funded Devnet assets.
 
 ## Remaining Milestone 1 Work
 
-- Prove the paid-suite against funded Solana Devnet assets and record the resulting
-  valid and invalid-claim receipts.
+- Optional canonical 20 percent demo-mint rerun with a funded disposable setup fee
+  payer.
+- Prepare Phase 4 control-plane ingestion work.
 
 ## Acceptance Checks
 

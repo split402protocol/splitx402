@@ -29,7 +29,7 @@ import { base58Encode, hexToBytes } from "@split402/protocol";
 
 import { WORKSPACE_ENV_PATH } from "./env.js";
 import { getSolLamports, getTokenAccountSummary, SOLANA_RPC_URL } from "./solana-rpc.js";
-import { createSvmSignerFromEnv } from "./svm-key.js";
+import { createSvmSignerFromBase58, createSvmSignerFromEnv } from "./svm-key.js";
 
 const DEFAULT_SERVICE_SEED_HEX =
   "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
@@ -57,27 +57,28 @@ async function main(): Promise<void> {
   );
   const serviceSigner = await createKeyPairSignerFromPrivateKeyBytes(serviceSeed);
   const buyerSigner = await createSvmSignerFromEnv();
+  const feePayerSigner = await createDemoFeePayerSigner(serviceSigner, buyerSigner);
   const mintSigner = await generateKeyPairSigner();
   const merchantPayTo = process.env.SPLIT402_MERCHANT_PAY_TO ?? DEFAULT_PAY_TO;
-  const serviceLamports = await getSolLamports(serviceSigner.address);
+  const feePayerLamports = await getSolLamports(feePayerSigner.address);
 
-  if (BigInt(serviceLamports) <= 0n) {
+  if (BigInt(feePayerLamports) <= 0n) {
     throw new Error(
-      `service fee payer ${serviceSigner.address} has no Devnet SOL; set SPLIT402_SERVICE_SEED_HEX to a funded service key or fund the default service wallet`
+      `demo fee payer ${feePayerSigner.address} has no Devnet SOL; run corepack pnpm demo:setup-buyer, set SPLIT402_DEMO_FEE_PAYER_PRIVATE_KEY to a funded Devnet key, or fund the selected fee payer`
     );
   }
 
   const rpc = createSolanaRpc(SOLANA_RPC_URL);
   const rpcSubscriptions = createSolanaRpcSubscriptions(SOLANA_WS_URL);
   const createMintPlan = getCreateMintInstructionPlan({
-    payer: serviceSigner,
+    payer: feePayerSigner,
     newMint: mintSigner,
     decimals: DECIMALS,
     mintAuthority: serviceSigner.address,
     freezeAuthority: null
   });
   const mintToBuyerPlan = await getMintToATAInstructionPlanAsync({
-    payer: serviceSigner,
+    payer: feePayerSigner,
     owner: buyerSigner.address,
     mint: mintSigner.address,
     mintAuthority: serviceSigner,
@@ -86,7 +87,7 @@ async function main(): Promise<void> {
   });
   const createMerchantAtaInstruction =
     await getCreateAssociatedTokenIdempotentInstructionAsync({
-      payer: serviceSigner,
+      payer: feePayerSigner,
       owner: address(merchantPayTo),
       mint: mintSigner.address
     });
@@ -100,7 +101,7 @@ async function main(): Promise<void> {
       const { value: latestBlockhash } = await rpc.getLatestBlockhash().send();
       return pipe(
         createTransactionMessage({ version: 0 }),
-        (message) => setTransactionMessageFeePayerSigner(serviceSigner, message),
+        (message) => setTransactionMessageFeePayerSigner(feePayerSigner, message),
         (message) => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, message)
       );
     }
@@ -143,8 +144,9 @@ async function main(): Promise<void> {
         demoMintReady: true,
         network: "Solana Devnet",
         rpcUrl: SOLANA_RPC_URL,
-        serviceFeePayer: serviceSigner.address,
-        serviceLamportsBefore: serviceLamports,
+        serviceMintAuthority: serviceSigner.address,
+        feePayer: feePayerSigner.address,
+        feePayerLamportsBefore: feePayerLamports,
         mint: mintSigner.address,
         decimals: DECIMALS,
         requiredAmountAtomic: REQUIRED_AMOUNT_ATOMIC,
@@ -175,6 +177,20 @@ async function main(): Promise<void> {
       2
     )
   );
+}
+
+async function createDemoFeePayerSigner(
+  serviceSigner: Awaited<ReturnType<typeof createKeyPairSignerFromPrivateKeyBytes>>,
+  buyerSigner: Awaited<ReturnType<typeof createSvmSignerFromEnv>>
+) {
+  const feePayerSecret = process.env.SPLIT402_DEMO_FEE_PAYER_PRIVATE_KEY;
+  if (feePayerSecret !== undefined && feePayerSecret.length > 0) {
+    return await createSvmSignerFromBase58(feePayerSecret);
+  }
+  if (process.env.SPLIT402_USE_BUYER_AS_DEMO_FEE_PAYER === "true") {
+    return buyerSigner;
+  }
+  return serviceSigner;
 }
 
 async function upsertEnvValues(values: Record<string, string>): Promise<void> {

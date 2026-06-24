@@ -12,9 +12,19 @@ import {
   createDemoMerchantApp
 } from "../src/app.js";
 
+const DEFAULT_TEST_CONFIG = {
+  merchantOrigin: "http://localhost:4021",
+  paymentAsset: DEFAULT_DEVNET_USDC,
+  requiredAmountAtomic: "10000",
+  commissionBps: 2000
+};
+
 describe("Split402 demo merchant", () => {
   it("exposes root metadata", async () => {
-    const { app } = createDemoMerchantApp({ syncFacilitator: false });
+    const { app } = createDemoMerchantApp({
+      ...DEFAULT_TEST_CONFIG,
+      syncFacilitator: false
+    });
 
     await request(app)
       .get("/")
@@ -31,6 +41,7 @@ describe("Split402 demo merchant", () => {
 
   it("exposes health with merchant and campaign defaults", async () => {
     const { app, merchantPayTo, servicePublicKey } = createDemoMerchantApp({
+      ...DEFAULT_TEST_CONFIG,
       syncFacilitator: false
     });
 
@@ -54,6 +65,7 @@ describe("Split402 demo merchant", () => {
 
   it("publishes Split402 discovery metadata", async () => {
     const { app, merchantPayTo, servicePublicKey } = createDemoMerchantApp({
+      ...DEFAULT_TEST_CONFIG,
       syncFacilitator: false
     });
 
@@ -85,7 +97,10 @@ describe("Split402 demo merchant", () => {
   });
 
   it("exposes an empty receipt debug list before paid calls", async () => {
-    const { app } = createDemoMerchantApp({ syncFacilitator: false });
+    const { app } = createDemoMerchantApp({
+      ...DEFAULT_TEST_CONFIG,
+      syncFacilitator: false
+    });
 
     await request(app)
       .get("/debug/receipts")
@@ -97,6 +112,7 @@ describe("Split402 demo merchant", () => {
 
   it("returns an x402 challenge with Split402 offer metadata for unpaid risk requests", async () => {
     const { app } = createDemoMerchantApp({
+      ...DEFAULT_TEST_CONFIG,
       facilitatorClient: createSupportedFacilitatorClient()
     });
 
