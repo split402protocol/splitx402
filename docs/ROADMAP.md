@@ -154,6 +154,8 @@ Current slice:
 - receipt chain-verification worker framework with a pluggable verifier and
   PostgreSQL state transition to available accruals;
 - bounded/abortable chain-verification polling loop for deployable worker wiring;
+- durable control-plane runtime factory with PostgreSQL store wiring and
+  required-by-default merchant auth policy;
 - Solana JSON-RPC verifier for receipt settlement signatures and parsed transfer
   checks;
 - packaged PostgreSQL migration runner with checksum tracking and an opt-in live

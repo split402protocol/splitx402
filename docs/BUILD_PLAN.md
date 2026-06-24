@@ -214,6 +214,9 @@ Current slice:
   that makes confirmed accruals payout-eligible;
 - add a bounded/abortable chain-verification polling loop around the worker
   framework for deployable runtime wiring;
+- add a durable control-plane runtime factory that wires PostgreSQL stores,
+  receipt key resolution, wallet auth, and required-by-default merchant auth
+  policy from runtime configuration;
 - add a Solana JSON-RPC verifier for settlement signatures and parsed
   transaction transfer checks covering mint, payer authority, pay-to owner
   evidence, and amount;

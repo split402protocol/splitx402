@@ -71,6 +71,9 @@ Status: started.
 - Added a bounded and abortable chain-verification polling loop around the worker
   framework with idle backoff, transient error handling, and result/error hooks for
   deployable runtime wiring.
+- Added a durable control-plane runtime factory that wires PostgreSQL merchant,
+  campaign, route, wallet-auth, receipt, and outbox stores with receipt key
+  resolution and required-by-default merchant auth policy.
 - Added a Solana JSON-RPC signature-status verifier for receipt settlement
   signatures with confirmed/finalized commitment handling, retryable RPC failures,
   and rejected failed transactions.
@@ -133,6 +136,9 @@ Status: started.
   receipt events, plus PostgreSQL coverage for verified receipt/accrual state.
 - Added chain-verification loop tests for bounded idle polling, abort handling,
   and transient processor errors.
+- Added control-plane runtime tests for required-by-default auth policy, disabled
+  auth embeddings, environment-driven pool configuration, close handling, and
+  invalid runtime configuration.
 - Added Solana RPC verifier tests for confirmed/finalized signatures, missing
   signatures, RPC errors, failed transactions, malformed responses, and network
   mismatches.
@@ -156,11 +162,9 @@ a zero-sum ledger transaction.
 ## Remaining Milestone 2 Work
 
 - Wallet-auth refresh token flow.
-- Production auth policy wiring for the deployable runtime.
-- Deployable control-plane runtime wiring.
 - Full x402 SVM settlement-verifier parity, including explicit associated token
   account derivation and multi-provider RPC hardening.
-- Webhook dispatch loop and deployable worker runtime wiring.
+- Webhook dispatch loop and deployable worker process entrypoints.
 - Route suspension, payout-wallet rotation, and route search history.
 
 ## Acceptance Checks
