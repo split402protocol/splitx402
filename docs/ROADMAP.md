@@ -134,6 +134,11 @@ Current slice:
 - optional owner-wallet auth gating for merchant mutations;
 - PostgreSQL merchant registry adapter for merchant, origin, and service-key
   persistence;
+- in-memory campaign registry with immutable version records, terms hashes, and
+  signing bytes;
+- `POST /v1/campaigns`, `GET /v1/campaigns/:campaignId`,
+  `GET /v1/campaigns/:campaignId/versions/:version`, and
+  `POST /v1/campaigns/:campaignId/versions`;
 - receipt verifier key resolution through registered merchant service keys.
 
 ## Phase 5: Production Merchant SDK

@@ -84,6 +84,7 @@ mainnet payment flows exist yet.
 | PostgreSQL merchant/key/origin persistence | Started |
 | Wallet-authenticated merchant mutations | Started |
 | PostgreSQL wallet-auth persistence | Started |
+| Campaign draft/version APIs | Started |
 | Chain verification worker and payout engine | Not implemented |
 | `$SPLIT` bonding and atomic split settlement | Later research |
 
@@ -163,6 +164,10 @@ GET  /v1/merchants/:merchantId
 POST /v1/merchants/:merchantId/origins
 POST /v1/merchants/:merchantId/keys
 POST /v1/merchants/:merchantId/keys/:kid/revoke
+POST /v1/campaigns
+GET  /v1/campaigns/:campaignId
+GET  /v1/campaigns/:campaignId/versions/:version
+POST /v1/campaigns/:campaignId/versions
 ```
 
 ## Persistence Layout
@@ -177,6 +182,7 @@ flowchart LR
   Keys[("merchant_keys")]
   Challenges[("wallet_auth_challenges")]
   Sessions[("wallet_auth_sessions")]
+  Campaigns["Campaign registry"]
   Receipts[("payment_receipts")]
   Accruals[("commission_accruals")]
   LedgerTx[("ledger_transactions")]
@@ -189,6 +195,7 @@ flowchart LR
   Registry --> Keys
   API --> Challenges
   API --> Sessions
+  API --> Campaigns
   Ingestion --> Receipts
   Ingestion --> Accruals
   Ingestion --> LedgerTx
