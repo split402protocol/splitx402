@@ -1,27 +1,30 @@
-# Phase 0: Decisions
+# Phase 0: Repository Setup
 
-Phase 0 turns SplitX402 from an idea into an implementation-ready protocol plan.
+Phase 0 created the initial repository and planning surface.
 
 ## Current Status
 
-Local status: complete enough to begin Phase 1.
+Status: complete.
 
 GitHub status: live at `split402protocol/splitx402`.
 
-## Accepted Decisions
+## Current Interpretation
 
-- Runtime: TypeScript on Node.js.
-- Network: Base Sepolia first.
-- Asset: test USDC or the facilitator-supported test token on Base Sepolia.
-- x402 scheme: v2 `exact`.
-- SDK: prototype behind a local adapter using the currently published
-  `@coinbase/x402` package while tracking x402 Foundation package movement.
-- Split representation: `extensions.splitx402`.
-- Settlement target: one vault, merchant, or splitter address.
-- Split execution: internal ledger first, payout worker second.
-- Persistence: SQLite for the MVP.
-- Idempotency: require `payment-identifier` for every paid route.
-- Receipts: add signed offers/receipts after the first vertical slice works.
+The earliest Phase 0 notes treated this as a narrower repo-name-based Base/EVM
+experiment.
+That is superseded by
+[`0003`](decisions/0003-adopt-architecture-and-ffff-baseline.md).
+
+The canonical project direction is Split402:
+
+- Solana x402 `exact` payments;
+- USDC-denominated paid APIs and agent tools;
+- Split402 referral claims attached through x402 extension metadata;
+- merchant-signed offers and receipts;
+- idempotent commission accrual;
+- PostgreSQL as the MVP source of truth;
+- merchant-funded batched USDC payouts;
+- `$SPLIT` route bonding and atomic `split-exact` settlement later.
 
 ## Phase 0 Exit Criteria
 
@@ -32,12 +35,6 @@ GitHub status: live at `split402protocol/splitx402`.
 
 ## Next Phase
 
-Phase 1 starts with the smallest honest vertical slice:
-
-1. TypeScript API service.
-2. `GET /v1/health`.
-3. `GET /v1/paid-demo`.
-4. x402 `exact` challenge on Base Sepolia.
-5. Required payment id.
-6. SQLite payment/settlement storage.
-7. Three-recipient split allocation endpoint.
+The current implementation path is Phase 2, which maps to architecture Milestone 0:
+pnpm workspace, `@split402/protocol`, deterministic test vectors, signing helpers,
+receipts, request digests, and commission math.

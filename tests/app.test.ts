@@ -19,20 +19,20 @@ let dataDir: string;
 let config: AppConfig;
 
 beforeEach(async () => {
-  dataDir = await mkdtemp(path.join(os.tmpdir(), "splitx402-test-"));
+  dataDir = await mkdtemp(path.join(os.tmpdir(), "split402-test-"));
   config = loadConfig({
     NODE_ENV: "test",
     PORT: "4021",
     LOG_LEVEL: "silent",
-    SPLITX402_PAYMENT_MODE: "mock",
-    SPLITX402_NETWORK: "eip155:84532",
-    SPLITX402_ASSET: "USDC",
-    SPLITX402_PRICE_USD: "0.001",
-    SPLITX402_PAY_TO: "0x0000000000000000000000000000000000000000",
-    SPLITX402_FACILITATOR_URL: "https://x402.org/facilitator",
-    SPLITX402_SYNC_FACILITATOR: "false",
-    SPLITX402_RESOURCE_BASE_URL: "http://localhost:4021",
-    SPLITX402_DATA_DIR: dataDir,
+    SPLIT402_PAYMENT_MODE: "mock",
+    SPLIT402_NETWORK: "eip155:84532",
+    SPLIT402_ASSET: "USDC",
+    SPLIT402_PRICE_USD: "0.001",
+    SPLIT402_PAY_TO: "0x0000000000000000000000000000000000000000",
+    SPLIT402_FACILITATOR_URL: "https://x402.org/facilitator",
+    SPLIT402_SYNC_FACILITATOR: "false",
+    SPLIT402_RESOURCE_BASE_URL: "http://localhost:4021",
+    SPLIT402_DATA_DIR: dataDir,
   });
 });
 
@@ -40,7 +40,7 @@ afterEach(async () => {
   await rm(dataDir, { recursive: true, force: true });
 });
 
-describe("SplitX402 Phase 1 service", () => {
+describe("Split402 Phase 1 service", () => {
   it("returns health status", async () => {
     const { app } = createApp(config);
 
@@ -50,7 +50,7 @@ describe("SplitX402 Phase 1 service", () => {
       .expect(({ body }) => {
         expect(body).toMatchObject({
           status: "ok",
-          service: "splitx402",
+          service: "split402",
           phase: "phase-1",
           paymentMode: "mock",
         });
@@ -85,11 +85,11 @@ describe("SplitX402 Phase 1 service", () => {
     const { app } = createApp(config);
 
     await request(app)
-      .get("/.well-known/splitx402.json")
+      .get("/.well-known/split402.json")
       .expect(200)
       .expect(({ body }) => {
         expect(body).toMatchObject({
-          protocol: "splitx402",
+          protocol: "split402",
           version: "0.1-phase-1",
           settlementMode: "mock",
         });

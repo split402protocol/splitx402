@@ -1,0 +1,17 @@
+[
+  {
+    "name": "wallet-risk-json-post",
+    "digest": "sha256:2371212d42d10ddb2c1221bf055c06b449b88b4b6a7f8602e52c4363e1c44aca",
+    "operation": {
+      "method": "POST",
+      "pathTemplate": "/v1/risk/:wallet",
+      "pathParams": {
+        "wallet": "2Zqh2jyHWKtqxGy4zMjicNRFq6EPa5JMkhxKTkyVP2yJ"
+      },
+      "query": {},
+      "body": {
+        "includeLabels": true
+      }
+    }
+  }
+]

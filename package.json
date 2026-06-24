@@ -1,20 +1,24 @@
 {
-  "name": "splitx402",
+  "name": "split402",
   "version": "0.1.0",
   "description": "x402-compatible split revenue infrastructure for paid HTTP resources.",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@10.30.2",
   "engines": {
     "node": ">=22.0.0"
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "corepack pnpm -r --if-present build && tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && corepack pnpm -r --if-present typecheck",
     "lint": "eslint .",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "vitest run && corepack pnpm -r --if-present test",
+    "test:watch": "vitest",
+    "vectors": "corepack pnpm --filter @split402/protocol vectors",
+    "vectors:check": "corepack pnpm --filter @split402/protocol vectors:check",
+    "audit": "corepack pnpm audit --audit-level high"
   },
   "dependencies": {
     "@x402/core": "2.16.0",
@@ -30,7 +34,7 @@
   "devDependencies": {
     "@eslint/js": "9.39.4",
     "@types/express": "5.0.6",
-    "@types/node": "22.10.7",
+    "@types/node": "22.20.0",
     "@types/supertest": "6.0.3",
     "eslint": "9.39.4",
     "globals": "15.14.0",
@@ -40,7 +44,9 @@
     "typescript-eslint": "8.62.0",
     "vitest": "4.1.9"
   },
-  "overrides": {
-    "ws": "8.21.0"
+  "pnpm": {
+    "overrides": {
+      "ws": "8.21.0"
+    }
   }
 }

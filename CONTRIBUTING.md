@@ -1,6 +1,6 @@
 # Contributing
 
-SplitX402 is early-stage protocol infrastructure. Contributions should preserve the
+Split402 is early-stage protocol infrastructure. Contributions should preserve the
 project's current bias: compatibility first, explicit decisions, and testable payment
 invariants.
 
@@ -14,16 +14,13 @@ invariants.
 
 ## Local Development
 
-The implementation scaffold has not landed yet. Until Phase 1 begins, documentation
-changes are the primary contribution type.
-
-Expected Phase 1 commands:
+Expected local commands:
 
 ```bash
-npm install
-npm test
-npm run lint
-npm run typecheck
+corepack pnpm install
+corepack pnpm test
+corepack pnpm lint
+corepack pnpm typecheck
 ```
 
 ## Pull Requests
@@ -34,4 +31,3 @@ Each pull request should include:
 - the decision or issue it supports;
 - validation performed;
 - any protocol, security, or migration concerns.
-

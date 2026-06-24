@@ -25,17 +25,17 @@ export function createApp(config: AppConfig) {
   app.get("/v1/health", (_req, res) => {
     res.json({
       status: "ok",
-      service: "splitx402",
+      service: "split402",
       phase: "phase-1",
       paymentMode: config.paymentMode,
     });
   });
 
-  app.get("/.well-known/splitx402.json", (_req, res) => {
+  app.get("/.well-known/split402.json", (_req, res) => {
     res.json({
-      protocol: "splitx402",
+      protocol: "split402",
       version: "0.1-phase-1",
-      service: "SplitX402",
+      service: "Split402",
       settlementMode: config.paymentMode === "mock" ? "mock" : "x402-exact",
       routes: [
         {
@@ -56,7 +56,7 @@ export function createApp(config: AppConfig) {
   app.get(PAID_DEMO_ROUTE, (_req, res) => {
     res.json({
       ok: true,
-      service: "splitx402",
+      service: "split402",
       route: PAID_DEMO_ROUTE,
       paymentId: typeof res.locals.paymentId === "string" ? res.locals.paymentId : null,
       settlementStatus: config.paymentMode === "mock" ? "mock-settled" : "settled",

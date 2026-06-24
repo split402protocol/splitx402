@@ -30,10 +30,10 @@ export function createPaymentRequired(config: AppConfig): PaymentRequired {
     error: "Payment required",
     resource: {
       url: `${config.resourceBaseUrl}${PAID_DEMO_ROUTE}`,
-      description: "SplitX402 paid demo response",
+      description: "Split402 paid demo response",
       mimeType: "application/json",
-      serviceName: "SplitX402",
-      tags: ["splitx402", "x402", "phase-1"],
+      serviceName: "Split402",
+      tags: ["split402", "x402", "phase-1"],
     },
     accepts: [createAcceptedPayment(config)],
     extensions: {
@@ -58,10 +58,10 @@ export function createX402Routes(config: AppConfig): RoutesConfig {
         },
       ],
       resource: `${config.resourceBaseUrl}${PAID_DEMO_ROUTE}`,
-      description: "SplitX402 paid demo response",
+      description: "Split402 paid demo response",
       mimeType: "application/json",
-      serviceName: "SplitX402",
-      tags: ["splitx402", "x402", "phase-1"],
+      serviceName: "Split402",
+      tags: ["split402", "x402", "phase-1"],
       extensions: {
         [PAYMENT_IDENTIFIER]: declarePaymentIdentifierExtension(true),
       },

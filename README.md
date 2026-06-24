@@ -1,60 +1,70 @@
-# SplitX402
+# Split402
 
-> x402-compatible split revenue infrastructure for paid HTTP resources.
+> Referral, attribution, and commission infrastructure for x402-paid APIs and
+> agent tools.
 
-SplitX402 is a proposed x402-compatible payment architecture for charging once over
-HTTP and distributing the resulting revenue across multiple recipients.
+Split402 is the project name. This repository, `split402protocol/splitx402`, is the
+v2 implementation line for the same Split402 protocol work that started in
+`splitx402/ffff`.
 
-The key direction is:
+The source of truth for scope is the Split402 protocol architecture v0.1 spec in
+[`docs/reference/split402_protocol_architecture_v0.1.md`](docs/reference/split402_protocol_architecture_v0.1.md).
+The `ffff` repo is the first implementation pass built from that spec; this repo
+continues it with a cleaner branch/PR history and staged delivery.
 
-- stay compatible with normal x402 clients;
-- express split intent as an x402 extension;
-- settle first to a deterministic merchant/vault address;
-- distribute splits through a ledger and payout worker until true atomic split
-  settlement is worth the added protocol and contract complexity.
+The MVP rule is:
+
+- keep the commercial x402 payment in USDC;
+- attach signed referral attribution through a Split402 x402 extension;
+- settle the gross payment normally to the merchant;
+- record a signed receipt and commission liability;
+- pay referrers from a merchant-funded payout worker;
+- leave atomic split settlement and `$SPLIT` route bonding out of the critical path
+  until the payment loop works end to end.
 
 ## Status
 
-Phase 1 skeleton service is underway on a feature branch. No production contracts or
-mainnet payment flows exist yet.
+Phase 2 has started. It implements architecture Milestone 0 by importing the
+protocol package and deterministic test vectors from `splitx402/ffff`, converting
+the repo to a pnpm workspace, and keeping the Phase 1 HTTP skeleton as a temporary
+runnable host.
+
+No production contracts or mainnet payment flows exist yet.
 
 ## Docs
 
-- [Architecture opinion](docs/SPLITX402_ARCHITECTURE.md)
+- [Canonical architecture spec](docs/reference/split402_protocol_architecture_v0.1.md)
+- [Architecture alignment note](docs/SPLIT402_ARCHITECTURE.md)
 - [Phase 0 status](docs/PHASE_0.md)
 - [Phase 1 status](docs/PHASE_1.md)
+- [Phase 2 status](docs/PHASE_2.md)
 - [MVP build plan](docs/BUILD_PLAN.md)
-- [Phase 0 decisions](docs/decisions/0001-phase-0-protocol-decisions.md)
-- [Phase 1 service scope](docs/decisions/0002-phase-1-service-scope.md)
+- [Architecture baseline decision](docs/decisions/0003-adopt-architecture-and-ffff-baseline.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Security policy](SECURITY.md)
 
-## Suggested First Build
-
-Start with a TypeScript service that protects one HTTP endpoint with x402, requires a
-`payment-identifier`, records settlement, and allocates split shares in an internal
-ledger. Add onchain payout only after the quote, settlement, idempotency, and
-reconciliation loop is working on testnet.
-
 ## Development
 
-Copy `.env.example` to `.env`, then run:
+Use Corepack/pnpm for workspace commands:
 
 ```bash
-npm install
-npm run dev
+corepack enable
+corepack pnpm install
+corepack pnpm dev
 ```
 
 Useful checks:
 
 ```bash
-npm run lint
-npm run typecheck
-npm test
-npm run build
-npm audit --audit-level high
+corepack pnpm lint
+corepack pnpm typecheck
+corepack pnpm test
+corepack pnpm build
+corepack pnpm vectors:check
+corepack pnpm audit
 ```
 
-By default the service runs in `SPLITX402_PAYMENT_MODE=mock`, which emits x402-shaped
-HTTP 402 challenges and accepts deterministic mock payment payloads for local tests.
-Use `SPLITX402_PAYMENT_MODE=x402` for the real facilitator-backed middleware path.
+By default the temporary service runs in `SPLIT402_PAYMENT_MODE=mock`, which emits
+x402-shaped HTTP 402 challenges and accepts deterministic mock payment payloads for
+local tests. Use `SPLIT402_PAYMENT_MODE=x402` only when exercising the older Phase 1
+facilitator-backed path.
