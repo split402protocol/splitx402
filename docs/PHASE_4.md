@@ -52,6 +52,10 @@ Status: started.
   operation persistence.
 - Added `0004_campaigns.sql` for campaign, campaign version, and campaign
   operation tables.
+- Added a packaged PostgreSQL migration runner with checksum tracking.
+- Added an opt-in live PostgreSQL integration harness that applies migrations in
+  an isolated schema and exercises merchant, campaign, wallet-auth, receipt,
+  accrual, and ledger persistence through real `pg`.
 - Added merchant service-key resolution for receipt verification by `merchantId`,
   `kid`, purpose, and receipt issue time.
 - Added `0002_merchants_keys_origins.sql` for merchant, origin, and key tables.
@@ -85,6 +89,8 @@ Status: started.
   signature activation.
 - Added PostgreSQL campaign registry tests for draft persistence, immutable
   version persistence, operation rows, activation state, and conflict mapping.
+- Added `corepack pnpm test:postgres` for live PostgreSQL validation when
+  `SPLIT402_TEST_DATABASE_URL` is set.
 - Reworked the README with protocol diagrams, package graph, control-plane flow,
   endpoint overview, and usage examples.
 
@@ -98,7 +104,6 @@ a zero-sum ledger transaction.
 
 ## Remaining Milestone 2 Work
 
-- Live PostgreSQL integration test harness.
 - Wallet-auth refresh token flow.
 - Production auth policy wiring for the deployable runtime.
 - Route draft, sign, and activate flow.
@@ -118,3 +123,5 @@ a zero-sum ledger transaction.
 - `corepack pnpm build`
 - `corepack pnpm vectors:check`
 - `corepack pnpm audit`
+- Optional live database check:
+  `SPLIT402_TEST_DATABASE_URL=... corepack pnpm test:postgres`
