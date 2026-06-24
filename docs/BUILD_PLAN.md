@@ -134,6 +134,9 @@ Current slice:
 - port `apps/demo-agent` from `ffff`;
 - expose buyer setup, token setup, offer inspection, preflight, and paid-suite demo
   scripts;
+- support a separate disposable fee payer for demo mint setup;
+- record an existing-token Devnet paid-suite proof with valid and invalid-claim
+  receipts;
 - validate required and optional attribution before settlement;
 - keep valid/invalid claim behavior, Express adapter behavior, demo merchant
   metadata/challenge behavior, and agent SDK offer/receipt behavior covered by tests.

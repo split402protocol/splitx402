@@ -32,7 +32,8 @@ receipts around x402 settlement, the `@split402/express` request-context adapter
 the first `apps/demo-merchant` runtime, and the `@split402/agent-sdk` buyer-side
 client for offer inspection, referral claims, and receipt verification. The current
 slice also includes `apps/demo-agent`, the runnable Devnet setup, preflight, offer
-inspection, and paid-suite harness.
+inspection, and paid-suite harness. An existing-token Devnet paid-suite proof is
+recorded in [`docs/proofs/phase3-paid-suite-2026-06-24.md`](docs/proofs/phase3-paid-suite-2026-06-24.md).
 
 No production contracts or mainnet payment flows exist yet.
 
