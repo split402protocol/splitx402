@@ -1,7 +1,9 @@
 import {
+  ReferralClaimV1Schema,
   Split402ReceiptV1Schema,
   hashProtocolObject,
   verifySplit402ReceiptObject,
+  type ReferralClaimV1,
   type Split402ReceiptV1
 } from "@split402/protocol";
 import express from "express";
@@ -20,6 +22,7 @@ import {
   isCampaignRegistryValidationError,
   type CampaignCommissionBase,
   type CampaignOperation,
+  type CampaignProfile,
   type CampaignRegistry,
   type CampaignTermsInput
 } from "./campaigns.js";
@@ -35,6 +38,13 @@ import {
   type MerchantRegistry,
   type MerchantStatus
 } from "./merchants.js";
+import {
+  RouteRegistryValidationError,
+  isRouteRegistryConflictError,
+  isRouteRegistryValidationError,
+  type RouteOperationScope,
+  type RouteRegistry
+} from "./routes.js";
 
 export type ReceiptIngestSource = "buyer" | "merchant" | "relay" | "unknown";
 export type ReceiptVerificationState =
@@ -403,6 +413,7 @@ export interface ControlPlaneAppOptions {
   ingestor: ReceiptIngestor;
   merchantRegistry?: MerchantRegistry;
   campaignRegistry?: CampaignRegistry;
+  routeRegistry?: RouteRegistry;
   auth?: ControlPlaneAuthOptions;
   jsonLimit?: string;
 }
@@ -435,6 +446,9 @@ export function createControlPlaneApp(
   }
   if (options.campaignRegistry !== undefined) {
     app.use(createCampaignRegistryRouter(options.campaignRegistry, options));
+  }
+  if (options.routeRegistry !== undefined) {
+    app.use(createRouteRegistryRouter(options.routeRegistry, options));
   }
 
   app.use((_req, res) => {
@@ -909,6 +923,121 @@ export function createCampaignRegistryRouter(
   return router;
 }
 
+export function createRouteRegistryRouter(
+  routeRegistry: RouteRegistry,
+  options: Pick<ControlPlaneAppOptions, "campaignRegistry" | "jsonLimit"> = {}
+): Router {
+  const router = express.Router();
+  router.use(express.json({ limit: options.jsonLimit ?? "128kb" }));
+
+  router.post("/v1/routes/drafts", async (req, res, next) => {
+    try {
+      const campaignRegistry = requireRouteCampaignRegistry(options);
+      const body = requireJsonObject(req.body);
+      const campaign = await loadActiveCampaignForRoute(
+        campaignRegistry,
+        readRequiredString(body.campaignId, "campaignId")
+      );
+      const resourceOrigin =
+        readOptionalString(body.resourceOrigin, "resourceOrigin") ??
+        campaign.current.terms.resourceOrigin;
+      const operationIds =
+        readOptionalRouteOperationScope(body.operationIds) ?? ["*"];
+      assertRouteScopeMatchesCampaign(campaign, resourceOrigin, operationIds);
+
+      const id = readOptionalString(body.id, "id");
+      const issuedAt = readOptionalString(body.issuedAt, "issuedAt");
+      const nonce = readOptionalString(body.nonce, "nonce");
+      const metadataHash = readOptionalSha256Hash(body.metadataHash, "metadataHash");
+      const campaignVersionMin =
+        readOptionalPositiveInteger(
+          body.campaignVersionMin,
+          "campaignVersionMin"
+        ) ?? campaign.currentVersion;
+      if (campaignVersionMin > campaign.currentVersion) {
+        throw new RouteRegistryValidationError(
+          "route draft requires a newer campaign version"
+        );
+      }
+      const draft = await routeRegistry.createRouteDraft({
+        ...(id === undefined ? {} : { id }),
+        campaignId: campaign.id,
+        campaignVersionMin,
+        referrerWallet: readRequiredString(body.referrerWallet, "referrerWallet"),
+        payoutWallet: readRequiredString(body.payoutWallet, "payoutWallet"),
+        resourceOrigin,
+        operationIds,
+        ...(issuedAt === undefined ? {} : { issuedAt }),
+        expiresAt: readRequiredString(body.expiresAt, "expiresAt"),
+        ...(nonce === undefined ? {} : { nonce }),
+        ...(metadataHash === undefined ? {} : { metadataHash })
+      });
+      res.status(201).json({ draft });
+    } catch (error) {
+      if (
+        !sendRouteRegistryError(res, error) &&
+        !sendCampaignRegistryError(res, error) &&
+        !sendMerchantRegistryError(res, error)
+      ) {
+        next(error);
+      }
+    }
+  });
+
+  router.post("/v1/routes", async (req, res, next) => {
+    try {
+      const campaignRegistry = requireRouteCampaignRegistry(options);
+      const body = requireJsonObject(req.body);
+      const claim = readReferralClaim(body.claim);
+      const campaign = await loadActiveCampaignForRoute(
+        campaignRegistry,
+        claim.campaignId
+      );
+      assertRouteScopeMatchesCampaign(
+        campaign,
+        claim.resourceOrigin,
+        claim.operationIds
+      );
+      if (claim.campaignVersionMin > campaign.currentVersion) {
+        throw new RouteRegistryValidationError(
+          "route claim requires a newer campaign version"
+        );
+      }
+
+      const route = await routeRegistry.activateRoute({ claim });
+      res.status(201).json({ route });
+    } catch (error) {
+      if (
+        !sendRouteRegistryError(res, error) &&
+        !sendCampaignRegistryError(res, error) &&
+        !sendMerchantRegistryError(res, error)
+      ) {
+        next(error);
+      }
+    }
+  });
+
+  router.get("/v1/routes/:routeId", async (req, res, next) => {
+    try {
+      const routeId = readRouteParam(req.params.routeId, "routeId");
+      const route = await routeRegistry.getRoute(routeId);
+      if (route === undefined) {
+        res.status(404).json({ error: "route_not_found" });
+        return;
+      }
+      res.json({ route });
+    } catch (error) {
+      if (!sendRouteRegistryError(res, error) && !sendMerchantRegistryError(res, error)) {
+        next(error);
+      }
+    }
+  });
+
+  router.use(jsonErrorHandler);
+
+  return router;
+}
+
 export function isReceiptIngestSource(value: unknown): value is ReceiptIngestSource {
   return (
     typeof value === "string" &&
@@ -1058,6 +1187,114 @@ function readOptionalWalletAuthPurpose(value: unknown): WalletAuthPurpose | unde
     return value;
   }
   throw new MerchantRegistryValidationError("purpose must be merchant-session");
+}
+
+function requireRouteCampaignRegistry(
+  options: Pick<ControlPlaneAppOptions, "campaignRegistry">
+): CampaignRegistry {
+  if (options.campaignRegistry === undefined) {
+    throw new RouteRegistryValidationError(
+      "campaign registry is required for route registration"
+    );
+  }
+  return options.campaignRegistry;
+}
+
+async function loadActiveCampaignForRoute(
+  campaignRegistry: CampaignRegistry,
+  campaignId: string
+): Promise<CampaignProfile> {
+  const campaign = await campaignRegistry.getCampaign(campaignId);
+  if (campaign === undefined) {
+    throw new RouteRegistryValidationError(`unknown campaign: ${campaignId}`);
+  }
+  if (campaign.status !== "active") {
+    throw new RouteRegistryValidationError("campaign must be active");
+  }
+  return campaign;
+}
+
+function assertRouteScopeMatchesCampaign(
+  campaign: CampaignProfile,
+  resourceOrigin: string,
+  operationIds: RouteOperationScope
+): void {
+  if (resourceOrigin !== campaign.current.terms.resourceOrigin) {
+    throw new RouteRegistryValidationError(
+      "route resourceOrigin must match the active campaign version"
+    );
+  }
+  if (operationIds[0] === "*") {
+    return;
+  }
+
+  const campaignOperationIds = new Set(
+    campaign.current.terms.operations.map((operation) => operation.operationId)
+  );
+  const missingOperationIds = operationIds.filter(
+    (operationId) => !campaignOperationIds.has(operationId)
+  );
+  if (missingOperationIds.length > 0) {
+    throw new RouteRegistryValidationError(
+      `route operationIds are not in the active campaign version: ${missingOperationIds.join(", ")}`
+    );
+  }
+}
+
+function readOptionalRouteOperationScope(
+  value: unknown
+): RouteOperationScope | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new RouteRegistryValidationError(
+      "operationIds must be a non-empty array"
+    );
+  }
+  if (value.includes("*")) {
+    if (value.length !== 1 || value[0] !== "*") {
+      throw new RouteRegistryValidationError(
+        "operationIds wildcard must be the only scope entry"
+      );
+    }
+    return ["*"];
+  }
+  const operationIds = value.map((operationId) => {
+    if (typeof operationId !== "string" || operationId.trim().length === 0) {
+      throw new RouteRegistryValidationError(
+        "operationIds entries must be non-empty strings"
+      );
+    }
+    return operationId;
+  });
+  if (new Set(operationIds).size !== operationIds.length) {
+    throw new RouteRegistryValidationError("operationIds entries must be unique");
+  }
+  return operationIds;
+}
+
+function readOptionalSha256Hash(
+  value: unknown,
+  label: string
+): `sha256:${string}` | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "string" || !/^sha256:[0-9a-f]{64}$/u.test(value)) {
+    throw new RouteRegistryValidationError(`${label} must be a sha256 hash`);
+  }
+  return value as `sha256:${string}`;
+}
+
+function readReferralClaim(value: unknown): ReferralClaimV1 {
+  const parsed = ReferralClaimV1Schema.safeParse(value);
+  if (!parsed.success) {
+    throw new RouteRegistryValidationError(
+      parsed.error.issues.map((issue) => issue.message).join("; ")
+    );
+  }
+  return parsed.data;
 }
 
 function readCampaignTermsInput(body: Record<string, unknown>): CampaignTermsInput {
@@ -1238,6 +1475,7 @@ export * from "./campaigns.js";
 export * from "./merchants.js";
 export * from "./migrations.js";
 export * from "./postgres.js";
+export * from "./routes.js";
 
 function isMerchantAuthRequired(
   options: Pick<ControlPlaneAppOptions, "auth">
@@ -1382,6 +1620,18 @@ function sendCampaignRegistryError(res: Response, error: unknown): boolean {
     return true;
   }
   if (isCampaignRegistryConflictError(error)) {
+    res.status(409).json({ error: "conflict", message: error.message });
+    return true;
+  }
+  return false;
+}
+
+function sendRouteRegistryError(res: Response, error: unknown): boolean {
+  if (isRouteRegistryValidationError(error)) {
+    res.status(400).json({ error: "invalid_request", message: error.message });
+    return true;
+  }
+  if (isRouteRegistryConflictError(error)) {
     res.status(409).json({ error: "conflict", message: error.message });
     return true;
   }

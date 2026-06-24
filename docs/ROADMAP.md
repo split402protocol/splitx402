@@ -141,6 +141,8 @@ Current slice:
   `POST /v1/campaigns/:campaignId/versions`;
 - owner-authorized `POST /v1/campaigns/:campaignId/activate` for the current
   version with registered merchant service-key signature verification;
+- route draft/sign/activate APIs with canonical unsigned referral claims,
+  referrer signature verification, and active campaign scope checks;
 - PostgreSQL campaign registry adapter with campaign, immutable version,
   operation, and activation persistence;
 - packaged PostgreSQL migration runner with checksum tracking and an opt-in live

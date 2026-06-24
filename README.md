@@ -87,6 +87,7 @@ mainnet payment flows exist yet.
 | Campaign draft/version APIs | Started |
 | Campaign activation APIs | Started |
 | PostgreSQL campaign persistence | Started |
+| Route draft/sign/activate APIs | Started |
 | Live PostgreSQL migration/integration harness | Started |
 | Chain verification worker and payout engine | Not implemented |
 | `$SPLIT` bonding and atomic split settlement | Later research |
@@ -172,6 +173,9 @@ GET  /v1/campaigns/:campaignId
 POST /v1/campaigns/:campaignId/activate
 GET  /v1/campaigns/:campaignId/versions/:version
 POST /v1/campaigns/:campaignId/versions
+POST /v1/routes/drafts
+POST /v1/routes
+GET  /v1/routes/:routeId
 ```
 
 ## Persistence Layout

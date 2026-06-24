@@ -200,6 +200,8 @@ Current slice:
   signing bytes;
 - add owner-authorized campaign activation for the current version with registered
   merchant service-key signature verification;
+- add route draft/sign/activate APIs with canonical unsigned referral claims,
+  referrer signature verification, and active campaign scope checks;
 - add the PostgreSQL campaign registry adapter and migration for durable campaign,
   immutable version, operation, and activation state;
 - add the packaged PostgreSQL migration runner and opt-in live integration harness
