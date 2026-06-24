@@ -1,42 +1,34 @@
 # 0002: Phase 1 Service Scope
 
 Date: 2026-06-24
-Status: accepted
+Status: superseded by 0003 where it conflicts with the Split402 architecture spec
 
 ## Context
 
-Phase 1 needs a runnable service that proves the x402 HTTP skeleton before the
-project expands into split manifests, receipts, or payout logic.
+Phase 1 needed a runnable service that proved the x402 HTTP skeleton before the
+project expanded into full Split402 protocol packages, referral claims, receipts,
+control-plane storage, or payout logic.
 
-The public `splitx402/ffff` repository was reviewed as a reference. It contains a
-larger Split402 monorepo with protocol packages, Solana Devnet demos, signed offers,
-referral claims, receipts, and generated test vectors.
+The public `splitx402/ffff` repository and the local architecture spec define the
+broader Split402 direction: Solana Devnet demos, signed offers, referral claims,
+receipts, deterministic test vectors, persistent ingestion, ledger accounting, and
+merchant-funded payouts.
 
 ## Decision
 
-Keep this repository as a focused single-package TypeScript service for Phase 1.
+Keep the Phase 1 service as a temporary runnable HTTP host and test target. Do not
+treat its narrower EVM/Base assumptions as the Split402 product direction.
 
-Use the Phase 0 direction:
+The Phase 1 service should use the canonical Split402 name in visible metadata:
 
-- Base Sepolia first;
-- x402 v2 `exact`;
-- payment-identifier required;
-- one paid HTTP demo route;
-- settlement recording;
-- no custom split scheme yet.
-
-Adopt only the reference ideas that improve Phase 1 without changing scope:
-
-- explicit facilitator sync control;
-- service discovery metadata;
-- clear local mock mode for unpaid/paid handshake tests.
+- `GET /.well-known/split402.json`;
+- service name `Split402`;
+- `SPLIT402_*` environment variables.
 
 ## Consequences
 
-- The codebase remains small enough to iterate quickly.
-- The first pull request can be reviewed as service infrastructure rather than a full
-  protocol suite.
-- We avoid copying Solana-specific assumptions into a Base Sepolia MVP.
-- The reference repository remains useful later for signed receipts, test vectors,
-  agent SDK shape, and referral/commission workflows.
-
+- Phase 1 remains useful for local handshake tests.
+- Phase 2 can port the `ffff` protocol package and test vectors without being blocked
+  by the service skeleton.
+- Later phases should replace or absorb the skeleton into the Solana Devnet merchant
+  demo described by the architecture spec.

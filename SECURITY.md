@@ -1,6 +1,6 @@
 # Security Policy
 
-SplitX402 is not ready for production or mainnet use.
+Split402 is not ready for production or mainnet use.
 
 ## Supported Versions
 
@@ -29,4 +29,3 @@ The first implementation must protect:
 - custody of significant balances;
 - custom x402 schemes;
 - unaudited splitter contracts.
-

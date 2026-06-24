@@ -12,7 +12,6 @@ app.listen(config.port, () => {
       network: config.network,
       facilitatorUrl: config.facilitatorUrl,
     },
-    "SplitX402 service listening",
+    "Split402 service listening",
   );
 });
-

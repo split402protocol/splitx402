@@ -18,16 +18,22 @@ jobs:
         uses: actions/setup-node@v6.4.0
         with:
           node-version: 22
-          cache: npm
+          cache: pnpm
+
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Install
-        run: npm ci
+        run: corepack pnpm install --frozen-lockfile
 
       - name: Lint
-        run: npm run lint
+        run: corepack pnpm lint
 
       - name: Typecheck
-        run: npm run typecheck
+        run: corepack pnpm typecheck
 
       - name: Test
-        run: npm test
+        run: corepack pnpm test
+
+      - name: Check vectors
+        run: corepack pnpm vectors:check
