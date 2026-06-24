@@ -9,6 +9,7 @@ import request from "supertest";
 import { describe, expect, it } from "vitest";
 
 import {
+  buildCampaignTermsSigningBytes,
   InMemoryCampaignRegistry,
   InMemoryMerchantRegistry,
   InMemoryReceiptIngestionStore,
@@ -16,6 +17,7 @@ import {
   ReceiptIngestor,
   WalletAuthenticator,
   createControlPlaneApp,
+  type CampaignVersionRecord,
   type CampaignTermsInput
 } from "../src/index.js";
 
@@ -24,6 +26,9 @@ const OWNER_SEED = hexToBytes(
 );
 const OTHER_OWNER_SEED = hexToBytes(
   "c0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf"
+);
+const MERCHANT_SEED = hexToBytes(
+  "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
 );
 const OWNER_WALLET = deriveEd25519PublicKey(OWNER_SEED);
 const OTHER_OWNER_WALLET = deriveEd25519PublicKey(OTHER_OWNER_SEED);
@@ -323,6 +328,85 @@ describe("control-plane HTTP API", () => {
     expect(nextVersionResponse.body.version.version).toBe(2);
     expect(nextVersionResponse.body.version.terms.commissionBps).toBe(2500);
   });
+
+  it("activates a campaign with a merchant service-key signature", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const { app } = createTestApp({
+      withAuth: true,
+      withCampaignRegistry: true,
+      withMerchantRegistry: true
+    });
+    const ownerToken = await createAccessToken(app, OWNER_SEED, OWNER_WALLET);
+    await request(app)
+      .post("/v1/merchants")
+      .set("authorization", `Bearer ${ownerToken}`)
+      .send({
+        id: bundle.artifacts.receipt.merchantId,
+        slug: "demo-merchant",
+        displayName: "Demo Merchant",
+        status: "active"
+      })
+      .expect(201);
+    await request(app)
+      .post(`/v1/merchants/${bundle.artifacts.receipt.merchantId}/origins`)
+      .set("authorization", `Bearer ${ownerToken}`)
+      .send({
+        origin: bundle.artifacts.receipt.merchantOrigin,
+        verificationMethod: "well_known",
+        status: "verified",
+        verifiedAt: "2026-06-24T00:01:00Z"
+      })
+      .expect(201);
+    await request(app)
+      .post(`/v1/merchants/${bundle.artifacts.receipt.merchantId}/keys`)
+      .set("authorization", `Bearer ${ownerToken}`)
+      .send({
+        kid: bundle.artifacts.receipt.kid,
+        publicKey: bundle.keys.merchantPublicKey,
+        validFrom: "2026-06-24T00:00:00Z"
+      })
+      .expect(201);
+    const campaignResponse = await request(app)
+      .post("/v1/campaigns")
+      .set("authorization", `Bearer ${ownerToken}`)
+      .send({
+        id: bundle.artifacts.receipt.campaignId,
+        merchantId: bundle.artifacts.receipt.merchantId,
+        ...createCampaignBody()
+      })
+      .expect(201);
+    const currentVersion = campaignResponse.body.campaign
+      .current as CampaignVersionRecord;
+    const signature = signCampaignTerms(currentVersion);
+
+    await request(app)
+      .post(`/v1/campaigns/${bundle.artifacts.receipt.campaignId}/activate`)
+      .set("authorization", `Bearer ${ownerToken}`)
+      .send({
+        kid: bundle.artifacts.receipt.kid,
+        signature: mutateSignature(signature)
+      })
+      .expect(400);
+    const activationResponse = await request(app)
+      .post(`/v1/campaigns/${bundle.artifacts.receipt.campaignId}/activate`)
+      .set("authorization", `Bearer ${ownerToken}`)
+      .send({
+        kid: bundle.artifacts.receipt.kid,
+        signature
+      })
+      .expect(200);
+
+    expect(activationResponse.body.campaign.status).toBe("active");
+    expect(activationResponse.body.campaign.current.merchantKid).toBe(
+      bundle.artifacts.receipt.kid
+    );
+    expect(activationResponse.body.campaign.current.merchantSignature).toBe(
+      signature
+    );
+    expect(activationResponse.body.campaign.current.activatedAt).toBe(
+      "2026-06-24T00:02:00.000Z"
+    );
+  });
 });
 
 function createTestApp(
@@ -432,4 +516,15 @@ function createCampaignBody(
     endsAt: null,
     ...overrides
   };
+}
+
+function signCampaignTerms(version: CampaignVersionRecord): string {
+  return signEd25519Message(
+    buildCampaignTermsSigningBytes(version.terms),
+    MERCHANT_SEED
+  ).signature;
+}
+
+function mutateSignature(signature: string): string {
+  return `${signature.slice(0, -1)}${signature.endsWith("A") ? "B" : "A"}`;
 }

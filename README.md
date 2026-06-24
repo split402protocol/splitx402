@@ -85,6 +85,7 @@ mainnet payment flows exist yet.
 | Wallet-authenticated merchant mutations | Started |
 | PostgreSQL wallet-auth persistence | Started |
 | Campaign draft/version APIs | Started |
+| Campaign activation APIs | Started |
 | Chain verification worker and payout engine | Not implemented |
 | `$SPLIT` bonding and atomic split settlement | Later research |
 
@@ -166,6 +167,7 @@ POST /v1/merchants/:merchantId/keys
 POST /v1/merchants/:merchantId/keys/:kid/revoke
 POST /v1/campaigns
 GET  /v1/campaigns/:campaignId
+POST /v1/campaigns/:campaignId/activate
 GET  /v1/campaigns/:campaignId/versions/:version
 POST /v1/campaigns/:campaignId/versions
 ```

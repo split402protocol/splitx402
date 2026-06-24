@@ -43,6 +43,11 @@ Status: started.
   `POST /v1/campaigns/:campaignId/versions`.
 - Added owner-wallet auth gating for campaign creation and new campaign versions
   when auth is enabled.
+- Added `POST /v1/campaigns/:campaignId/activate` for owner-authorized
+  activation of the current campaign version with a registered Ed25519 merchant
+  service-key signature.
+- Added campaign activation checks for active merchant status, verified merchant
+  origin ownership, valid service-key window, and immutable version signatures.
 - Added merchant service-key resolution for receipt verification by `merchantId`,
   `kid`, purpose, and receipt issue time.
 - Added `0002_merchants_keys_origins.sql` for merchant, origin, and key tables.
@@ -72,7 +77,8 @@ Status: started.
 - Added PostgreSQL wallet-auth tests for durable challenge consumption, token hash
   persistence, and replay rejection.
 - Added campaign registry and HTTP tests for immutable version creation, terms
-  hashes, signing bytes, and owner-authenticated campaign mutations.
+  hashes, signing bytes, owner-authenticated campaign mutations, and merchant
+  signature activation.
 - Reworked the README with protocol diagrams, package graph, control-plane flow,
   endpoint overview, and usage examples.
 
@@ -89,7 +95,6 @@ a zero-sum ledger transaction.
 - Live PostgreSQL integration test harness.
 - Wallet-auth refresh token flow.
 - Production auth policy wiring for the deployable runtime.
-- Campaign activation with merchant signature verification.
 - PostgreSQL-backed campaign registry adapter.
 - Route draft, sign, and activate flow.
 - Deployable control-plane runtime wiring.

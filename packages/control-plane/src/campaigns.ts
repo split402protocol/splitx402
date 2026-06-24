@@ -6,7 +6,8 @@ import {
   buildDomainSeparatedSigningBytes,
   bytesToHex,
   createPrefixedId,
-  hashProtocolObject
+  hashProtocolObject,
+  verifyEd25519Signature
 } from "@split402/protocol";
 
 export type CampaignStatus = "draft" | "active" | "paused" | "closed";
@@ -48,6 +49,9 @@ export interface CampaignVersionRecord {
   terms: CampaignTerms;
   termsHash: `sha256:${string}`;
   signingBytesHex: string;
+  merchantKid?: string;
+  merchantSignature?: string;
+  activatedAt?: string;
   createdAt: string;
 }
 
@@ -91,6 +95,14 @@ export interface CreateCampaignVersionInput extends CampaignTermsInput {
   campaignId: string;
 }
 
+export interface ActivateCampaignVersionInput {
+  campaignId: string;
+  version?: number;
+  merchantKid: string;
+  merchantPublicKey: string;
+  merchantSignature: string;
+}
+
 export interface CampaignRegistry {
   createCampaign(input: CreateCampaignInput): Promise<CampaignProfile> | CampaignProfile;
   getCampaign(campaignId: string): Promise<CampaignProfile | undefined> | CampaignProfile | undefined;
@@ -101,6 +113,9 @@ export interface CampaignRegistry {
   createCampaignVersion(
     input: CreateCampaignVersionInput
   ): Promise<CampaignVersionRecord> | CampaignVersionRecord;
+  activateCampaignVersion(
+    input: ActivateCampaignVersionInput
+  ): Promise<CampaignProfile> | CampaignProfile;
 }
 
 export interface InMemoryCampaignRegistryOptions {
@@ -214,11 +229,95 @@ export class InMemoryCampaignRegistry implements CampaignRegistry {
     this.campaigns.set(campaign.id, {
       ...campaign,
       resourceOrigin: version.terms.resourceOrigin,
+      status: "draft",
       currentVersion: nextVersion,
       updatedAt: now
     });
 
     return cloneCampaignVersion(version);
+  }
+
+  activateCampaignVersion(input: ActivateCampaignVersionInput): CampaignProfile {
+    const campaign = this.campaigns.get(input.campaignId);
+    if (campaign === undefined) {
+      throw new CampaignRegistryValidationError(`unknown campaign: ${input.campaignId}`);
+    }
+    if (campaign.status === "closed") {
+      throw new CampaignRegistryValidationError("closed campaigns cannot be activated");
+    }
+
+    const versionNumber = assertPositiveVersion(input.version ?? campaign.currentVersion);
+    if (versionNumber !== campaign.currentVersion) {
+      throw new CampaignRegistryValidationError(
+        "only the current campaign version can be activated"
+      );
+    }
+
+    const versions = this.versionsByCampaignId.get(campaign.id);
+    const version = versions?.get(versionNumber);
+    if (version === undefined || versions === undefined) {
+      throw new CampaignRegistryValidationError(
+        `unknown campaign version: ${input.campaignId}:${versionNumber}`
+      );
+    }
+
+    const merchantKid = assertNonEmptyString(input.merchantKid, "merchantKid");
+    const merchantPublicKey = assertBase58PublicKey(
+      input.merchantPublicKey,
+      "merchantPublicKey"
+    );
+    const merchantSignature = assertNonEmptyString(
+      input.merchantSignature,
+      "merchantSignature"
+    );
+
+    if (
+      version.merchantKid !== undefined ||
+      version.merchantSignature !== undefined
+    ) {
+      if (
+        version.merchantKid === merchantKid &&
+        version.merchantSignature === merchantSignature
+      ) {
+        return {
+          ...cloneCampaign(campaign),
+          current: cloneCampaignVersion(version)
+        };
+      }
+      throw new CampaignRegistryConflictError(
+        "campaign version is already activated with a different signature"
+      );
+    }
+
+    if (
+      !verifyCampaignTermsSignature(
+        version.terms,
+        merchantPublicKey,
+        merchantSignature
+      )
+    ) {
+      throw new CampaignRegistryValidationError("invalid campaign terms signature");
+    }
+
+    const now = this.now();
+    const activatedVersion: CampaignVersionRecord = {
+      ...version,
+      merchantKid,
+      merchantSignature,
+      activatedAt: now
+    };
+    const activatedCampaign: CampaignRecord = {
+      ...campaign,
+      status: "active",
+      updatedAt: now
+    };
+    versions.set(versionNumber, activatedVersion);
+    this.campaigns.set(campaign.id, activatedCampaign);
+
+    return {
+      ...cloneCampaign(activatedCampaign),
+      current: cloneCampaignVersion(activatedVersion)
+    };
   }
 
   private now(): string {
@@ -240,6 +339,22 @@ export function isCampaignRegistryConflictError(
 
 export function buildCampaignTermsSigningBytes(terms: CampaignTerms): Uint8Array {
   return buildDomainSeparatedSigningBytes("split402:campaign-terms:v1", terms);
+}
+
+export function verifyCampaignTermsSignature(
+  terms: CampaignTerms,
+  merchantPublicKey: string,
+  merchantSignature: string
+): boolean {
+  try {
+    return verifyEd25519Signature(
+      buildCampaignTermsSigningBytes(terms),
+      merchantPublicKey,
+      merchantSignature
+    );
+  } catch {
+    return false;
+  }
 }
 
 function createCampaignVersionRecord(

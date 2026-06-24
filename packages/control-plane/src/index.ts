@@ -15,6 +15,7 @@ import {
   type WalletAuthPurpose
 } from "./auth.js";
 import {
+  CampaignRegistryValidationError,
   isCampaignRegistryConflictError,
   isCampaignRegistryValidationError,
   type CampaignCommissionBase,
@@ -757,6 +758,96 @@ export function createCampaignRegistryRouter(
     }
   });
 
+  router.post("/v1/campaigns/:campaignId/activate", async (req, res, next) => {
+    try {
+      const campaignId = readRouteParam(req.params.campaignId, "campaignId");
+      const campaign = await campaignRegistry.getCampaign(campaignId);
+      if (campaign === undefined) {
+        res.status(404).json({ error: "campaign_not_found" });
+        return;
+      }
+      const session = await requireMerchantOwnerForMerchantId(
+        req,
+        res,
+        options,
+        campaign.merchantId
+      );
+      if (session === undefined && isMerchantAuthRequired(options)) {
+        return;
+      }
+      if (options.merchantRegistry === undefined) {
+        res.status(500).json({
+          error: "internal_server_error",
+          message: "merchant registry is required for campaign activation"
+        });
+        return;
+      }
+
+      const body = requireJsonObject(req.body);
+      const versionNumber = readOptionalPositiveInteger(body.version, "version");
+      const version = await campaignRegistry.getCampaignVersion(
+        campaignId,
+        versionNumber ?? campaign.currentVersion
+      );
+      if (version === undefined) {
+        res.status(404).json({ error: "campaign_version_not_found" });
+        return;
+      }
+
+      const merchant = await options.merchantRegistry.getMerchantProfile(
+        campaign.merchantId
+      );
+      if (merchant === undefined) {
+        res.status(404).json({ error: "merchant_not_found" });
+        return;
+      }
+      if (merchant.status !== "active") {
+        throw new CampaignRegistryValidationError("merchant must be active");
+      }
+      if (
+        !merchant.origins.some(
+          (origin) =>
+            origin.origin === version.terms.resourceOrigin &&
+            origin.status === "verified"
+        )
+      ) {
+        throw new CampaignRegistryValidationError(
+          "campaign resourceOrigin must match a verified merchant origin"
+        );
+      }
+
+      const kid = readRequiredString(body.kid, "kid");
+      const key = await options.merchantRegistry.resolveKey({
+        merchantId: campaign.merchantId,
+        kid,
+        purpose: "offer_receipt"
+      });
+      if (key === undefined) {
+        throw new CampaignRegistryValidationError(
+          "merchant service key not found or inactive"
+        );
+      }
+      if (key.algorithm !== "Ed25519") {
+        throw new CampaignRegistryValidationError(
+          "campaign activation requires an Ed25519 merchant key"
+        );
+      }
+
+      const activated = await campaignRegistry.activateCampaignVersion({
+        campaignId,
+        ...(versionNumber === undefined ? {} : { version: versionNumber }),
+        merchantKid: kid,
+        merchantPublicKey: key.publicKey,
+        merchantSignature: readRequiredString(body.signature, "signature")
+      });
+      res.json({ campaign: activated });
+    } catch (error) {
+      if (!sendCampaignRegistryError(res, error) && !sendMerchantRegistryError(res, error)) {
+        next(error);
+      }
+    }
+  });
+
   router.get(
     "/v1/campaigns/:campaignId/versions/:version",
     async (req, res, next) => {
@@ -1036,6 +1127,22 @@ function readOptionalNumber(value: unknown, label: string): number | undefined {
     return undefined;
   }
   return readRequiredNumber(value, label);
+}
+
+function readOptionalPositiveInteger(
+  value: unknown,
+  label: string
+): number | undefined {
+  const number = readOptionalNumber(value, label);
+  if (number === undefined) {
+    return undefined;
+  }
+  if (!Number.isInteger(number) || number <= 0) {
+    throw new MerchantRegistryValidationError(
+      `${label} must be a positive integer`
+    );
+  }
+  return number;
 }
 
 function readOptionalBoolean(value: unknown, label: string): boolean | undefined {

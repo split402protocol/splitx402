@@ -1,13 +1,21 @@
-import { createSampleProtocolArtifacts } from "@split402/protocol";
+import {
+  createSampleProtocolArtifacts,
+  hexToBytes,
+  signEd25519Message
+} from "@split402/protocol";
 import { describe, expect, it } from "vitest";
 
 import {
+  buildCampaignTermsSigningBytes,
   CampaignRegistryConflictError,
   InMemoryCampaignRegistry,
   type CampaignTermsInput
 } from "../src/index.js";
 
 const FIXED_NOW = new Date("2026-06-24T00:00:00Z");
+const MERCHANT_SEED = hexToBytes(
+  "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+);
 
 describe("campaign registry", () => {
   it("creates immutable campaign terms and signing bytes", () => {
@@ -75,6 +83,48 @@ describe("campaign registry", () => {
       })
     ).toThrow(CampaignRegistryConflictError);
   });
+
+  it("activates the current campaign version with a merchant service-key signature", () => {
+    const bundle = createSampleProtocolArtifacts();
+    const registry = createRegistry();
+    const campaign = registry.createCampaign({
+      id: bundle.artifacts.receipt.campaignId,
+      merchantId: bundle.artifacts.receipt.merchantId,
+      ...createCampaignTerms()
+    });
+    const merchantSignature = signCampaignTerms(campaign.current);
+
+    const activated = registry.activateCampaignVersion({
+      campaignId: campaign.id,
+      merchantKid: bundle.artifacts.receipt.kid,
+      merchantPublicKey: bundle.keys.merchantPublicKey,
+      merchantSignature
+    });
+
+    expect(activated.status).toBe("active");
+    expect(activated.current.merchantKid).toBe(bundle.artifacts.receipt.kid);
+    expect(activated.current.merchantSignature).toBe(merchantSignature);
+    expect(activated.current.activatedAt).toBe(FIXED_NOW.toISOString());
+  });
+
+  it("rejects campaign activation when the merchant signature is invalid", () => {
+    const bundle = createSampleProtocolArtifacts();
+    const registry = createRegistry();
+    const campaign = registry.createCampaign({
+      id: bundle.artifacts.receipt.campaignId,
+      merchantId: bundle.artifacts.receipt.merchantId,
+      ...createCampaignTerms()
+    });
+
+    expect(() =>
+      registry.activateCampaignVersion({
+        campaignId: campaign.id,
+        merchantKid: bundle.artifacts.receipt.kid,
+        merchantPublicKey: bundle.keys.merchantPublicKey,
+        merchantSignature: mutateSignature(signCampaignTerms(campaign.current))
+      })
+    ).toThrow("invalid campaign terms signature");
+  });
 });
 
 function createRegistry(): InMemoryCampaignRegistry {
@@ -107,4 +157,17 @@ function createCampaignTerms(
     endsAt: null,
     ...overrides
   };
+}
+
+function signCampaignTerms(
+  version: ReturnType<InMemoryCampaignRegistry["createCampaign"]>["current"]
+): string {
+  return signEd25519Message(
+    buildCampaignTermsSigningBytes(version.terms),
+    MERCHANT_SEED
+  ).signature;
+}
+
+function mutateSignature(signature: string): string {
+  return `${signature.slice(0, -1)}${signature.endsWith("A") ? "B" : "A"}`;
 }
