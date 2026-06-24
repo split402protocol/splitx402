@@ -173,6 +173,7 @@ Current slice:
 
 - add `@split402/control-plane`;
 - verify submitted Split402 receipts with merchant service public keys;
+- add wallet authentication challenge/session flow;
 - expose a control-plane app and `POST /v1/receipts` route for public receipt
   submission;
 - define the receipt ingestion store interface for durable receipt persistence;
@@ -192,6 +193,8 @@ Current slice:
 - add the merchant/key/origin registry foundation;
 - expose merchant creation, profile, origin registration, service-key registration,
   and service-key revocation routes;
+- gate merchant mutations with authenticated owner-wallet sessions when auth is
+  enabled;
 - resolve receipt verification keys through registered merchant service keys by
   `merchantId` and `kid`;
 - add the PostgreSQL merchant registry adapter for durable merchant, origin, and

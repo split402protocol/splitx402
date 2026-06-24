@@ -7,6 +7,13 @@ import {
 import express from "express";
 import type { NextFunction, Request, Response, Router } from "express";
 
+import {
+  isWalletAuthRejectedError,
+  isWalletAuthValidationError,
+  type AuthenticatedWalletSession,
+  type WalletAuthenticator,
+  type WalletAuthPurpose
+} from "./auth.js";
 import { isReceiptIngestionPersistenceConflict } from "./errors.js";
 import {
   MerchantRegistryValidationError,
@@ -386,7 +393,13 @@ export class ReceiptIngestor {
 export interface ControlPlaneAppOptions {
   ingestor: ReceiptIngestor;
   merchantRegistry?: MerchantRegistry;
+  auth?: ControlPlaneAuthOptions;
   jsonLimit?: string;
+}
+
+export interface ControlPlaneAuthOptions {
+  authenticator: WalletAuthenticator;
+  requireMerchantAuth?: boolean;
 }
 
 export function createControlPlaneApp(
@@ -403,6 +416,9 @@ export function createControlPlaneApp(
     });
   });
 
+  if (options.auth !== undefined) {
+    app.use(createWalletAuthRouter(options.auth.authenticator, options));
+  }
   app.use(createReceiptIngestionRouter(options));
   if (options.merchantRegistry !== undefined) {
     app.use(createMerchantRegistryRouter(options.merchantRegistry, options));
@@ -427,6 +443,52 @@ export function createControlPlaneApp(
   );
 
   return app;
+}
+
+export function createWalletAuthRouter(
+  authenticator: WalletAuthenticator,
+  options: Pick<ControlPlaneAppOptions, "jsonLimit"> = {}
+): Router {
+  const router = express.Router();
+  router.use(express.json({ limit: options.jsonLimit ?? "128kb" }));
+
+  router.post("/v1/auth/challenges", async (req, res, next) => {
+    try {
+      const body = requireJsonObject(req.body);
+      const purpose = readOptionalWalletAuthPurpose(body.purpose);
+      const challenge = await authenticator.createChallenge({
+        wallet: readRequiredString(body.wallet, "wallet"),
+        network: readRequiredString(body.network, "network"),
+        ...(purpose === undefined ? {} : { purpose })
+      });
+      res.status(201).json({ challenge });
+    } catch (error) {
+      if (!sendWalletAuthError(res, error) && !sendMerchantRegistryError(res, error)) {
+        next(error);
+      }
+    }
+  });
+
+  router.post("/v1/auth/sessions", async (req, res, next) => {
+    try {
+      const body = requireJsonObject(req.body);
+      const publicKey = readOptionalString(body.publicKey, "publicKey");
+      const session = await authenticator.createSession({
+        challengeId: readRequiredString(body.challengeId, "challengeId"),
+        signature: readRequiredString(body.signature, "signature"),
+        ...(publicKey === undefined ? {} : { publicKey })
+      });
+      res.status(201).json({ session });
+    } catch (error) {
+      if (!sendWalletAuthError(res, error) && !sendMerchantRegistryError(res, error)) {
+        next(error);
+      }
+    }
+  });
+
+  router.use(jsonErrorHandler);
+
+  return router;
 }
 
 export function createReceiptIngestionRouter(
@@ -474,20 +536,36 @@ export function createReceiptIngestionRouter(
 
 export function createMerchantRegistryRouter(
   merchantRegistry: MerchantRegistry,
-  options: Pick<ControlPlaneAppOptions, "jsonLimit"> = {}
+  options: Pick<ControlPlaneAppOptions, "auth" | "jsonLimit"> = {}
 ): Router {
   const router = express.Router();
   router.use(express.json({ limit: options.jsonLimit ?? "128kb" }));
 
   router.post("/v1/merchants", async (req, res, next) => {
     try {
+      const session = await readMerchantMutationSession(req, res, options);
+      if (session === undefined && isMerchantAuthRequired(options)) {
+        return;
+      }
       const body = requireJsonObject(req.body);
       const id = readOptionalString(body.id, "id");
       const status = readOptionalMerchantStatus(body.status);
+      const ownerWallet =
+        readOptionalString(body.ownerWallet, "ownerWallet") ?? session?.wallet;
+      if (ownerWallet === undefined) {
+        throw new MerchantRegistryValidationError("ownerWallet is required");
+      }
+      if (session !== undefined && ownerWallet !== session.wallet) {
+        res.status(403).json({
+          error: "forbidden",
+          message: "ownerWallet must match authenticated wallet"
+        });
+        return;
+      }
       const merchant = await merchantRegistry.createMerchant({
         slug: readRequiredString(body.slug, "slug"),
         displayName: readRequiredString(body.displayName, "displayName"),
-        ownerWallet: readRequiredString(body.ownerWallet, "ownerWallet"),
+        ownerWallet,
         ...(id === undefined ? {} : { id }),
         ...(status === undefined ? {} : { status })
       });
@@ -516,6 +594,15 @@ export function createMerchantRegistryRouter(
 
   router.post("/v1/merchants/:merchantId/origins", async (req, res, next) => {
     try {
+      const session = await requireMerchantOwnerSession(
+        req,
+        res,
+        options,
+        merchantRegistry
+      );
+      if (session === undefined && isMerchantAuthRequired(options)) {
+        return;
+      }
       const body = requireJsonObject(req.body);
       const verificationMethod = readOptionalOriginVerificationMethod(
         body.verificationMethod
@@ -539,6 +626,15 @@ export function createMerchantRegistryRouter(
 
   router.post("/v1/merchants/:merchantId/keys", async (req, res, next) => {
     try {
+      const session = await requireMerchantOwnerSession(
+        req,
+        res,
+        options,
+        merchantRegistry
+      );
+      if (session === undefined && isMerchantAuthRequired(options)) {
+        return;
+      }
       const body = requireJsonObject(req.body);
       const algorithm = readOptionalMerchantKeyAlgorithm(body.algorithm);
       const purpose = readOptionalMerchantKeyPurpose(body.purpose);
@@ -563,6 +659,15 @@ export function createMerchantRegistryRouter(
 
   router.post("/v1/merchants/:merchantId/keys/:kid/revoke", async (req, res, next) => {
     try {
+      const session = await requireMerchantOwnerSession(
+        req,
+        res,
+        options,
+        merchantRegistry
+      );
+      if (session === undefined && isMerchantAuthRequired(options)) {
+        return;
+      }
       const body = readJsonObject(req.body) ?? {};
       const revokedAt = readOptionalString(body.revokedAt, "revokedAt");
       const reason = readOptionalString(body.reason, "reason");
@@ -730,6 +835,16 @@ function readOptionalMerchantKeyPurpose(
   );
 }
 
+function readOptionalWalletAuthPurpose(value: unknown): WalletAuthPurpose | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === "merchant-session") {
+    return value;
+  }
+  throw new MerchantRegistryValidationError("purpose must be merchant-session");
+}
+
 function readReceiptSource(value: unknown): ReceiptIngestSource | undefined {
   if (value === undefined) {
     return undefined;
@@ -766,8 +881,89 @@ function readHttpErrorStatus(error: unknown): number | undefined {
 }
 
 export * from "./errors.js";
+export * from "./auth.js";
 export * from "./merchants.js";
 export * from "./postgres.js";
+
+function isMerchantAuthRequired(
+  options: Pick<ControlPlaneAppOptions, "auth">
+): boolean {
+  return options.auth?.requireMerchantAuth ?? options.auth !== undefined;
+}
+
+async function readMerchantMutationSession(
+  req: Request,
+  res: Response,
+  options: Pick<ControlPlaneAppOptions, "auth">
+): Promise<AuthenticatedWalletSession | undefined> {
+  if (!isMerchantAuthRequired(options)) {
+    return undefined;
+  }
+  const accessToken = readBearerAccessToken(req);
+  if (accessToken === undefined) {
+    res.status(401).json({
+      error: "unauthorized",
+      message: "bearer access token required"
+    });
+    return undefined;
+  }
+  const session = await options.auth?.authenticator.authenticateAccessToken(
+    accessToken
+  );
+  if (session === undefined || session.purpose !== "merchant-session") {
+    res.status(401).json({
+      error: "unauthorized",
+      message: "invalid or expired access token"
+    });
+    return undefined;
+  }
+  return session;
+}
+
+async function requireMerchantOwnerSession(
+  req: Request,
+  res: Response,
+  options: Pick<ControlPlaneAppOptions, "auth">,
+  merchantRegistry: MerchantRegistry
+): Promise<AuthenticatedWalletSession | undefined> {
+  const session = await readMerchantMutationSession(req, res, options);
+  if (session === undefined) {
+    return undefined;
+  }
+
+  const merchantId = req.params.merchantId;
+  if (typeof merchantId !== "string") {
+    res.status(404).json({ error: "merchant_not_found" });
+    return undefined;
+  }
+
+  const merchant = await merchantRegistry.getMerchantProfile(merchantId);
+  if (merchant === undefined) {
+    res.status(404).json({ error: "merchant_not_found" });
+    return undefined;
+  }
+  if (merchant.ownerWallet !== session.wallet) {
+    res.status(403).json({
+      error: "forbidden",
+      message: "authenticated wallet does not own merchant"
+    });
+    return undefined;
+  }
+  return session;
+}
+
+function readBearerAccessToken(req: Request): string | undefined {
+  const authorization = req.header("authorization");
+  if (authorization === undefined) {
+    return undefined;
+  }
+  const parts = authorization.trim().split(/\s+/u);
+  if (parts.length !== 2 || parts[0]?.toLowerCase() !== "bearer") {
+    return undefined;
+  }
+  const token = parts[1];
+  return token === undefined || token.trim().length === 0 ? undefined : token;
+}
 
 function sendMerchantRegistryError(res: Response, error: unknown): boolean {
   if (isMerchantRegistryValidationError(error)) {
@@ -776,6 +972,18 @@ function sendMerchantRegistryError(res: Response, error: unknown): boolean {
   }
   if (isMerchantRegistryConflict(error)) {
     res.status(409).json({ error: "conflict", message: error.message });
+    return true;
+  }
+  return false;
+}
+
+function sendWalletAuthError(res: Response, error: unknown): boolean {
+  if (isWalletAuthValidationError(error)) {
+    res.status(400).json({ error: "invalid_request", message: error.message });
+    return true;
+  }
+  if (isWalletAuthRejectedError(error)) {
+    res.status(401).json({ error: "unauthorized", message: error.message });
     return true;
   }
   return false;
