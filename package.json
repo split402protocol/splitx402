@@ -12,7 +12,7 @@
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "build": "corepack pnpm -r --if-present build && tsc -p tsconfig.json",
-    "typecheck": "tsc --noEmit -p tsconfig.json && corepack pnpm -r --if-present typecheck",
+    "typecheck": "corepack pnpm -r --if-present build && tsc --noEmit -p tsconfig.json && corepack pnpm -r --if-present typecheck",
     "lint": "eslint .",
     "test": "vitest run && corepack pnpm -r --if-present test",
     "test:watch": "vitest",
