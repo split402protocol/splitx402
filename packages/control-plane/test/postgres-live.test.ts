@@ -1,8 +1,10 @@
 import {
+  buildReferralClaimSigningBytes,
   createSampleProtocolArtifacts,
   deriveEd25519PublicKey,
   hexToBytes,
   signEd25519Message,
+  type ReferralClaimV1,
   type Split402ReceiptV1
 } from "@split402/protocol";
 import { Pool } from "pg";
@@ -16,13 +18,16 @@ import {
   PostgresCampaignRegistry,
   PostgresMerchantRegistry,
   PostgresReceiptIngestionStore,
+  PostgresRouteRegistry,
   PostgresWalletAuthStore,
   ReceiptIngestor,
   WalletAuthenticator,
   type ControlPlaneMigration,
   type ControlPlaneMigrationResult,
   type CampaignTermsInput,
-  type CampaignVersionRecord
+  type CampaignVersionRecord,
+  type RouteDraft,
+  type UnsignedReferralClaim
 } from "../src/index.js";
 
 const DATABASE_URL = process.env.SPLIT402_TEST_DATABASE_URL;
@@ -33,7 +38,15 @@ const OWNER_SEED = hexToBytes(
 const MERCHANT_SEED = hexToBytes(
   "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
 );
+const REFERRER_SEED = hexToBytes(
+  "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
+);
+const PAYOUT_SEED = hexToBytes(
+  "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f"
+);
 const OWNER_WALLET = deriveEd25519PublicKey(OWNER_SEED);
+const REFERRER_WALLET = deriveEd25519PublicKey(REFERRER_SEED);
+const PAYOUT_WALLET = deriveEd25519PublicKey(PAYOUT_SEED);
 
 describeLive("live PostgreSQL control-plane persistence", () => {
   const schema = `split402_live_${Date.now().toString(16)}`;
@@ -90,6 +103,9 @@ describeLive("live PostgreSQL control-plane persistence", () => {
     const campaignRegistry = new PostgresCampaignRegistry(pool, {
       now: () => new Date("2026-06-24T00:00:00Z")
     });
+    const routeRegistry = new PostgresRouteRegistry(pool, {
+      now: () => new Date("2026-06-24T00:00:00Z")
+    });
     const authenticator = createAuthenticator(pool);
     const ingestor = new ReceiptIngestor(new PostgresReceiptIngestionStore(pool), {
       resolveMerchantPublicKey: createMerchantReceiptKeyResolver(merchantRegistry),
@@ -128,6 +144,26 @@ describeLive("live PostgreSQL control-plane persistence", () => {
       merchantPublicKey: bundle.keys.merchantPublicKey,
       merchantSignature: signature
     });
+    const receiptRouteId = bundle.artifacts.receipt.routeId;
+    if (receiptRouteId === undefined) {
+      throw new Error("sample receipt is missing a route id");
+    }
+    const routeDraft = routeRegistry.createRouteDraft({
+      id: receiptRouteId,
+      campaignId: campaign.id,
+      campaignVersionMin: 1,
+      referrerWallet: REFERRER_WALLET,
+      payoutWallet: PAYOUT_WALLET,
+      resourceOrigin: bundle.artifacts.receipt.merchantOrigin,
+      operationIds: [bundle.artifacts.receipt.operationId],
+      issuedAt: "2026-06-24T00:00:00Z",
+      expiresAt: "2026-06-25T00:00:00Z",
+      nonce: "live-route-nonce-0001"
+    });
+    const activatedRoute = await routeRegistry.activateRoute({
+      claim: signRouteDraft(routeDraft)
+    });
+    const loadedRoute = await routeRegistry.getRoute(activatedRoute.id);
 
     const challenge = await authenticator.createChallenge({
       wallet: OWNER_WALLET,
@@ -158,6 +194,7 @@ describeLive("live PostgreSQL control-plane persistence", () => {
       "campaigns",
       "campaign_versions",
       "campaign_operations",
+      "routes",
       "wallet_auth_challenges",
       "wallet_auth_sessions",
       "payment_receipts",
@@ -171,6 +208,7 @@ describeLive("live PostgreSQL control-plane persistence", () => {
     }
 
     expect(activatedCampaign.status).toBe("active");
+    expect(loadedRoute?.claimHash).toBe(activatedRoute.claimHash);
     expect(session.wallet).toBe(OWNER_WALLET);
     expect(ingestion.accrual?.amountAtomic).toBe("2000");
     expect(ingestion.ledgerTransaction?.entries).toHaveLength(3);
@@ -182,6 +220,7 @@ describeLive("live PostgreSQL control-plane persistence", () => {
       campaigns: 1,
       campaign_versions: 1,
       campaign_operations: 1,
+      routes: 1,
       wallet_auth_challenges: 1,
       wallet_auth_sessions: 1,
       payment_receipts: 1,
@@ -229,6 +268,25 @@ function signCampaignTerms(version: CampaignVersionRecord): string {
     buildCampaignTermsSigningBytes(version.terms),
     MERCHANT_SEED
   ).signature;
+}
+
+function signRouteDraft(draft: RouteDraft): ReferralClaimV1 {
+  return signUnsignedClaim(draft.claim);
+}
+
+function signUnsignedClaim(claim: UnsignedReferralClaim): ReferralClaimV1 {
+  const signed = signEd25519Message(
+    buildReferralClaimSigningBytes(claim),
+    REFERRER_SEED
+  );
+  return {
+    ...claim,
+    signature: {
+      type: "solana-ed25519",
+      publicKey: signed.publicKey,
+      value: signed.signature
+    }
+  };
 }
 
 function nextAuthId(prefix: "chl" | "ses", sequence: number): string {

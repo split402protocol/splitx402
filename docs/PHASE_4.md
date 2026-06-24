@@ -54,6 +54,10 @@ Status: started.
   `GET /v1/routes/:routeId`.
 - Added active campaign, resource origin, campaign version, and operation-scope
   checks around route draft creation and activation.
+- Added `PostgresRouteRegistry` for durable active route and signed referral-claim
+  persistence.
+- Added `0005_routes.sql` for route records, claim hashes, operation scopes, and
+  campaign/referrer lookup indexes.
 - Added `PostgresCampaignRegistry` for durable campaign, version, activation, and
   operation persistence.
 - Added `0004_campaigns.sql` for campaign, campaign version, and campaign
@@ -98,6 +102,10 @@ Status: started.
   route claims.
 - Added PostgreSQL campaign registry tests for draft persistence, immutable
   version persistence, operation rows, activation state, and conflict mapping.
+- Added PostgreSQL route registry tests for route persistence, duplicate claim
+  idempotency, and same-route/different-claim conflicts.
+- Extended the live PostgreSQL integration harness to apply the route migration
+  and persist one activated route row.
 - Added `corepack pnpm test:postgres` for live PostgreSQL validation when
   `SPLIT402_TEST_DATABASE_URL` is set.
 - Reworked the README with protocol diagrams, package graph, control-plane flow,
@@ -118,7 +126,7 @@ a zero-sum ledger transaction.
 - Deployable control-plane runtime wiring.
 - Chain verification worker.
 - Outbox event persistence.
-- Immutable campaign and route history.
+- Route suspension, payout-wallet rotation, and route search history.
 
 ## Acceptance Checks
 

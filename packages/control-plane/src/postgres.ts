@@ -3,6 +3,7 @@ import {
   Split402ReceiptV1Schema,
   Split402IdSchema,
   createPrefixedId,
+  ReferralClaimV1Schema,
   type Split402ReceiptV1
 } from "@split402/protocol";
 import type { QueryResult, QueryResultRow } from "pg";
@@ -48,6 +49,18 @@ import {
   type ResolveMerchantKeyInput,
   type RevokeMerchantKeyInput
 } from "./merchants.js";
+import {
+  InMemoryRouteRegistry,
+  RouteRegistryConflictError,
+  type ActivateRouteInput,
+  type CreateRouteDraftInput,
+  type InMemoryRouteRegistryOptions,
+  type RouteDraft,
+  type RouteOperationScope,
+  type RouteRecord,
+  type RouteRegistry,
+  type RouteStatus
+} from "./routes.js";
 import type {
   AccrualStatus,
   CommissionAccrual,
@@ -201,6 +214,26 @@ interface CampaignVersionRow extends QueryResultRow {
   created_at: Date | string;
 }
 
+interface RouteRow extends QueryResultRow {
+  id: string;
+  campaign_id: string;
+  campaign_version_min: number;
+  referrer_wallet: string;
+  payout_wallet: string;
+  resource_origin: string;
+  operation_ids: unknown;
+  claim_hash: `sha256:${string}`;
+  claim_json: unknown;
+  signing_bytes_hex: string;
+  status: string;
+  issued_at: Date | string;
+  expires_at: Date | string;
+  nonce: string;
+  metadata_hash: `sha256:${string}` | null;
+  created_at: Date | string;
+  activated_at: Date | string;
+}
+
 export interface PostgresMerchantRegistryOptions {
   now?: () => Date;
   merchantIdFactory?: () => string;
@@ -210,6 +243,8 @@ export interface PostgresCampaignRegistryOptions {
   now?: () => Date;
   campaignIdFactory?: () => string;
 }
+
+export type PostgresRouteRegistryOptions = InMemoryRouteRegistryOptions;
 
 export class PostgresReceiptIngestionStore implements ReceiptIngestionStore {
   constructor(private readonly db: PostgresPool | PostgresQueryExecutor) {}
@@ -651,6 +686,74 @@ export class PostgresCampaignRegistry implements CampaignRegistry {
   }
 }
 
+export class PostgresRouteRegistry implements RouteRegistry {
+  constructor(
+    private readonly db: PostgresPool | PostgresQueryExecutor,
+    private readonly options: PostgresRouteRegistryOptions = {}
+  ) {}
+
+  createRouteDraft(input: CreateRouteDraftInput): RouteDraft {
+    return this.memoryRegistry().createRouteDraft(input);
+  }
+
+  async activateRoute(input: ActivateRouteInput): Promise<RouteRecord> {
+    const route = this.memoryRegistry().activateRoute(input);
+    try {
+      await insertRoute(this.db, route);
+      return route;
+    } catch (error) {
+      if (!isUniqueViolation(error)) {
+        throw error;
+      }
+      const existingByClaimHash = await this.getRouteByClaimHash(route.claimHash);
+      if (existingByClaimHash !== undefined) {
+        return existingByClaimHash;
+      }
+      const existingById = await this.getRoute(route.id);
+      if (existingById !== undefined) {
+        throw new RouteRegistryConflictError(`route already exists: ${route.id}`);
+      }
+      throw mapRouteWriteError(error);
+    }
+  }
+
+  async getRoute(routeId: string): Promise<RouteRecord | undefined> {
+    const result = await this.db.query<RouteRow>(
+      `select id, campaign_id, campaign_version_min, referrer_wallet,
+              payout_wallet, resource_origin, operation_ids, claim_hash,
+              claim_json, signing_bytes_hex, status, issued_at, expires_at,
+              nonce, metadata_hash, created_at, activated_at
+         from routes
+        where id = $1
+        limit 1`,
+      [routeId]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapRoute(row);
+  }
+
+  private async getRouteByClaimHash(
+    claimHash: `sha256:${string}`
+  ): Promise<RouteRecord | undefined> {
+    const result = await this.db.query<RouteRow>(
+      `select id, campaign_id, campaign_version_min, referrer_wallet,
+              payout_wallet, resource_origin, operation_ids, claim_hash,
+              claim_json, signing_bytes_hex, status, issued_at, expires_at,
+              nonce, metadata_hash, created_at, activated_at
+         from routes
+        where claim_hash = $1
+        limit 1`,
+      [claimHash]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapRoute(row);
+  }
+
+  private memoryRegistry(): InMemoryRouteRegistry {
+    return new InMemoryRouteRegistry(this.options);
+  }
+}
+
 export class PostgresMerchantRegistry implements MerchantRegistry {
   constructor(
     private readonly db: PostgresQueryExecutor,
@@ -1061,6 +1164,42 @@ async function insertCampaignOperations(
   }
 }
 
+function insertRoute(
+  client: PostgresQueryExecutor,
+  route: RouteRecord
+): Promise<QueryResult> {
+  return client.query(
+    `insert into routes (
+       id, campaign_id, campaign_version_min, referrer_wallet, payout_wallet,
+       resource_origin, operation_ids, claim_hash, claim_json, signing_bytes_hex,
+       status, issued_at, expires_at, nonce, metadata_hash, created_at,
+       activated_at
+     ) values (
+       $1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9::jsonb, $10, $11, $12, $13,
+       $14, $15, $16, $17
+     )`,
+    [
+      route.id,
+      route.campaignId,
+      route.campaignVersionMin,
+      route.referrerWallet,
+      route.payoutWallet,
+      route.resourceOrigin,
+      JSON.stringify(route.operationIds),
+      route.claimHash,
+      JSON.stringify(route.claim),
+      route.signingBytesHex,
+      route.status,
+      route.issuedAt,
+      route.expiresAt,
+      route.nonce,
+      route.metadataHash ?? null,
+      route.createdAt,
+      route.activatedAt
+    ]
+  );
+}
+
 function insertReceipt(
   client: PostgresQueryExecutor,
   receiptRecord: ReceiptRecord
@@ -1417,6 +1556,52 @@ function mapCampaignVersion(row: CampaignVersionRow): CampaignVersionRecord {
   };
 }
 
+function mapRoute(row: RouteRow): RouteRecord {
+  return {
+    id: row.id,
+    campaignId: row.campaign_id,
+    campaignVersionMin: row.campaign_version_min,
+    referrerWallet: row.referrer_wallet,
+    payoutWallet: row.payout_wallet,
+    resourceOrigin: row.resource_origin,
+    operationIds: parseRouteOperationScope(row.operation_ids),
+    claimHash: row.claim_hash,
+    claim: parseReferralClaimJson(row.claim_json),
+    signingBytesHex: row.signing_bytes_hex,
+    status: readRouteStatus(row.status),
+    issuedAt: toIsoString(row.issued_at),
+    expiresAt: toIsoString(row.expires_at),
+    nonce: row.nonce,
+    ...(row.metadata_hash === null ? {} : { metadataHash: row.metadata_hash }),
+    createdAt: toIsoString(row.created_at),
+    activatedAt: toIsoString(row.activated_at)
+  };
+}
+
+function parseReferralClaimJson(value: unknown): RouteRecord["claim"] {
+  const parsed = typeof value === "string" ? JSON.parse(value) : value;
+  return ReferralClaimV1Schema.parse(parsed);
+}
+
+function parseRouteOperationScope(value: unknown): RouteOperationScope {
+  const parsed = typeof value === "string" ? JSON.parse(value) : value;
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    throw new Error("route operation_ids must be a non-empty array");
+  }
+  if (parsed.includes("*")) {
+    if (parsed.length !== 1 || parsed[0] !== "*") {
+      throw new Error("route operation_ids wildcard must be the only entry");
+    }
+    return ["*"];
+  }
+  return parsed.map((item) => {
+    if (typeof item !== "string" || item.trim().length === 0) {
+      throw new Error("route operation_ids entries must be non-empty strings");
+    }
+    return item;
+  });
+}
+
 function parseCampaignTermsJson(value: unknown): CampaignTerms {
   const parsed = typeof value === "string" ? JSON.parse(value) : value;
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
@@ -1564,6 +1749,18 @@ function readCampaignStatus(value: string): CampaignStatus {
   throw new Error(`unsupported campaign status: ${value}`);
 }
 
+function readRouteStatus(value: string): RouteStatus {
+  if (
+    value === "active" ||
+    value === "suspended" ||
+    value === "expired" ||
+    value === "revoked"
+  ) {
+    return value;
+  }
+  throw new Error(`unsupported route status: ${value}`);
+}
+
 function assertSplit402Id(value: string, label: string): string {
   if (!Split402IdSchema.safeParse(value).success) {
     throw new MerchantRegistryValidationError(`${label} must be a Split402 id`);
@@ -1703,5 +1900,11 @@ function mapMerchantWriteError(error: unknown): unknown {
 function mapCampaignWriteError(error: unknown): unknown {
   return isUniqueViolation(error)
     ? new CampaignRegistryConflictError("campaign registry record already exists")
+    : error;
+}
+
+function mapRouteWriteError(error: unknown): unknown {
+  return isUniqueViolation(error)
+    ? new RouteRegistryConflictError("route registry record already exists")
     : error;
 }
