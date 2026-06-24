@@ -18,10 +18,10 @@ npm-debug.log*
 # Databases
 *.sqlite
 *.sqlite3
+.data/
 
 # OS / editor
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
-
