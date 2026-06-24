@@ -7,6 +7,23 @@ The payment stays a normal x402 USDC payment. Split402 adds a signed referral
 claim so the merchant/control plane can record the configured commission, for
 example 10 percent when the campaign terms set `commissionBps` to `1000`.
 
+## Agent Flow
+
+```mermaid
+sequenceDiagram
+  participant A as Agent
+  participant M as Merchant API
+  participant X as x402 client
+
+  A->>M: Inspect unpaid resource
+  M-->>A: 402 response with Split402 offer
+  A->>A: Sign referral claim
+  A->>X: Build x402 SVM exact payment
+  X->>M: Retry paid request with referral claim
+  M-->>A: JSON response plus Split402 receipt
+  A->>A: Verify merchant-signed receipt
+```
+
 ## Use
 
 ```ts

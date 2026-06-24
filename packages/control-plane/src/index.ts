@@ -1540,6 +1540,7 @@ export * from "./merchants.js";
 export * from "./migrations.js";
 export * from "./postgres.js";
 export * from "./routes.js";
+export * from "./solana.js";
 export * from "./workers.js";
 
 function isMerchantAuthRequired(
