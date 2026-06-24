@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Builds
+dist/
+build/
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Databases
+*.sqlite
+*.sqlite3
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
