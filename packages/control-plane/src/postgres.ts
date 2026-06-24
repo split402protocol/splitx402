@@ -53,6 +53,7 @@ import {
 import {
   InMemoryRouteRegistry,
   RouteRegistryConflictError,
+  RouteRegistryValidationError,
   type ActivateRouteInput,
   type CreateRouteDraftInput,
   type InMemoryRouteRegistryOptions,
@@ -60,7 +61,8 @@ import {
   type RouteOperationScope,
   type RouteRecord,
   type RouteRegistry,
-  type RouteStatus
+  type RouteStatus,
+  type SuspendRouteInput
 } from "./routes.js";
 import type {
   AccrualStatus,
@@ -892,6 +894,48 @@ export class PostgresRouteRegistry implements RouteRegistry {
     );
     const row = result.rows[0];
     return row === undefined ? undefined : mapRoute(row);
+  }
+
+  async suspendRoute(input: SuspendRouteInput): Promise<RouteRecord | undefined> {
+    const existing = await this.getRoute(input.routeId);
+    if (existing === undefined) {
+      return undefined;
+    }
+    if (existing.status === "suspended") {
+      return existing;
+    }
+    if (existing.status !== "active") {
+      throw new RouteRegistryValidationError(
+        `route must be active to suspend; current status is ${existing.status}`
+      );
+    }
+
+    const result = await this.db.query<RouteRow>(
+      `update routes
+          set status = 'suspended'
+        where id = $1
+          and status = 'active'
+        returning id, campaign_id, campaign_version_min, referrer_wallet,
+                  payout_wallet, resource_origin, operation_ids, claim_hash,
+                  claim_json, signing_bytes_hex, status, issued_at, expires_at,
+                  nonce, metadata_hash, created_at, activated_at`,
+      [input.routeId]
+    );
+    const row = result.rows[0];
+    if (row !== undefined) {
+      return mapRoute(row);
+    }
+
+    const current = await this.getRoute(input.routeId);
+    if (current?.status === "suspended") {
+      return current;
+    }
+    if (current === undefined) {
+      return undefined;
+    }
+    throw new RouteRegistryValidationError(
+      `route must be active to suspend; current status is ${current.status}`
+    );
   }
 
   private async getRouteByClaimHash(

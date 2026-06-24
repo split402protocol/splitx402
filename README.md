@@ -153,7 +153,7 @@ mainnet payment flows exist yet.
 | Campaign draft/version APIs | Started |
 | Campaign activation APIs | Started |
 | PostgreSQL campaign persistence | Started |
-| Route draft/sign/activate APIs | Started |
+| Route draft/sign/activate/suspend APIs | Started |
 | PostgreSQL route persistence | Started |
 | Outbox event persistence | Started |
 | Outbox claim/retry/dead-letter APIs | Started |
@@ -266,6 +266,7 @@ GET  /v1/campaigns/:campaignId/versions/:version
 POST /v1/campaigns/:campaignId/versions
 POST /v1/routes/drafts
 POST /v1/routes
+POST /v1/routes/:routeId/suspend
 GET  /v1/routes/:routeId
 ```
 
@@ -317,9 +318,11 @@ for tests or through PostgreSQL adapters for durable control-plane state. Receip
 ingestion uses the same boundary: in-memory stores for deterministic behavior
 tests, PostgreSQL stores for durable receipt, accrual, and ledger rows. Wallet auth
 also uses the same store boundary, with PostgreSQL persisting single-use challenges
-and hashed bearer sessions. Route activation records are also durable in
-PostgreSQL, keyed by route id and canonical referral-claim hash so exact duplicate
-activation is idempotent while conflicting claims are rejected. Accepted receipts
+and hashed bearer sessions. Route activation and suspension records are also
+durable in PostgreSQL, keyed by route id and canonical referral-claim hash so
+exact duplicate activation is idempotent while conflicting claims are rejected.
+When merchant auth is required, route suspension is limited to the owner wallet
+of the route campaign's merchant. Accepted receipts
 also create pending outbox events in the same PostgreSQL transaction, giving future
 workers a durable feed for chain verification, payout selection, dashboards, and
 webhooks. The PostgreSQL outbox store can claim ready events, mark them delivered,

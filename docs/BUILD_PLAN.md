@@ -157,7 +157,7 @@ Deliverables:
 - wallet authentication;
 - merchant, key, and origin APIs;
 - campaign version APIs;
-- route draft/sign/activate flow;
+- route draft/sign/activate/suspend flow;
 - public receipt ingestion;
 - chain verification worker;
 - accrual and zero-sum ledger;
@@ -200,12 +200,13 @@ Current slice:
   signing bytes;
 - add owner-authorized campaign activation for the current version with registered
   merchant service-key signature verification;
-- add route draft/sign/activate APIs with canonical unsigned referral claims,
-  referrer signature verification, and active campaign scope checks;
+- add route draft/sign/activate/suspend APIs with canonical unsigned referral
+  claims, referrer signature verification, active campaign scope checks, and
+  merchant-owner-authorized suspension when auth is required;
 - add the PostgreSQL campaign registry adapter and migration for durable campaign,
   immutable version, operation, and activation state;
-- add the PostgreSQL route registry adapter and migration for durable active
-  routes, signed referral claims, and duplicate-claim idempotency;
+- add the PostgreSQL route registry adapter and migration for durable active and
+  suspended routes, signed referral claims, and duplicate-claim idempotency;
 - add the PostgreSQL outbox migration and transaction insert for durable
   `receipt.accepted.v1` worker events;
 - add the PostgreSQL outbox worker store for claiming ready events, retrying

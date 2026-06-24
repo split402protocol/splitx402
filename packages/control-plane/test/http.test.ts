@@ -476,6 +476,62 @@ describe("control-plane HTTP API", () => {
     expect(routeResponse.body.route.claimHash).toMatch(/^sha256:[0-9a-f]{64}$/u);
     expect(loadedResponse.body.route.id).toBe(draft.routeId);
   });
+
+  it("suspends active routes with merchant-owner authorization when required", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const { app } = createTestApp({
+      withAuth: true,
+      withCampaignRegistry: true,
+      withMerchantRegistry: true,
+      withRouteRegistry: true
+    });
+    const ownerToken = await createAccessToken(app, OWNER_SEED, OWNER_WALLET);
+    const otherOwnerToken = await createAccessToken(
+      app,
+      OTHER_OWNER_SEED,
+      OTHER_OWNER_WALLET
+    );
+    await createActiveCampaign(app, ownerToken);
+    const draftResponse = await request(app)
+      .post("/v1/routes/drafts")
+      .send({
+        campaignId: bundle.artifacts.receipt.campaignId,
+        referrerWallet: REFERRER_WALLET,
+        payoutWallet: PAYOUT_WALLET,
+        operationIds: [bundle.artifacts.receipt.operationId],
+        expiresAt: "2026-06-25T00:00:00Z",
+        nonce: "route-nonce-http-0001"
+      })
+      .expect(201);
+    const draft = draftResponse.body.draft as RouteDraft;
+    await request(app)
+      .post("/v1/routes")
+      .send({ claim: signRouteDraft(draft) })
+      .expect(201);
+
+    await request(app)
+      .post(`/v1/routes/${draft.routeId}/suspend`)
+      .expect(401);
+    await request(app)
+      .post(`/v1/routes/${draft.routeId}/suspend`)
+      .set("authorization", `Bearer ${otherOwnerToken}`)
+      .expect(403);
+    const suspendedResponse = await request(app)
+      .post(`/v1/routes/${draft.routeId}/suspend`)
+      .set("authorization", `Bearer ${ownerToken}`)
+      .expect(200);
+    const duplicateResponse = await request(app)
+      .post(`/v1/routes/${draft.routeId}/suspend`)
+      .set("authorization", `Bearer ${ownerToken}`)
+      .expect(200);
+    const loadedResponse = await request(app)
+      .get(`/v1/routes/${draft.routeId}`)
+      .expect(200);
+
+    expect(suspendedResponse.body.route.status).toBe("suspended");
+    expect(duplicateResponse.body.route.status).toBe("suspended");
+    expect(loadedResponse.body.route.status).toBe("suspended");
+  });
 });
 
 function createTestApp(
@@ -528,10 +584,11 @@ function createTestApp(
   };
 }
 
-async function createActiveCampaign(app: Express): Promise<void> {
+async function createActiveCampaign(app: Express, ownerToken?: string): Promise<void> {
   const bundle = createSampleProtocolArtifacts();
-  await request(app)
+  const merchantRequest = request(app)
     .post("/v1/merchants")
+    .set(ownerToken === undefined ? {} : { authorization: `Bearer ${ownerToken}` })
     .send({
       id: bundle.artifacts.receipt.merchantId,
       slug: "demo-merchant",
@@ -540,8 +597,10 @@ async function createActiveCampaign(app: Express): Promise<void> {
       status: "active"
     })
     .expect(201);
+  await merchantRequest;
   await request(app)
     .post(`/v1/merchants/${bundle.artifacts.receipt.merchantId}/origins`)
+    .set(ownerToken === undefined ? {} : { authorization: `Bearer ${ownerToken}` })
     .send({
       origin: bundle.artifacts.receipt.merchantOrigin,
       verificationMethod: "well_known",
@@ -551,6 +610,7 @@ async function createActiveCampaign(app: Express): Promise<void> {
     .expect(201);
   await request(app)
     .post(`/v1/merchants/${bundle.artifacts.receipt.merchantId}/keys`)
+    .set(ownerToken === undefined ? {} : { authorization: `Bearer ${ownerToken}` })
     .send({
       kid: bundle.artifacts.receipt.kid,
       publicKey: bundle.keys.merchantPublicKey,
@@ -559,6 +619,7 @@ async function createActiveCampaign(app: Express): Promise<void> {
     .expect(201);
   const campaignResponse = await request(app)
     .post("/v1/campaigns")
+    .set(ownerToken === undefined ? {} : { authorization: `Bearer ${ownerToken}` })
     .send({
       id: bundle.artifacts.receipt.campaignId,
       merchantId: bundle.artifacts.receipt.merchantId,
@@ -570,6 +631,7 @@ async function createActiveCampaign(app: Express): Promise<void> {
   );
   await request(app)
     .post(`/v1/campaigns/${bundle.artifacts.receipt.campaignId}/activate`)
+    .set(ownerToken === undefined ? {} : { authorization: `Bearer ${ownerToken}` })
     .send({
       kid: bundle.artifacts.receipt.kid,
       signature

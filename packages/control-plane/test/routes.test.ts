@@ -89,6 +89,22 @@ describe("InMemoryRouteRegistry", () => {
       RouteRegistryConflictError
     );
   });
+
+  it("suspends active routes idempotently", () => {
+    const registry = createRouteRegistry();
+    const route = registry.activateRoute({ claim: signRouteDraft(createRouteDraft()) });
+
+    const suspended = registry.suspendRoute({ routeId: route.id });
+    const duplicate = registry.suspendRoute({ routeId: route.id });
+    const loaded = registry.getRoute(route.id);
+
+    expect(suspended?.status).toBe("suspended");
+    expect(duplicate?.status).toBe("suspended");
+    expect(loaded?.status).toBe("suspended");
+    expect(
+      registry.suspendRoute({ routeId: "rte_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" })
+    ).toBeUndefined();
+  });
 });
 
 function createRouteRegistry(): InMemoryRouteRegistry {

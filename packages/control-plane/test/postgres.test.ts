@@ -513,6 +513,27 @@ describe("PostgresRouteRegistry", () => {
       RouteRegistryConflictError
     );
   });
+
+  it("suspends active routes idempotently", async () => {
+    const fakePool = new FakePostgresPool();
+    const registry = createPostgresRouteRegistry(fakePool);
+    const claim = signRouteDraft(
+      registry.createRouteDraft(createRouteDraftInput())
+    );
+    const route = await registry.activateRoute({ claim });
+
+    const suspended = await registry.suspendRoute({ routeId: route.id });
+    const duplicate = await registry.suspendRoute({ routeId: route.id });
+    const loaded = await registry.getRoute(route.id);
+
+    expect(suspended?.status).toBe("suspended");
+    expect(duplicate?.status).toBe("suspended");
+    expect(loaded?.status).toBe("suspended");
+    expect(fakePool.database.routes[0]?.status).toBe("suspended");
+    await expect(
+      registry.suspendRoute({ routeId: "rte_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" })
+    ).resolves.toBeUndefined();
+  });
 });
 
 describe("PostgresWalletAuthStore", () => {
@@ -800,6 +821,9 @@ class FakePostgresClient implements PostgresTransactionClient {
     }
     if (normalized.startsWith("update campaign_versions")) {
       return commandResult(this.database.activateCampaignVersion(values));
+    }
+    if (normalized.startsWith("update routes")) {
+      return result(this.database.suspendRoute(values) as unknown as Row[]);
     }
     if (normalized.startsWith("update campaigns")) {
       this.database.updateCampaign(normalized, values);
@@ -1423,6 +1447,15 @@ class FakePostgresDatabase {
       return false;
     });
     return route === undefined ? [] : [route];
+  }
+
+  suspendRoute(values: readonly unknown[]): StoredRouteRow[] {
+    const route = this.routes.find((row) => row.id === readString(values[0]));
+    if (route === undefined || route.status !== "active") {
+      return [];
+    }
+    route.status = "suspended";
+    return [route];
   }
 
   insertWalletAuthChallenge(values: readonly unknown[]): void {
