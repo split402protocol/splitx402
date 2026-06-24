@@ -151,6 +151,8 @@ Current slice:
   and accounting rows;
 - PostgreSQL outbox claiming, retry scheduling, delivery marking, and dead-letter
   state transitions;
+- receipt chain-verification worker framework with a pluggable verifier and
+  PostgreSQL state transition to available accruals;
 - packaged PostgreSQL migration runner with checksum tracking and an opt-in live
   integration harness;
 - receipt verifier key resolution through registered merchant service keys.
