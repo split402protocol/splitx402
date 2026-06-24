@@ -198,6 +198,8 @@ Current slice:
   enabled;
 - add campaign draft and immutable-version APIs with canonical terms hashes and
   signing bytes;
+- add owner-authorized campaign activation for the current version with registered
+  merchant service-key signature verification;
 - resolve receipt verification keys through registered merchant service keys by
   `merchantId` and `kid`;
 - add the PostgreSQL merchant registry adapter for durable merchant, origin, and
