@@ -1,0 +1,33 @@
+{
+  "name": "@split402/demo-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx src/index.ts",
+    "inspect-offer": "tsx src/inspect-offer.ts",
+    "setup-buyer": "tsx src/setup-buyer.ts",
+    "setup-mint": "tsx src/setup-demo-mint.ts",
+    "setup-existing-token": "tsx src/setup-existing-token.ts",
+    "preflight": "tsx src/preflight.ts",
+    "paid-suite": "tsx src/paid-suite.ts",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@solana-program/token": "^0.9.0",
+    "@solana-program/token-2022": "^0.6.1",
+    "@solana/kit": "^5.1.0",
+    "@split402/agent-sdk": "workspace:*",
+    "@split402/protocol": "workspace:*",
+    "@split402/x402-extension": "workspace:*",
+    "@x402/axios": "^2.16.0",
+    "@x402/core": "^2.16.0",
+    "@x402/svm": "^2.16.0",
+    "axios": "^1.18.1",
+    "dotenv": "^17.4.2"
+  }
+}

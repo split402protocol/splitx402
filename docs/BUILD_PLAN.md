@@ -131,6 +131,9 @@ Current slice:
 - port `@split402/agent-sdk` from `ffff`;
 - expose buyer-side offer inspection, referral-claim creation, paid JSON call, and
   receipt verification helpers;
+- port `apps/demo-agent` from `ffff`;
+- expose buyer setup, token setup, offer inspection, preflight, and paid-suite demo
+  scripts;
 - validate required and optional attribution before settlement;
 - keep valid/invalid claim behavior, Express adapter behavior, demo merchant
   metadata/challenge behavior, and agent SDK offer/receipt behavior covered by tests.

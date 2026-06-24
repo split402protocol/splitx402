@@ -2,7 +2,7 @@
 
 Phase 3 starts architecture Milestone 1, the single-merchant Devnet demo path.
 The first slices port the x402 extension, Express request-context adapter, demo
-merchant runtime, and agent SDK from `ffff`.
+merchant runtime, agent SDK, and demo agent from `ffff`.
 
 ## Current Status
 
@@ -30,18 +30,24 @@ Status: started.
   calls, receipt extraction, and offer/receipt verification.
 - Added agent SDK tests for valid claims, invalid-claim fixtures, receipt extraction,
   and unpaid offer inspection.
+- Added `apps/demo-agent`.
+- Added demo scripts for buyer setup, demo mint setup, existing-token setup,
+  merchant offer inspection, preflight readiness checks, and the paid-suite receipt
+  harness.
 
 ## Why This Comes Next
 
 The merchant demo needs protocol artifacts from Phase 2, an x402 extension layer
 that can attach offers and receipts, an HTTP adapter that can bind the paid request
 to a stable operation digest, a runnable merchant app that exposes the first paid
-operation, and a buyer-side SDK that can inspect the offer and carry referral
-attribution into payment retries.
+operation, a buyer-side SDK that can inspect the offer and carry referral
+attribution into payment retries, and a runnable agent harness that can exercise the
+same flow against funded Devnet assets.
 
 ## Remaining Milestone 1 Work
 
-- End-to-end Solana Devnet payment and receipt path.
+- Prove the paid-suite against funded Solana Devnet assets and record the resulting
+  valid and invalid-claim receipts.
 
 ## Acceptance Checks
 
