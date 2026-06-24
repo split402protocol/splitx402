@@ -92,6 +92,13 @@ Status: started.
 
 Goal: implement architecture Milestone 2.
 
+Main branch currently contains the control-plane foundation through receipt
+ingestion, wallet authentication, merchant/key/origin registry APIs, PostgreSQL
+receipt/merchant/auth persistence, and campaign draft/version/activation APIs.
+Route registry, durable campaign persistence, outbox processing, chain
+verification, Solana verifier hardening, and deployable runtime wiring are in the
+active PR stack and should be treated as staged work until merged.
+
 Deliverables:
 
 - PostgreSQL migrations;
@@ -142,6 +149,17 @@ Current slice:
 - owner-authorized `POST /v1/campaigns/:campaignId/activate` for the current
   version with registered merchant service-key signature verification;
 - receipt verifier key resolution through registered merchant service keys.
+
+Active implementation stack:
+
+- PostgreSQL campaign registry adapter and migration;
+- route draft/sign/activate flow;
+- PostgreSQL route registry adapter and migration;
+- durable receipt outbox events;
+- outbox worker claim/retry/dead-letter store;
+- chain-verification worker framework and polling loop;
+- Solana signature and transfer verification;
+- durable control-plane runtime factory with production auth policy defaults.
 
 ## Phase 5: Production Merchant SDK
 
