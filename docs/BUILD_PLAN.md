@@ -151,6 +151,13 @@ Exit criteria:
 
 Status: started.
 
+Main branch status: receipt ingestion, merchant/key/origin registry,
+wallet-authenticated merchant mutations, PostgreSQL receipt/merchant/auth
+persistence, and campaign draft/version/activation APIs are present on `main`.
+Route registry, durable campaign persistence, outbox workers, chain verification,
+Solana verifier hardening, and deployable runtime wiring are staged in the active
+implementation PR stack.
+
 Deliverables:
 
 - PostgreSQL migrations;
@@ -205,6 +212,16 @@ Current slice:
 - add the PostgreSQL merchant registry adapter for durable merchant, origin, and
   service-key rows;
 - add the first merchant/key/origin PostgreSQL migration.
+
+Active PR stack after `main`:
+
+- PostgreSQL campaign registry adapter and migration;
+- route draft/sign/activate APIs and PostgreSQL route persistence;
+- durable receipt outbox event persistence;
+- outbox worker claim, retry, delivery, and dead-letter store;
+- receipt chain-verification worker framework and bounded polling loop;
+- Solana RPC signature-status and transfer verifier slices;
+- durable control-plane runtime factory and required-by-default auth policy wiring.
 
 ## Architecture Milestone 3: Production Merchant SDK
 
