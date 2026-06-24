@@ -83,6 +83,7 @@ mainnet payment flows exist yet.
 | Merchant/key/origin registry APIs | Started |
 | PostgreSQL merchant/key/origin persistence | Started |
 | Wallet-authenticated merchant mutations | Started |
+| PostgreSQL wallet-auth persistence | Started |
 | Chain verification worker and payout engine | Not implemented |
 | `$SPLIT` bonding and atomic split settlement | Later research |
 
@@ -174,6 +175,8 @@ flowchart LR
   Merchants[("merchants")]
   Origins[("merchant_origins")]
   Keys[("merchant_keys")]
+  Challenges[("wallet_auth_challenges")]
+  Sessions[("wallet_auth_sessions")]
   Receipts[("payment_receipts")]
   Accruals[("commission_accruals")]
   LedgerTx[("ledger_transactions")]
@@ -184,6 +187,8 @@ flowchart LR
   Registry --> Merchants
   Registry --> Origins
   Registry --> Keys
+  API --> Challenges
+  API --> Sessions
   Ingestion --> Receipts
   Ingestion --> Accruals
   Ingestion --> LedgerTx
@@ -193,7 +198,9 @@ flowchart LR
 Merchant profiles, origins, and service keys can run in memory for tests or through
 the PostgreSQL adapter for durable control-plane state. Receipt ingestion uses the
 same boundary: in-memory stores for deterministic behavior tests, PostgreSQL stores
-for durable receipt, accrual, and ledger rows.
+for durable receipt, accrual, and ledger rows. Wallet auth also uses the same store
+boundary, with PostgreSQL persisting single-use challenges and hashed bearer
+sessions.
 
 ## MVP Rules
 

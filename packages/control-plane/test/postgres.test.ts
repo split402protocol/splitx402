@@ -1,5 +1,8 @@
 import {
   createSampleProtocolArtifacts,
+  deriveEd25519PublicKey,
+  hexToBytes,
+  signEd25519Message,
   type Split402ReceiptV1
 } from "@split402/protocol";
 import type { QueryResult, QueryResultRow } from "pg";
@@ -10,12 +13,21 @@ import {
   MerchantRegistryConflictError,
   PostgresMerchantRegistry,
   PostgresReceiptIngestionStore,
+  PostgresWalletAuthStore,
   ReceiptIngestionPersistenceConflictError,
   ReceiptIngestor,
+  WalletAuthRejectedError,
+  WalletAuthenticator,
   type PostgresPool,
   type PostgresTransactionClient,
   type ReceiptIngestionSnapshot
 } from "../src/index.js";
+
+const OWNER_SEED = hexToBytes(
+  "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf"
+);
+const OWNER_WALLET = deriveEd25519PublicKey(OWNER_SEED);
+const NETWORK = "solana:devnet";
 
 describe("PostgresReceiptIngestionStore", () => {
   it("persists and loads a credited receipt snapshot", async () => {
@@ -186,6 +198,61 @@ describe("PostgresMerchantRegistry", () => {
   });
 });
 
+describe("PostgresWalletAuthStore", () => {
+  it("persists single-use challenges and hashed bearer sessions", async () => {
+    const fakePool = new FakePostgresPool();
+    const authenticator = createPostgresAuthenticator(fakePool);
+    const challenge = await authenticator.createChallenge({
+      wallet: OWNER_WALLET,
+      network: NETWORK
+    });
+    const signature = signEd25519Message(
+      new TextEncoder().encode(challenge.message),
+      OWNER_SEED
+    ).signature;
+
+    const session = await authenticator.createSession({
+      challengeId: challenge.challengeId,
+      signature,
+      publicKey: OWNER_WALLET
+    });
+    const authenticated = await authenticator.authenticateAccessToken(
+      session.accessToken
+    );
+
+    expect(fakePool.database.walletAuthChallenges).toHaveLength(1);
+    expect(fakePool.database.walletAuthChallenges[0]?.consumed_at).toBe(
+      "2026-06-24T00:00:00.000Z"
+    );
+    expect(fakePool.database.walletAuthSessions).toHaveLength(1);
+    expect(fakePool.database.walletAuthSessions[0]?.token_hash).toMatch(
+      /^sha256:[0-9a-f]{64}$/u
+    );
+    expect(fakePool.database.walletAuthSessions[0]?.token_hash).not.toContain(
+      session.accessToken
+    );
+    expect(authenticated?.wallet).toBe(OWNER_WALLET);
+  });
+
+  it("prevents replay after a challenge is consumed in PostgreSQL", async () => {
+    const fakePool = new FakePostgresPool();
+    const authenticator = createPostgresAuthenticator(fakePool);
+    const challenge = await authenticator.createChallenge({
+      wallet: OWNER_WALLET,
+      network: NETWORK
+    });
+    const signature = signEd25519Message(
+      new TextEncoder().encode(challenge.message),
+      OWNER_SEED
+    ).signature;
+    await authenticator.createSession({ challengeId: challenge.challengeId, signature });
+
+    await expect(
+      authenticator.createSession({ challengeId: challenge.challengeId, signature })
+    ).rejects.toBeInstanceOf(WalletAuthRejectedError);
+  });
+});
+
 async function createSnapshot(
   receipt: Split402ReceiptV1
 ): Promise<ReceiptIngestionSnapshot> {
@@ -207,6 +274,23 @@ function createPostgresRegistry(fakePool: FakePostgresPool): PostgresMerchantReg
     now: () => new Date("2026-06-24T00:00:00Z"),
     merchantIdFactory: () => "mrc_ffffffffffffffffffffffffffffffff"
   });
+}
+
+function createPostgresAuthenticator(
+  fakePool: FakePostgresPool
+): WalletAuthenticator {
+  let idSequence = 0;
+  return new WalletAuthenticator(new PostgresWalletAuthStore(fakePool), {
+    now: () => new Date("2026-06-24T00:00:00Z"),
+    challengeIdFactory: () => nextAuthId("chl", ++idSequence),
+    sessionIdFactory: () => nextAuthId("ses", ++idSequence),
+    nonceFactory: () => `nonce-${idSequence}`,
+    accessTokenFactory: () => `postgres-token-${idSequence}`
+  });
+}
+
+function nextAuthId(prefix: "chl" | "ses", sequence: number): string {
+  return `${prefix}_${sequence.toString(16).padStart(32, "0")}`;
 }
 
 class FakePostgresPool implements PostgresPool {
@@ -279,8 +363,21 @@ class FakePostgresClient implements PostgresTransactionClient {
     if (normalized.startsWith("insert into merchant_keys")) {
       return result(this.database.insertMerchantKey(values) as unknown as Row[]);
     }
+    if (normalized.startsWith("insert into wallet_auth_challenges")) {
+      this.database.insertWalletAuthChallenge(values);
+      return result([]);
+    }
+    if (normalized.startsWith("insert into wallet_auth_sessions")) {
+      this.database.insertWalletAuthSession(values);
+      return result([]);
+    }
     if (normalized.startsWith("update merchant_keys")) {
       return result(this.database.revokeMerchantKey(values) as unknown as Row[]);
+    }
+    if (normalized.startsWith("update wallet_auth_challenges")) {
+      return result(
+        this.database.consumeWalletAuthChallenge(values) as unknown as Row[]
+      );
     }
     if (normalized.includes("from payment_receipts")) {
       return result(this.database.selectReceipt(normalized, values) as unknown as Row[]);
@@ -307,6 +404,16 @@ class FakePostgresClient implements PostgresTransactionClient {
         this.database.selectMerchantKeys(normalized, values) as unknown as Row[]
       );
     }
+    if (normalized.includes("from wallet_auth_challenges")) {
+      return result(
+        this.database.selectWalletAuthChallenge(values[0]) as unknown as Row[]
+      );
+    }
+    if (normalized.includes("from wallet_auth_sessions")) {
+      return result(
+        this.database.selectWalletAuthSession(values[0]) as unknown as Row[]
+      );
+    }
 
     throw new Error(`unsupported query: ${normalized}`);
   }
@@ -320,6 +427,8 @@ class FakePostgresDatabase {
   merchants: StoredMerchantRow[] = [];
   merchantOrigins: StoredMerchantOriginRow[] = [];
   merchantKeys: StoredMerchantKeyRow[] = [];
+  walletAuthChallenges: StoredWalletAuthChallengeRow[] = [];
+  walletAuthSessions: StoredWalletAuthSessionRow[] = [];
   failNextInsertWithUniqueViolation = false;
 
   insertReceipt(values: readonly unknown[]): void {
@@ -557,6 +666,60 @@ class FakePostgresDatabase {
 
     return this.merchantKeys.filter((row) => row.merchant_id === merchantId);
   }
+
+  insertWalletAuthChallenge(values: readonly unknown[]): void {
+    this.walletAuthChallenges.push({
+      id: readString(values[0]),
+      wallet: readString(values[1]),
+      network: readString(values[2]),
+      purpose: readString(values[3]),
+      nonce: readString(values[4]),
+      message: readString(values[5]),
+      expires_at: readString(values[6]),
+      created_at: readString(values[7]),
+      consumed_at: readNullableString(values[8])
+    });
+  }
+
+  selectWalletAuthChallenge(challengeId: unknown): StoredWalletAuthChallengeRow[] {
+    const challenge = this.walletAuthChallenges.find(
+      (row) => row.id === readString(challengeId)
+    );
+    return challenge === undefined ? [] : [challenge];
+  }
+
+  consumeWalletAuthChallenge(values: readonly unknown[]): QueryResultRow[] {
+    const challengeId = readString(values[0]);
+    const consumedAt = readString(values[1]);
+    const challenge = this.walletAuthChallenges.find(
+      (row) => row.id === challengeId
+    );
+    if (challenge === undefined || challenge.consumed_at !== null) {
+      return [];
+    }
+    challenge.consumed_at = consumedAt;
+    return [{ id: challenge.id }];
+  }
+
+  insertWalletAuthSession(values: readonly unknown[]): void {
+    this.walletAuthSessions.push({
+      token_hash: readString(values[0]),
+      session_id: readString(values[1]),
+      wallet: readString(values[2]),
+      network: readString(values[3]),
+      purpose: readString(values[4]),
+      challenge_id: readString(values[5]),
+      issued_at: readString(values[6]),
+      expires_at: readString(values[7])
+    });
+  }
+
+  selectWalletAuthSession(tokenHash: unknown): StoredWalletAuthSessionRow[] {
+    const session = this.walletAuthSessions.find(
+      (row) => row.token_hash === readString(tokenHash)
+    );
+    return session === undefined ? [] : [session];
+  }
 }
 
 type StoredReceiptRow = QueryResultRow & {
@@ -640,6 +803,29 @@ type StoredMerchantKeyRow = QueryResultRow & {
   revoked_at: string | null;
   revocation_reason: string | null;
   created_at: string;
+};
+
+type StoredWalletAuthChallengeRow = QueryResultRow & {
+  id: string;
+  wallet: string;
+  network: string;
+  purpose: string;
+  nonce: string;
+  message: string;
+  expires_at: string;
+  created_at: string;
+  consumed_at: string | null;
+};
+
+type StoredWalletAuthSessionRow = QueryResultRow & {
+  token_hash: string;
+  session_id: string;
+  wallet: string;
+  network: string;
+  purpose: string;
+  challenge_id: string;
+  issued_at: string;
+  expires_at: string;
 };
 
 function result<Row extends QueryResultRow>(rows: Row[]): QueryResult<Row> {

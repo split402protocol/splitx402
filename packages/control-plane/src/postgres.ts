@@ -7,6 +7,11 @@ import {
 } from "@split402/protocol";
 import type { QueryResult, QueryResultRow } from "pg";
 
+import type {
+  AuthenticatedWalletSession,
+  WalletAuthChallengeRecord,
+  WalletAuthStore
+} from "./auth.js";
 import { ReceiptIngestionPersistenceConflictError } from "./errors.js";
 import {
   MerchantRegistryConflictError,
@@ -126,6 +131,29 @@ interface MerchantKeyRow extends QueryResultRow {
   revoked_at: Date | string | null;
   revocation_reason: string | null;
   created_at: Date | string;
+}
+
+interface WalletAuthChallengeRow extends QueryResultRow {
+  id: string;
+  wallet: string;
+  network: string;
+  purpose: string;
+  nonce: string;
+  message: string;
+  expires_at: Date | string;
+  created_at: Date | string;
+  consumed_at: Date | string | null;
+}
+
+interface WalletAuthSessionRow extends QueryResultRow {
+  token_hash: string;
+  session_id: string;
+  wallet: string;
+  network: string;
+  purpose: string;
+  challenge_id: string;
+  issued_at: Date | string;
+  expires_at: Date | string;
 }
 
 export interface PostgresMerchantRegistryOptions {
@@ -515,6 +543,101 @@ export class PostgresMerchantRegistry implements MerchantRegistry {
   }
 }
 
+export class PostgresWalletAuthStore implements WalletAuthStore {
+  constructor(private readonly db: PostgresQueryExecutor) {}
+
+  async saveChallenge(challenge: WalletAuthChallengeRecord): Promise<void> {
+    await this.db.query(
+      `insert into wallet_auth_challenges (
+         id, wallet, network, purpose, nonce, message, expires_at, created_at,
+         consumed_at
+       ) values (
+         $1, $2, $3, $4, $5, $6, $7, $8, $9
+       )`,
+      [
+        challenge.challengeId,
+        challenge.wallet,
+        challenge.network,
+        challenge.purpose,
+        challenge.nonce,
+        challenge.message,
+        challenge.expiresAt,
+        challenge.createdAt,
+        challenge.consumedAt ?? null
+      ]
+    );
+  }
+
+  async getChallenge(
+    challengeId: string
+  ): Promise<WalletAuthChallengeRecord | undefined> {
+    const result = await this.db.query<WalletAuthChallengeRow>(
+      `select id, wallet, network, purpose, nonce, message, expires_at,
+              created_at, consumed_at
+         from wallet_auth_challenges
+        where id = $1
+        limit 1`,
+      [challengeId]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapWalletAuthChallenge(row);
+  }
+
+  async consumeChallenge(
+    challengeId: string,
+    consumedAt: string
+  ): Promise<boolean> {
+    const result = await this.db.query<Pick<WalletAuthChallengeRow, "id">>(
+      `update wallet_auth_challenges
+          set consumed_at = $2
+        where id = $1
+          and consumed_at is null
+        returning id`,
+      [challengeId, consumedAt]
+    );
+    return result.rows[0] !== undefined;
+  }
+
+  async saveSession(
+    tokenHash: string,
+    session: AuthenticatedWalletSession
+  ): Promise<void> {
+    await this.db.query(
+      `insert into wallet_auth_sessions (
+         token_hash, session_id, wallet, network, purpose, challenge_id,
+         issued_at, expires_at
+       ) values (
+         $1, $2, $3, $4, $5, $6, $7, $8
+       )`,
+      [
+        tokenHash,
+        session.sessionId,
+        session.wallet,
+        session.network,
+        session.purpose,
+        session.challengeId,
+        session.issuedAt,
+        session.expiresAt
+      ]
+    );
+  }
+
+  async getSession(
+    tokenHash: string
+  ): Promise<AuthenticatedWalletSession | undefined> {
+    const result = await this.db.query<WalletAuthSessionRow>(
+      `select token_hash, session_id, wallet, network, purpose, challenge_id,
+              issued_at, expires_at
+         from wallet_auth_sessions
+        where token_hash = $1
+        limit 1`,
+      [tokenHash]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapWalletAuthSession(row);
+  }
+}
+
 function insertReceipt(
   client: PostgresQueryExecutor,
   receiptRecord: ReceiptRecord
@@ -801,6 +924,38 @@ function mapMerchantKey(row: MerchantKeyRow): MerchantKeyRecord {
   };
 }
 
+function mapWalletAuthChallenge(
+  row: WalletAuthChallengeRow
+): WalletAuthChallengeRecord {
+  return {
+    challengeId: row.id,
+    wallet: row.wallet,
+    network: row.network,
+    purpose: readWalletAuthPurpose(row.purpose),
+    nonce: row.nonce,
+    message: row.message,
+    expiresAt: toIsoString(row.expires_at),
+    createdAt: toIsoString(row.created_at),
+    ...(row.consumed_at === null
+      ? {}
+      : { consumedAt: toIsoString(row.consumed_at) })
+  };
+}
+
+function mapWalletAuthSession(
+  row: WalletAuthSessionRow
+): AuthenticatedWalletSession {
+  return {
+    sessionId: row.session_id,
+    wallet: row.wallet,
+    network: row.network,
+    purpose: readWalletAuthPurpose(row.purpose),
+    challengeId: row.challenge_id,
+    issuedAt: toIsoString(row.issued_at),
+    expiresAt: toIsoString(row.expires_at)
+  };
+}
+
 function requiredRow<Row extends QueryResultRow>(result: QueryResult<Row>): Row {
   const row = result.rows[0];
   if (row === undefined) {
@@ -930,6 +1085,13 @@ function readMerchantKeyPurpose(value: string): MerchantKeyPurpose {
     return value;
   }
   throw new Error(`unsupported merchant key purpose: ${value}`);
+}
+
+function readWalletAuthPurpose(value: string): "merchant-session" {
+  if (value === "merchant-session") {
+    return value;
+  }
+  throw new Error(`unsupported wallet auth purpose: ${value}`);
 }
 
 function mapMerchantWriteError(error: unknown): unknown {
