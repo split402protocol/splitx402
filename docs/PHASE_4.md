@@ -48,6 +48,12 @@ Status: started.
   service-key signature.
 - Added campaign activation checks for active merchant status, verified merchant
   origin ownership, valid service-key window, and immutable version signatures.
+- Added route draft/sign/activate registry types with canonical unsigned referral
+  claims, signing bytes, signature verification, and active route records.
+- Added `POST /v1/routes/drafts`, `POST /v1/routes`, and
+  `GET /v1/routes/:routeId`.
+- Added active campaign, resource origin, campaign version, and operation-scope
+  checks around route draft creation and activation.
 - Added `PostgresCampaignRegistry` for durable campaign, version, activation, and
   operation persistence.
 - Added `0004_campaigns.sql` for campaign, campaign version, and campaign
@@ -87,6 +93,9 @@ Status: started.
 - Added campaign registry and HTTP tests for immutable version creation, terms
   hashes, signing bytes, owner-authenticated campaign mutations, and merchant
   signature activation.
+- Added route registry and HTTP tests for unsigned draft creation, signed route
+  activation, duplicate activation idempotency, invalid signatures, and conflicting
+  route claims.
 - Added PostgreSQL campaign registry tests for draft persistence, immutable
   version persistence, operation rows, activation state, and conflict mapping.
 - Added `corepack pnpm test:postgres` for live PostgreSQL validation when
@@ -106,7 +115,6 @@ a zero-sum ledger transaction.
 
 - Wallet-auth refresh token flow.
 - Production auth policy wiring for the deployable runtime.
-- Route draft, sign, and activate flow.
 - Deployable control-plane runtime wiring.
 - Chain verification worker.
 - Outbox event persistence.
