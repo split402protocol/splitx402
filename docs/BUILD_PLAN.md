@@ -173,6 +173,10 @@ Current slice:
 
 - add `@split402/control-plane`;
 - verify submitted Split402 receipts with merchant service public keys;
+- expose a control-plane app and `POST /v1/receipts` route for public receipt
+  submission;
+- define the receipt ingestion store interface needed by the future PostgreSQL
+  adapter;
 - persist the receipt ingestion shape behind an in-memory store for the first
   behavior tests;
 - make identical receipt submission idempotent;

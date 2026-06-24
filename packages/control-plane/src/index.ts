@@ -4,6 +4,8 @@ import {
   verifySplit402ReceiptObject,
   type Split402ReceiptV1
 } from "@split402/protocol";
+import express from "express";
+import type { NextFunction, Request, Response, Router } from "express";
 
 export type ReceiptIngestSource = "buyer" | "merchant" | "relay" | "unknown";
 export type ReceiptVerificationState =
@@ -98,7 +100,25 @@ export interface ReceiptIngestorOptions {
   idFactory?: (prefix: "acr" | "ldg" | "lde") => string;
 }
 
-export class InMemoryReceiptIngestionStore {
+export interface ReceiptIngestionStore {
+  getByReceiptId(
+    receiptId: string
+  ): Promise<ReceiptIngestionSnapshot | undefined> | ReceiptIngestionSnapshot | undefined;
+  getByReceiptHash(
+    receiptHash: `sha256:${string}`
+  ): Promise<ReceiptIngestionSnapshot | undefined> | ReceiptIngestionSnapshot | undefined;
+  getByPaymentId(
+    paymentId: string
+  ): Promise<ReceiptIngestionSnapshot | undefined> | ReceiptIngestionSnapshot | undefined;
+  getBySettlementTxSignature(
+    signature: string
+  ): Promise<ReceiptIngestionSnapshot | undefined> | ReceiptIngestionSnapshot | undefined;
+  save(snapshot: ReceiptIngestionSnapshot): Promise<void> | void;
+}
+
+const RECEIPT_INGEST_SOURCES = ["buyer", "merchant", "relay", "unknown"] as const;
+
+export class InMemoryReceiptIngestionStore implements ReceiptIngestionStore {
   private readonly receiptsById = new Map<string, ReceiptIngestionSnapshot>();
   private readonly receiptIdByHash = new Map<`sha256:${string}`, string>();
   private readonly receiptIdByPaymentId = new Map<string, string>();
@@ -147,7 +167,7 @@ export class ReceiptIngestor {
   private sequence = 0;
 
   constructor(
-    private readonly store: InMemoryReceiptIngestionStore,
+    private readonly store: ReceiptIngestionStore,
     private readonly options: ReceiptIngestorOptions
   ) {}
 
@@ -163,12 +183,12 @@ export class ReceiptIngestor {
 
     const receipt = parsed.data;
     const receiptHash = hashProtocolObject(receipt);
-    const duplicate = this.store.getByReceiptHash(receiptHash);
+    const duplicate = await this.store.getByReceiptHash(receiptHash);
     if (duplicate !== undefined) {
       return { status: "duplicate", statusCode: 200, ...duplicate };
     }
 
-    const conflict = this.findConflict(receipt, receiptHash);
+    const conflict = await this.findConflict(receipt, receiptHash);
     if (conflict !== undefined) {
       return conflict;
     }
@@ -196,25 +216,25 @@ export class ReceiptIngestor {
       receiptHash,
       input.source ?? "unknown"
     );
-    this.store.save(snapshot);
+    await this.store.save(snapshot);
     return { status: "created", statusCode: 201, ...snapshot };
   }
 
-  private findConflict(
+  private async findConflict(
     receipt: Split402ReceiptV1,
     receiptHash: `sha256:${string}`
-  ): Extract<ReceiptIngestResult, { status: "conflict" }> | undefined {
-    const byReceiptId = this.store.getByReceiptId(receipt.receiptId);
+  ): Promise<Extract<ReceiptIngestResult, { status: "conflict" }> | undefined> {
+    const byReceiptId = await this.store.getByReceiptId(receipt.receiptId);
     if (byReceiptId !== undefined) {
       return conflict("receiptId", byReceiptId, receiptHash);
     }
 
-    const byPaymentId = this.store.getByPaymentId(receipt.paymentId);
+    const byPaymentId = await this.store.getByPaymentId(receipt.paymentId);
     if (byPaymentId !== undefined) {
       return conflict("paymentId", byPaymentId, receiptHash);
     }
 
-    const bySettlementTx = this.store.getBySettlementTxSignature(
+    const bySettlementTx = await this.store.getBySettlementTxSignature(
       receipt.settlementTxSignature
     );
     if (bySettlementTx !== undefined) {
@@ -332,6 +352,98 @@ export class ReceiptIngestor {
   }
 }
 
+export interface ReceiptIngestionRouterOptions {
+  ingestor: ReceiptIngestor;
+  jsonLimit?: string;
+}
+
+export function createControlPlaneApp(
+  options: ReceiptIngestionRouterOptions
+): express.Express {
+  const app = express();
+  app.disable("x-powered-by");
+
+  app.get("/v1/health", (_req, res) => {
+    res.json({
+      status: "ok",
+      service: "split402-control-plane",
+      phase: "phase-4"
+    });
+  });
+
+  app.use(createReceiptIngestionRouter(options));
+
+  app.use((_req, res) => {
+    res.status(404).json({ error: "not_found" });
+  });
+
+  app.use(
+    (
+      error: unknown,
+      _req: Request,
+      res: Response,
+      _next: NextFunction
+    ) => {
+      res.status(500).json({
+        error: "internal_server_error",
+        message: error instanceof Error ? error.message : "unknown error"
+      });
+    }
+  );
+
+  return app;
+}
+
+export function createReceiptIngestionRouter(
+  options: ReceiptIngestionRouterOptions
+): Router {
+  const router = express.Router();
+  router.use(express.json({ limit: options.jsonLimit ?? "128kb" }));
+
+  router.post("/v1/receipts", async (req, res, next) => {
+    try {
+      const requestBody = readJsonObject(req.body);
+      if (requestBody === undefined || requestBody.receipt === undefined) {
+        res.status(400).json({
+          status: "rejected",
+          errors: ["request body must include receipt"]
+        });
+        return;
+      }
+
+      const source = readReceiptSource(requestBody.source);
+      if (source === undefined && requestBody.source !== undefined) {
+        res.status(400).json({
+          status: "rejected",
+          errors: [
+            "source must be one of buyer, merchant, relay, or unknown"
+          ]
+        });
+        return;
+      }
+
+      const result = await options.ingestor.ingest({
+        receipt: requestBody.receipt,
+        ...(source === undefined ? {} : { source })
+      });
+      res.status(result.statusCode).json(result);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.use(jsonErrorHandler);
+
+  return router;
+}
+
+export function isReceiptIngestSource(value: unknown): value is ReceiptIngestSource {
+  return (
+    typeof value === "string" &&
+    (RECEIPT_INGEST_SOURCES as readonly string[]).includes(value)
+  );
+}
+
 export function assertLedgerBalances(entries: LedgerEntry[]): void {
   const totals = new Map<string, bigint>();
   for (const entry of entries) {
@@ -364,4 +476,45 @@ function conflict(
 function negateAtomic(value: string): string {
   const amount = BigInt(value);
   return amount === 0n ? "0" : `-${amount.toString()}`;
+}
+
+function readJsonObject(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function readReceiptSource(value: unknown): ReceiptIngestSource | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return isReceiptIngestSource(value) ? value : undefined;
+}
+
+function jsonErrorHandler(
+  error: unknown,
+  _req: Request,
+  res: Response,
+  next: NextFunction
+): void {
+  const status = readHttpErrorStatus(error);
+  if (status !== undefined) {
+    res.status(status).json({
+      status: "rejected",
+      errors: [error instanceof Error ? error.message : "invalid request body"]
+    });
+    return;
+  }
+
+  next(error);
+}
+
+function readHttpErrorStatus(error: unknown): number | undefined {
+  if (typeof error !== "object" || error === null) {
+    return undefined;
+  }
+  const status = (error as { status?: unknown }).status;
+  return typeof status === "number" && status >= 400 && status < 500
+    ? status
+    : undefined;
 }

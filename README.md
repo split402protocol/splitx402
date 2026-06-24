@@ -29,8 +29,9 @@ protocol package and deterministic test vectors from `splitx402/ffff`. Phase 3
 implemented the x402 extension, Express adapter, demo merchant, agent SDK, demo
 agent, and Devnet paid-suite proof. The current Phase 4 slice adds the first
 `@split402/control-plane` receipt ingestion domain for signed receipt verification,
-idempotent accrual creation, duplicate/conflict handling, and a zero-sum ledger
-model, plus the first PostgreSQL receipt/accrual/ledger migration.
+idempotent accrual creation, duplicate/conflict handling, a public
+`POST /v1/receipts` ingestion API, and a zero-sum ledger model, plus the first
+PostgreSQL receipt/accrual/ledger migration.
 
 An existing-token Devnet paid-suite proof is recorded in
 [`docs/proofs/phase3-paid-suite-2026-06-24.md`](docs/proofs/phase3-paid-suite-2026-06-24.md).
