@@ -55,6 +55,11 @@ export type LedgerAccountType =
   | "merchant_commission_liability"
   | "referrer_payable"
   | "protocol_fee_payable";
+export type OutboxEventStatus =
+  | "pending"
+  | "processing"
+  | "delivered"
+  | "dead_letter";
 
 export interface ReceiptRecord {
   id: string;
@@ -96,6 +101,20 @@ export interface LedgerEntry {
   accountReference: string;
   asset: string;
   amountAtomic: string;
+}
+
+export interface OutboxEventRecord {
+  id: string;
+  eventType: string;
+  aggregateType: string;
+  aggregateId: string;
+  payload: Record<string, unknown>;
+  status: OutboxEventStatus;
+  attempts: number;
+  availableAt: string;
+  lockedAt?: string;
+  lastError?: string;
+  createdAt: string;
 }
 
 export interface ReceiptIngestionSnapshot {
