@@ -9,8 +9,11 @@ import type { QueryResult, QueryResultRow } from "pg";
 import { describe, expect, it } from "vitest";
 
 import {
+  buildCampaignTermsSigningBytes,
+  CampaignRegistryConflictError,
   InMemoryReceiptIngestionStore,
   MerchantRegistryConflictError,
+  PostgresCampaignRegistry,
   PostgresMerchantRegistry,
   PostgresReceiptIngestionStore,
   PostgresWalletAuthStore,
@@ -18,6 +21,8 @@ import {
   ReceiptIngestor,
   WalletAuthRejectedError,
   WalletAuthenticator,
+  type CampaignTermsInput,
+  type CampaignVersionRecord,
   type PostgresPool,
   type PostgresTransactionClient,
   type ReceiptIngestionSnapshot
@@ -25,6 +30,9 @@ import {
 
 const OWNER_SEED = hexToBytes(
   "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf"
+);
+const MERCHANT_SEED = hexToBytes(
+  "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
 );
 const OWNER_WALLET = deriveEd25519PublicKey(OWNER_SEED);
 const NETWORK = "solana:devnet";
@@ -198,6 +206,96 @@ describe("PostgresMerchantRegistry", () => {
   });
 });
 
+describe("PostgresCampaignRegistry", () => {
+  it("persists campaign drafts, versions, and operations", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const fakePool = new FakePostgresPool();
+    const registry = createPostgresCampaignRegistry(fakePool);
+
+    const campaign = await registry.createCampaign({
+      id: bundle.artifacts.receipt.campaignId,
+      merchantId: bundle.artifacts.receipt.merchantId,
+      ...createCampaignTerms()
+    });
+    const firstVersion = await registry.getCampaignVersion(campaign.id, 1);
+    const secondVersion = await registry.createCampaignVersion({
+      campaignId: campaign.id,
+      ...createCampaignTerms({ commissionBps: 2500 })
+    });
+    const loaded = await registry.getCampaign(campaign.id);
+
+    expect(campaign.status).toBe("draft");
+    expect(firstVersion?.termsHash).toBe(campaign.current.termsHash);
+    expect(secondVersion.version).toBe(2);
+    expect(secondVersion.terms.commissionBps).toBe(2500);
+    expect(loaded?.currentVersion).toBe(2);
+    expect(loaded?.current.termsHash).toBe(secondVersion.termsHash);
+    expect(fakePool.database.campaigns).toHaveLength(1);
+    expect(fakePool.database.campaignVersions).toHaveLength(2);
+    expect(fakePool.database.campaignOperations).toHaveLength(2);
+  });
+
+  it("activates the current version with a merchant signature", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const fakePool = new FakePostgresPool();
+    const registry = createPostgresCampaignRegistry(fakePool);
+    const campaign = await registry.createCampaign({
+      id: bundle.artifacts.receipt.campaignId,
+      merchantId: bundle.artifacts.receipt.merchantId,
+      ...createCampaignTerms()
+    });
+    const signature = signCampaignTerms(campaign.current);
+
+    const activated = await registry.activateCampaignVersion({
+      campaignId: campaign.id,
+      merchantKid: bundle.artifacts.receipt.kid,
+      merchantPublicKey: bundle.keys.merchantPublicKey,
+      merchantSignature: signature
+    });
+    const replayed = await registry.activateCampaignVersion({
+      campaignId: campaign.id,
+      merchantKid: bundle.artifacts.receipt.kid,
+      merchantPublicKey: bundle.keys.merchantPublicKey,
+      merchantSignature: signature
+    });
+    const loaded = await registry.getCampaign(campaign.id);
+
+    expect(activated.status).toBe("active");
+    expect(activated.current.merchantSignature).toBe(signature);
+    expect(activated.current.activatedAt).toBe("2026-06-24T00:00:00.000Z");
+    expect(replayed.current.merchantSignature).toBe(signature);
+    expect(loaded?.status).toBe("active");
+    expect(loaded?.current.merchantKid).toBe(bundle.artifacts.receipt.kid);
+    await expect(
+      registry.activateCampaignVersion({
+        campaignId: campaign.id,
+        merchantKid: bundle.artifacts.receipt.kid,
+        merchantPublicKey: bundle.keys.merchantPublicKey,
+        merchantSignature: "different-signature"
+      })
+    ).rejects.toBeInstanceOf(CampaignRegistryConflictError);
+  });
+
+  it("maps unique violations to campaign registry conflicts", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const fakePool = new FakePostgresPool();
+    const registry = createPostgresCampaignRegistry(fakePool);
+    await registry.createCampaign({
+      id: bundle.artifacts.receipt.campaignId,
+      merchantId: bundle.artifacts.receipt.merchantId,
+      ...createCampaignTerms()
+    });
+
+    await expect(
+      registry.createCampaign({
+        id: bundle.artifacts.receipt.campaignId,
+        merchantId: bundle.artifacts.receipt.merchantId,
+        ...createCampaignTerms({ commissionBps: 2500 })
+      })
+    ).rejects.toBeInstanceOf(CampaignRegistryConflictError);
+  });
+});
+
 describe("PostgresWalletAuthStore", () => {
   it("persists single-use challenges and hashed bearer sessions", async () => {
     const fakePool = new FakePostgresPool();
@@ -276,6 +374,15 @@ function createPostgresRegistry(fakePool: FakePostgresPool): PostgresMerchantReg
   });
 }
 
+function createPostgresCampaignRegistry(
+  fakePool: FakePostgresPool
+): PostgresCampaignRegistry {
+  return new PostgresCampaignRegistry(fakePool, {
+    now: () => new Date("2026-06-24T00:00:00Z"),
+    campaignIdFactory: () => "cmp_ffffffffffffffffffffffffffffffff"
+  });
+}
+
 function createPostgresAuthenticator(
   fakePool: FakePostgresPool
 ): WalletAuthenticator {
@@ -291,6 +398,38 @@ function createPostgresAuthenticator(
 
 function nextAuthId(prefix: "chl" | "ses", sequence: number): string {
   return `${prefix}_${sequence.toString(16).padStart(32, "0")}`;
+}
+
+function createCampaignTerms(
+  overrides: Partial<CampaignTermsInput> = {}
+): CampaignTermsInput {
+  const bundle = createSampleProtocolArtifacts();
+  return {
+    resourceOrigin: bundle.artifacts.receipt.merchantOrigin,
+    operations: [
+      {
+        operationId: bundle.artifacts.receipt.operationId,
+        method: "POST",
+        pathTemplate: "/v1/risk"
+      }
+    ],
+    network: bundle.artifacts.receipt.network,
+    asset: bundle.artifacts.receipt.asset,
+    requiredAmountAtomic: bundle.artifacts.receipt.requiredAmountAtomic,
+    payToWallet: bundle.artifacts.receipt.payToWallet,
+    commissionBps: bundle.artifacts.receipt.commissionBps,
+    payoutThresholdAtomic: "100000",
+    startsAt: "2026-06-24T00:00:00Z",
+    endsAt: null,
+    ...overrides
+  };
+}
+
+function signCampaignTerms(version: CampaignVersionRecord): string {
+  return signEd25519Message(
+    buildCampaignTermsSigningBytes(version.terms),
+    MERCHANT_SEED
+  ).signature;
 }
 
 class FakePostgresPool implements PostgresPool {
@@ -363,6 +502,18 @@ class FakePostgresClient implements PostgresTransactionClient {
     if (normalized.startsWith("insert into merchant_keys")) {
       return result(this.database.insertMerchantKey(values) as unknown as Row[]);
     }
+    if (normalized.startsWith("insert into campaigns")) {
+      this.database.insertCampaign(values);
+      return result([]);
+    }
+    if (normalized.startsWith("insert into campaign_versions")) {
+      this.database.insertCampaignVersion(values);
+      return result([]);
+    }
+    if (normalized.startsWith("insert into campaign_operations")) {
+      this.database.insertCampaignOperation(values);
+      return result([]);
+    }
     if (normalized.startsWith("insert into wallet_auth_challenges")) {
       this.database.insertWalletAuthChallenge(values);
       return result([]);
@@ -373,6 +524,13 @@ class FakePostgresClient implements PostgresTransactionClient {
     }
     if (normalized.startsWith("update merchant_keys")) {
       return result(this.database.revokeMerchantKey(values) as unknown as Row[]);
+    }
+    if (normalized.startsWith("update campaign_versions")) {
+      return commandResult(this.database.activateCampaignVersion(values));
+    }
+    if (normalized.startsWith("update campaigns")) {
+      this.database.updateCampaign(normalized, values);
+      return result([]);
     }
     if (normalized.startsWith("update wallet_auth_challenges")) {
       return result(
@@ -404,6 +562,14 @@ class FakePostgresClient implements PostgresTransactionClient {
         this.database.selectMerchantKeys(normalized, values) as unknown as Row[]
       );
     }
+    if (normalized.includes("from campaigns")) {
+      return result(this.database.selectCampaign(values[0]) as unknown as Row[]);
+    }
+    if (normalized.includes("from campaign_versions")) {
+      return result(
+        this.database.selectCampaignVersion(values) as unknown as Row[]
+      );
+    }
     if (normalized.includes("from wallet_auth_challenges")) {
       return result(
         this.database.selectWalletAuthChallenge(values[0]) as unknown as Row[]
@@ -427,6 +593,9 @@ class FakePostgresDatabase {
   merchants: StoredMerchantRow[] = [];
   merchantOrigins: StoredMerchantOriginRow[] = [];
   merchantKeys: StoredMerchantKeyRow[] = [];
+  campaigns: StoredCampaignRow[] = [];
+  campaignVersions: StoredCampaignVersionRow[] = [];
+  campaignOperations: StoredCampaignOperationRow[] = [];
   walletAuthChallenges: StoredWalletAuthChallengeRow[] = [];
   walletAuthSessions: StoredWalletAuthSessionRow[] = [];
   failNextInsertWithUniqueViolation = false;
@@ -667,6 +836,130 @@ class FakePostgresDatabase {
     return this.merchantKeys.filter((row) => row.merchant_id === merchantId);
   }
 
+  insertCampaign(values: readonly unknown[]): void {
+    const row: StoredCampaignRow = {
+      id: readString(values[0]),
+      merchant_id: readString(values[1]),
+      resource_origin: readString(values[2]),
+      status: readString(values[3]),
+      current_version: readNumber(values[4]),
+      created_at: readString(values[5]),
+      updated_at: readString(values[6])
+    };
+    if (this.campaigns.some((campaign) => campaign.id === row.id)) {
+      throw Object.assign(new Error("duplicate key"), { code: "23505" });
+    }
+    this.campaigns.push(row);
+  }
+
+  insertCampaignVersion(values: readonly unknown[]): void {
+    const row: StoredCampaignVersionRow = {
+      campaign_id: readString(values[0]),
+      version: readNumber(values[1]),
+      terms_hash: readString(values[2]) as `sha256:${string}`,
+      terms_json: readString(values[3]),
+      signing_bytes_hex: readString(values[4]),
+      network: readString(values[5]),
+      asset_mint: readString(values[6]),
+      commission_bps: readNumber(values[7]),
+      protocol_fee_bps: readNumber(values[8]),
+      payout_threshold_atomic: readString(values[9]),
+      starts_at: readString(values[10]),
+      ends_at: readNullableString(values[11]),
+      merchant_kid: readNullableString(values[12]),
+      merchant_signature: readNullableString(values[13]),
+      activated_at: readNullableString(values[14]),
+      created_at: readString(values[15])
+    };
+    if (
+      this.campaignVersions.some(
+        (version) =>
+          version.campaign_id === row.campaign_id &&
+          (version.version === row.version ||
+            version.terms_hash === row.terms_hash)
+      )
+    ) {
+      throw Object.assign(new Error("duplicate key"), { code: "23505" });
+    }
+    this.campaignVersions.push(row);
+  }
+
+  insertCampaignOperation(values: readonly unknown[]): void {
+    const row: StoredCampaignOperationRow = {
+      campaign_id: readString(values[0]),
+      campaign_version: readNumber(values[1]),
+      operation_id: readString(values[2]),
+      method: readString(values[3]),
+      path_template: readString(values[4]),
+      input_schema: readNullableString(values[5])
+    };
+    if (
+      this.campaignOperations.some(
+        (operation) =>
+          operation.campaign_id === row.campaign_id &&
+          operation.campaign_version === row.campaign_version &&
+          operation.operation_id === row.operation_id
+      )
+    ) {
+      throw Object.assign(new Error("duplicate key"), { code: "23505" });
+    }
+    this.campaignOperations.push(row);
+  }
+
+  updateCampaign(normalizedSql: string, values: readonly unknown[]): void {
+    const campaign = this.campaigns.find((row) => row.id === readString(values[0]));
+    if (campaign === undefined) {
+      return;
+    }
+    if (normalizedSql.includes("resource_origin = $2")) {
+      campaign.resource_origin = readString(values[1]);
+      campaign.status = "draft";
+      campaign.current_version = readNumber(values[2]);
+      campaign.updated_at = readString(values[3]);
+      return;
+    }
+    campaign.status = "active";
+    campaign.updated_at = readString(values[1]);
+  }
+
+  activateCampaignVersion(values: readonly unknown[]): number {
+    const campaignId = readString(values[0]);
+    const versionNumber = readNumber(values[1]);
+    const version = this.campaignVersions.find(
+      (row) => row.campaign_id === campaignId && row.version === versionNumber
+    );
+    if (version === undefined) {
+      return 0;
+    }
+    if (
+      version.merchant_kid !== null ||
+      version.merchant_signature !== null ||
+      version.activated_at !== null
+    ) {
+      return 0;
+    }
+    version.merchant_kid = readString(values[2]);
+    version.merchant_signature = readString(values[3]);
+    version.activated_at = readString(values[4]);
+    return 1;
+  }
+
+  selectCampaign(campaignId: unknown): StoredCampaignRow[] {
+    const campaign = this.campaigns.find(
+      (row) => row.id === readString(campaignId)
+    );
+    return campaign === undefined ? [] : [campaign];
+  }
+
+  selectCampaignVersion(values: readonly unknown[]): StoredCampaignVersionRow[] {
+    const campaignId = readString(values[0]);
+    const versionNumber = readNumber(values[1]);
+    const version = this.campaignVersions.find(
+      (row) => row.campaign_id === campaignId && row.version === versionNumber
+    );
+    return version === undefined ? [] : [version];
+  }
+
   insertWalletAuthChallenge(values: readonly unknown[]): void {
     this.walletAuthChallenges.push({
       id: readString(values[0]),
@@ -805,6 +1098,44 @@ type StoredMerchantKeyRow = QueryResultRow & {
   created_at: string;
 };
 
+type StoredCampaignRow = QueryResultRow & {
+  id: string;
+  merchant_id: string;
+  resource_origin: string;
+  status: string;
+  current_version: number;
+  created_at: string;
+  updated_at: string;
+};
+
+type StoredCampaignVersionRow = QueryResultRow & {
+  campaign_id: string;
+  version: number;
+  terms_hash: `sha256:${string}`;
+  terms_json: string;
+  signing_bytes_hex: string;
+  network: string;
+  asset_mint: string;
+  commission_bps: number;
+  protocol_fee_bps: number;
+  payout_threshold_atomic: string;
+  starts_at: string;
+  ends_at: string | null;
+  merchant_kid: string | null;
+  merchant_signature: string | null;
+  activated_at: string | null;
+  created_at: string;
+};
+
+type StoredCampaignOperationRow = QueryResultRow & {
+  campaign_id: string;
+  campaign_version: number;
+  operation_id: string;
+  method: string;
+  path_template: string;
+  input_schema: string | null;
+};
+
 type StoredWalletAuthChallengeRow = QueryResultRow & {
   id: string;
   wallet: string;
@@ -835,6 +1166,16 @@ function result<Row extends QueryResultRow>(rows: Row[]): QueryResult<Row> {
     oid: 0,
     fields: [],
     rows
+  };
+}
+
+function commandResult<Row extends QueryResultRow>(rowCount: number): QueryResult<Row> {
+  return {
+    command: "UPDATE",
+    rowCount,
+    oid: 0,
+    fields: [],
+    rows: []
   };
 }
 
