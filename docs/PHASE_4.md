@@ -72,6 +72,10 @@ Status: started.
 - Added a bounded and abortable chain-verification polling loop around the worker
   framework with idle backoff, transient error handling, and result/error hooks for
   deployable runtime wiring.
+- Added a deployable `split402-chain-worker` process entrypoint and
+  `corepack pnpm worker:chain` script that compose the PostgreSQL runtime,
+  Solana receipt verifier, and chain-verification polling loop from environment
+  configuration.
 - Added a durable control-plane runtime factory that wires PostgreSQL merchant,
   campaign, route, wallet-auth, receipt, and outbox stores with receipt key
   resolution and required-by-default merchant auth policy.
@@ -138,6 +142,8 @@ Status: started.
   receipt events, plus PostgreSQL coverage for verified receipt/accrual state.
 - Added chain-verification loop tests for bounded idle polling, abort handling,
   and transient processor errors.
+- Added chain-verification worker entrypoint tests for environment parsing,
+  runtime wiring, invalid configuration, and help output.
 - Added control-plane runtime tests for required-by-default auth policy, disabled
   auth embeddings, environment-driven pool configuration, close handling, and
   invalid runtime configuration.
@@ -166,7 +172,7 @@ a zero-sum ledger transaction.
 - Wallet-auth refresh token flow.
 - Full x402 SVM settlement-verifier parity, including explicit associated token
   account derivation and multi-provider RPC hardening.
-- Webhook dispatch loop and deployable worker process entrypoints.
+- Webhook dispatch loop and webhook worker process entrypoint.
 - Payout-wallet rotation and route search history.
 
 ## Acceptance Checks
