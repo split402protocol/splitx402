@@ -108,6 +108,9 @@ Current slice:
 
 - `@split402/control-plane` package;
 - public receipt ingestion domain that verifies merchant-signed receipts;
+- Express control-plane app and `POST /v1/receipts` route for public receipt
+  submissions;
+- store interface boundary for the future PostgreSQL adapter;
 - in-memory store for the first deterministic idempotency tests;
 - duplicate detection by receipt hash;
 - conflict detection by receipt id, payment id, and settlement transaction;
