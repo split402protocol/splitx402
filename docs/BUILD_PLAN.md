@@ -128,9 +128,12 @@ Current slice:
 - preserve request-context capture for operation digest inputs;
 - port `apps/demo-merchant` from `ffff`;
 - expose health, discovery, debug receipts, and paid risk-score route;
+- port `@split402/agent-sdk` from `ffff`;
+- expose buyer-side offer inspection, referral-claim creation, paid JSON call, and
+  receipt verification helpers;
 - validate required and optional attribution before settlement;
-- keep valid/invalid claim behavior, Express adapter behavior, and demo merchant
-  metadata/challenge behavior covered by tests.
+- keep valid/invalid claim behavior, Express adapter behavior, demo merchant
+  metadata/challenge behavior, and agent SDK offer/receipt behavior covered by tests.
 
 Exit criteria:
 

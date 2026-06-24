@@ -76,9 +76,11 @@ Current slice:
   and referral claim hints;
 - demo merchant runtime with health, discovery, debug receipts, local campaign
   config, local service signer, and `/v1/risk`;
+- `@split402/agent-sdk` buyer client for offer inspection, referral claim creation,
+  paid JSON calls, and receipt verification;
 - attribution validation before x402 verification;
 - signed receipt enrichment after settlement;
-- extension, adapter, and demo merchant tests.
+- extension, adapter, demo merchant, and agent SDK tests.
 
 ## Phase 4: Control Plane And Persistent Ingestion
 
