@@ -159,6 +159,8 @@ mainnet payment flows exist yet.
 | Outbox claim/retry/dead-letter APIs | Started |
 | Chain verification worker framework | Started |
 | Chain verification polling loop | Started |
+| Durable control-plane runtime factory | Started |
+| Production auth policy wiring | Started |
 | Solana RPC signature-status verifier | Started |
 | Solana transaction transfer verifier | Started |
 | Live PostgreSQL migration/integration harness | Started |
@@ -365,6 +367,19 @@ Run the optional live PostgreSQL harness against an empty test database:
 $env:SPLIT402_TEST_DATABASE_URL="postgresql://split402:split402@localhost:5432/split402_test"
 corepack pnpm test:postgres
 ```
+
+Create a durable control-plane app backed by PostgreSQL:
+
+```ts
+import { createControlPlaneRuntimeFromEnv } from "@split402/control-plane";
+
+const runtime = createControlPlaneRuntimeFromEnv();
+runtime.app.listen(process.env.PORT ?? 4020);
+```
+
+The runtime reads `SPLIT402_DATABASE_URL` or `DATABASE_URL`, wires PostgreSQL
+merchant, campaign, route, auth, receipt, and outbox stores, and defaults
+`SPLIT402_CONTROL_PLANE_AUTH_POLICY` to `required` for merchant mutations.
 
 Run the demo merchant and agent flows:
 
