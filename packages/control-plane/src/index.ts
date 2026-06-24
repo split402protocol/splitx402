@@ -8,12 +8,14 @@ import {
 } from "@split402/protocol";
 import express from "express";
 import type { NextFunction, Request, Response, Router } from "express";
+import { Pool, type PoolConfig } from "pg";
 
 import {
+  WalletAuthenticator,
   isWalletAuthRejectedError,
   isWalletAuthValidationError,
   type AuthenticatedWalletSession,
-  type WalletAuthenticator,
+  type WalletAuthenticatorOptions,
   type WalletAuthPurpose
 } from "./auth.js";
 import {
@@ -28,6 +30,7 @@ import {
 } from "./campaigns.js";
 import { isReceiptIngestionPersistenceConflict } from "./errors.js";
 import {
+  createMerchantReceiptKeyResolver,
   MerchantRegistryValidationError,
   isMerchantRegistryConflict,
   isMerchantRegistryValidationError,
@@ -45,6 +48,15 @@ import {
   type RouteOperationScope,
   type RouteRegistry
 } from "./routes.js";
+import {
+  PostgresCampaignRegistry,
+  PostgresMerchantRegistry,
+  PostgresOutboxEventStore,
+  PostgresReceiptIngestionStore,
+  PostgresRouteRegistry,
+  PostgresWalletAuthStore,
+  type PostgresPool
+} from "./postgres.js";
 
 export type ReceiptIngestSource = "buyer" | "merchant" | "relay" | "unknown";
 export type ReceiptVerificationState =
@@ -485,6 +497,111 @@ export interface ControlPlaneAppOptions {
 export interface ControlPlaneAuthOptions {
   authenticator: WalletAuthenticator;
   requireMerchantAuth?: boolean;
+}
+
+export type ControlPlaneRuntimeAuthPolicy = "disabled" | "optional" | "required";
+
+export interface CreateControlPlaneRuntimeOptions {
+  db: PostgresPool;
+  authPolicy?: ControlPlaneRuntimeAuthPolicy;
+  close?: () => Promise<void> | void;
+  jsonLimit?: string;
+  walletAuth?: WalletAuthenticatorOptions;
+}
+
+export interface CreateControlPlaneRuntimeFromEnvOptions {
+  env?: NodeJS.ProcessEnv;
+  poolFactory?: (config: PoolConfig) => PostgresPool;
+  walletAuth?: WalletAuthenticatorOptions;
+}
+
+export interface ControlPlaneRuntime {
+  app: express.Express;
+  authPolicy: ControlPlaneRuntimeAuthPolicy;
+  campaignRegistry: PostgresCampaignRegistry;
+  close(): Promise<void>;
+  db: PostgresPool;
+  ingestor: ReceiptIngestor;
+  merchantRegistry: PostgresMerchantRegistry;
+  outboxStore: PostgresOutboxEventStore;
+  receiptStore: PostgresReceiptIngestionStore;
+  routeRegistry: PostgresRouteRegistry;
+  authenticator?: WalletAuthenticator;
+}
+
+export function createControlPlaneRuntime(
+  options: CreateControlPlaneRuntimeOptions
+): ControlPlaneRuntime {
+  const authPolicy = readRuntimeAuthPolicy(options.authPolicy ?? "required");
+  const merchantRegistry = new PostgresMerchantRegistry(options.db);
+  const campaignRegistry = new PostgresCampaignRegistry(options.db);
+  const routeRegistry = new PostgresRouteRegistry(options.db);
+  const receiptStore = new PostgresReceiptIngestionStore(options.db);
+  const outboxStore = new PostgresOutboxEventStore(options.db);
+  const ingestor = new ReceiptIngestor(receiptStore, {
+    resolveMerchantPublicKey: createMerchantReceiptKeyResolver(merchantRegistry)
+  });
+  const authenticator =
+    authPolicy === "disabled"
+      ? undefined
+      : new WalletAuthenticator(
+          new PostgresWalletAuthStore(options.db),
+          options.walletAuth
+        );
+  const app = createControlPlaneApp({
+    ingestor,
+    merchantRegistry,
+    campaignRegistry,
+    routeRegistry,
+    ...(options.jsonLimit === undefined ? {} : { jsonLimit: options.jsonLimit }),
+    ...(authenticator === undefined
+      ? {}
+      : {
+          auth: {
+            authenticator,
+            requireMerchantAuth: authPolicy === "required"
+          }
+        })
+  });
+
+  return {
+    app,
+    authPolicy,
+    db: options.db,
+    ingestor,
+    merchantRegistry,
+    campaignRegistry,
+    routeRegistry,
+    receiptStore,
+    outboxStore,
+    ...(authenticator === undefined ? {} : { authenticator }),
+    close: async () => {
+      await options.close?.();
+    }
+  };
+}
+
+export function createControlPlaneRuntimeFromEnv(
+  options: CreateControlPlaneRuntimeFromEnvOptions = {}
+): ControlPlaneRuntime {
+  const env = options.env ?? process.env;
+  const pool = createRuntimePool(env, options.poolFactory);
+  return createControlPlaneRuntime({
+    db: pool,
+    authPolicy: readRuntimeAuthPolicy(
+      env.SPLIT402_CONTROL_PLANE_AUTH_POLICY ?? "required"
+    ),
+    ...(env.SPLIT402_CONTROL_PLANE_JSON_LIMIT === undefined
+      ? {}
+      : { jsonLimit: env.SPLIT402_CONTROL_PLANE_JSON_LIMIT }),
+    walletAuth: {
+      ...readWalletAuthEnvOptions(env),
+      ...options.walletAuth
+    },
+    close: async () => {
+      await closeRuntimePool(pool);
+    }
+  });
 }
 
 export function createControlPlaneApp(
@@ -1531,6 +1648,94 @@ function readHttpErrorStatus(error: unknown): number | undefined {
   return typeof status === "number" && status >= 400 && status < 500
     ? status
     : undefined;
+}
+
+function createRuntimePool(
+  env: NodeJS.ProcessEnv,
+  poolFactory: ((config: PoolConfig) => PostgresPool) | undefined
+): PostgresPool {
+  const connectionString = env.SPLIT402_DATABASE_URL ?? env.DATABASE_URL;
+  if (connectionString === undefined || connectionString.trim().length === 0) {
+    throw new Error("SPLIT402_DATABASE_URL or DATABASE_URL is required");
+  }
+
+  const poolConfig: PoolConfig = { connectionString };
+  const max = readOptionalRuntimePositiveInteger(
+    env.SPLIT402_DATABASE_POOL_MAX,
+    "SPLIT402_DATABASE_POOL_MAX"
+  );
+  if (max !== undefined) {
+    poolConfig.max = max;
+  }
+
+  if (readOptionalRuntimeBoolean(env.SPLIT402_DATABASE_SSL, "SPLIT402_DATABASE_SSL") === true) {
+    poolConfig.ssl = {
+      rejectUnauthorized:
+        env.SPLIT402_DATABASE_SSL_REJECT_UNAUTHORIZED !== "false"
+    };
+  }
+
+  return poolFactory?.(poolConfig) ?? new Pool(poolConfig);
+}
+
+async function closeRuntimePool(pool: PostgresPool): Promise<void> {
+  const closable = pool as PostgresPool & { end?: () => Promise<void> | void };
+  await closable.end?.();
+}
+
+function readRuntimeAuthPolicy(value: string): ControlPlaneRuntimeAuthPolicy {
+  if (value === "disabled" || value === "optional" || value === "required") {
+    return value;
+  }
+  throw new Error(
+    "SPLIT402_CONTROL_PLANE_AUTH_POLICY must be disabled, optional, or required"
+  );
+}
+
+function readWalletAuthEnvOptions(
+  env: NodeJS.ProcessEnv
+): WalletAuthenticatorOptions {
+  const challengeTtlMs = readOptionalRuntimePositiveInteger(
+    env.SPLIT402_WALLET_AUTH_CHALLENGE_TTL_MS,
+    "SPLIT402_WALLET_AUTH_CHALLENGE_TTL_MS"
+  );
+  const sessionTtlMs = readOptionalRuntimePositiveInteger(
+    env.SPLIT402_WALLET_AUTH_SESSION_TTL_MS,
+    "SPLIT402_WALLET_AUTH_SESSION_TTL_MS"
+  );
+  return {
+    ...(challengeTtlMs === undefined ? {} : { challengeTtlMs }),
+    ...(sessionTtlMs === undefined ? {} : { sessionTtlMs })
+  };
+}
+
+function readOptionalRuntimePositiveInteger(
+  value: string | undefined,
+  label: string
+): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!/^[1-9][0-9]*$/u.test(value)) {
+    throw new Error(`${label} must be a positive integer`);
+  }
+  return Number.parseInt(value, 10);
+}
+
+function readOptionalRuntimeBoolean(
+  value: string | undefined,
+  label: string
+): boolean | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === "true") {
+    return true;
+  }
+  if (value === "false") {
+    return false;
+  }
+  throw new Error(`${label} must be true or false`);
 }
 
 export * from "./errors.js";
