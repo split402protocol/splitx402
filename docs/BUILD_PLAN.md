@@ -212,6 +212,8 @@ Current slice:
   failures, marking delivery, and dead-lettering exhausted work;
 - add the receipt chain-verification worker framework and PostgreSQL state update
   that makes confirmed accruals payout-eligible;
+- add a bounded/abortable chain-verification polling loop around the worker
+  framework for deployable runtime wiring;
 - add a Solana JSON-RPC verifier for settlement signatures and parsed
   transaction transfer checks covering mint, payer authority, pay-to owner
   evidence, and amount;

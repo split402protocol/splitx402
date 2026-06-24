@@ -68,6 +68,9 @@ Status: started.
   `receipt.accepted.v1` events, calls a pluggable verifier, marks confirmed
   receipts as verified, moves accruals to `available`, and handles retry or
   dead-letter verifier outcomes.
+- Added a bounded and abortable chain-verification polling loop around the worker
+  framework with idle backoff, transient error handling, and result/error hooks for
+  deployable runtime wiring.
 - Added a Solana JSON-RPC signature-status verifier for receipt settlement
   signatures with confirmed/finalized commitment handling, retryable RPC failures,
   and rejected failed transactions.
@@ -128,6 +131,8 @@ Status: started.
   enforcement, delivery marking, and dead-letter behavior.
 - Added chain-verification worker tests for confirmed, retryable, and malformed
   receipt events, plus PostgreSQL coverage for verified receipt/accrual state.
+- Added chain-verification loop tests for bounded idle polling, abort handling,
+  and transient processor errors.
 - Added Solana RPC verifier tests for confirmed/finalized signatures, missing
   signatures, RPC errors, failed transactions, malformed responses, and network
   mismatches.
@@ -155,7 +160,7 @@ a zero-sum ledger transaction.
 - Deployable control-plane runtime wiring.
 - Full x402 SVM settlement-verifier parity, including explicit associated token
   account derivation and multi-provider RPC hardening.
-- Dedicated worker loops for chain verification and webhook dispatch.
+- Webhook dispatch loop and deployable worker runtime wiring.
 - Route suspension, payout-wallet rotation, and route search history.
 
 ## Acceptance Checks
