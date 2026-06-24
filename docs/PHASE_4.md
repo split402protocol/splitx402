@@ -8,6 +8,12 @@ that can later feed chain verification, payout selection, dashboards, and webhoo
 
 Status: started.
 
+Main branch currently contains the receipt-ingestion, merchant registry,
+wallet-auth, PostgreSQL receipt/merchant/auth persistence, and campaign
+draft/version/activation foundation. The route registry, durable campaign
+persistence, outbox stores, chain-verification workers, Solana verifier slices,
+and runtime factory are staged in the active implementation PR stack.
+
 ## What Changed
 
 - Added `packages/control-plane`.
@@ -92,14 +98,11 @@ a zero-sum ledger transaction.
 
 ## Remaining Milestone 2 Work
 
-- Live PostgreSQL integration test harness.
 - Wallet-auth refresh token flow.
-- Production auth policy wiring for the deployable runtime.
-- PostgreSQL-backed campaign registry adapter.
-- Route draft, sign, and activate flow.
-- Deployable control-plane runtime wiring.
-- Chain verification worker.
-- Outbox event persistence.
+- Merge the active PR stack for durable campaign persistence, routes, outbox
+  events, chain verification, Solana verification, and runtime wiring.
+- Payout-wallet rotation and route search history.
+- Webhook dispatch loop and deployable worker process entrypoints.
 - Immutable campaign and route history.
 
 ## Acceptance Checks
