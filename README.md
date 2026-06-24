@@ -15,8 +15,8 @@ The key direction is:
 
 ## Status
 
-Phase 0 is in progress: protocol decisions, repository baseline, and MVP boundaries.
-No production contracts or mainnet payment flows exist yet.
+Phase 0 decisions are recorded and the repository baseline is live on GitHub. No
+production contracts or mainnet payment flows exist yet.
 
 ## Docs
 

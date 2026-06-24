@@ -5,7 +5,7 @@
 Goal: make the architecture explicit enough that implementation can begin without
 constant protocol churn.
 
-Status: in progress.
+Status: complete enough to begin Phase 1.
 
 Deliverables:
 
@@ -76,4 +76,3 @@ Deliverables:
 - signed offer/receipt support;
 - receipt verification;
 - refund and dispute policy.
-
