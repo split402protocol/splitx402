@@ -200,7 +200,8 @@ describeLive("live PostgreSQL control-plane persistence", () => {
       "payment_receipts",
       "commission_accruals",
       "ledger_transactions",
-      "ledger_entries"
+      "ledger_entries",
+      "outbox_events"
     ]);
 
     if (ingestion.status !== "created") {
@@ -226,7 +227,8 @@ describeLive("live PostgreSQL control-plane persistence", () => {
       payment_receipts: 1,
       commission_accruals: 1,
       ledger_transactions: 1,
-      ledger_entries: 3
+      ledger_entries: 3,
+      outbox_events: 1
     });
   }, 30_000);
 });

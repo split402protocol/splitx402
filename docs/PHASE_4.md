@@ -58,6 +58,10 @@ Status: started.
   persistence.
 - Added `0005_routes.sql` for route records, claim hashes, operation scopes, and
   campaign/referrer lookup indexes.
+- Added `0006_outbox_events.sql` for durable pending worker/webhook events.
+- Added outbox insertion to `PostgresReceiptIngestionStore` so accepted receipts
+  commit a `receipt.accepted.v1` event in the same transaction as receipt,
+  accrual, and ledger rows.
 - Added `PostgresCampaignRegistry` for durable campaign, version, activation, and
   operation persistence.
 - Added `0004_campaigns.sql` for campaign, campaign version, and campaign
@@ -106,6 +110,8 @@ Status: started.
   idempotency, and same-route/different-claim conflicts.
 - Extended the live PostgreSQL integration harness to apply the route migration
   and persist one activated route row.
+- Added PostgreSQL receipt-ingestion tests for committed outbox payloads and
+  rollback behavior, plus live harness coverage for the outbox table.
 - Added `corepack pnpm test:postgres` for live PostgreSQL validation when
   `SPLIT402_TEST_DATABASE_URL` is set.
 - Reworked the README with protocol diagrams, package graph, control-plane flow,
@@ -125,7 +131,7 @@ a zero-sum ledger transaction.
 - Production auth policy wiring for the deployable runtime.
 - Deployable control-plane runtime wiring.
 - Chain verification worker.
-- Outbox event persistence.
+- Outbox event claiming, retry, and dead-letter worker APIs.
 - Route suspension, payout-wallet rotation, and route search history.
 
 ## Acceptance Checks

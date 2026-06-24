@@ -206,6 +206,8 @@ Current slice:
   immutable version, operation, and activation state;
 - add the PostgreSQL route registry adapter and migration for durable active
   routes, signed referral claims, and duplicate-claim idempotency;
+- add the PostgreSQL outbox migration and transaction insert for durable
+  `receipt.accepted.v1` worker events;
 - add the packaged PostgreSQL migration runner and opt-in live integration harness
   for real database validation;
 - resolve receipt verification keys through registered merchant service keys by

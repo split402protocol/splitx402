@@ -6,6 +6,7 @@ import {
   ReferralClaimV1Schema,
   type Split402ReceiptV1
 } from "@split402/protocol";
+import { randomUUID } from "node:crypto";
 import type { QueryResult, QueryResultRow } from "pg";
 
 import type {
@@ -67,6 +68,7 @@ import type {
   LedgerAccountType,
   LedgerEntry,
   LedgerTransaction,
+  OutboxEventRecord,
   ReceiptIngestSource,
   ReceiptIngestionSnapshot,
   ReceiptIngestionStore,
@@ -244,10 +246,17 @@ export interface PostgresCampaignRegistryOptions {
   campaignIdFactory?: () => string;
 }
 
+export interface PostgresReceiptIngestionStoreOptions {
+  outboxEventIdFactory?: () => string;
+}
+
 export type PostgresRouteRegistryOptions = InMemoryRouteRegistryOptions;
 
 export class PostgresReceiptIngestionStore implements ReceiptIngestionStore {
-  constructor(private readonly db: PostgresPool | PostgresQueryExecutor) {}
+  constructor(
+    private readonly db: PostgresPool | PostgresQueryExecutor,
+    private readonly options: PostgresReceiptIngestionStoreOptions = {}
+  ) {}
 
   async getByReceiptId(
     receiptId: string
@@ -277,20 +286,18 @@ export class PostgresReceiptIngestionStore implements ReceiptIngestionStore {
     await this.withTransaction(async (client) => {
       await insertReceipt(client, snapshot.receipt);
 
-      if (snapshot.accrual === undefined) {
-        return;
+      if (snapshot.accrual !== undefined) {
+        await insertAccrual(client, snapshot.accrual);
+
+        if (snapshot.ledgerTransaction !== undefined) {
+          await insertLedgerTransaction(client, snapshot.ledgerTransaction);
+          for (const entry of snapshot.ledgerTransaction.entries) {
+            await insertLedgerEntry(client, entry);
+          }
+        }
       }
 
-      await insertAccrual(client, snapshot.accrual);
-
-      if (snapshot.ledgerTransaction === undefined) {
-        return;
-      }
-
-      await insertLedgerTransaction(client, snapshot.ledgerTransaction);
-      for (const entry of snapshot.ledgerTransaction.entries) {
-        await insertLedgerEntry(client, entry);
-      }
+      await insertOutboxEvent(client, this.createReceiptAcceptedEvent(snapshot));
     });
   }
 
@@ -365,6 +372,15 @@ export class PostgresReceiptIngestionStore implements ReceiptIngestionStore {
     );
 
     return mapLedgerTransaction(row, entriesResult.rows.map(mapLedgerEntry));
+  }
+
+  private createReceiptAcceptedEvent(
+    snapshot: ReceiptIngestionSnapshot
+  ): OutboxEventRecord {
+    return createReceiptAcceptedOutboxEvent(
+      snapshot,
+      this.options.outboxEventIdFactory?.() ?? randomUUID()
+    );
   }
 
   private async withTransaction(
@@ -1301,6 +1317,65 @@ function insertLedgerEntry(
       entry.amountAtomic
     ]
   );
+}
+
+function insertOutboxEvent(
+  client: PostgresQueryExecutor,
+  event: OutboxEventRecord
+): Promise<QueryResult> {
+  return client.query(
+    `insert into outbox_events (
+       id, event_type, aggregate_type, aggregate_id, payload, status, attempts,
+       available_at, locked_at, last_error, created_at
+     ) values (
+       $1::uuid, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11
+     )`,
+    [
+      event.id,
+      event.eventType,
+      event.aggregateType,
+      event.aggregateId,
+      JSON.stringify(event.payload),
+      event.status,
+      event.attempts,
+      event.availableAt,
+      event.lockedAt ?? null,
+      event.lastError ?? null,
+      event.createdAt
+    ]
+  );
+}
+
+function createReceiptAcceptedOutboxEvent(
+  snapshot: ReceiptIngestionSnapshot,
+  id: string
+): OutboxEventRecord {
+  const receipt = snapshot.receipt.receipt;
+  return {
+    id,
+    eventType: "receipt.accepted.v1",
+    aggregateType: "receipt",
+    aggregateId: snapshot.receipt.id,
+    payload: {
+      receiptId: snapshot.receipt.id,
+      receiptHash: snapshot.receipt.receiptHash,
+      merchantId: receipt.merchantId,
+      campaignId: receipt.campaignId,
+      routeId: receipt.routeId ?? null,
+      paymentId: receipt.paymentId,
+      settlementTxSignature: receipt.settlementTxSignature,
+      network: receipt.network,
+      asset: receipt.asset,
+      source: snapshot.receipt.source,
+      verificationState: snapshot.receipt.verificationState,
+      accrualId: snapshot.accrual?.id ?? null,
+      ledgerTransactionId: snapshot.ledgerTransaction?.id ?? null
+    },
+    status: "pending",
+    attempts: 0,
+    availableAt: snapshot.receipt.createdAt,
+    createdAt: snapshot.receipt.createdAt
+  };
 }
 
 function mapReceiptRecord(row: PaymentReceiptRow): ReceiptRecord {
