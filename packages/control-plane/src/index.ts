@@ -1236,6 +1236,7 @@ export * from "./errors.js";
 export * from "./auth.js";
 export * from "./campaigns.js";
 export * from "./merchants.js";
+export * from "./migrations.js";
 export * from "./postgres.js";
 
 function isMerchantAuthRequired(

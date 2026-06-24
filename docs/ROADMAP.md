@@ -143,6 +143,8 @@ Current slice:
   version with registered merchant service-key signature verification;
 - PostgreSQL campaign registry adapter with campaign, immutable version,
   operation, and activation persistence;
+- packaged PostgreSQL migration runner with checksum tracking and an opt-in live
+  integration harness;
 - receipt verifier key resolution through registered merchant service keys.
 
 ## Phase 5: Production Merchant SDK
