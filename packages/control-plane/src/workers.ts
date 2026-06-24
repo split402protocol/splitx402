@@ -28,9 +28,38 @@ export interface ReceiptChainVerifier {
   ): Promise<ReceiptChainVerificationResult> | ReceiptChainVerificationResult;
 }
 
+export interface ReceiptChainVerificationProcessor {
+  processNext():
+    | Promise<ReceiptChainVerificationWorkerResult>
+    | ReceiptChainVerificationWorkerResult;
+}
+
 export interface ReceiptChainVerificationWorkerOptions {
   now?: () => Date;
   retryDelayMs?: number;
+}
+
+export interface ReceiptChainVerificationWorkerLoopOptions {
+  errorDelayMs?: number;
+  maxIterations?: number;
+  onError?: (error: unknown) => Promise<void> | void;
+  onResult?: (
+    result: ReceiptChainVerificationWorkerResult
+  ) => Promise<void> | void;
+  pollIntervalMs?: number;
+  signal?: AbortSignal;
+  sleep?: ReceiptChainVerificationWorkerLoopSleep;
+  stopOnError?: boolean;
+}
+
+export type ReceiptChainVerificationWorkerLoopSleep = (
+  delayMs: number,
+  signal?: AbortSignal
+) => Promise<void> | void;
+
+export interface ReceiptChainVerificationWorkerLoopSummary {
+  iterations: number;
+  stoppedBy: "aborted" | "max_iterations";
 }
 
 export type ReceiptChainVerificationWorkerResult =
@@ -56,8 +85,11 @@ export type ReceiptChainVerificationWorkerResult =
 
 const RECEIPT_ACCEPTED_EVENT_TYPE = "receipt.accepted.v1";
 const DEFAULT_RETRY_DELAY_MS = 60_000;
+const DEFAULT_POLL_INTERVAL_MS = 5_000;
 
-export class ReceiptChainVerificationWorker {
+export class ReceiptChainVerificationWorker
+  implements ReceiptChainVerificationProcessor
+{
   constructor(
     private readonly outboxStore: OutboxEventStore,
     private readonly receiptStore: ReceiptChainVerificationStore,
@@ -149,9 +181,99 @@ export class ReceiptChainVerificationWorker {
   }
 }
 
+export async function runReceiptChainVerificationWorkerLoop(
+  worker: ReceiptChainVerificationProcessor,
+  options: ReceiptChainVerificationWorkerLoopOptions = {}
+): Promise<ReceiptChainVerificationWorkerLoopSummary> {
+  assertValidMaxIterations(options.maxIterations);
+  let iterations = 0;
+
+  while (!isAborted(options.signal)) {
+    if (hasReachedMaxIterations(iterations, options.maxIterations)) {
+      return { iterations, stoppedBy: "max_iterations" };
+    }
+
+    try {
+      const result = await worker.processNext();
+      iterations += 1;
+      await options.onResult?.(result);
+
+      if (result.status === "idle" && !shouldStop(iterations, options)) {
+        await sleep(options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS, options);
+      }
+    } catch (error) {
+      iterations += 1;
+      await options.onError?.(error);
+      if (options.stopOnError === true) {
+        throw error;
+      }
+      if (!shouldStop(iterations, options)) {
+        await sleep(options.errorDelayMs ?? options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS, options);
+      }
+    }
+  }
+
+  return { iterations, stoppedBy: "aborted" };
+}
+
 function readReceiptId(event: OutboxEventRecord): string | undefined {
   const receiptId = event.payload.receiptId;
   return typeof receiptId === "string" && receiptId.trim().length > 0
     ? receiptId
     : undefined;
+}
+
+function assertValidMaxIterations(maxIterations: number | undefined): void {
+  if (
+    maxIterations !== undefined &&
+    (!Number.isInteger(maxIterations) || maxIterations < 1)
+  ) {
+    throw new Error("maxIterations must be a positive integer");
+  }
+}
+
+function hasReachedMaxIterations(
+  iterations: number,
+  maxIterations: number | undefined
+): boolean {
+  return maxIterations !== undefined && iterations >= maxIterations;
+}
+
+function shouldStop(
+  iterations: number,
+  options: ReceiptChainVerificationWorkerLoopOptions
+): boolean {
+  return (
+    isAborted(options.signal) ||
+    hasReachedMaxIterations(iterations, options.maxIterations)
+  );
+}
+
+async function sleep(
+  delayMs: number,
+  options: ReceiptChainVerificationWorkerLoopOptions
+): Promise<void> {
+  const sleepFn = options.sleep ?? defaultSleep;
+  await sleepFn(delayMs, options.signal);
+}
+
+async function defaultSleep(delayMs: number, signal?: AbortSignal): Promise<void> {
+  if (delayMs <= 0 || isAborted(signal)) {
+    return;
+  }
+  await new Promise<void>((resolve) => {
+    const timeout = setTimeout(resolve, delayMs);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timeout);
+        resolve();
+      },
+      { once: true }
+    );
+  });
+}
+
+function isAborted(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted ?? false;
 }

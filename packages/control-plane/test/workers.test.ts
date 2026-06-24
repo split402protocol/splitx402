@@ -5,10 +5,13 @@ import {
   InMemoryReceiptIngestionStore,
   ReceiptChainVerificationWorker,
   ReceiptIngestor,
+  runReceiptChainVerificationWorkerLoop,
   type MarkOutboxEventFailedInput,
   type OutboxEventRecord,
   type OutboxEventStore,
+  type ReceiptChainVerificationProcessor,
   type ReceiptChainVerificationResult,
+  type ReceiptChainVerificationWorkerResult,
   type ReceiptChainVerificationStore,
   type ReceiptIngestionSnapshot
 } from "../src/index.js";
@@ -107,6 +110,76 @@ describe("ReceiptChainVerificationWorker", () => {
       })
     );
     expect(outboxStore.event?.status).toBe("dead_letter");
+  });
+});
+
+describe("runReceiptChainVerificationWorkerLoop", () => {
+  it("polls until maxIterations and sleeps between idle results", async () => {
+    const sleeps: number[] = [];
+    const results: string[] = [];
+    const processor = new FakeLoopProcessor([
+      { status: "idle" },
+      { status: "idle" },
+      { status: "idle" }
+    ]);
+
+    const summary = await runReceiptChainVerificationWorkerLoop(processor, {
+      maxIterations: 3,
+      pollIntervalMs: 250,
+      sleep: (delayMs) => {
+        sleeps.push(delayMs);
+      },
+      onResult: (result) => {
+        results.push(result.status);
+      }
+    });
+
+    expect(summary).toEqual({ iterations: 3, stoppedBy: "max_iterations" });
+    expect(results).toEqual(["idle", "idle", "idle"]);
+    expect(sleeps).toEqual([250, 250]);
+  });
+
+  it("stops cleanly when aborted by a result callback", async () => {
+    const abort = new AbortController();
+    const processor = new FakeLoopProcessor([{ status: "idle" }]);
+    const sleeps: number[] = [];
+
+    const summary = await runReceiptChainVerificationWorkerLoop(processor, {
+      signal: abort.signal,
+      sleep: (delayMs) => {
+        sleeps.push(delayMs);
+      },
+      onResult: () => {
+        abort.abort();
+      }
+    });
+
+    expect(summary).toEqual({ iterations: 1, stoppedBy: "aborted" });
+    expect(sleeps).toEqual([]);
+  });
+
+  it("reports transient processor errors and keeps polling", async () => {
+    const errors: string[] = [];
+    const sleeps: number[] = [];
+    const processor = new FakeLoopProcessor([
+      new Error("database unavailable"),
+      { status: "idle" }
+    ]);
+
+    const summary = await runReceiptChainVerificationWorkerLoop(processor, {
+      errorDelayMs: 500,
+      maxIterations: 2,
+      sleep: (delayMs) => {
+        sleeps.push(delayMs);
+      },
+      onError: (error) => {
+        errors.push(error instanceof Error ? error.message : "unknown");
+      }
+    });
+
+    expect(summary).toEqual({ iterations: 2, stoppedBy: "max_iterations" });
+    expect(errors).toEqual(["database unavailable"]);
+    expect(sleeps).toEqual([500]);
   });
 });
 
@@ -224,6 +297,23 @@ class FakeReceiptChainVerificationStore implements ReceiptChainVerificationStore
           })
     };
     return this.snapshot;
+  }
+}
+
+class FakeLoopProcessor implements ReceiptChainVerificationProcessor {
+  private index = 0;
+
+  constructor(
+    private readonly results: Array<ReceiptChainVerificationWorkerResult | Error>
+  ) {}
+
+  processNext(): ReceiptChainVerificationWorkerResult {
+    const result = this.results[this.index];
+    this.index += 1;
+    if (result instanceof Error) {
+      throw result;
+    }
+    return result ?? { status: "idle" };
   }
 }
 

@@ -158,6 +158,7 @@ mainnet payment flows exist yet.
 | Outbox event persistence | Started |
 | Outbox claim/retry/dead-letter APIs | Started |
 | Chain verification worker framework | Started |
+| Chain verification polling loop | Started |
 | Solana RPC signature-status verifier | Started |
 | Solana transaction transfer verifier | Started |
 | Live PostgreSQL migration/integration harness | Started |
