@@ -71,6 +71,9 @@ Status: started.
 - Added a Solana JSON-RPC signature-status verifier for receipt settlement
   signatures with confirmed/finalized commitment handling, retryable RPC failures,
   and rejected failed transactions.
+- Extended the Solana verifier to fetch parsed transaction details and reject
+  receipts whose settlement transaction does not prove the expected token mint,
+  payer authority, pay-to owner evidence, and amount.
 - Added `PostgresCampaignRegistry` for durable campaign, version, activation, and
   operation persistence.
 - Added `0004_campaigns.sql` for campaign, campaign version, and campaign
@@ -128,6 +131,10 @@ Status: started.
 - Added Solana RPC verifier tests for confirmed/finalized signatures, missing
   signatures, RPC errors, failed transactions, malformed responses, and network
   mismatches.
+- Added Solana transaction verifier tests for missing transaction details,
+  malformed transaction responses, mint mismatches, pay-to owner mismatches, payer
+  authority mismatches, insufficient transfer amounts, and transaction meta
+  failures.
 - Added `corepack pnpm test:postgres` for live PostgreSQL validation when
   `SPLIT402_TEST_DATABASE_URL` is set.
 - Reworked the README with protocol diagrams, package graph, control-plane flow,
@@ -146,7 +153,8 @@ a zero-sum ledger transaction.
 - Wallet-auth refresh token flow.
 - Production auth policy wiring for the deployable runtime.
 - Deployable control-plane runtime wiring.
-- Solana transaction recipient and amount decoder for settlement verification.
+- Full x402 SVM settlement-verifier parity, including explicit associated token
+  account derivation and multi-provider RPC hardening.
 - Dedicated worker loops for chain verification and webhook dispatch.
 - Route suspension, payout-wallet rotation, and route search history.
 

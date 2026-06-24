@@ -153,7 +153,8 @@ Current slice:
   state transitions;
 - receipt chain-verification worker framework with a pluggable verifier and
   PostgreSQL state transition to available accruals;
-- Solana JSON-RPC signature-status verifier for receipt settlement signatures;
+- Solana JSON-RPC verifier for receipt settlement signatures and parsed transfer
+  checks;
 - packaged PostgreSQL migration runner with checksum tracking and an opt-in live
   integration harness;
 - receipt verifier key resolution through registered merchant service keys.

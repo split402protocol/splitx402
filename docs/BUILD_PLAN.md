@@ -212,8 +212,9 @@ Current slice:
   failures, marking delivery, and dead-lettering exhausted work;
 - add the receipt chain-verification worker framework and PostgreSQL state update
   that makes confirmed accruals payout-eligible;
-- add a Solana JSON-RPC signature-status verifier for settlement signatures while
-  leaving full transaction decoding as the next verification hardening step;
+- add a Solana JSON-RPC verifier for settlement signatures and parsed
+  transaction transfer checks covering mint, payer authority, pay-to owner
+  evidence, and amount;
 - add the packaged PostgreSQL migration runner and opt-in live integration harness
   for real database validation;
 - resolve receipt verification keys through registered merchant service keys by

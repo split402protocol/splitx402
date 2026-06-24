@@ -159,8 +159,9 @@ mainnet payment flows exist yet.
 | Outbox claim/retry/dead-letter APIs | Started |
 | Chain verification worker framework | Started |
 | Solana RPC signature-status verifier | Started |
+| Solana transaction transfer verifier | Started |
 | Live PostgreSQL migration/integration harness | Started |
-| Solana transaction decoder and payout engine | Not implemented |
+| Payout engine | Not implemented |
 | `$SPLIT` bonding and atomic split settlement | Later research |
 
 The latest Devnet proof is recorded in
@@ -323,8 +324,9 @@ or reschedule/dead-letter failures without creating duplicate worker work. The
 first chain-verification worker framework can process `receipt.accepted.v1` events
 with a pluggable verifier and make confirmed accruals available for future payout
 selection. The first Solana verifier checks settlement signature status through
-JSON-RPC; full transaction decoding for recipient and amount validation is still a
-remaining hardening step.
+JSON-RPC and parses confirmed transaction data to reject receipts whose token
+mint, payer authority, pay-to owner evidence, or amount do not match the receipt.
+Full x402 SVM parity and payout execution are still remaining hardening steps.
 
 ## MVP Rules
 
