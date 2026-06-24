@@ -13,11 +13,15 @@ Status: started.
 - Added `packages/control-plane`.
 - Added an in-memory receipt ingestion domain for the first control-plane behavior
   slice.
-- Added a receipt ingestion store interface for the future PostgreSQL-backed
-  implementation.
+- Added a receipt ingestion store interface for durable persistence.
 - Added an Express control-plane app with `GET /v1/health`.
 - Added public `POST /v1/receipts` ingestion for buyer, merchant, relay, or
   unknown receipt submissions.
+- Added `PostgresReceiptIngestionStore` for durable receipt, accrual, ledger
+  transaction, and ledger entry writes.
+- Added transaction wrapping and rollback for PostgreSQL receipt persistence.
+- Added database uniqueness conflict mapping so duplicate/conflict semantics remain
+  stable if a concurrent write wins first.
 - Added merchant public-key resolution at ingestion time.
 - Added receipt schema parsing and merchant signature verification.
 - Added duplicate handling by canonical receipt hash.
@@ -31,6 +35,8 @@ Status: started.
   invalid signatures, and unattributed zero-credit receipts.
 - Added HTTP tests for health, receipt creation, duplicate submission, invalid
   source values, and malformed submission envelopes.
+- Added PostgreSQL adapter tests for transaction writes, row mapping, rollback, and
+  uniqueness-conflict mapping.
 
 ## Why This Comes Next
 
@@ -42,7 +48,7 @@ a zero-sum ledger transaction.
 
 ## Remaining Milestone 2 Work
 
-- PostgreSQL adapter for the receipt ingestion store.
+- Live PostgreSQL integration test harness.
 - Wallet authentication.
 - Merchant, key, and origin APIs.
 - Campaign version APIs.

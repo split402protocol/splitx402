@@ -10,8 +10,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   InMemoryReceiptIngestionStore,
+  ReceiptIngestionPersistenceConflictError,
   ReceiptIngestor,
-  assertLedgerBalances
+  assertLedgerBalances,
+  type ReceiptIngestionSnapshot,
+  type ReceiptIngestionStore
 } from "../src/index.js";
 
 const MERCHANT_SEED = hexToBytes(
@@ -82,6 +85,26 @@ describe("receipt ingestion", () => {
     expect(second.receipt.id).toBe(first.receipt.id);
     expect(second.accrual?.id).toBe(first.accrual?.id);
     expect(store.listAccruals()).toHaveLength(1);
+  });
+
+  it("recovers an identical duplicate after a persistence conflict", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const backingStore = new InMemoryReceiptIngestionStore();
+    const store = new RacingReceiptStore(backingStore);
+    const ingestor = new ReceiptIngestor(store, {
+      resolveMerchantPublicKey: () => bundle.keys.merchantPublicKey,
+      now: () => FIXED_NOW
+    });
+
+    const result = await ingestor.ingest({ receipt: bundle.artifacts.receipt });
+
+    expect(result.status).toBe("duplicate");
+    if (result.status !== "duplicate") {
+      throw new Error("expected duplicate recovery");
+    }
+    expect(result.receipt.id).toBe(bundle.artifacts.receipt.receiptId);
+    expect(result.statusCode).toBe(200);
+    expect(backingStore.listAccruals()).toHaveLength(1);
   });
 
   it("rejects conflicting receipt identifiers before signature verification", async () => {
@@ -180,4 +203,33 @@ function signReceipt(receipt: Split402ReceiptV1): Split402ReceiptV1 {
     ...unsignedReceipt,
     signature: signed.signature
   };
+}
+
+class RacingReceiptStore implements ReceiptIngestionStore {
+  constructor(private readonly backingStore: InMemoryReceiptIngestionStore) {}
+
+  getByReceiptId(receiptId: string): ReceiptIngestionSnapshot | undefined {
+    return this.backingStore.getByReceiptId(receiptId);
+  }
+
+  getByReceiptHash(
+    receiptHash: `sha256:${string}`
+  ): ReceiptIngestionSnapshot | undefined {
+    return this.backingStore.getByReceiptHash(receiptHash);
+  }
+
+  getByPaymentId(paymentId: string): ReceiptIngestionSnapshot | undefined {
+    return this.backingStore.getByPaymentId(paymentId);
+  }
+
+  getBySettlementTxSignature(
+    signature: string
+  ): ReceiptIngestionSnapshot | undefined {
+    return this.backingStore.getBySettlementTxSignature(signature);
+  }
+
+  save(snapshot: ReceiptIngestionSnapshot): void {
+    this.backingStore.save(snapshot);
+    throw new ReceiptIngestionPersistenceConflictError();
+  }
 }
