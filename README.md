@@ -9,6 +9,12 @@ The MVP keeps the commercial payment simple: the buyer pays the merchant in USDC
 the merchant receives the gross x402 settlement, and Split402 records an auditable
 commission liability that can later be paid from a merchant-funded payout worker.
 
+In plain terms: an agent can pay USDC for an x402 API call and attach a signed
+Split402 referral claim. If the merchant campaign says the referral commission is
+10 percent, Split402 records that 10 percent as an owed commission to the
+referrer's payout wallet while the merchant still receives the normal x402
+settlement.
+
 Split402 is the project name. This repository, `split402protocol/splitx402`, is
 the v2 implementation line for the protocol work that started in
 `splitx402/ffff`. The canonical scope is defined in the
@@ -88,6 +94,7 @@ mainnet payment flows exist yet.
 | Campaign activation APIs | Started |
 | PostgreSQL campaign persistence | Started |
 | Route draft/sign/activate APIs | Started |
+| PostgreSQL route persistence | Started |
 | Live PostgreSQL migration/integration harness | Started |
 | Chain verification worker and payout engine | Not implemented |
 | `$SPLIT` bonding and atomic split settlement | Later research |
@@ -183,7 +190,8 @@ GET  /v1/routes/:routeId
 ```mermaid
 flowchart LR
   API["Control-plane API"]
-  Registry["Merchant registry"]
+  Registry["Merchant and campaign registry"]
+  RouteRegistry["Route registry"]
   Ingestion["Receipt ingestion store"]
   Merchants[("merchants")]
   Origins[("merchant_origins")]
@@ -191,6 +199,7 @@ flowchart LR
   CampaignRows[("campaigns")]
   CampaignVersions[("campaign_versions")]
   CampaignOps[("campaign_operations")]
+  Routes[("routes")]
   Challenges[("wallet_auth_challenges")]
   Sessions[("wallet_auth_sessions")]
   Receipts[("payment_receipts")]
@@ -199,6 +208,7 @@ flowchart LR
   LedgerEntries[("ledger_entries")]
 
   API --> Registry
+  API --> RouteRegistry
   API --> Ingestion
   Registry --> Merchants
   Registry --> Origins
@@ -206,6 +216,8 @@ flowchart LR
   Registry --> CampaignRows
   CampaignRows --> CampaignVersions
   CampaignVersions --> CampaignOps
+  RouteRegistry --> Routes
+  Routes --> CampaignRows
   API --> Challenges
   API --> Sessions
   Ingestion --> Receipts
@@ -219,7 +231,9 @@ for tests or through PostgreSQL adapters for durable control-plane state. Receip
 ingestion uses the same boundary: in-memory stores for deterministic behavior
 tests, PostgreSQL stores for durable receipt, accrual, and ledger rows. Wallet auth
 also uses the same store boundary, with PostgreSQL persisting single-use challenges
-and hashed bearer sessions.
+and hashed bearer sessions. Route activation records are also durable in
+PostgreSQL, keyed by route id and canonical referral-claim hash so exact duplicate
+activation is idempotent while conflicting claims are rejected.
 
 ## MVP Rules
 

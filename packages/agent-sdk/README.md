@@ -1,6 +1,11 @@
 # @split402/agent-sdk
 
-Small TypeScript SDK for agents that want to call Split402-enabled x402 APIs and claim referral credit.
+TypeScript SDK for agents that call Split402-enabled x402 APIs and claim referral
+credit.
+
+The payment stays a normal x402 USDC payment. Split402 adds a signed referral
+claim so the merchant/control plane can record the configured commission, for
+example 10 percent when the campaign terms set `commissionBps` to `1000`.
 
 ## Use
 

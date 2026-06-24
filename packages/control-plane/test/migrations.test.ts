@@ -15,7 +15,8 @@ describe("control-plane migrations", () => {
       "0001_receipt_ingestion.sql",
       "0002_merchants_keys_origins.sql",
       "0003_wallet_auth.sql",
-      "0004_campaigns.sql"
+      "0004_campaigns.sql",
+      "0005_routes.sql"
     ]);
     expect(
       migrations.every((migration) =>
