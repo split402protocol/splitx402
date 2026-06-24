@@ -16,16 +16,22 @@ once the GitHub repository is available. Until then, contact the maintainers dir
 
 The first implementation must protect:
 
-- replay safety through required payment identifiers;
-- quote integrity across method, URL, amount, asset, network, destination, and split
-  digest;
-- immutable split manifests after quote creation;
-- exact allocation sums, including rounding dust;
+- merchant-signed offers and receipts verified through registered service keys;
+- referral claim integrity across campaign, route, payout wallet, resource origin,
+  operation scope, and expiry;
+- request digest integrity across method, URL, body, amount, asset, network, and
+  destination;
+- replay safety through receipt id, payment id, settlement signature, and canonical
+  receipt hash uniqueness;
+- zero-sum commission ledger entries for merchant liability, referrer payable, and
+  protocol fee payable;
+- chain verification before any accrual becomes payout-eligible;
 - payout idempotency and reconciliation.
 
 ## Non-Goals For Now
 
-- mainnet settlement;
+- production or mainnet settlement;
 - custody of significant balances;
-- custom x402 schemes;
-- unaudited splitter contracts.
+- custom x402 schemes or custom facilitators;
+- atomic split settlement and `$SPLIT` route bonding;
+- unaudited on-chain programs.

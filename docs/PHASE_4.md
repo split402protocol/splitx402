@@ -68,6 +68,9 @@ Status: started.
   `receipt.accepted.v1` events, calls a pluggable verifier, marks confirmed
   receipts as verified, moves accruals to `available`, and handles retry or
   dead-letter verifier outcomes.
+- Added a Solana JSON-RPC signature-status verifier for receipt settlement
+  signatures with confirmed/finalized commitment handling, retryable RPC failures,
+  and rejected failed transactions.
 - Added `PostgresCampaignRegistry` for durable campaign, version, activation, and
   operation persistence.
 - Added `0004_campaigns.sql` for campaign, campaign version, and campaign
@@ -122,6 +125,9 @@ Status: started.
   enforcement, delivery marking, and dead-letter behavior.
 - Added chain-verification worker tests for confirmed, retryable, and malformed
   receipt events, plus PostgreSQL coverage for verified receipt/accrual state.
+- Added Solana RPC verifier tests for confirmed/finalized signatures, missing
+  signatures, RPC errors, failed transactions, malformed responses, and network
+  mismatches.
 - Added `corepack pnpm test:postgres` for live PostgreSQL validation when
   `SPLIT402_TEST_DATABASE_URL` is set.
 - Reworked the README with protocol diagrams, package graph, control-plane flow,
@@ -140,7 +146,7 @@ a zero-sum ledger transaction.
 - Wallet-auth refresh token flow.
 - Production auth policy wiring for the deployable runtime.
 - Deployable control-plane runtime wiring.
-- Solana RPC chain verifier implementation.
+- Solana transaction recipient and amount decoder for settlement verification.
 - Dedicated worker loops for chain verification and webhook dispatch.
 - Route suspension, payout-wallet rotation, and route search history.
 

@@ -1,7 +1,7 @@
 {
   "name": "split402",
   "version": "0.1.0",
-  "description": "x402-compatible split revenue infrastructure for paid HTTP resources.",
+  "description": "Referral and commission protocol infrastructure for x402-paid APIs and agent tools.",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.30.2",
