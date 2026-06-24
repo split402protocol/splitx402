@@ -1,0 +1,46 @@
+{
+  "name": "splitx402",
+  "version": "0.1.0",
+  "description": "x402-compatible split revenue infrastructure for paid HTTP resources.",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@x402/core": "2.16.0",
+    "@x402/evm": "2.16.0",
+    "@x402/express": "2.16.0",
+    "@x402/extensions": "2.16.0",
+    "dotenv": "16.4.7",
+    "express": "5.2.1",
+    "pino": "9.6.0",
+    "pino-http": "10.4.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.4",
+    "@types/express": "5.0.6",
+    "@types/node": "22.10.7",
+    "@types/supertest": "6.0.3",
+    "eslint": "9.39.4",
+    "globals": "15.14.0",
+    "supertest": "7.2.2",
+    "tsx": "4.22.4",
+    "typescript": "5.7.3",
+    "typescript-eslint": "8.62.0",
+    "vitest": "4.1.9"
+  },
+  "overrides": {
+    "ws": "8.21.0"
+  }
+}

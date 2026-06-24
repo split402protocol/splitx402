@@ -15,15 +15,17 @@ The key direction is:
 
 ## Status
 
-Phase 0 decisions are recorded and the repository baseline is live on GitHub. No
-production contracts or mainnet payment flows exist yet.
+Phase 1 skeleton service is underway on a feature branch. No production contracts or
+mainnet payment flows exist yet.
 
 ## Docs
 
 - [Architecture opinion](docs/SPLITX402_ARCHITECTURE.md)
 - [Phase 0 status](docs/PHASE_0.md)
+- [Phase 1 status](docs/PHASE_1.md)
 - [MVP build plan](docs/BUILD_PLAN.md)
 - [Phase 0 decisions](docs/decisions/0001-phase-0-protocol-decisions.md)
+- [Phase 1 service scope](docs/decisions/0002-phase-1-service-scope.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Security policy](SECURITY.md)
 
@@ -36,6 +38,23 @@ reconciliation loop is working on testnet.
 
 ## Development
 
-The implementation has not been scaffolded yet. Phase 1 should initialize the
-TypeScript service, tests, formatting, and local development commands described in
-the build plan.
+Copy `.env.example` to `.env`, then run:
+
+```bash
+npm install
+npm run dev
+```
+
+Useful checks:
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
+npm audit --audit-level high
+```
+
+By default the service runs in `SPLITX402_PAYMENT_MODE=mock`, which emits x402-shaped
+HTTP 402 challenges and accepts deterministic mock payment payloads for local tests.
+Use `SPLITX402_PAYMENT_MODE=x402` for the real facilitator-backed middleware path.

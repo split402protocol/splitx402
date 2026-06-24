@@ -25,6 +25,8 @@ Exit criteria:
 
 Goal: run one paid HTTP route using x402 on a test network.
 
+Status: implemented on the Phase 1 feature branch, pending review and merge.
+
 Deliverables:
 
 - TypeScript service scaffold;
