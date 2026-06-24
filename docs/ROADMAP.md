@@ -80,6 +80,8 @@ Current slice:
   paid JSON calls, and receipt verification;
 - demo agent app with buyer setup, offer inspection, preflight, and paid-suite
   scripts for the Devnet receipt path;
+- recorded existing-token Devnet paid-suite proof for valid and invalid-claim
+  receipts;
 - attribution validation before x402 verification;
 - signed receipt enrichment after settlement;
 - extension, adapter, demo merchant, and agent SDK tests.
