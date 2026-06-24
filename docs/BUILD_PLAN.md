@@ -194,6 +194,8 @@ Current slice:
   and service-key revocation routes;
 - resolve receipt verification keys through registered merchant service keys by
   `merchantId` and `kid`;
+- add the PostgreSQL merchant registry adapter for durable merchant, origin, and
+  service-key rows;
 - add the first merchant/key/origin PostgreSQL migration.
 
 ## Architecture Milestone 3: Production Merchant SDK

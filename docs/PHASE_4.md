@@ -30,6 +30,8 @@ Status: started.
 - Added merchant service-key resolution for receipt verification by `merchantId`,
   `kid`, purpose, and receipt issue time.
 - Added `0002_merchants_keys_origins.sql` for merchant, origin, and key tables.
+- Added `PostgresMerchantRegistry` for durable merchant, origin, and service-key
+  state.
 - Added merchant public-key resolution at ingestion time.
 - Added receipt schema parsing and merchant signature verification.
 - Added duplicate handling by canonical receipt hash.
@@ -45,6 +47,8 @@ Status: started.
   source values, and malformed submission envelopes.
 - Added PostgreSQL adapter tests for transaction writes, row mapping, rollback, and
   uniqueness-conflict mapping.
+- Added PostgreSQL merchant registry tests for profile loading, key resolution,
+  revocation windows, and uniqueness-conflict mapping.
 - Added merchant registry tests for key resolution, historical receipt verification
   after later key rotation, and post-revocation receipt rejection.
 - Reworked the README with protocol diagrams, package graph, control-plane flow,
@@ -62,7 +66,6 @@ a zero-sum ledger transaction.
 
 - Live PostgreSQL integration test harness.
 - Wallet authentication.
-- PostgreSQL-backed merchant registry adapter.
 - Auth-gated merchant, key, and origin APIs.
 - Campaign version APIs.
 - Route draft, sign, and activate flow.
