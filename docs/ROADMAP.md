@@ -145,6 +145,8 @@ Current slice:
   referrer signature verification, and active campaign scope checks;
 - PostgreSQL campaign registry adapter with campaign, immutable version,
   operation, and activation persistence;
+- PostgreSQL route registry adapter with active route, operation scope, signed
+  claim, and duplicate-claim persistence;
 - packaged PostgreSQL migration runner with checksum tracking and an opt-in live
   integration harness;
 - receipt verifier key resolution through registered merchant service keys.
