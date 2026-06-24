@@ -149,6 +149,8 @@ Exit criteria:
 
 ## Architecture Milestone 2: Control Plane And Ingestion
 
+Status: started.
+
 Deliverables:
 
 - PostgreSQL migrations;
@@ -166,6 +168,19 @@ Exit criteria:
 - receipt submitted by merchant or buyer produces one accrual total;
 - duplicate and conflict behavior matches the spec;
 - campaign and route history is immutable and auditable.
+
+Current slice:
+
+- add `@split402/control-plane`;
+- verify submitted Split402 receipts with merchant service public keys;
+- persist the receipt ingestion shape behind an in-memory store for the first
+  behavior tests;
+- make identical receipt submission idempotent;
+- reject same-receipt-id, same-payment-id, or same-settlement-transaction conflicts;
+- create one pending commission accrual for each valid credited attributed receipt;
+- create a balanced ledger transaction for merchant liability, referrer payable,
+  and protocol fee payable;
+- add the first PostgreSQL migration for receipt, accrual, and ledger tables.
 
 ## Architecture Milestone 3: Production Merchant SDK
 
