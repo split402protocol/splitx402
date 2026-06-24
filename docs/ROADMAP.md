@@ -141,6 +141,8 @@ Current slice:
   `POST /v1/campaigns/:campaignId/versions`;
 - owner-authorized `POST /v1/campaigns/:campaignId/activate` for the current
   version with registered merchant service-key signature verification;
+- PostgreSQL campaign registry adapter with campaign, immutable version,
+  operation, and activation persistence;
 - receipt verifier key resolution through registered merchant service keys.
 
 ## Phase 5: Production Merchant SDK

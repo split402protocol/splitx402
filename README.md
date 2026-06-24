@@ -86,6 +86,7 @@ mainnet payment flows exist yet.
 | PostgreSQL wallet-auth persistence | Started |
 | Campaign draft/version APIs | Started |
 | Campaign activation APIs | Started |
+| PostgreSQL campaign persistence | Started |
 | Chain verification worker and payout engine | Not implemented |
 | `$SPLIT` bonding and atomic split settlement | Later research |
 
@@ -182,9 +183,11 @@ flowchart LR
   Merchants[("merchants")]
   Origins[("merchant_origins")]
   Keys[("merchant_keys")]
+  CampaignRows[("campaigns")]
+  CampaignVersions[("campaign_versions")]
+  CampaignOps[("campaign_operations")]
   Challenges[("wallet_auth_challenges")]
   Sessions[("wallet_auth_sessions")]
-  Campaigns["Campaign registry"]
   Receipts[("payment_receipts")]
   Accruals[("commission_accruals")]
   LedgerTx[("ledger_transactions")]
@@ -195,21 +198,23 @@ flowchart LR
   Registry --> Merchants
   Registry --> Origins
   Registry --> Keys
+  Registry --> CampaignRows
+  CampaignRows --> CampaignVersions
+  CampaignVersions --> CampaignOps
   API --> Challenges
   API --> Sessions
-  API --> Campaigns
   Ingestion --> Receipts
   Ingestion --> Accruals
   Ingestion --> LedgerTx
   LedgerTx --> LedgerEntries
 ```
 
-Merchant profiles, origins, and service keys can run in memory for tests or through
-the PostgreSQL adapter for durable control-plane state. Receipt ingestion uses the
-same boundary: in-memory stores for deterministic behavior tests, PostgreSQL stores
-for durable receipt, accrual, and ledger rows. Wallet auth also uses the same store
-boundary, with PostgreSQL persisting single-use challenges and hashed bearer
-sessions.
+Merchant profiles, origins, service keys, and campaign versions can run in memory
+for tests or through PostgreSQL adapters for durable control-plane state. Receipt
+ingestion uses the same boundary: in-memory stores for deterministic behavior
+tests, PostgreSQL stores for durable receipt, accrual, and ledger rows. Wallet auth
+also uses the same store boundary, with PostgreSQL persisting single-use challenges
+and hashed bearer sessions.
 
 ## MVP Rules
 
