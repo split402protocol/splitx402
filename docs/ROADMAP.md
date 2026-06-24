@@ -147,6 +147,8 @@ Current slice:
   operation, and activation persistence;
 - PostgreSQL route registry adapter with active route, operation scope, signed
   claim, and duplicate-claim persistence;
+- PostgreSQL outbox event persistence committed atomically with accepted receipts
+  and accounting rows;
 - packaged PostgreSQL migration runner with checksum tracking and an opt-in live
   integration harness;
 - receipt verifier key resolution through registered merchant service keys.

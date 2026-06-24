@@ -82,6 +82,27 @@ describe("PostgresReceiptIngestionStore", () => {
       })
     );
     expect(loaded?.ledgerTransaction?.entries).toHaveLength(3);
+    expect(fakePool.database.outboxEvents).toHaveLength(1);
+    expect(fakePool.database.outboxEvents[0]).toEqual(
+      expect.objectContaining({
+        event_type: "receipt.accepted.v1",
+        aggregate_type: "receipt",
+        aggregate_id: bundle.artifacts.receipt.receiptId,
+        status: "pending",
+        attempts: 0,
+        available_at: "2026-06-24T00:02:00.000Z",
+        created_at: "2026-06-24T00:02:00.000Z"
+      })
+    );
+    expect(readJsonPayload(fakePool.database.outboxEvents[0]?.payload)).toEqual(
+      expect.objectContaining({
+        receiptId: bundle.artifacts.receipt.receiptId,
+        receiptHash: loaded?.receipt.receiptHash,
+        merchantId: bundle.artifacts.receipt.merchantId,
+        accrualId: loaded?.accrual?.id,
+        ledgerTransactionId: loaded?.ledgerTransaction?.id
+      })
+    );
   });
 
   it("persists receipt snapshots without accrual or ledger rows", async () => {
@@ -102,6 +123,14 @@ describe("PostgresReceiptIngestionStore", () => {
     expect(fakePool.database.accruals).toHaveLength(0);
     expect(fakePool.database.ledgerTransactions).toHaveLength(0);
     expect(fakePool.database.ledgerEntries).toHaveLength(0);
+    expect(fakePool.database.outboxEvents).toHaveLength(1);
+    expect(readJsonPayload(fakePool.database.outboxEvents[0]?.payload)).toEqual(
+      expect.objectContaining({
+        receiptId: snapshot.receipt.id,
+        accrualId: null,
+        ledgerTransactionId: null
+      })
+    );
   });
 
   it("rolls back and maps unique violations to persistence conflicts", async () => {
@@ -117,6 +146,7 @@ describe("PostgresReceiptIngestionStore", () => {
     expect(fakePool.client.rollbackCount).toBe(1);
     expect(fakePool.client.releaseCount).toBe(1);
     expect(fakePool.database.receipts).toHaveLength(0);
+    expect(fakePool.database.outboxEvents).toHaveLength(0);
   });
 });
 
@@ -590,6 +620,10 @@ class FakePostgresClient implements PostgresTransactionClient {
       this.database.insertLedgerEntry(values);
       return result([]);
     }
+    if (normalized.startsWith("insert into outbox_events")) {
+      this.database.insertOutboxEvent(values);
+      return result([]);
+    }
     if (normalized.startsWith("insert into merchants")) {
       return result(this.database.insertMerchant(values) as unknown as Row[]);
     }
@@ -694,6 +728,7 @@ class FakePostgresDatabase {
   accruals: StoredAccrualRow[] = [];
   ledgerTransactions: StoredLedgerTransactionRow[] = [];
   ledgerEntries: StoredLedgerEntryRow[] = [];
+  outboxEvents: StoredOutboxEventRow[] = [];
   merchants: StoredMerchantRow[] = [];
   merchantOrigins: StoredMerchantOriginRow[] = [];
   merchantKeys: StoredMerchantKeyRow[] = [];
@@ -767,6 +802,34 @@ class FakePostgresDatabase {
       amount_atomic: readString(values[5]),
       created_at: "2026-06-24T00:02:00Z"
     });
+  }
+
+  insertOutboxEvent(values: readonly unknown[]): void {
+    const row: StoredOutboxEventRow = {
+      id: readString(values[0]),
+      event_type: readString(values[1]),
+      aggregate_type: readString(values[2]),
+      aggregate_id: readString(values[3]),
+      payload: readString(values[4]),
+      status: readString(values[5]),
+      attempts: readNumber(values[6]),
+      available_at: readString(values[7]),
+      locked_at: readNullableString(values[8]),
+      last_error: readNullableString(values[9]),
+      created_at: readString(values[10])
+    };
+    if (
+      this.outboxEvents.some(
+        (event) =>
+          event.id === row.id ||
+          (event.event_type === row.event_type &&
+            event.aggregate_type === row.aggregate_type &&
+            event.aggregate_id === row.aggregate_id)
+      )
+    ) {
+      throw Object.assign(new Error("duplicate key"), { code: "23505" });
+    }
+    this.outboxEvents.push(row);
   }
 
   selectReceipt(
@@ -1218,6 +1281,20 @@ type StoredLedgerEntryRow = QueryResultRow & {
   created_at: string;
 };
 
+type StoredOutboxEventRow = QueryResultRow & {
+  id: string;
+  event_type: string;
+  aggregate_type: string;
+  aggregate_id: string;
+  payload: string;
+  status: string;
+  attempts: number;
+  available_at: string;
+  locked_at: string | null;
+  last_error: string | null;
+  created_at: string;
+};
+
 type StoredMerchantRow = QueryResultRow & {
   id: string;
   slug?: string;
@@ -1374,4 +1451,12 @@ function readNullableString(value: unknown): string | null {
     return null;
   }
   return readString(value);
+}
+
+function readJsonPayload(value: unknown): Record<string, unknown> {
+  const payload = JSON.parse(readString(value));
+  if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+    throw new Error("expected object payload");
+  }
+  return payload as Record<string, unknown>;
 }

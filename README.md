@@ -95,6 +95,7 @@ mainnet payment flows exist yet.
 | PostgreSQL campaign persistence | Started |
 | Route draft/sign/activate APIs | Started |
 | PostgreSQL route persistence | Started |
+| Outbox event persistence | Started |
 | Live PostgreSQL migration/integration harness | Started |
 | Chain verification worker and payout engine | Not implemented |
 | `$SPLIT` bonding and atomic split settlement | Later research |
@@ -149,6 +150,7 @@ flowchart TD
   Receipt["Insert receipt"]
   Accrual["Create pending commission accrual"]
   Ledger["Create zero-sum ledger transaction"]
+  Outbox["Insert outbox event"]
   Response["Return created, duplicate, conflict, or rejected"]
 
   Submit --> Schema
@@ -156,9 +158,11 @@ flowchart TD
   Key --> Signature
   Signature --> Idempotency
   Idempotency --> Receipt
-  Receipt --> Accrual
+  Receipt -->|"credited receipt"| Accrual
   Accrual --> Ledger
-  Ledger --> Response
+  Ledger --> Outbox
+  Receipt -->|"zero-credit receipt"| Outbox
+  Outbox --> Response
   Idempotency -->|"existing canonical receipt"| Response
   Idempotency -->|"same id with different hash"| Response
 ```
@@ -206,6 +210,7 @@ flowchart LR
   Accruals[("commission_accruals")]
   LedgerTx[("ledger_transactions")]
   LedgerEntries[("ledger_entries")]
+  Outbox[("outbox_events")]
 
   API --> Registry
   API --> RouteRegistry
@@ -224,6 +229,7 @@ flowchart LR
   Ingestion --> Accruals
   Ingestion --> LedgerTx
   LedgerTx --> LedgerEntries
+  Ingestion --> Outbox
 ```
 
 Merchant profiles, origins, service keys, and campaign versions can run in memory
@@ -233,7 +239,10 @@ tests, PostgreSQL stores for durable receipt, accrual, and ledger rows. Wallet a
 also uses the same store boundary, with PostgreSQL persisting single-use challenges
 and hashed bearer sessions. Route activation records are also durable in
 PostgreSQL, keyed by route id and canonical referral-claim hash so exact duplicate
-activation is idempotent while conflicting claims are rejected.
+activation is idempotent while conflicting claims are rejected. Accepted receipts
+also create pending outbox events in the same PostgreSQL transaction, giving future
+workers a durable feed for chain verification, payout selection, dashboards, and
+webhooks.
 
 ## MVP Rules
 
