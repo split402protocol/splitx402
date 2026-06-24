@@ -3,6 +3,7 @@ import request from "supertest";
 import { describe, expect, it } from "vitest";
 
 import {
+  InMemoryMerchantRegistry,
   InMemoryReceiptIngestionStore,
   ReceiptIngestor,
   createControlPlaneApp
@@ -97,9 +98,84 @@ describe("control-plane HTTP API", () => {
       errors: ["source must be one of buyer, merchant, relay, or unknown"]
     });
   });
+
+  it("creates merchants, origins, service keys, and key revocations", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const { app } = createTestApp({ withMerchantRegistry: true });
+
+    const merchantResponse = await request(app)
+      .post("/v1/merchants")
+      .send({
+        id: bundle.artifacts.receipt.merchantId,
+        slug: "demo-merchant",
+        displayName: "Demo Merchant",
+        ownerWallet: bundle.keys.payerWallet
+      })
+      .expect(201);
+    const originResponse = await request(app)
+      .post(`/v1/merchants/${bundle.artifacts.receipt.merchantId}/origins`)
+      .send({
+        origin: bundle.artifacts.receipt.merchantOrigin,
+        verificationMethod: "well_known"
+      })
+      .expect(201);
+    const keyResponse = await request(app)
+      .post(`/v1/merchants/${bundle.artifacts.receipt.merchantId}/keys`)
+      .send({
+        kid: bundle.artifacts.receipt.kid,
+        publicKey: bundle.keys.merchantPublicKey,
+        validFrom: "2026-06-24T00:00:00Z"
+      })
+      .expect(201);
+    const profileResponse = await request(app)
+      .get(`/v1/merchants/${bundle.artifacts.receipt.merchantId}`)
+      .expect(200);
+    const revokeResponse = await request(app)
+      .post(
+        `/v1/merchants/${bundle.artifacts.receipt.merchantId}/keys/${bundle.artifacts.receipt.kid}/revoke`
+      )
+      .send({
+        revokedAt: "2026-06-24T00:02:00Z",
+        reason: "rotation complete"
+      })
+      .expect(200);
+
+    expect(merchantResponse.body.merchant.id).toBe(
+      bundle.artifacts.receipt.merchantId
+    );
+    expect(originResponse.body.origin.origin).toBe(
+      bundle.artifacts.receipt.merchantOrigin
+    );
+    expect(keyResponse.body.key.publicKey).toBe(bundle.keys.merchantPublicKey);
+    expect(profileResponse.body.merchant.origins).toHaveLength(1);
+    expect(profileResponse.body.merchant.keys).toHaveLength(1);
+    expect(revokeResponse.body.key.revocationReason).toBe("rotation complete");
+  });
+
+  it("returns conflicts for duplicate merchant slugs", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const { app } = createTestApp({ withMerchantRegistry: true });
+    const merchantBody = {
+      id: bundle.artifacts.receipt.merchantId,
+      slug: "demo-merchant",
+      displayName: "Demo Merchant",
+      ownerWallet: bundle.keys.payerWallet
+    };
+
+    await request(app).post("/v1/merchants").send(merchantBody).expect(201);
+    const response = await request(app)
+      .post("/v1/merchants")
+      .send({
+        ...merchantBody,
+        id: "mrc_ffffffffffffffffffffffffffffffff"
+      })
+      .expect(409);
+
+    expect(response.body.error).toBe("conflict");
+  });
 });
 
-function createTestApp() {
+function createTestApp(options: { withMerchantRegistry?: boolean } = {}) {
   const bundle = createSampleProtocolArtifacts();
   const store = new InMemoryReceiptIngestionStore();
   const ingestor = new ReceiptIngestor(store, {
@@ -108,7 +184,16 @@ function createTestApp() {
   });
 
   return {
-    app: createControlPlaneApp({ ingestor }),
+    app: createControlPlaneApp({
+      ingestor,
+      ...(options.withMerchantRegistry === true
+        ? {
+            merchantRegistry: new InMemoryMerchantRegistry({
+              now: () => new Date("2026-06-24T00:02:00Z")
+            })
+          }
+        : {})
+    }),
     store,
     receipt: bundle.artifacts.receipt
   };

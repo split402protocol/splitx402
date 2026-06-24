@@ -189,6 +189,12 @@ Current slice:
 - create a balanced ledger transaction for merchant liability, referrer payable,
   and protocol fee payable;
 - add the first PostgreSQL migration for receipt, accrual, and ledger tables.
+- add the merchant/key/origin registry foundation;
+- expose merchant creation, profile, origin registration, service-key registration,
+  and service-key revocation routes;
+- resolve receipt verification keys through registered merchant service keys by
+  `merchantId` and `kid`;
+- add the first merchant/key/origin PostgreSQL migration.
 
 ## Architecture Milestone 3: Production Merchant SDK
 
