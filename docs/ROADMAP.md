@@ -110,8 +110,12 @@ Current slice:
 - public receipt ingestion domain that verifies merchant-signed receipts;
 - Express control-plane app and `POST /v1/receipts` route for public receipt
   submissions;
-- store interface boundary for the future PostgreSQL adapter;
+- store interface boundary for durable receipt persistence;
 - in-memory store for the first deterministic idempotency tests;
+- PostgreSQL receipt ingestion store that persists receipts, accruals, ledger
+  transactions, and ledger entries in one transaction;
+- database uniqueness conflict mapping back to the public duplicate/conflict
+  ingestion behavior;
 - duplicate detection by receipt hash;
 - conflict detection by receipt id, payment id, and settlement transaction;
 - commission accrual creation only for credited attributed receipts;
