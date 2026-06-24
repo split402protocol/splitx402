@@ -127,6 +127,8 @@ Current slice:
 - `POST /v1/merchants`, `GET /v1/merchants/:merchantId`,
   `POST /v1/merchants/:merchantId/origins`,
   `POST /v1/merchants/:merchantId/keys`, and service-key revocation routes;
+- PostgreSQL merchant registry adapter for merchant, origin, and service-key
+  persistence;
 - receipt verifier key resolution through registered merchant service keys.
 
 ## Phase 5: Production Merchant SDK
