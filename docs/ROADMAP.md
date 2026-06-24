@@ -123,6 +123,11 @@ Current slice:
   payable, and protocol fee payable;
 - initial PostgreSQL migration for receipts, accruals, ledger transactions, and
   ledger entries.
+- merchant, service-key, and origin registry foundation;
+- `POST /v1/merchants`, `GET /v1/merchants/:merchantId`,
+  `POST /v1/merchants/:merchantId/origins`,
+  `POST /v1/merchants/:merchantId/keys`, and service-key revocation routes;
+- receipt verifier key resolution through registered merchant service keys.
 
 ## Phase 5: Production Merchant SDK
 

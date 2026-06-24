@@ -8,6 +8,17 @@ import express from "express";
 import type { NextFunction, Request, Response, Router } from "express";
 
 import { isReceiptIngestionPersistenceConflict } from "./errors.js";
+import {
+  MerchantRegistryValidationError,
+  isMerchantRegistryConflict,
+  isMerchantRegistryValidationError,
+  type MerchantKeyAlgorithm,
+  type MerchantKeyPurpose,
+  type MerchantOriginStatus,
+  type MerchantOriginVerificationMethod,
+  type MerchantRegistry,
+  type MerchantStatus
+} from "./merchants.js";
 
 export type ReceiptIngestSource = "buyer" | "merchant" | "relay" | "unknown";
 export type ReceiptVerificationState =
@@ -372,13 +383,14 @@ export class ReceiptIngestor {
   }
 }
 
-export interface ReceiptIngestionRouterOptions {
+export interface ControlPlaneAppOptions {
   ingestor: ReceiptIngestor;
+  merchantRegistry?: MerchantRegistry;
   jsonLimit?: string;
 }
 
 export function createControlPlaneApp(
-  options: ReceiptIngestionRouterOptions
+  options: ControlPlaneAppOptions
 ): express.Express {
   const app = express();
   app.disable("x-powered-by");
@@ -392,6 +404,9 @@ export function createControlPlaneApp(
   });
 
   app.use(createReceiptIngestionRouter(options));
+  if (options.merchantRegistry !== undefined) {
+    app.use(createMerchantRegistryRouter(options.merchantRegistry, options));
+  }
 
   app.use((_req, res) => {
     res.status(404).json({ error: "not_found" });
@@ -415,7 +430,7 @@ export function createControlPlaneApp(
 }
 
 export function createReceiptIngestionRouter(
-  options: ReceiptIngestionRouterOptions
+  options: ControlPlaneAppOptions
 ): Router {
   const router = express.Router();
   router.use(express.json({ limit: options.jsonLimit ?? "128kb" }));
@@ -449,6 +464,123 @@ export function createReceiptIngestionRouter(
       res.status(result.statusCode).json(result);
     } catch (error) {
       next(error);
+    }
+  });
+
+  router.use(jsonErrorHandler);
+
+  return router;
+}
+
+export function createMerchantRegistryRouter(
+  merchantRegistry: MerchantRegistry,
+  options: Pick<ControlPlaneAppOptions, "jsonLimit"> = {}
+): Router {
+  const router = express.Router();
+  router.use(express.json({ limit: options.jsonLimit ?? "128kb" }));
+
+  router.post("/v1/merchants", async (req, res, next) => {
+    try {
+      const body = requireJsonObject(req.body);
+      const id = readOptionalString(body.id, "id");
+      const status = readOptionalMerchantStatus(body.status);
+      const merchant = await merchantRegistry.createMerchant({
+        slug: readRequiredString(body.slug, "slug"),
+        displayName: readRequiredString(body.displayName, "displayName"),
+        ownerWallet: readRequiredString(body.ownerWallet, "ownerWallet"),
+        ...(id === undefined ? {} : { id }),
+        ...(status === undefined ? {} : { status })
+      });
+      res.status(201).json({ merchant });
+    } catch (error) {
+      if (!sendMerchantRegistryError(res, error)) {
+        next(error);
+      }
+    }
+  });
+
+  router.get("/v1/merchants/:merchantId", async (req, res, next) => {
+    try {
+      const merchant = await merchantRegistry.getMerchantProfile(
+        req.params.merchantId
+      );
+      if (merchant === undefined) {
+        res.status(404).json({ error: "merchant_not_found" });
+        return;
+      }
+      res.json({ merchant });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/v1/merchants/:merchantId/origins", async (req, res, next) => {
+    try {
+      const body = requireJsonObject(req.body);
+      const verificationMethod = readOptionalOriginVerificationMethod(
+        body.verificationMethod
+      );
+      const status = readOptionalMerchantOriginStatus(body.status);
+      const verifiedAt = readOptionalString(body.verifiedAt, "verifiedAt");
+      const origin = await merchantRegistry.addOrigin({
+        merchantId: req.params.merchantId,
+        origin: readRequiredString(body.origin, "origin"),
+        ...(verificationMethod === undefined ? {} : { verificationMethod }),
+        ...(status === undefined ? {} : { status }),
+        ...(verifiedAt === undefined ? {} : { verifiedAt })
+      });
+      res.status(201).json({ origin });
+    } catch (error) {
+      if (!sendMerchantRegistryError(res, error)) {
+        next(error);
+      }
+    }
+  });
+
+  router.post("/v1/merchants/:merchantId/keys", async (req, res, next) => {
+    try {
+      const body = requireJsonObject(req.body);
+      const algorithm = readOptionalMerchantKeyAlgorithm(body.algorithm);
+      const purpose = readOptionalMerchantKeyPurpose(body.purpose);
+      const validFrom = readOptionalString(body.validFrom, "validFrom");
+      const validUntil = readOptionalString(body.validUntil, "validUntil");
+      const key = await merchantRegistry.addKey({
+        merchantId: req.params.merchantId,
+        kid: readRequiredString(body.kid, "kid"),
+        publicKey: readRequiredString(body.publicKey, "publicKey"),
+        ...(algorithm === undefined ? {} : { algorithm }),
+        ...(purpose === undefined ? {} : { purpose }),
+        ...(validFrom === undefined ? {} : { validFrom }),
+        ...(validUntil === undefined ? {} : { validUntil })
+      });
+      res.status(201).json({ key });
+    } catch (error) {
+      if (!sendMerchantRegistryError(res, error)) {
+        next(error);
+      }
+    }
+  });
+
+  router.post("/v1/merchants/:merchantId/keys/:kid/revoke", async (req, res, next) => {
+    try {
+      const body = readJsonObject(req.body) ?? {};
+      const revokedAt = readOptionalString(body.revokedAt, "revokedAt");
+      const reason = readOptionalString(body.reason, "reason");
+      const key = await merchantRegistry.revokeKey({
+        merchantId: req.params.merchantId,
+        kid: req.params.kid,
+        ...(revokedAt === undefined ? {} : { revokedAt }),
+        ...(reason === undefined ? {} : { reason })
+      });
+      if (key === undefined) {
+        res.status(404).json({ error: "merchant_key_not_found" });
+        return;
+      }
+      res.json({ key });
+    } catch (error) {
+      if (!sendMerchantRegistryError(res, error)) {
+        next(error);
+      }
     }
   });
 
@@ -504,6 +636,100 @@ function readJsonObject(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
+function requireJsonObject(value: unknown): Record<string, unknown> {
+  const object = readJsonObject(value);
+  if (object === undefined) {
+    throw new MerchantRegistryValidationError("request body must be an object");
+  }
+  return object;
+}
+
+function readRequiredString(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new MerchantRegistryValidationError(`${label} must be a non-empty string`);
+  }
+  return value;
+}
+
+function readOptionalString(value: unknown, label: string): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return readRequiredString(value, label);
+}
+
+function readOptionalMerchantStatus(value: unknown): MerchantStatus | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (
+    value === "pending" ||
+    value === "active" ||
+    value === "suspended" ||
+    value === "closed"
+  ) {
+    return value;
+  }
+  throw new MerchantRegistryValidationError("status must be a valid merchant status");
+}
+
+function readOptionalOriginVerificationMethod(
+  value: unknown
+): MerchantOriginVerificationMethod | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === "well_known" || value === "dns") {
+    return value;
+  }
+  throw new MerchantRegistryValidationError(
+    "verificationMethod must be well_known or dns"
+  );
+}
+
+function readOptionalMerchantOriginStatus(
+  value: unknown
+): MerchantOriginStatus | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (
+    value === "pending" ||
+    value === "verified" ||
+    value === "failed" ||
+    value === "revoked"
+  ) {
+    return value;
+  }
+  throw new MerchantRegistryValidationError("status must be a valid origin status");
+}
+
+function readOptionalMerchantKeyAlgorithm(
+  value: unknown
+): MerchantKeyAlgorithm | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === "Ed25519" || value === "ES256") {
+    return value;
+  }
+  throw new MerchantRegistryValidationError("algorithm must be Ed25519 or ES256");
+}
+
+function readOptionalMerchantKeyPurpose(
+  value: unknown
+): MerchantKeyPurpose | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === "offer_receipt" || value === "webhook") {
+    return value;
+  }
+  throw new MerchantRegistryValidationError(
+    "purpose must be offer_receipt or webhook"
+  );
+}
+
 function readReceiptSource(value: unknown): ReceiptIngestSource | undefined {
   if (value === undefined) {
     return undefined;
@@ -540,4 +766,17 @@ function readHttpErrorStatus(error: unknown): number | undefined {
 }
 
 export * from "./errors.js";
+export * from "./merchants.js";
 export * from "./postgres.js";
+
+function sendMerchantRegistryError(res: Response, error: unknown): boolean {
+  if (isMerchantRegistryValidationError(error)) {
+    res.status(400).json({ error: "invalid_request", message: error.message });
+    return true;
+  }
+  if (isMerchantRegistryConflict(error)) {
+    res.status(409).json({ error: "conflict", message: error.message });
+    return true;
+  }
+  return false;
+}

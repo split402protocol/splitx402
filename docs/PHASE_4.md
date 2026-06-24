@@ -22,6 +22,14 @@ Status: started.
 - Added transaction wrapping and rollback for PostgreSQL receipt persistence.
 - Added database uniqueness conflict mapping so duplicate/conflict semantics remain
   stable if a concurrent write wins first.
+- Added merchant, origin, and service-key registry types.
+- Added an in-memory merchant registry for the current control-plane runtime and
+  behavior tests.
+- Added merchant creation, profile, origin registration, service-key registration,
+  and service-key revocation routes.
+- Added merchant service-key resolution for receipt verification by `merchantId`,
+  `kid`, purpose, and receipt issue time.
+- Added `0002_merchants_keys_origins.sql` for merchant, origin, and key tables.
 - Added merchant public-key resolution at ingestion time.
 - Added receipt schema parsing and merchant signature verification.
 - Added duplicate handling by canonical receipt hash.
@@ -37,6 +45,10 @@ Status: started.
   source values, and malformed submission envelopes.
 - Added PostgreSQL adapter tests for transaction writes, row mapping, rollback, and
   uniqueness-conflict mapping.
+- Added merchant registry tests for key resolution, historical receipt verification
+  after later key rotation, and post-revocation receipt rejection.
+- Reworked the README with protocol diagrams, package graph, control-plane flow,
+  endpoint overview, and usage examples.
 
 ## Why This Comes Next
 
@@ -50,7 +62,8 @@ a zero-sum ledger transaction.
 
 - Live PostgreSQL integration test harness.
 - Wallet authentication.
-- Merchant, key, and origin APIs.
+- PostgreSQL-backed merchant registry adapter.
+- Auth-gated merchant, key, and origin APIs.
 - Campaign version APIs.
 - Route draft, sign, and activate flow.
 - Deployable control-plane runtime wiring.
