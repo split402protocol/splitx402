@@ -1,0 +1,8 @@
+{
+  "name": "@split402/test-vectors",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "files": ["fixtures"]
+}
+

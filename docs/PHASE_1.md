@@ -1,7 +1,7 @@
-# Phase 1: Skeleton Service
+# Phase 1: Transitional Skeleton Service
 
-Phase 1 turns the documented architecture into a runnable HTTP service with a single
-paid route.
+Phase 1 added a runnable HTTP service with a single paid route. It remains useful as
+a local host while the real Split402 protocol packages are ported from `ffff`.
 
 ## Current Status
 
@@ -11,16 +11,15 @@ Status: implemented on `codex/phase-1-skeleton-service`, pending review and merg
 
 - Node.js and TypeScript service scaffold.
 - `GET /v1/health`.
-- `GET /.well-known/splitx402.json` service discovery metadata.
+- `GET /.well-known/split402.json` service discovery metadata.
 - `GET /v1/paid-demo` protected by an x402 payment guard.
 - `GET /v1/payments/:paymentId` for inspecting recorded settlement events.
-- Official `@x402/express`, `@x402/core`, `@x402/evm`, and `@x402/extensions`
-  integration path for real x402 mode.
 - Deterministic mock payment mode for local tests without spending testnet funds.
+- Facilitator-backed x402 path from the earlier skeleton.
 - Required `payment-identifier` declaration and validation.
 - File-backed settlement log in `.data/settlements.jsonl`.
 - Structured request logging.
-- CI workflow for lint, typecheck, and tests.
+- CI workflow for lint, typecheck, tests, vector checks, and audit after Phase 2.
 
 ## Acceptance Checks
 
@@ -28,39 +27,24 @@ Status: implemented on `codex/phase-1-skeleton-service`, pending review and merg
 - Invalid payment signature returns HTTP 402.
 - Valid mock payment returns HTTP 200 with `PAYMENT-RESPONSE`.
 - Settlement response is recorded and queryable by payment id.
-- `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, and
-  `npm audit --audit-level high` pass locally.
+- Workspace checks pass through pnpm.
 
-## Real x402 Mode
+## Environment
 
-Set these environment values before using the facilitator-backed path:
+Set these environment values for the temporary service:
 
 ```bash
-SPLITX402_PAYMENT_MODE=x402
-SPLITX402_PAY_TO=0xYourReceivingWallet
-SPLITX402_NETWORK=eip155:84532
-SPLITX402_FACILITATOR_URL=https://x402.org/facilitator
+SPLIT402_PAYMENT_MODE=mock
+SPLIT402_PAY_TO=0xYourReceivingWallet
+SPLIT402_NETWORK=eip155:84532
+SPLIT402_FACILITATOR_URL=https://x402.org/facilitator
 ```
 
-`SPLITX402_SYNC_FACILITATOR=false` is useful for offline startup checks. Keep it
-`true` when proving the real payment path.
+`SPLIT402_SYNC_FACILITATOR=false` is useful for offline startup checks. Keep it
+`true` when proving the older facilitator-backed path.
 
-## Reference Checked
+## Scope Note
 
-The public `splitx402/ffff` repository was reviewed during this phase. It is a more
-advanced Split402 monorepo with protocol packages, Solana Devnet demos, signed
-referral offers, receipts, and test vectors.
-
-Useful ideas adopted here:
-
-- explicit facilitator sync configuration;
-- service discovery metadata;
-- clear local-demo boundaries.
-
-Ideas deferred:
-
-- monorepo package split;
-- Solana Devnet as the first network;
-- signed referral/commission artifacts;
-- offline language-neutral test vectors.
-
+This phase is not the final Split402 architecture. The Solana/USDC protocol scope,
+referral claims, signed offers/receipts, control plane, and payout flow are defined
+by the v0.1 architecture spec and start landing in Phase 2 and later.
