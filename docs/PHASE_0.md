@@ -6,7 +6,7 @@ Phase 0 turns SplitX402 from an idea into an implementation-ready protocol plan.
 
 Local status: complete enough to begin Phase 1.
 
-GitHub status: pending repository creation for `split402protocol/splitx402`.
+GitHub status: live at `split402protocol/splitx402`.
 
 ## Accepted Decisions
 
@@ -28,7 +28,7 @@ GitHub status: pending repository creation for `split402protocol/splitx402`.
 - Phase 0 decision record exists.
 - Roadmap and MVP build plan are documented.
 - Repository has license, security, contribution, issue, and PR templates.
-- GitHub remote exists and contains the initial commit.
+- GitHub remote exists and contains the Phase 0 commits.
 
 ## Next Phase
 
@@ -41,4 +41,3 @@ Phase 1 starts with the smallest honest vertical slice:
 5. Required payment id.
 6. SQLite payment/settlement storage.
 7. Three-recipient split allocation endpoint.
-
