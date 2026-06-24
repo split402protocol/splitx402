@@ -1,5 +1,9 @@
 # Split402
 
+[![CI](https://github.com/split402protocol/splitx402/actions/workflows/ci.yml/badge.svg)](https://github.com/split402protocol/splitx402/actions/workflows/ci.yml)
+![Status](https://img.shields.io/badge/status-public_alpha-orange)
+![Runtime](https://img.shields.io/badge/node-%3E%3D22-339933)
+
 > Referral, attribution, and commission infrastructure for x402-paid APIs and
 > agent tools.
 
@@ -19,6 +23,33 @@ Split402 is the project name. This repository, `split402protocol/splitx402`, is
 the v2 implementation line for the protocol work that started in
 `splitx402/ffff`. The canonical scope is defined in the
 [Split402 protocol architecture v0.1 spec](docs/reference/split402_protocol_architecture_v0.1.md).
+
+## What Split402 Does
+
+Split402 is an accrual-and-payout protocol for referral revenue on top of normal
+x402 payments.
+
+| Step | Result |
+| --- | --- |
+| Buyer or agent pays an x402-protected API in USDC. | The merchant receives the normal gross x402 settlement. |
+| The request carries a signed Split402 referral claim. | The merchant can attribute the sale to a route, app, or agent. |
+| The merchant signs a Split402 receipt after settlement. | The control plane can verify who paid, which campaign applied, and which referral wallet should be credited. |
+| The control plane records a commission accrual. | A 10 percent campaign records `1000` bps as owed to the referrer. |
+| A later payout worker pays accumulated commissions. | Referrers receive USDC from a merchant-funded payout flow. |
+
+```mermaid
+flowchart LR
+  Payment["1. x402 USDC payment"]
+  Merchant["2. Merchant receives gross settlement"]
+  Receipt["3. Merchant signs Split402 receipt"]
+  Ledger["4. Split402 records referral commission"]
+  Payout["5. Merchant-funded payout pays referrer"]
+
+  Payment --> Merchant
+  Merchant --> Receipt
+  Receipt --> Ledger
+  Ledger --> Payout
+```
 
 ## Protocol Model
 
@@ -73,6 +104,35 @@ sequenceDiagram
   C->>C: Verify key, enforce idempotency, create accrual
 ```
 
+## Commission Accounting
+
+Split402 does not take funds from the x402 transaction in the current MVP. It
+records what the merchant owes after a successful paid call.
+
+| Example | Value |
+| --- | --- |
+| API price | `1.00 USDC` |
+| x402 settlement | `1.00 USDC` paid to the merchant |
+| Campaign commission | `1000` bps, or 10 percent |
+| Split402 accrual | `0.10 USDC` owed to the referrer |
+| Payout timing | Later, after chain verification and payout selection |
+
+```mermaid
+flowchart LR
+  Gross["Buyer pays 1.00 USDC"]
+  Settle["x402 settles 1.00 USDC to merchant"]
+  Terms["Campaign terms: 1000 bps"]
+  Accrual["Ledger records 0.10 USDC payable"]
+  Verify["Chain verification"]
+  Batch["Payout batch"]
+
+  Gross --> Settle
+  Settle --> Terms
+  Terms --> Accrual
+  Accrual --> Verify
+  Verify --> Batch
+```
+
 ## Current Status
 
 Split402 is in staged public-alpha implementation. No production contracts or
@@ -98,8 +158,9 @@ mainnet payment flows exist yet.
 | Outbox event persistence | Started |
 | Outbox claim/retry/dead-letter APIs | Started |
 | Chain verification worker framework | Started |
+| Solana RPC signature-status verifier | Started |
 | Live PostgreSQL migration/integration harness | Started |
-| Solana RPC chain verifier and payout engine | Not implemented |
+| Solana transaction decoder and payout engine | Not implemented |
 | `$SPLIT` bonding and atomic split settlement | Later research |
 
 The latest Devnet proof is recorded in
@@ -167,6 +228,19 @@ flowchart TD
   Outbox --> Response
   Idempotency -->|"existing canonical receipt"| Response
   Idempotency -->|"same id with different hash"| Response
+```
+
+## Accrual Lifecycle
+
+```mermaid
+stateDiagram-v2
+  [*] --> ReceiptAccepted: signed receipt ingested
+  ReceiptAccepted --> PendingChainVerification: commission accrual created
+  PendingChainVerification --> Available: settlement signature confirmed
+  PendingChainVerification --> Held: policy or risk hold
+  PendingChainVerification --> DeadLetter: repeated verifier failure
+  Available --> PayoutSelected: payout worker allocation
+  PayoutSelected --> Paid: payout finalized
 ```
 
 The current Phase 4 control plane exposes:
@@ -248,7 +322,9 @@ webhooks. The PostgreSQL outbox store can claim ready events, mark them delivere
 or reschedule/dead-letter failures without creating duplicate worker work. The
 first chain-verification worker framework can process `receipt.accepted.v1` events
 with a pluggable verifier and make confirmed accruals available for future payout
-selection.
+selection. The first Solana verifier checks settlement signature status through
+JSON-RPC; full transaction decoding for recipient and amount validation is still a
+remaining hardening step.
 
 ## MVP Rules
 
