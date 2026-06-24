@@ -173,6 +173,16 @@ importers:
         specifier: ^1.18.1
         version: 1.18.1
 
+  packages/control-plane:
+    dependencies:
+      '@split402/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+    devDependencies:
+      vitest:
+        specifier: ^4.1.9
+        version: 4.1.9(@types/node@22.20.0)(vite@8.1.0(@types/node@22.20.0)(esbuild@0.28.1)(tsx@4.22.4))
+
   packages/express:
     dependencies:
       '@split402/protocol':
