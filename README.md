@@ -21,6 +21,7 @@ No production contracts or mainnet payment flows exist yet.
 ## Docs
 
 - [Architecture opinion](docs/SPLITX402_ARCHITECTURE.md)
+- [Phase 0 status](docs/PHASE_0.md)
 - [MVP build plan](docs/BUILD_PLAN.md)
 - [Phase 0 decisions](docs/decisions/0001-phase-0-protocol-decisions.md)
 - [Roadmap](docs/ROADMAP.md)
@@ -38,4 +39,3 @@ reconciliation loop is working on testnet.
 The implementation has not been scaffolded yet. Phase 1 should initialize the
 TypeScript service, tests, formatting, and local development commands described in
 the build plan.
-
