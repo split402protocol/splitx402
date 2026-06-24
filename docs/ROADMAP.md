@@ -74,9 +74,11 @@ Current slice:
 - resource-server offer enrichment;
 - Express request context capture for method, route template, params, query, body,
   and referral claim hints;
+- demo merchant runtime with health, discovery, debug receipts, local campaign
+  config, local service signer, and `/v1/risk`;
 - attribution validation before x402 verification;
 - signed receipt enrichment after settlement;
-- extension and adapter tests.
+- extension, adapter, and demo merchant tests.
 
 ## Phase 4: Control Plane And Persistent Ingestion
 

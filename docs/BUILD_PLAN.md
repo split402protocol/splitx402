@@ -126,8 +126,11 @@ Current slice:
 - preserve client-side attribution enrichment behavior;
 - preserve resource-server offer and receipt hooks;
 - preserve request-context capture for operation digest inputs;
+- port `apps/demo-merchant` from `ffff`;
+- expose health, discovery, debug receipts, and paid risk-score route;
 - validate required and optional attribution before settlement;
-- keep valid/invalid claim behavior and Express adapter behavior covered by tests.
+- keep valid/invalid claim behavior, Express adapter behavior, and demo merchant
+  metadata/challenge behavior covered by tests.
 
 Exit criteria:
 
