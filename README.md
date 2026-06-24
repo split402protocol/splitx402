@@ -97,8 +97,9 @@ mainnet payment flows exist yet.
 | PostgreSQL route persistence | Started |
 | Outbox event persistence | Started |
 | Outbox claim/retry/dead-letter APIs | Started |
+| Chain verification worker framework | Started |
 | Live PostgreSQL migration/integration harness | Started |
-| Chain verification worker and payout engine | Not implemented |
+| Solana RPC chain verifier and payout engine | Not implemented |
 | `$SPLIT` bonding and atomic split settlement | Later research |
 
 The latest Devnet proof is recorded in
@@ -244,7 +245,10 @@ activation is idempotent while conflicting claims are rejected. Accepted receipt
 also create pending outbox events in the same PostgreSQL transaction, giving future
 workers a durable feed for chain verification, payout selection, dashboards, and
 webhooks. The PostgreSQL outbox store can claim ready events, mark them delivered,
-or reschedule/dead-letter failures without creating duplicate worker work.
+or reschedule/dead-letter failures without creating duplicate worker work. The
+first chain-verification worker framework can process `receipt.accepted.v1` events
+with a pluggable verifier and make confirmed accruals available for future payout
+selection.
 
 ## MVP Rules
 

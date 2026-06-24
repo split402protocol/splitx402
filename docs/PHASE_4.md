@@ -64,6 +64,10 @@ Status: started.
   accrual, and ledger rows.
 - Added `PostgresOutboxEventStore` for worker-facing event reads, ready-event
   claims, delivery marking, retry scheduling, and dead-letter transitions.
+- Added a receipt chain-verification worker framework that claims
+  `receipt.accepted.v1` events, calls a pluggable verifier, marks confirmed
+  receipts as verified, moves accruals to `available`, and handles retry or
+  dead-letter verifier outcomes.
 - Added `PostgresCampaignRegistry` for durable campaign, version, activation, and
   operation persistence.
 - Added `0004_campaigns.sql` for campaign, campaign version, and campaign
@@ -116,6 +120,8 @@ Status: started.
   rollback behavior, plus live harness coverage for the outbox table.
 - Added PostgreSQL outbox worker tests for ready-event claiming, retry delay
   enforcement, delivery marking, and dead-letter behavior.
+- Added chain-verification worker tests for confirmed, retryable, and malformed
+  receipt events, plus PostgreSQL coverage for verified receipt/accrual state.
 - Added `corepack pnpm test:postgres` for live PostgreSQL validation when
   `SPLIT402_TEST_DATABASE_URL` is set.
 - Reworked the README with protocol diagrams, package graph, control-plane flow,
@@ -134,7 +140,7 @@ a zero-sum ledger transaction.
 - Wallet-auth refresh token flow.
 - Production auth policy wiring for the deployable runtime.
 - Deployable control-plane runtime wiring.
-- Chain verification worker.
+- Solana RPC chain verifier implementation.
 - Dedicated worker loops for chain verification and webhook dispatch.
 - Route suspension, payout-wallet rotation, and route search history.
 
