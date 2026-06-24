@@ -69,11 +69,14 @@ Deliverables:
 Current slice:
 
 - `@split402/x402-extension` package imported from `ffff`;
+- `@split402/express` request-context adapter imported from `ffff`;
 - client payment payload enrichment;
 - resource-server offer enrichment;
+- Express request context capture for method, route template, params, query, body,
+  and referral claim hints;
 - attribution validation before x402 verification;
 - signed receipt enrichment after settlement;
-- extension tests for valid and invalid claims.
+- extension and adapter tests.
 
 ## Phase 4: Control Plane And Persistent Ingestion
 

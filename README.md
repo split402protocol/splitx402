@@ -28,7 +28,8 @@ Phase 3 has started. Phase 2 implemented architecture Milestone 0 by importing t
 protocol package and deterministic test vectors from `splitx402/ffff`. The current
 slice begins architecture Milestone 1 by adding the `@split402/x402-extension`
 package used to advertise signed offers, validate attribution, and return signed
-receipts around x402 settlement.
+receipts around x402 settlement, plus the `@split402/express` request-context
+adapter used by the merchant runtime.
 
 No production contracts or mainnet payment flows exist yet.
 
