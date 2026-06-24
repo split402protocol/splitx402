@@ -122,10 +122,12 @@ Deliverables:
 Current slice:
 
 - port `@split402/x402-extension` from `ffff`;
+- port `@split402/express` from `ffff`;
 - preserve client-side attribution enrichment behavior;
 - preserve resource-server offer and receipt hooks;
+- preserve request-context capture for operation digest inputs;
 - validate required and optional attribution before settlement;
-- keep valid/invalid claim behavior covered by tests.
+- keep valid/invalid claim behavior and Express adapter behavior covered by tests.
 
 Exit criteria:
 
