@@ -1148,11 +1148,12 @@ Server-to-server merchant ingestion MAY additionally use scoped API credentials.
 }
 ```
 
-Response returns `campaignId`, `version`, canonical terms, terms hash, and signing bytes. Activation requires a merchant signature over the terms hash.
+Response returns `campaignId`, `version`, canonical terms, terms hash, and signing bytes. Activation requires a merchant signature over the domain-separated signing bytes for the canonical terms.
 
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/v1/campaigns/:campaignId` | Current campaign summary. |
+| `POST` | `/v1/campaigns/:campaignId/activate` | Activate current signed version after merchant key and origin checks. |
 | `GET` | `/v1/campaigns/:campaignId/versions/:version` | Immutable version. |
 | `POST` | `/v1/campaigns/:campaignId/versions` | Create next immutable version. |
 | `POST` | `/v1/campaigns/:campaignId/pause` | Stop issuing new offers. |

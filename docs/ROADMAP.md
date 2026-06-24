@@ -139,6 +139,8 @@ Current slice:
 - `POST /v1/campaigns`, `GET /v1/campaigns/:campaignId`,
   `GET /v1/campaigns/:campaignId/versions/:version`, and
   `POST /v1/campaigns/:campaignId/versions`;
+- owner-authorized `POST /v1/campaigns/:campaignId/activate` for the current
+  version with registered merchant service-key signature verification;
 - receipt verifier key resolution through registered merchant service keys.
 
 ## Phase 5: Production Merchant SDK
