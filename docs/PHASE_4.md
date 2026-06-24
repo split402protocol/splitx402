@@ -27,6 +27,11 @@ Status: started.
   behavior tests.
 - Added merchant creation, profile, origin registration, service-key registration,
   and service-key revocation routes.
+- Added wallet authentication challenge and session types.
+- Added in-memory single-use wallet authentication challenge/session storage.
+- Added `POST /v1/auth/challenges` and `POST /v1/auth/sessions`.
+- Added optional auth gating for merchant creation, origin registration,
+  service-key registration, and service-key revocation.
 - Added merchant service-key resolution for receipt verification by `merchantId`,
   `kid`, purpose, and receipt issue time.
 - Added `0002_merchants_keys_origins.sql` for merchant, origin, and key tables.
@@ -51,6 +56,8 @@ Status: started.
   revocation windows, and uniqueness-conflict mapping.
 - Added merchant registry tests for key resolution, historical receipt verification
   after later key rotation, and post-revocation receipt rejection.
+- Added wallet authentication tests for signed challenge exchange, challenge replay,
+  session expiry, and auth-gated merchant mutations.
 - Reworked the README with protocol diagrams, package graph, control-plane flow,
   endpoint overview, and usage examples.
 
@@ -65,8 +72,8 @@ a zero-sum ledger transaction.
 ## Remaining Milestone 2 Work
 
 - Live PostgreSQL integration test harness.
-- Wallet authentication.
-- Auth-gated merchant, key, and origin APIs.
+- Persistent wallet-auth session storage and refresh.
+- Production auth policy wiring for the deployable runtime.
 - Campaign version APIs.
 - Route draft, sign, and activate flow.
 - Deployable control-plane runtime wiring.

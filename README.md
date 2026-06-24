@@ -82,6 +82,7 @@ mainnet payment flows exist yet.
 | PostgreSQL receipt, accrual, and ledger persistence | Started |
 | Merchant/key/origin registry APIs | Started |
 | PostgreSQL merchant/key/origin persistence | Started |
+| Wallet-authenticated merchant mutations | Started |
 | Chain verification worker and payout engine | Not implemented |
 | `$SPLIT` bonding and atomic split settlement | Later research |
 
@@ -153,6 +154,8 @@ The current Phase 4 control plane exposes:
 
 ```text
 GET  /v1/health
+POST /v1/auth/challenges
+POST /v1/auth/sessions
 POST /v1/receipts
 POST /v1/merchants
 GET  /v1/merchants/:merchantId
@@ -243,12 +246,14 @@ import {
   InMemoryMerchantRegistry,
   InMemoryReceiptIngestionStore,
   ReceiptIngestor,
+  WalletAuthenticator,
   createControlPlaneApp,
   createMerchantReceiptKeyResolver
 } from "@split402/control-plane";
 
 const merchantRegistry = new InMemoryMerchantRegistry();
 const receiptStore = new InMemoryReceiptIngestionStore();
+const authenticator = new WalletAuthenticator();
 
 const ingestor = new ReceiptIngestor(receiptStore, {
   resolveMerchantPublicKey: createMerchantReceiptKeyResolver(merchantRegistry)
@@ -256,18 +261,29 @@ const ingestor = new ReceiptIngestor(receiptStore, {
 
 export const app = createControlPlaneApp({
   ingestor,
-  merchantRegistry
+  merchantRegistry,
+  auth: { authenticator }
 });
 ```
 
 Register a merchant service key, then submit receipts:
 
 ```bash
+curl -X POST http://localhost:4020/v1/auth/challenges \
+  -H "content-type: application/json" \
+  -d '{"wallet":"<owner-wallet>","network":"solana:devnet","purpose":"merchant-session"}'
+
+curl -X POST http://localhost:4020/v1/auth/sessions \
+  -H "content-type: application/json" \
+  -d '{"challengeId":"<challenge-id>","signature":"<owner-wallet-signature>"}'
+
 curl -X POST http://localhost:4020/v1/merchants \
+  -H "authorization: Bearer <access-token>" \
   -H "content-type: application/json" \
   -d '{"slug":"demo-merchant","displayName":"Demo Merchant","ownerWallet":"<owner-wallet>"}'
 
 curl -X POST http://localhost:4020/v1/merchants/<merchant-id>/keys \
+  -H "authorization: Bearer <access-token>" \
   -H "content-type: application/json" \
   -d '{"kid":"kid_demo_merchant_1","publicKey":"<service-public-key>"}'
 
