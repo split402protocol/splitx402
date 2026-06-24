@@ -208,6 +208,8 @@ Current slice:
   routes, signed referral claims, and duplicate-claim idempotency;
 - add the PostgreSQL outbox migration and transaction insert for durable
   `receipt.accepted.v1` worker events;
+- add the PostgreSQL outbox worker store for claiming ready events, retrying
+  failures, marking delivery, and dead-lettering exhausted work;
 - add the packaged PostgreSQL migration runner and opt-in live integration harness
   for real database validation;
 - resolve receipt verification keys through registered merchant service keys by

@@ -17,6 +17,7 @@ import {
   MerchantRegistryConflictError,
   PostgresCampaignRegistry,
   PostgresMerchantRegistry,
+  PostgresOutboxEventStore,
   PostgresReceiptIngestionStore,
   PostgresRouteRegistry,
   PostgresWalletAuthStore,
@@ -147,6 +148,114 @@ describe("PostgresReceiptIngestionStore", () => {
     expect(fakePool.client.releaseCount).toBe(1);
     expect(fakePool.database.receipts).toHaveLength(0);
     expect(fakePool.database.outboxEvents).toHaveLength(0);
+  });
+
+  it("claims, retries, and delivers ready outbox events", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const fakePool = new FakePostgresPool();
+    const receiptStore = new PostgresReceiptIngestionStore(fakePool);
+    const outboxStore = new PostgresOutboxEventStore(fakePool);
+    const ingestor = new ReceiptIngestor(receiptStore, {
+      resolveMerchantPublicKey: () => bundle.keys.merchantPublicKey,
+      now: () => new Date("2026-06-24T00:02:00Z")
+    });
+    await ingestor.ingest({ receipt: bundle.artifacts.receipt, source: "merchant" });
+
+    const claimed = await outboxStore.claimNext({
+      now: "2026-06-24T00:03:00Z"
+    });
+
+    expect(claimed).toEqual(
+      expect.objectContaining({
+        eventType: "receipt.accepted.v1",
+        aggregateId: bundle.artifacts.receipt.receiptId,
+        status: "processing",
+        attempts: 1,
+        lockedAt: "2026-06-24T00:03:00Z"
+      })
+    );
+    if (claimed === undefined) {
+      throw new Error("expected claimed outbox event");
+    }
+    expect(
+      await outboxStore.claimNext({ now: "2026-06-24T00:03:01Z" })
+    ).toBeUndefined();
+
+    const failed = await outboxStore.markFailed({
+      eventId: claimed.id,
+      lastError: "rpc timeout",
+      availableAt: "2026-06-24T00:05:00Z"
+    });
+
+    expect(failed).toEqual(
+      expect.objectContaining({
+        status: "pending",
+        attempts: 1,
+        availableAt: "2026-06-24T00:05:00Z",
+        lastError: "rpc timeout"
+      })
+    );
+    expect(failed?.lockedAt).toBeUndefined();
+    expect(
+      await outboxStore.claimNext({ now: "2026-06-24T00:04:59Z" })
+    ).toBeUndefined();
+
+    const retry = await outboxStore.claimNext({
+      now: "2026-06-24T00:05:00Z"
+    });
+    expect(retry?.status).toBe("processing");
+    expect(retry?.attempts).toBe(2);
+    expect(retry?.lastError).toBeUndefined();
+
+    if (retry === undefined) {
+      throw new Error("expected retried outbox event");
+    }
+    const delivered = await outboxStore.markDelivered({ eventId: retry.id });
+    const loaded = await outboxStore.getEvent(retry.id);
+
+    expect(delivered?.status).toBe("delivered");
+    expect(delivered?.lockedAt).toBeUndefined();
+    expect(delivered?.lastError).toBeUndefined();
+    expect(loaded?.status).toBe("delivered");
+    expect(
+      await outboxStore.claimNext({ now: "2026-06-24T00:06:00Z" })
+    ).toBeUndefined();
+  });
+
+  it("dead-letters failed processing outbox events", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const fakePool = new FakePostgresPool();
+    const receiptStore = new PostgresReceiptIngestionStore(fakePool);
+    const outboxStore = new PostgresOutboxEventStore(fakePool);
+    const ingestor = new ReceiptIngestor(receiptStore, {
+      resolveMerchantPublicKey: () => bundle.keys.merchantPublicKey,
+      now: () => new Date("2026-06-24T00:02:00Z")
+    });
+    await ingestor.ingest({ receipt: bundle.artifacts.receipt, source: "relay" });
+    const claimed = await outboxStore.claimNext({
+      now: "2026-06-24T00:03:00Z"
+    });
+    if (claimed === undefined) {
+      throw new Error("expected claimed outbox event");
+    }
+
+    const deadLetter = await outboxStore.markFailed({
+      eventId: claimed.id,
+      lastError: "invalid chain response",
+      availableAt: "2026-06-24T00:03:00Z",
+      deadLetter: true
+    });
+
+    expect(deadLetter).toEqual(
+      expect.objectContaining({
+        status: "dead_letter",
+        attempts: 1,
+        lastError: "invalid chain response"
+      })
+    );
+    expect(
+      await outboxStore.claimNext({ now: "2026-06-24T00:10:00Z" })
+    ).toBeUndefined();
   });
 });
 
@@ -672,6 +781,30 @@ class FakePostgresClient implements PostgresTransactionClient {
         this.database.consumeWalletAuthChallenge(values) as unknown as Row[]
       );
     }
+    if (
+      normalized.startsWith("update outbox_events") &&
+      normalized.includes("attempts = attempts + 1")
+    ) {
+      return result(
+        this.database.claimNextOutboxEvent(values) as unknown as Row[]
+      );
+    }
+    if (
+      normalized.startsWith("update outbox_events") &&
+      normalized.includes("status = 'delivered'")
+    ) {
+      return result(
+        this.database.markOutboxEventDelivered(values) as unknown as Row[]
+      );
+    }
+    if (
+      normalized.startsWith("update outbox_events") &&
+      normalized.includes("status = $4")
+    ) {
+      return result(
+        this.database.markOutboxEventFailed(values) as unknown as Row[]
+      );
+    }
     if (normalized.includes("from payment_receipts")) {
       return result(this.database.selectReceipt(normalized, values) as unknown as Row[]);
     }
@@ -707,6 +840,11 @@ class FakePostgresClient implements PostgresTransactionClient {
     }
     if (normalized.includes("from routes")) {
       return result(this.database.selectRoute(normalized, values) as unknown as Row[]);
+    }
+    if (normalized.includes("from outbox_events")) {
+      return result(
+        this.database.selectOutboxEvent(values[0]) as unknown as Row[]
+      );
     }
     if (normalized.includes("from wallet_auth_challenges")) {
       return result(
@@ -830,6 +968,57 @@ class FakePostgresDatabase {
       throw Object.assign(new Error("duplicate key"), { code: "23505" });
     }
     this.outboxEvents.push(row);
+  }
+
+  claimNextOutboxEvent(values: readonly unknown[]): StoredOutboxEventRow[] {
+    const now = readString(values[0]);
+    const readyEvent = this.outboxEvents
+      .filter(
+        (event) =>
+          event.status === "pending" &&
+          Date.parse(event.available_at) <= Date.parse(now)
+      )
+      .sort(compareOutboxEvents)[0];
+    if (readyEvent === undefined) {
+      return [];
+    }
+    readyEvent.status = "processing";
+    readyEvent.attempts += 1;
+    readyEvent.locked_at = now;
+    readyEvent.last_error = null;
+    return [readyEvent];
+  }
+
+  markOutboxEventDelivered(values: readonly unknown[]): StoredOutboxEventRow[] {
+    const event = this.outboxEvents.find(
+      (row) => row.id === readString(values[0])
+    );
+    if (event === undefined || event.status !== "processing") {
+      return [];
+    }
+    event.status = "delivered";
+    event.locked_at = null;
+    event.last_error = null;
+    return [event];
+  }
+
+  markOutboxEventFailed(values: readonly unknown[]): StoredOutboxEventRow[] {
+    const event = this.outboxEvents.find(
+      (row) => row.id === readString(values[0])
+    );
+    if (event === undefined || event.status !== "processing") {
+      return [];
+    }
+    event.last_error = readString(values[1]);
+    event.available_at = readString(values[2]);
+    event.status = readString(values[3]);
+    event.locked_at = null;
+    return [event];
+  }
+
+  selectOutboxEvent(eventId: unknown): StoredOutboxEventRow[] {
+    const event = this.outboxEvents.find((row) => row.id === readString(eventId));
+    return event === undefined ? [] : [event];
   }
 
   selectReceipt(
@@ -1430,6 +1619,17 @@ function commandResult<Row extends QueryResultRow>(rowCount: number): QueryResul
 
 function normalizeSql(text: string): string {
   return text.replace(/\s+/gu, " ").trim().toLowerCase();
+}
+
+function compareOutboxEvents(
+  left: StoredOutboxEventRow,
+  right: StoredOutboxEventRow
+): number {
+  return (
+    Date.parse(left.available_at) - Date.parse(right.available_at) ||
+    Date.parse(left.created_at) - Date.parse(right.created_at) ||
+    left.id.localeCompare(right.id)
+  );
 }
 
 function readString(value: unknown): string {
