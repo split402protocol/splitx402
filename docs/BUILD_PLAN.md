@@ -196,6 +196,8 @@ Current slice:
   and service-key revocation routes;
 - gate merchant mutations with authenticated owner-wallet sessions when auth is
   enabled;
+- add campaign draft and immutable-version APIs with canonical terms hashes and
+  signing bytes;
 - resolve receipt verification keys through registered merchant service keys by
   `merchantId` and `kid`;
 - add the PostgreSQL merchant registry adapter for durable merchant, origin, and

@@ -14,6 +14,14 @@ import {
   type WalletAuthenticator,
   type WalletAuthPurpose
 } from "./auth.js";
+import {
+  isCampaignRegistryConflictError,
+  isCampaignRegistryValidationError,
+  type CampaignCommissionBase,
+  type CampaignOperation,
+  type CampaignRegistry,
+  type CampaignTermsInput
+} from "./campaigns.js";
 import { isReceiptIngestionPersistenceConflict } from "./errors.js";
 import {
   MerchantRegistryValidationError,
@@ -393,6 +401,7 @@ export class ReceiptIngestor {
 export interface ControlPlaneAppOptions {
   ingestor: ReceiptIngestor;
   merchantRegistry?: MerchantRegistry;
+  campaignRegistry?: CampaignRegistry;
   auth?: ControlPlaneAuthOptions;
   jsonLimit?: string;
 }
@@ -422,6 +431,9 @@ export function createControlPlaneApp(
   app.use(createReceiptIngestionRouter(options));
   if (options.merchantRegistry !== undefined) {
     app.use(createMerchantRegistryRouter(options.merchantRegistry, options));
+  }
+  if (options.campaignRegistry !== undefined) {
+    app.use(createCampaignRegistryRouter(options.campaignRegistry, options));
   }
 
   app.use((_req, res) => {
@@ -694,6 +706,118 @@ export function createMerchantRegistryRouter(
   return router;
 }
 
+export function createCampaignRegistryRouter(
+  campaignRegistry: CampaignRegistry,
+  options: Pick<
+    ControlPlaneAppOptions,
+    "auth" | "jsonLimit" | "merchantRegistry"
+  > = {}
+): Router {
+  const router = express.Router();
+  router.use(express.json({ limit: options.jsonLimit ?? "128kb" }));
+
+  router.post("/v1/campaigns", async (req, res, next) => {
+    try {
+      const body = requireJsonObject(req.body);
+      const merchantId = readRequiredString(body.merchantId, "merchantId");
+      const session = await requireMerchantOwnerForMerchantId(
+        req,
+        res,
+        options,
+        merchantId
+      );
+      if (session === undefined && isMerchantAuthRequired(options)) {
+        return;
+      }
+      const id = readOptionalString(body.id, "id");
+      const campaign = await campaignRegistry.createCampaign({
+        ...(id === undefined ? {} : { id }),
+        merchantId,
+        ...readCampaignTermsInput(body)
+      });
+      res.status(201).json({ campaign });
+    } catch (error) {
+      if (!sendCampaignRegistryError(res, error) && !sendMerchantRegistryError(res, error)) {
+        next(error);
+      }
+    }
+  });
+
+  router.get("/v1/campaigns/:campaignId", async (req, res, next) => {
+    try {
+      const campaignId = readRouteParam(req.params.campaignId, "campaignId");
+      const campaign = await campaignRegistry.getCampaign(campaignId);
+      if (campaign === undefined) {
+        res.status(404).json({ error: "campaign_not_found" });
+        return;
+      }
+      res.json({ campaign });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get(
+    "/v1/campaigns/:campaignId/versions/:version",
+    async (req, res, next) => {
+      try {
+        const campaignId = readRouteParam(req.params.campaignId, "campaignId");
+        const versionNumber = readPositiveIntegerParam(
+          req.params.version,
+          "version"
+        );
+        const version = await campaignRegistry.getCampaignVersion(
+          campaignId,
+          versionNumber
+        );
+        if (version === undefined) {
+          res.status(404).json({ error: "campaign_version_not_found" });
+          return;
+        }
+        res.json({ version });
+      } catch (error) {
+        if (!sendCampaignRegistryError(res, error) && !sendMerchantRegistryError(res, error)) {
+          next(error);
+        }
+      }
+    }
+  );
+
+  router.post("/v1/campaigns/:campaignId/versions", async (req, res, next) => {
+    try {
+      const campaignId = readRouteParam(req.params.campaignId, "campaignId");
+      const campaign = await campaignRegistry.getCampaign(campaignId);
+      if (campaign === undefined) {
+        res.status(404).json({ error: "campaign_not_found" });
+        return;
+      }
+      const session = await requireMerchantOwnerForMerchantId(
+        req,
+        res,
+        options,
+        campaign.merchantId
+      );
+      if (session === undefined && isMerchantAuthRequired(options)) {
+        return;
+      }
+      const body = requireJsonObject(req.body);
+      const version = await campaignRegistry.createCampaignVersion({
+        campaignId,
+        ...readCampaignTermsInput(body)
+      });
+      res.status(201).json({ version });
+    } catch (error) {
+      if (!sendCampaignRegistryError(res, error) && !sendMerchantRegistryError(res, error)) {
+        next(error);
+      }
+    }
+  });
+
+  router.use(jsonErrorHandler);
+
+  return router;
+}
+
 export function isReceiptIngestSource(value: unknown): value is ReceiptIngestSource {
   return (
     typeof value === "string" &&
@@ -845,6 +969,127 @@ function readOptionalWalletAuthPurpose(value: unknown): WalletAuthPurpose | unde
   throw new MerchantRegistryValidationError("purpose must be merchant-session");
 }
 
+function readCampaignTermsInput(body: Record<string, unknown>): CampaignTermsInput {
+  const protocolFeeBps = readOptionalNumber(body.protocolFeeBps, "protocolFeeBps");
+  const commissionBase = readOptionalCampaignCommissionBase(body.commissionBase);
+  const attributionRequired = readOptionalBoolean(
+    body.attributionRequired,
+    "attributionRequired"
+  );
+  const allowSelfReferral = readOptionalBoolean(
+    body.allowSelfReferral,
+    "allowSelfReferral"
+  );
+  const endsAt = readOptionalNullableString(body.endsAt, "endsAt");
+  return {
+    resourceOrigin: readRequiredString(body.resourceOrigin, "resourceOrigin"),
+    operations: readCampaignOperations(body.operations),
+    network: readRequiredString(body.network, "network"),
+    asset: readRequiredString(body.asset, "asset"),
+    requiredAmountAtomic: readRequiredString(
+      body.requiredAmountAtomic,
+      "requiredAmountAtomic"
+    ),
+    payToWallet: readRequiredString(body.payToWallet, "payToWallet"),
+    commissionBps: readRequiredNumber(body.commissionBps, "commissionBps"),
+    ...(protocolFeeBps === undefined ? {} : { protocolFeeBps }),
+    ...(commissionBase === undefined ? {} : { commissionBase }),
+    ...(attributionRequired === undefined ? {} : { attributionRequired }),
+    ...(allowSelfReferral === undefined ? {} : { allowSelfReferral }),
+    payoutThresholdAtomic: readRequiredString(
+      body.payoutThresholdAtomic,
+      "payoutThresholdAtomic"
+    ),
+    startsAt: readRequiredString(body.startsAt, "startsAt"),
+    ...(endsAt === undefined ? {} : { endsAt })
+  };
+}
+
+function readCampaignOperations(value: unknown): CampaignOperation[] {
+  if (!Array.isArray(value)) {
+    throw new MerchantRegistryValidationError("operations must be an array");
+  }
+  return value.map((item) => {
+    const operation = requireJsonObject(item);
+    const inputSchema =
+      operation.inputSchema === undefined
+        ? undefined
+        : operation.inputSchema;
+    return {
+      operationId: readRequiredString(operation.operationId, "operationId"),
+      method: readRequiredString(operation.method, "method"),
+      pathTemplate: readRequiredString(operation.pathTemplate, "pathTemplate"),
+      ...(inputSchema === undefined ? {} : { inputSchema })
+    };
+  });
+}
+
+function readRequiredNumber(value: unknown, label: string): number {
+  if (typeof value !== "number") {
+    throw new MerchantRegistryValidationError(`${label} must be a number`);
+  }
+  return value;
+}
+
+function readOptionalNumber(value: unknown, label: string): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return readRequiredNumber(value, label);
+}
+
+function readOptionalBoolean(value: unknown, label: string): boolean | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "boolean") {
+    throw new MerchantRegistryValidationError(`${label} must be a boolean`);
+  }
+  return value;
+}
+
+function readOptionalNullableString(
+  value: unknown,
+  label: string
+): string | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === null) {
+    return null;
+  }
+  return readRequiredString(value, label);
+}
+
+function readOptionalCampaignCommissionBase(
+  value: unknown
+): CampaignCommissionBase | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === "required_amount") {
+    return value;
+  }
+  throw new MerchantRegistryValidationError(
+    "commissionBase must be required_amount"
+  );
+}
+
+function readRouteParam(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new MerchantRegistryValidationError(`${label} route parameter is required`);
+  }
+  return value;
+}
+
+function readPositiveIntegerParam(value: unknown, label: string): number {
+  const raw = readRouteParam(value, label);
+  if (!/^[1-9][0-9]*$/u.test(raw)) {
+    throw new MerchantRegistryValidationError(`${label} must be a positive integer`);
+  }
+  return Number.parseInt(raw, 10);
+}
+
 function readReceiptSource(value: unknown): ReceiptIngestSource | undefined {
   if (value === undefined) {
     return undefined;
@@ -882,6 +1127,7 @@ function readHttpErrorStatus(error: unknown): number | undefined {
 
 export * from "./errors.js";
 export * from "./auth.js";
+export * from "./campaigns.js";
 export * from "./merchants.js";
 export * from "./postgres.js";
 
@@ -952,6 +1198,39 @@ async function requireMerchantOwnerSession(
   return session;
 }
 
+async function requireMerchantOwnerForMerchantId(
+  req: Request,
+  res: Response,
+  options: Pick<ControlPlaneAppOptions, "auth" | "merchantRegistry">,
+  merchantId: string
+): Promise<AuthenticatedWalletSession | undefined> {
+  const session = await readMerchantMutationSession(req, res, options);
+  if (session === undefined) {
+    return undefined;
+  }
+  if (options.merchantRegistry === undefined) {
+    res.status(500).json({
+      error: "internal_server_error",
+      message: "merchant registry is required for owner authorization"
+    });
+    return undefined;
+  }
+
+  const merchant = await options.merchantRegistry.getMerchantProfile(merchantId);
+  if (merchant === undefined) {
+    res.status(404).json({ error: "merchant_not_found" });
+    return undefined;
+  }
+  if (merchant.ownerWallet !== session.wallet) {
+    res.status(403).json({
+      error: "forbidden",
+      message: "authenticated wallet does not own merchant"
+    });
+    return undefined;
+  }
+  return session;
+}
+
 function readBearerAccessToken(req: Request): string | undefined {
   const authorization = req.header("authorization");
   if (authorization === undefined) {
@@ -984,6 +1263,18 @@ function sendWalletAuthError(res: Response, error: unknown): boolean {
   }
   if (isWalletAuthRejectedError(error)) {
     res.status(401).json({ error: "unauthorized", message: error.message });
+    return true;
+  }
+  return false;
+}
+
+function sendCampaignRegistryError(res: Response, error: unknown): boolean {
+  if (isCampaignRegistryValidationError(error)) {
+    res.status(400).json({ error: "invalid_request", message: error.message });
+    return true;
+  }
+  if (isCampaignRegistryConflictError(error)) {
+    res.status(409).json({ error: "conflict", message: error.message });
     return true;
   }
   return false;

@@ -35,6 +35,14 @@ Status: started.
 - Added `0003_wallet_auth.sql` for auth challenge and session tables.
 - Added optional auth gating for merchant creation, origin registration,
   service-key registration, and service-key revocation.
+- Added campaign draft/version registry types.
+- Added an in-memory campaign registry with immutable version records, canonical
+  terms hashes, and signing bytes.
+- Added `POST /v1/campaigns`, `GET /v1/campaigns/:campaignId`,
+  `GET /v1/campaigns/:campaignId/versions/:version`, and
+  `POST /v1/campaigns/:campaignId/versions`.
+- Added owner-wallet auth gating for campaign creation and new campaign versions
+  when auth is enabled.
 - Added merchant service-key resolution for receipt verification by `merchantId`,
   `kid`, purpose, and receipt issue time.
 - Added `0002_merchants_keys_origins.sql` for merchant, origin, and key tables.
@@ -63,6 +71,8 @@ Status: started.
   session expiry, and auth-gated merchant mutations.
 - Added PostgreSQL wallet-auth tests for durable challenge consumption, token hash
   persistence, and replay rejection.
+- Added campaign registry and HTTP tests for immutable version creation, terms
+  hashes, signing bytes, and owner-authenticated campaign mutations.
 - Reworked the README with protocol diagrams, package graph, control-plane flow,
   endpoint overview, and usage examples.
 
@@ -79,7 +89,8 @@ a zero-sum ledger transaction.
 - Live PostgreSQL integration test harness.
 - Wallet-auth refresh token flow.
 - Production auth policy wiring for the deployable runtime.
-- Campaign version APIs.
+- Campaign activation with merchant signature verification.
+- PostgreSQL-backed campaign registry adapter.
 - Route draft, sign, and activate flow.
 - Deployable control-plane runtime wiring.
 - Chain verification worker.

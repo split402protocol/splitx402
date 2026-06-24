@@ -9,12 +9,14 @@ import request from "supertest";
 import { describe, expect, it } from "vitest";
 
 import {
+  InMemoryCampaignRegistry,
   InMemoryMerchantRegistry,
   InMemoryReceiptIngestionStore,
   InMemoryWalletAuthStore,
   ReceiptIngestor,
   WalletAuthenticator,
-  createControlPlaneApp
+  createControlPlaneApp,
+  type CampaignTermsInput
 } from "../src/index.js";
 
 const OWNER_SEED = hexToBytes(
@@ -266,10 +268,69 @@ describe("control-plane HTTP API", () => {
 
     expect(response.body.error).toBe("forbidden");
   });
+
+  it("creates campaign versions for an authenticated merchant owner", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const { app } = createTestApp({
+      withAuth: true,
+      withCampaignRegistry: true,
+      withMerchantRegistry: true
+    });
+    const ownerToken = await createAccessToken(app, OWNER_SEED, OWNER_WALLET);
+    await request(app)
+      .post("/v1/merchants")
+      .set("authorization", `Bearer ${ownerToken}`)
+      .send({
+        id: bundle.artifacts.receipt.merchantId,
+        slug: "demo-merchant",
+        displayName: "Demo Merchant"
+      })
+      .expect(201);
+
+    await request(app)
+      .post("/v1/campaigns")
+      .send({
+        id: bundle.artifacts.receipt.campaignId,
+        merchantId: bundle.artifacts.receipt.merchantId,
+        ...createCampaignBody()
+      })
+      .expect(401);
+    const campaignResponse = await request(app)
+      .post("/v1/campaigns")
+      .set("authorization", `Bearer ${ownerToken}`)
+      .send({
+        id: bundle.artifacts.receipt.campaignId,
+        merchantId: bundle.artifacts.receipt.merchantId,
+        ...createCampaignBody()
+      })
+      .expect(201);
+    const versionResponse = await request(app)
+      .get(`/v1/campaigns/${bundle.artifacts.receipt.campaignId}/versions/1`)
+      .expect(200);
+    const nextVersionResponse = await request(app)
+      .post(`/v1/campaigns/${bundle.artifacts.receipt.campaignId}/versions`)
+      .set("authorization", `Bearer ${ownerToken}`)
+      .send(createCampaignBody({ commissionBps: 2500 }))
+      .expect(201);
+
+    expect(campaignResponse.body.campaign.current.termsHash).toMatch(
+      /^sha256:[0-9a-f]{64}$/u
+    );
+    expect(campaignResponse.body.campaign.current.signingBytesHex).toMatch(
+      /^[0-9a-f]+$/u
+    );
+    expect(versionResponse.body.version.version).toBe(1);
+    expect(nextVersionResponse.body.version.version).toBe(2);
+    expect(nextVersionResponse.body.version.terms.commissionBps).toBe(2500);
+  });
 });
 
 function createTestApp(
-  options: { withAuth?: boolean; withMerchantRegistry?: boolean } = {}
+  options: {
+    withAuth?: boolean;
+    withCampaignRegistry?: boolean;
+    withMerchantRegistry?: boolean;
+  } = {}
 ) {
   const bundle = createSampleProtocolArtifacts();
   const store = new InMemoryReceiptIngestionStore();
@@ -284,6 +345,13 @@ function createTestApp(
       ...(options.withMerchantRegistry === true
         ? {
             merchantRegistry: new InMemoryMerchantRegistry({
+              now: () => new Date("2026-06-24T00:02:00Z")
+            })
+          }
+        : {}),
+      ...(options.withCampaignRegistry === true
+        ? {
+            campaignRegistry: new InMemoryCampaignRegistry({
               now: () => new Date("2026-06-24T00:02:00Z")
             })
           }
@@ -339,4 +407,29 @@ async function createAccessToken(
 
 function nextAuthId(prefix: "chl" | "ses", sequence: number): string {
   return `${prefix}_${sequence.toString(16).padStart(32, "0")}`;
+}
+
+function createCampaignBody(
+  overrides: Partial<CampaignTermsInput> = {}
+): CampaignTermsInput {
+  const bundle = createSampleProtocolArtifacts();
+  return {
+    resourceOrigin: bundle.artifacts.receipt.merchantOrigin,
+    operations: [
+      {
+        operationId: bundle.artifacts.receipt.operationId,
+        method: "POST",
+        pathTemplate: "/v1/risk"
+      }
+    ],
+    network: bundle.artifacts.receipt.network,
+    asset: bundle.artifacts.receipt.asset,
+    requiredAmountAtomic: bundle.artifacts.receipt.requiredAmountAtomic,
+    payToWallet: bundle.artifacts.receipt.payToWallet,
+    commissionBps: bundle.artifacts.receipt.commissionBps,
+    payoutThresholdAtomic: "100000",
+    startsAt: "2026-06-24T00:00:00Z",
+    endsAt: null,
+    ...overrides
+  };
 }
