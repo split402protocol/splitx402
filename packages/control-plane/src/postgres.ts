@@ -68,7 +68,10 @@ import type {
   LedgerAccountType,
   LedgerEntry,
   LedgerTransaction,
+  MarkOutboxEventDeliveredInput,
+  MarkOutboxEventFailedInput,
   OutboxEventRecord,
+  OutboxEventStore,
   ReceiptIngestSource,
   ReceiptIngestionSnapshot,
   ReceiptIngestionStore,
@@ -130,6 +133,20 @@ interface LedgerEntryRow extends QueryResultRow {
   account_reference: string;
   asset_mint: string;
   amount_atomic: string;
+}
+
+interface OutboxEventRow extends QueryResultRow {
+  id: string;
+  event_type: string;
+  aggregate_type: string;
+  aggregate_id: string;
+  payload: unknown;
+  status: string;
+  attempts: number;
+  available_at: Date | string;
+  locked_at: Date | string | null;
+  last_error: string | null;
+  created_at: Date | string;
 }
 
 interface MerchantRow extends QueryResultRow {
@@ -248,6 +265,10 @@ export interface PostgresCampaignRegistryOptions {
 
 export interface PostgresReceiptIngestionStoreOptions {
   outboxEventIdFactory?: () => string;
+}
+
+export interface PostgresOutboxEventStoreOptions {
+  now?: () => Date;
 }
 
 export type PostgresRouteRegistryOptions = InMemoryRouteRegistryOptions;
@@ -410,6 +431,97 @@ export class PostgresReceiptIngestionStore implements ReceiptIngestionStore {
       return this.db.connect();
     }
     return this.db;
+  }
+}
+
+export class PostgresOutboxEventStore implements OutboxEventStore {
+  constructor(
+    private readonly db: PostgresPool | PostgresQueryExecutor,
+    private readonly options: PostgresOutboxEventStoreOptions = {}
+  ) {}
+
+  async getEvent(eventId: string): Promise<OutboxEventRecord | undefined> {
+    const result = await this.db.query<OutboxEventRow>(
+      `select id, event_type, aggregate_type, aggregate_id, payload, status,
+              attempts, available_at, locked_at, last_error, created_at
+         from outbox_events
+        where id = $1::uuid
+        limit 1`,
+      [eventId]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapOutboxEvent(row);
+  }
+
+  async claimNext(input: { now?: string } = {}): Promise<OutboxEventRecord | undefined> {
+    const now = input.now ?? this.now();
+    const result = await this.db.query<OutboxEventRow>(
+      `update outbox_events
+          set status = 'processing',
+              attempts = attempts + 1,
+              locked_at = $1,
+              last_error = null
+        where id = (
+          select id
+            from outbox_events
+           where status = 'pending'
+             and available_at <= $1
+           order by available_at, created_at, id
+           for update skip locked
+           limit 1
+        )
+      returning id, event_type, aggregate_type, aggregate_id, payload, status,
+                attempts, available_at, locked_at, last_error, created_at`,
+      [now]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapOutboxEvent(row);
+  }
+
+  async markDelivered(
+    input: MarkOutboxEventDeliveredInput
+  ): Promise<OutboxEventRecord | undefined> {
+    const result = await this.db.query<OutboxEventRow>(
+      `update outbox_events
+          set status = 'delivered',
+              locked_at = null,
+              last_error = null
+        where id = $1::uuid
+          and status = 'processing'
+      returning id, event_type, aggregate_type, aggregate_id, payload, status,
+                attempts, available_at, locked_at, last_error, created_at`,
+      [input.eventId]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapOutboxEvent(row);
+  }
+
+  async markFailed(
+    input: MarkOutboxEventFailedInput
+  ): Promise<OutboxEventRecord | undefined> {
+    const result = await this.db.query<OutboxEventRow>(
+      `update outbox_events
+          set status = $4,
+              available_at = $3,
+              locked_at = null,
+              last_error = $2
+        where id = $1::uuid
+          and status = 'processing'
+      returning id, event_type, aggregate_type, aggregate_id, payload, status,
+                attempts, available_at, locked_at, last_error, created_at`,
+      [
+        input.eventId,
+        input.lastError,
+        input.availableAt,
+        input.deadLetter === true ? "dead_letter" : "pending"
+      ]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapOutboxEvent(row);
+  }
+
+  private now(): string {
+    return (this.options.now?.() ?? new Date()).toISOString();
   }
 }
 
@@ -1436,9 +1548,33 @@ function mapLedgerEntry(row: LedgerEntryRow): LedgerEntry {
   };
 }
 
+function mapOutboxEvent(row: OutboxEventRow): OutboxEventRecord {
+  return {
+    id: row.id,
+    eventType: row.event_type,
+    aggregateType: row.aggregate_type,
+    aggregateId: row.aggregate_id,
+    payload: parseOutboxPayload(row.payload),
+    status: readOutboxEventStatus(row.status),
+    attempts: row.attempts,
+    availableAt: toIsoString(row.available_at),
+    ...(row.locked_at === null ? {} : { lockedAt: toIsoString(row.locked_at) }),
+    ...(row.last_error === null ? {} : { lastError: row.last_error }),
+    createdAt: toIsoString(row.created_at)
+  };
+}
+
 function parseReceiptJson(value: unknown): Split402ReceiptV1 {
   const parsed = typeof value === "string" ? JSON.parse(value) : value;
   return Split402ReceiptV1Schema.parse(parsed);
+}
+
+function parseOutboxPayload(value: unknown): Record<string, unknown> {
+  const parsed = typeof value === "string" ? JSON.parse(value) : value;
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("outbox payload must be an object");
+  }
+  return parsed as Record<string, unknown>;
 }
 
 function readReceiptSource(value: string): ReceiptIngestSource {
@@ -1487,6 +1623,18 @@ function readLedgerAccountType(value: string): LedgerAccountType {
     return value;
   }
   throw new Error(`unsupported ledger account type: ${value}`);
+}
+
+function readOutboxEventStatus(value: string): OutboxEventRecord["status"] {
+  if (
+    value === "pending" ||
+    value === "processing" ||
+    value === "delivered" ||
+    value === "dead_letter"
+  ) {
+    return value;
+  }
+  throw new Error(`unsupported outbox event status: ${value}`);
 }
 
 function toIsoString(value: Date | string): string {

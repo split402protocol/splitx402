@@ -117,6 +117,36 @@ export interface OutboxEventRecord {
   createdAt: string;
 }
 
+export interface ClaimNextOutboxEventInput {
+  now?: string;
+}
+
+export interface MarkOutboxEventDeliveredInput {
+  eventId: string;
+}
+
+export interface MarkOutboxEventFailedInput {
+  eventId: string;
+  lastError: string;
+  availableAt: string;
+  deadLetter?: boolean;
+}
+
+export interface OutboxEventStore {
+  getEvent(
+    eventId: string
+  ): Promise<OutboxEventRecord | undefined> | OutboxEventRecord | undefined;
+  claimNext(
+    input?: ClaimNextOutboxEventInput
+  ): Promise<OutboxEventRecord | undefined> | OutboxEventRecord | undefined;
+  markDelivered(
+    input: MarkOutboxEventDeliveredInput
+  ): Promise<OutboxEventRecord | undefined> | OutboxEventRecord | undefined;
+  markFailed(
+    input: MarkOutboxEventFailedInput
+  ): Promise<OutboxEventRecord | undefined> | OutboxEventRecord | undefined;
+}
+
 export interface ReceiptIngestionSnapshot {
   receipt: ReceiptRecord;
   accrual?: CommissionAccrual;

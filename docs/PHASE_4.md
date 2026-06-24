@@ -62,6 +62,8 @@ Status: started.
 - Added outbox insertion to `PostgresReceiptIngestionStore` so accepted receipts
   commit a `receipt.accepted.v1` event in the same transaction as receipt,
   accrual, and ledger rows.
+- Added `PostgresOutboxEventStore` for worker-facing event reads, ready-event
+  claims, delivery marking, retry scheduling, and dead-letter transitions.
 - Added `PostgresCampaignRegistry` for durable campaign, version, activation, and
   operation persistence.
 - Added `0004_campaigns.sql` for campaign, campaign version, and campaign
@@ -112,6 +114,8 @@ Status: started.
   and persist one activated route row.
 - Added PostgreSQL receipt-ingestion tests for committed outbox payloads and
   rollback behavior, plus live harness coverage for the outbox table.
+- Added PostgreSQL outbox worker tests for ready-event claiming, retry delay
+  enforcement, delivery marking, and dead-letter behavior.
 - Added `corepack pnpm test:postgres` for live PostgreSQL validation when
   `SPLIT402_TEST_DATABASE_URL` is set.
 - Reworked the README with protocol diagrams, package graph, control-plane flow,
@@ -131,7 +135,7 @@ a zero-sum ledger transaction.
 - Production auth policy wiring for the deployable runtime.
 - Deployable control-plane runtime wiring.
 - Chain verification worker.
-- Outbox event claiming, retry, and dead-letter worker APIs.
+- Dedicated worker loops for chain verification and webhook dispatch.
 - Route suspension, payout-wallet rotation, and route search history.
 
 ## Acceptance Checks
