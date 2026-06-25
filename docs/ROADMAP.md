@@ -13,10 +13,10 @@ extension, demo merchant, demo agent, agent SDK, merchant SDK primitives,
 control-plane ingestion, PostgreSQL adapters, outbox workers, Solana chain
 verification, payout preview/allocation, payout transaction persistence,
 broadcast/finality boundaries, local-dev signer, remote signer client, signer
-appliance scaffold, rollup, payout lifecycle outbox/webhook events,
-unknown-outcome reconciliation queue, referrer payout views, payout
-reconciliation decision tooling, and idempotent payout ledger closure are
-present.
+appliance scaffold, signer deployment artifacts, rollup, payout lifecycle
+outbox/webhook events, unknown-outcome reconciliation queue, referrer payout
+views, payout reconciliation decision tooling, and idempotent payout ledger
+closure are present.
 
 The MVP still uses normal x402 settlement to the merchant and records a
 commission liability for later merchant-funded payout. Atomic split settlement and
@@ -259,6 +259,8 @@ Current slice:
   transaction signing;
 - payout signer auth key-ring rotation support;
 - payout signer metrics and safe audit events for signed/rejected attempts;
+- payout signer readiness checks, container build path, and Kubernetes
+  deployment starter artifacts;
 - signed-byte payout transaction persistence and Solana broadcast submission
   boundary;
 - Solana payout transaction finality monitor with retry and outcome-unknown

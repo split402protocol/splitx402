@@ -68,7 +68,7 @@ flowchart LR
 | Chain verification | Implemented as an outbox-driven Solana JSON-RPC worker for settlement signature and transfer checks. |
 | Webhooks | Implemented for accepted-receipt and payout lifecycle events with signed delivery envelopes and retry/dead-letter handling. |
 | Merchant SDK reliability boundary | Implemented with cached campaign lookup, service-key rotation helpers, payment identifiers, operation digests, and merchant-local receipt outbox primitives. |
-| Payout engine | In progress: preview, allocation, Solana transfer planning, simulation, signer policy, local-dev signer, remote signer client, signer appliance scaffold, signed-byte persistence, broadcast boundary, finality monitor, rollup, payout lifecycle events, unknown-outcome reconciliation queue, referrer payout views, and idempotent ledger closure are implemented. |
+| Payout engine | In progress: preview, allocation, Solana transfer planning, simulation, signer policy, local-dev signer, remote signer client, signer appliance scaffold, signer deployment artifacts, signed-byte persistence, broadcast boundary, finality monitor, rollup, payout lifecycle events, unknown-outcome reconciliation queue, referrer payout views, and idempotent ledger closure are implemented. |
 | Atomic split settlement | Later research. The MVP does not split the original x402 transaction onchain. |
 | `$SPLIT` bonding | Later research after the USDC accrual-and-payout loop is production ready. |
 
@@ -178,7 +178,7 @@ flowchart TB
 | `@split402/demo-merchant` | Solana Devnet merchant API used to prove the x402 plus Split402 flow. |
 | `@split402/demo-agent` | Runnable buyer/agent harness for setup, preflight, offer inspection, and paid-suite proof runs. |
 | `@split402/control-plane` | Receipt ingestion, auth, merchant/campaign/route registries, outbox workers, chain verification, accrual ledger, payout preview, allocation, transaction persistence, broadcast/finality boundaries, and payout ledger closure. |
-| `@split402/payout-signer` | Isolated payout signer appliance scaffold with HMAC request authentication, policy checks, and Solana transaction signing. |
+| `@split402/payout-signer` | Isolated payout signer appliance with HMAC request authentication, policy checks, Solana transaction signing, readiness/metrics endpoints, and container deployment artifacts. |
 
 ## Control-Plane Lifecycle
 
@@ -393,7 +393,8 @@ payout-engine boundaries.
 
 Active hardening is focused on Phase 6:
 
-- production signer appliance deployment and custody review;
+- staging deployment of the production-packaged signer appliance;
+- production payout custody and incident-response review;
 - production security review before any mainnet use.
 
 The latest Devnet proof is recorded in
@@ -405,6 +406,7 @@ The latest Devnet proof is recorded in
 - [Current state](docs/CURRENT_STATE.md)
 - [Architecture alignment note](docs/SPLIT402_ARCHITECTURE.md)
 - [Payout reconciliation runbook](docs/runbooks/payout-reconciliation.md)
+- [Payout signer deployment runbook](docs/runbooks/payout-signer-deployment.md)
 - [Payout signer key rotation runbook](docs/runbooks/payout-signer-key-rotation.md)
 - [Payout signer observability runbook](docs/runbooks/payout-signer-observability.md)
 - [MVP build plan](docs/BUILD_PLAN.md)

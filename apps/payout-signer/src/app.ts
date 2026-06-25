@@ -55,6 +55,13 @@ interface NormalizedPayoutSignerConfig
   authKeys: PayoutSignerAuthKey[];
 }
 
+type PayoutSigner = Awaited<ReturnType<typeof createSigner>>;
+
+interface PayoutSignerState {
+  promise: Promise<PayoutSigner | undefined>;
+  error?: unknown;
+}
+
 export type PayoutSignerAuditOutcome = "signed" | "rejected";
 
 export interface PayoutSignerAuditEvent {
@@ -106,7 +113,7 @@ export function createPayoutSignerApp(config: PayoutSignerConfig): express.Expre
   app.disable("x-powered-by");
   app.use(express.json({ limit: "128kb" }));
   const normalizedConfig = normalizePayoutSignerConfig(config);
-  const signerPromise = createSigner(normalizedConfig);
+  const signerState = createSignerState(normalizedConfig);
   const metrics = createMetrics(normalizedConfig);
 
   app.get("/v1/health", (_req, res) => {
@@ -121,6 +128,24 @@ export function createPayoutSignerApp(config: PayoutSignerConfig): express.Expre
         status: key.status
       }))
     });
+  });
+
+  app.get("/v1/ready", async (_req, res) => {
+    try {
+      await requireReadySigner(signerState);
+      res.json({
+        status: "ready",
+        service: "split402-payout-signer",
+        signerReference: normalizedConfig.signerReference,
+        network: normalizedConfig.network
+      });
+    } catch (error) {
+      res.status(503).json({
+        status: "not_ready",
+        service: "split402-payout-signer",
+        message: error instanceof Error ? error.message : "unknown error"
+      });
+    }
   });
 
   app.get("/v1/metrics", (_req, res) => {
@@ -140,7 +165,7 @@ export function createPayoutSignerApp(config: PayoutSignerConfig): express.Expre
       ).keyId;
       signRequest = readRemotePayoutSignRequest(req.body);
       assertRemotePayoutSignRequest(signRequest, normalizedConfig);
-      const signer = await signerPromise;
+      const signer = await requireReadySigner(signerState);
       const transactionBytes = Buffer.from(signRequest.transactionBase64, "base64");
       const transaction = getTransactionDecoder().decode(transactionBytes);
       const signed = await signTransaction([signer.keyPair], transaction);
@@ -280,6 +305,30 @@ async function createSigner(config: PayoutSignerConfig) {
     return createKeyPairSignerFromBytes(keyMaterial.bytes, false);
   }
   return createKeyPairSignerFromPrivateKeyBytes(keyMaterial.bytes, false);
+}
+
+function createSignerState(config: PayoutSignerConfig): PayoutSignerState {
+  const state: PayoutSignerState = {
+    promise: createSigner(config).then(
+      (signer) => signer,
+      (error) => {
+        state.error = error;
+        return undefined;
+      }
+    )
+  };
+  return state;
+}
+
+async function requireReadySigner(state: PayoutSignerState): Promise<PayoutSigner> {
+  const signer = await state.promise;
+  if (signer !== undefined) {
+    return signer;
+  }
+  if (state.error instanceof Error) {
+    throw state.error;
+  }
+  throw new Error("payout signer key material failed to initialize");
 }
 
 function readSignerKeyMaterial(

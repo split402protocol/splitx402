@@ -159,6 +159,38 @@ describe("payout signer app", () => {
     expect(JSON.stringify(response.body)).not.toContain(NEXT_SHARED_SECRET);
   });
 
+  it("reports readiness only after signer key material initializes", async () => {
+    const signer = await createKeyPairSignerFromPrivateKeyBytes(PRIVATE_KEY_BYTES);
+    const { app } = await createFixture({
+      fundingWallet: signer.address
+    });
+
+    await request(app).get("/v1/ready").expect(200, {
+      status: "ready",
+      service: "split402-payout-signer",
+      signerReference: "kms:test-payout",
+      network: "solana:devnet"
+    });
+
+    const notReadyApp = createPayoutSignerApp({
+      signerReference: "kms:test-payout",
+      network: "solana:devnet",
+      expectedFundingWallet: signer.address,
+      sharedSecret: SHARED_SECRET,
+      port: 4022,
+      privateKeyBase64: Buffer.from(new Uint8Array(31)).toString("base64")
+    });
+
+    const response = await request(notReadyApp).get("/v1/ready").expect(503);
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        status: "not_ready",
+        service: "split402-payout-signer",
+        message: "privateKeyBase64 must decode to 32 bytes"
+      })
+    );
+  });
+
   it("records safe audit events and metrics for signed and rejected requests", async () => {
     const auditEvents: PayoutSignerAuditEvent[] = [];
     const signer = await createKeyPairSignerFromPrivateKeyBytes(PRIVATE_KEY_BYTES);
