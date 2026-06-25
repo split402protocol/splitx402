@@ -170,7 +170,7 @@ mainnet payment flows exist yet.
 | Solana RPC signature-status verifier | Started |
 | Solana transaction transfer verifier | Started |
 | Live PostgreSQL migration/integration harness | Started |
-| Payout engine preview, funding-wallet registry, batch allocation, Solana transfer planning, and simulation | Started |
+| Payout engine preview, funding-wallet registry, batch allocation, Solana transfer planning, simulation, and signer policy | Started |
 | `$SPLIT` bonding and atomic split settlement | Later research |
 
 The latest Devnet proof is recorded in
@@ -383,8 +383,12 @@ destination token accounts, emits idempotent associated-token-account creation
 steps, and creates transfer-checked instruction plans for allocated batches.
 The Solana simulation boundary validates serialized transactions against the
 plan, calls `simulateTransaction`, and reports succeeded, failed, or retryable
-outcomes before signing and broadcast policy is wired in. Transaction signing,
-broadcasting, and reconciliation are still remaining hardening steps.
+outcomes. The signer boundary now requires a matching network, funding wallet,
+source token account, USDC mint, allowed SPL Token program, destination/amount
+list hash, amount caps, serialized transaction coverage, and successful
+simulation before it delegates to an isolated signing function. Signed-byte
+persistence, broadcasting, finality monitoring, and reconciliation are still
+remaining hardening steps.
 
 ## MVP Rules
 

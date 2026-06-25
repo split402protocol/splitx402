@@ -1,6 +1,6 @@
 import { address } from "@solana/kit";
 import { findAssociatedTokenPda } from "@solana-program/token";
-import type { Split402ReceiptV1 } from "@split402/protocol";
+import { hashProtocolObject, type Split402ReceiptV1 } from "@split402/protocol";
 
 import type {
   ReceiptChainVerificationResult,
@@ -136,6 +136,71 @@ export interface SolanaPayoutSimulationTransactionResult {
   error?: string;
   logs?: string[];
   unitsConsumed?: number;
+}
+
+export interface SolanaPayoutSignerPolicy {
+  network: string;
+  signerReference: string;
+  fundingWallet: string;
+  sourceTokenAccount: string;
+  mint: string;
+  allowedTokenProgramIds?: readonly string[];
+  maxTransactionAmountAtomic?: string;
+  maxBatchAmountAtomic?: string;
+  requireSuccessfulSimulation?: boolean;
+  expectedDestinationAmountListHash?: `sha256:${string}`;
+}
+
+export interface SignSolanaPayoutTransactionsInput {
+  plan: SolanaPayoutTransactionPlan;
+  transactions: readonly SolanaSerializedPayoutTransaction[];
+  simulationReport?: SolanaPayoutSimulationReport;
+}
+
+export interface SolanaPayoutTransactionSigner {
+  sign(
+    input: SignSolanaPayoutTransactionsInput
+  ): Promise<SolanaPayoutSigningReport> | SolanaPayoutSigningReport;
+}
+
+export interface SolanaPayoutSigningReport {
+  batchId: string;
+  network: string;
+  signerReference: string;
+  destinationAmountListHash: `sha256:${string}`;
+  signedTransactions: SolanaSignedPayoutTransaction[];
+}
+
+export interface SolanaSignedPayoutTransaction {
+  index: number;
+  signedTransactionBase64: string;
+  expectedSignature?: string;
+}
+
+export type SolanaPayoutTransactionSigningDelegate = (
+  input: SolanaPayoutTransactionSigningDelegateInput
+) =>
+  | Promise<SolanaPayoutTransactionSigningDelegateResult>
+  | SolanaPayoutTransactionSigningDelegateResult;
+
+export interface SolanaPayoutTransactionSigningDelegateInput {
+  batchId: string;
+  network: string;
+  signerReference: string;
+  destinationAmountListHash: `sha256:${string}`;
+  plannedTransaction: SolanaPayoutPlannedTransaction;
+  transactionBase64: string;
+  amountAtomic: string;
+}
+
+export interface SolanaPayoutTransactionSigningDelegateResult {
+  signedTransactionBase64: string;
+  expectedSignature?: string;
+}
+
+export interface SolanaPolicyEnforcedPayoutSignerOptions {
+  policy: SolanaPayoutSignerPolicy;
+  signTransaction: SolanaPayoutTransactionSigningDelegate;
 }
 
 type SolanaSignatureConfirmationStatus =
@@ -411,6 +476,67 @@ export class SolanaRpcPayoutTransactionSimulator {
     return Array.from(
       new Set(urls.map((url) => url.trim()).filter((url) => url.length > 0))
     );
+  }
+}
+
+export class SolanaPolicyEnforcedPayoutSigner
+  implements SolanaPayoutTransactionSigner {
+  constructor(private readonly options: SolanaPolicyEnforcedPayoutSignerOptions) {}
+
+  async sign(
+    input: SignSolanaPayoutTransactionsInput
+  ): Promise<SolanaPayoutSigningReport> {
+    const serializedTransactions = readSerializedPayoutTransactions(input);
+    const destinationAmountListHash =
+      hashSolanaPayoutDestinationAmountList(input.plan);
+    assertPayoutSignerPolicy({
+      plan: input.plan,
+      policy: this.options.policy,
+      destinationAmountListHash,
+      simulationReport: input.simulationReport
+    });
+
+    const signedTransactions: SolanaSignedPayoutTransaction[] = [];
+    for (const plannedTransaction of input.plan.transactions) {
+      const transactionBase64 = serializedTransactions.get(plannedTransaction.index);
+      if (transactionBase64 === undefined) {
+        throw new Error(
+          `missing serialized transaction for payout plan index ${plannedTransaction.index}`
+        );
+      }
+      const signed = await this.options.signTransaction({
+        batchId: input.plan.batchId,
+        network: input.plan.network,
+        signerReference: this.options.policy.signerReference,
+        destinationAmountListHash,
+        plannedTransaction,
+        transactionBase64,
+        amountAtomic: sumPlannedTransactionAmount(plannedTransaction).toString()
+      });
+      signedTransactions.push({
+        index: plannedTransaction.index,
+        signedTransactionBase64: assertBase64Transaction(
+          signed.signedTransactionBase64,
+          `signed transaction ${plannedTransaction.index}`
+        ),
+        ...(signed.expectedSignature === undefined
+          ? {}
+          : {
+              expectedSignature: assertNonEmptyString(
+                signed.expectedSignature,
+                `signed transaction ${plannedTransaction.index} expectedSignature`
+              )
+            })
+      });
+    }
+
+    return {
+      batchId: input.plan.batchId,
+      network: input.plan.network,
+      signerReference: this.options.policy.signerReference,
+      destinationAmountListHash,
+      signedTransactions
+    };
   }
 }
 
@@ -779,6 +905,228 @@ function assertPositiveInteger(value: number, label: string): number {
 function assertPositiveAtomicAmount(value: string, label: string): void {
   if (!/^[1-9][0-9]*$/u.test(value)) {
     throw new Error(`${label} must be a positive atomic amount`);
+  }
+}
+
+export function hashSolanaPayoutDestinationAmountList(
+  plan: SolanaPayoutTransactionPlan
+): `sha256:${string}` {
+  return hashProtocolObject({
+    schema: "split402.solana.payout.destination_amount_list.v1",
+    batchId: plan.batchId,
+    network: plan.network,
+    asset: plan.asset,
+    tokenProgramId: plan.tokenProgramId,
+    sourceTokenAccount: plan.sourceTokenAccount,
+    transactions: plan.transactions.map((transaction) => ({
+      index: transaction.index,
+      items: transaction.items.map((item) => ({
+        payoutItemId: item.payoutItemId,
+        destinationWallet: item.destinationWallet,
+        destinationTokenAccount: item.destinationTokenAccount,
+        amountAtomic: item.amountAtomic
+      }))
+    }))
+  });
+}
+
+function assertPayoutSignerPolicy(input: {
+  plan: SolanaPayoutTransactionPlan;
+  policy: SolanaPayoutSignerPolicy;
+  destinationAmountListHash: `sha256:${string}`;
+  simulationReport: SolanaPayoutSimulationReport | undefined;
+}): void {
+  const network = assertNonEmptyString(input.policy.network, "policy.network");
+  if (input.plan.network !== network) {
+    throw new Error(
+      `payout plan network ${input.plan.network} does not match signer policy network ${network}`
+    );
+  }
+  assertNonEmptyString(input.policy.signerReference, "policy.signerReference");
+  const fundingWallet = assertSolanaAddress(
+    input.policy.fundingWallet,
+    "policy.fundingWallet"
+  );
+  if (input.plan.fundingWallet !== fundingWallet) {
+    throw new Error("payout signer policy fundingWallet does not match plan");
+  }
+  const sourceTokenAccount = assertSolanaAddress(
+    input.policy.sourceTokenAccount,
+    "policy.sourceTokenAccount"
+  );
+  if (input.plan.sourceTokenAccount !== sourceTokenAccount) {
+    throw new Error("payout signer policy sourceTokenAccount does not match plan");
+  }
+  const mint = assertSolanaAddress(input.policy.mint, "policy.mint");
+  if (input.plan.asset !== mint) {
+    throw new Error("payout signer policy mint does not match plan asset");
+  }
+
+  const allowedTokenProgramIds = readAllowedTokenProgramIds(
+    input.policy.allowedTokenProgramIds
+  );
+  if (!allowedTokenProgramIds.has(input.plan.tokenProgramId)) {
+    throw new Error("payout signer policy does not allow plan token program");
+  }
+  if (
+    input.policy.expectedDestinationAmountListHash !== undefined &&
+    input.policy.expectedDestinationAmountListHash !== input.destinationAmountListHash
+  ) {
+    throw new Error("payout signer policy destination amount list hash mismatch");
+  }
+
+  assertPayoutSignerInstructionPolicy({
+    plan: input.plan,
+    allowedTokenProgramIds
+  });
+  assertPayoutSignerAmountLimits({
+    plan: input.plan,
+    maxTransactionAmountAtomic: input.policy.maxTransactionAmountAtomic,
+    maxBatchAmountAtomic: input.policy.maxBatchAmountAtomic
+  });
+  if (input.policy.requireSuccessfulSimulation ?? true) {
+    assertSuccessfulPayoutSimulation(input.plan, input.simulationReport);
+  }
+}
+
+function readAllowedTokenProgramIds(
+  value: readonly string[] | undefined
+): Set<string> {
+  if (value === undefined) {
+    return new Set(TOKEN_PROGRAM_IDS);
+  }
+  if (value.length === 0) {
+    throw new Error("policy.allowedTokenProgramIds must not be empty");
+  }
+  return new Set(
+    value.map((tokenProgramId) =>
+      assertSupportedTokenProgramId(tokenProgramId)
+    )
+  );
+}
+
+function assertPayoutSignerInstructionPolicy(input: {
+  plan: SolanaPayoutTransactionPlan;
+  allowedTokenProgramIds: Set<string>;
+}): void {
+  for (const transaction of input.plan.transactions) {
+    for (const instruction of transaction.instructions) {
+      switch (instruction.kind) {
+        case "createAssociatedTokenIdempotent":
+          if (instruction.programId !== ASSOCIATED_TOKEN_PROGRAM_ID) {
+            throw new Error("payout signer policy rejects unsupported ATA program");
+          }
+          if (instruction.payer !== input.plan.fundingWallet) {
+            throw new Error("payout signer policy rejects ATA payer mismatch");
+          }
+          if (instruction.mint !== input.plan.asset) {
+            throw new Error("payout signer policy rejects ATA mint mismatch");
+          }
+          if (!input.allowedTokenProgramIds.has(instruction.tokenProgramId)) {
+            throw new Error("payout signer policy rejects ATA token program");
+          }
+          break;
+        case "transferChecked":
+          if (!input.allowedTokenProgramIds.has(instruction.programId)) {
+            throw new Error("payout signer policy rejects transfer token program");
+          }
+          if (instruction.source !== input.plan.sourceTokenAccount) {
+            throw new Error("payout signer policy rejects transfer source");
+          }
+          if (instruction.authority !== input.plan.fundingWallet) {
+            throw new Error("payout signer policy rejects transfer authority");
+          }
+          if (instruction.mint !== input.plan.asset) {
+            throw new Error("payout signer policy rejects transfer mint");
+          }
+          if (instruction.decimals !== input.plan.tokenDecimals) {
+            throw new Error("payout signer policy rejects transfer decimals");
+          }
+          assertPositiveAtomicAmount(
+            instruction.amountAtomic,
+            `payout transaction ${transaction.index} transfer amountAtomic`
+          );
+          break;
+      }
+    }
+  }
+}
+
+function assertPayoutSignerAmountLimits(input: {
+  plan: SolanaPayoutTransactionPlan;
+  maxTransactionAmountAtomic: string | undefined;
+  maxBatchAmountAtomic: string | undefined;
+}): void {
+  const maxTransactionAmount = readOptionalAtomicLimit(
+    input.maxTransactionAmountAtomic,
+    "policy.maxTransactionAmountAtomic"
+  );
+  const maxBatchAmount = readOptionalAtomicLimit(
+    input.maxBatchAmountAtomic,
+    "policy.maxBatchAmountAtomic"
+  );
+  const batchAmount = BigInt(input.plan.totalAmountAtomic);
+  if (maxBatchAmount !== undefined && batchAmount > maxBatchAmount) {
+    throw new Error("payout batch amount exceeds signer maxBatchAmountAtomic");
+  }
+  if (maxTransactionAmount === undefined) {
+    return;
+  }
+  for (const transaction of input.plan.transactions) {
+    if (sumPlannedTransactionAmount(transaction) > maxTransactionAmount) {
+      throw new Error(
+        `payout transaction ${transaction.index} amount exceeds signer maxTransactionAmountAtomic`
+      );
+    }
+  }
+}
+
+function readOptionalAtomicLimit(
+  value: string | undefined,
+  label: string
+): bigint | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  assertPositiveAtomicAmount(value, label);
+  return BigInt(value);
+}
+
+function sumPlannedTransactionAmount(
+  transaction: SolanaPayoutPlannedTransaction
+): bigint {
+  return transaction.items.reduce(
+    (total, item) => total + BigInt(item.amountAtomic),
+    0n
+  );
+}
+
+function assertSuccessfulPayoutSimulation(
+  plan: SolanaPayoutTransactionPlan,
+  report: SolanaPayoutSimulationReport | undefined
+): void {
+  if (report === undefined) {
+    throw new Error("successful payout simulation is required before signing");
+  }
+  if (report.batchId !== plan.batchId || report.network !== plan.network) {
+    throw new Error("payout simulation report does not match plan");
+  }
+  if (report.status !== "succeeded") {
+    throw new Error("successful payout simulation is required before signing");
+  }
+  const resultsByIndex = new Map(
+    report.transactionResults.map((result) => [result.index, result])
+  );
+  for (const transaction of plan.transactions) {
+    const result = resultsByIndex.get(transaction.index);
+    if (result?.status !== "succeeded") {
+      throw new Error(
+        `successful payout simulation is required for transaction ${transaction.index}`
+      );
+    }
+  }
+  if (resultsByIndex.size !== plan.transactions.length) {
+    throw new Error("payout simulation report must cover every planned transaction");
   }
 }
 
@@ -1202,6 +1550,13 @@ function readOptionalInteger(value: unknown, label: string): number | undefined 
     return undefined;
   }
   return readInteger(value, label);
+}
+
+function assertNonEmptyString(value: string, label: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`${label} must be a non-empty string`);
+  }
+  return value;
 }
 
 function readRequiredString(value: unknown, label: string): string {

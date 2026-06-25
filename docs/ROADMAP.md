@@ -231,6 +231,7 @@ Current slice:
 - deterministic Solana transfer plan generation for allocated payout batches;
 - Solana RPC payout transaction simulation with per-transaction
   succeeded/failed/retry outcomes;
+- Solana payout signer interface and policy gate before isolated signing;
 - `POST /v1/merchants/:merchantId/payout-wallets`;
 - `POST /v1/merchants/:merchantId/payouts/preview`;
 - `POST /v1/merchants/:merchantId/payout-batches`.

@@ -74,7 +74,8 @@ POST /v1/merchants/:merchantId/payout-batches
 - PostgreSQL payout batch creation with `FOR UPDATE SKIP LOCKED` eligible-accrual
   selection for concurrent workers;
 - deterministic Solana payout transfer planning for allocated batches;
-- Solana RPC payout transaction simulation before signer and broadcast wiring.
+- Solana RPC payout transaction simulation before broadcast wiring;
+- policy-enforced Solana payout signing boundary before signed-byte persistence.
 
 ## Commands
 
