@@ -51,7 +51,8 @@ same flow against funded Devnet assets.
 
 - Optional canonical 20 percent demo-mint rerun with a funded disposable setup fee
   payer.
-- Prepare Phase 4 control-plane ingestion work.
+- Control-plane ingestion, merchant SDK, and payout-engine work now continue in
+  later phase documents.
 
 ## Acceptance Checks
 

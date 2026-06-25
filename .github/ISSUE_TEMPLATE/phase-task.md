@@ -16,3 +16,7 @@ assignees: ""
 ## Acceptance Checks
 
 -
+
+## Protocol / Security Notes
+
+-

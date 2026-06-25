@@ -7,6 +7,25 @@ The payment stays a normal x402 USDC payment. Split402 adds a signed referral
 claim so the merchant/control plane can record the configured commission, for
 example 10 percent when the campaign terms set `commissionBps` to `1000`.
 
+## What The Agent Gets
+
+```mermaid
+flowchart LR
+  Offer["Inspect signed offer"]
+  Claim["Create referral claim"]
+  Payment["Pay x402 resource"]
+  Receipt["Verify Split402 receipt"]
+  Credit["Commission credit recorded by control plane"]
+
+  Offer --> Claim
+  Claim --> Payment
+  Payment --> Receipt
+  Receipt --> Credit
+```
+
+The SDK helps the agent prove attribution. It does not custody funds and does not
+change the merchant's x402 settlement destination.
+
 ## Agent Flow
 
 ```mermaid

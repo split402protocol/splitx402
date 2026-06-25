@@ -9,8 +9,10 @@ pre-release research and development.
 
 ## Reporting Issues
 
-Please report suspected vulnerabilities privately through GitHub Security Advisories
-once the GitHub repository is available. Until then, contact the maintainers directly.
+Please report suspected vulnerabilities privately through GitHub Security
+Advisories for this repository. Do not open public issues for private keys,
+settlement bypasses, replay vulnerabilities, payout duplication, or auth/session
+weaknesses.
 
 ## Security Priorities
 

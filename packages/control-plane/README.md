@@ -2,7 +2,8 @@
 
 Control-plane primitives for Split402 receipt ingestion, merchant and campaign
 registries, route discovery, chain verification, webhook delivery, commission
-accruals, and payout planning.
+accruals, payout planning, payout transaction tracking, and payout ledger
+closure.
 
 The control plane receives merchant-signed Split402 receipts after successful
 x402 settlement. It verifies the receipt, enforces idempotency, records the
@@ -21,6 +22,9 @@ flowchart TD
   Chain["Chain verifier"]
   Available["Available accrual"]
   Batch["Payout batch allocation"]
+  Tx["Signed payout transaction"]
+  Finality["Finality monitor"]
+  Close["Ledger closure"]
 
   Receipt --> Verify
   Verify --> Dedupe
@@ -29,7 +33,31 @@ flowchart TD
   Outbox --> Chain
   Chain --> Available
   Available --> Batch
+  Batch --> Tx
+  Tx --> Finality
+  Finality --> Close
 ```
+
+## Payout Lifecycle
+
+```mermaid
+stateDiagram-v2
+  [*] --> PendingChainVerification
+  PendingChainVerification --> Available: settlement verified
+  Available --> Allocated: payout batch created
+  Allocated --> Signed: signed bytes persisted
+  Signed --> Submitted: broadcast sent
+  Submitted --> Confirmed: signature confirmed
+  Confirmed --> Finalized: chain finalized
+  Submitted --> Failed: chain failure
+  Submitted --> OutcomeUnknown: timeout or ambiguous RPC result
+  Finalized --> LedgerClosed: idempotent payout-batch closure
+```
+
+The current payout engine is still public-alpha infrastructure. It has the
+accounting and transaction boundaries needed to prevent duplicate allocation and
+duplicate ledger closure, while signer runtime wiring, payout webhooks, and
+unknown-outcome reconciliation remain active hardening work.
 
 ## API Surface
 

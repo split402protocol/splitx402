@@ -13,6 +13,15 @@ Implementation reference:
 
 - [`splitx402/ffff`](https://github.com/splitx402/ffff)
 
+## Current Implementation Snapshot
+
+The repository now contains the protocol core, test vectors, x402 extension,
+Express adapter, demo merchant, demo agent, agent SDK, merchant SDK primitives,
+control-plane ingestion, PostgreSQL persistence, outbox workers, Solana chain
+verification, and the first payout-engine execution boundaries. Phase 6 remains
+active for signer runtime wiring, payout webhooks, reconciliation, and
+referrer-facing payout history.
+
 ## Architecture Rule
 
 The fastest safe build is:
@@ -105,7 +114,7 @@ Exit criteria:
 
 ## Architecture Milestone 1: Single Merchant Devnet Demo
 
-Status: started.
+Status: implemented with a recorded Devnet proof.
 
 Goal: port and evolve the `ffff` merchant demo into a Solana/x402 Split402 demo.
 
@@ -149,7 +158,8 @@ Exit criteria:
 
 ## Architecture Milestone 2: Control Plane And Ingestion
 
-Status: started.
+Status: implemented foundation; continuing hardening moved into the merchant SDK
+and payout phases.
 
 Deliverables:
 
@@ -244,6 +254,8 @@ Current slice:
 
 ## Architecture Milestone 3: Production Merchant SDK
 
+Status: first SDK slice implemented.
+
 Deliverables:
 
 - remote and cached campaign resolver;
@@ -282,6 +294,8 @@ Exit criteria:
 - logical request retry cannot create a second payment or commission.
 
 ## Architecture Milestone 4: Payout Engine
+
+Status: in progress.
 
 Deliverables:
 

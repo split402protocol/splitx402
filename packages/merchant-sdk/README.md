@@ -10,6 +10,30 @@ This package starts with production merchant boundaries:
 - operation digest helpers for production GET and JSON POST request shapes;
 - a durable receipt outbox for post-settlement control-plane ingestion.
 
+## Merchant Runtime Shape
+
+```mermaid
+flowchart LR
+  Campaigns["Control-plane campaigns"]
+  Cache["Cached campaign resolver"]
+  Extension["x402 resource-server extension"]
+  Payment["Normal x402 settlement"]
+  Receipt["Signed Split402 receipt"]
+  Outbox["Merchant receipt outbox"]
+  Control["Split402 control plane"]
+
+  Campaigns --> Cache
+  Cache --> Extension
+  Extension --> Payment
+  Payment --> Receipt
+  Receipt --> Outbox
+  Outbox --> Control
+```
+
+The SDK is built around a hard rule: after x402 settlement succeeds, the merchant
+must be able to preserve the signed receipt locally and retry control-plane
+delivery without creating duplicate commissions.
+
 ## Cached Campaign Resolver
 
 `CachedControlPlaneCampaignResolver` fetches active campaign terms from the
@@ -186,3 +210,10 @@ await dispatcher.dispatchNext();
 `InMemoryMerchantReceiptOutboxStore` is for tests and examples. Production
 integrations should implement `MerchantReceiptOutboxStore` with durable local
 storage such as PostgreSQL, SQLite, or the merchant's job queue.
+
+## Package Status
+
+Implemented as the first production merchant SDK slice. The package provides the
+core reliability primitives, but a production merchant still needs durable local
+storage, operational monitoring, key-management policy, and a security review
+before mainnet use.
