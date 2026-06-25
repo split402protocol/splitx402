@@ -8,6 +8,13 @@ staging_environment:
 funding_wallet:
 network:
 network_policy_record:
+signer_policy_record:
+signer_policy_network:
+signer_policy_funding_wallet:
+signer_policy_source_token_account:
+signer_policy_mint:
+signer_policy_allowed_token_program_ids:
+signer_policy_max_transaction_amount_atomic:
 smoke_check_output:
 rotation_drill_record:
 incident_drill_record:

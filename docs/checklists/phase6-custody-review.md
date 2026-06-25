@@ -15,7 +15,7 @@ all required gates are approved.
 | HMAC key rotation | Completed planned rotation using `docs/runbooks/payout-signer-key-rotation.md`. | Pending |
 | Emergency auth revocation | Completed emergency revocation drill with old-key rejection evidence. | Pending |
 | Payout signer key custody | Key source, owner, backup policy, access list, and recovery process reviewed. | Pending |
-| Signer policy review | Funding wallet, source token account, USDC mint, token program allow-list, amount caps, and network settings reviewed. | Pending |
+| Signer policy review | `signer_policy_record` plus signer policy fields proving funding wallet, source token account, USDC mint, token program allow-list, amount caps, and network settings were reviewed. | Pending |
 | Unknown-outcome reconciliation | Drill proving no replacement transaction is built before `POST /v1/payout-batches/:batchId/reconcile`. | Pending |
 | RPC failover | `corepack pnpm payout:finality:failover-drill` output with `passed: true`, primary RPC unavailable, and secondary RPC returning status. | Pending |
 | Incident drill | Completed `docs/runbooks/payout-custody-incident-drill.md` with timestamps and owners. | Pending |
@@ -50,6 +50,14 @@ control_plane_image_digest:
 staging_environment:
 funding_wallet:
 network:
+network_policy_record:
+signer_policy_record:
+signer_policy_network:
+signer_policy_funding_wallet:
+signer_policy_source_token_account:
+signer_policy_mint:
+signer_policy_allowed_token_program_ids:
+signer_policy_max_transaction_amount_atomic:
 smoke_check_output:
 rotation_drill_record:
 incident_drill_record:

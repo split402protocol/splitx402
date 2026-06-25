@@ -130,6 +130,12 @@ before approving production payout custody.
 Attach the applied network policy, firewall rule, or service-mesh policy to
 `network_policy_record` in the same evidence bundle.
 
+Copy
+[`docs/templates/phase6-signer-policy-review.txt`](../templates/phase6-signer-policy-review.txt)
+and record the signer policy values used for deployment. Attach it to
+`signer_policy_record`, then copy its reviewed values into the
+`signer_policy_*` fields in the custody evidence bundle.
+
 ## Rollback
 
 If signing fails after a deploy:

@@ -407,6 +407,7 @@ The latest Devnet proof is recorded in
 - [Architecture alignment note](docs/SPLIT402_ARCHITECTURE.md)
 - [Phase 6 custody review checklist](docs/checklists/phase6-custody-review.md)
 - [Phase 6 custody evidence template](docs/templates/phase6-custody-evidence.txt)
+- [Phase 6 signer policy review template](docs/templates/phase6-signer-policy-review.txt)
 - [Payout custody incident drill](docs/runbooks/payout-custody-incident-drill.md)
 - [Payout reconciliation runbook](docs/runbooks/payout-reconciliation.md)
 - [Payout signer deployment runbook](docs/runbooks/payout-signer-deployment.md)
