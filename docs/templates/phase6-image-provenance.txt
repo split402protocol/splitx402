@@ -1,0 +1,14 @@
+review_id:
+review_date:
+reviewers:
+source_commit:
+signer_image_digest:
+control_plane_image_digest:
+signer_image_build_command:
+dependency_install_command:
+dependency_audit_command:
+dependency_audit_output:
+build_log_record:
+sbom_record:
+review_decision: no-go
+review_notes:

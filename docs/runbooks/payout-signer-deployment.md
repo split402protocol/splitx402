@@ -26,6 +26,14 @@ docker build \
 The image starts `apps/payout-signer/dist/index.js` and listens on
 `SPLIT402_PAYOUT_SIGNER_SERVICE_PORT`, defaulting to `4022`.
 
+Before approving custody, copy
+[`docs/templates/phase6-image-provenance.txt`](../templates/phase6-image-provenance.txt)
+and record the exact source commit, immutable image digests, build command,
+dependency install command, dependency audit command, and audit output. Attach
+the completed record to the Phase 6 evidence bundle and copy the signer build
+command and audit output into `signer_image_build_command` and
+`signer_image_dependency_audit_output`.
+
 ## Configure
 
 Set non-secret policy values as deployment config:
@@ -51,6 +59,13 @@ Exactly one signing key source must be configured:
 - `SPLIT402_PAYOUT_SIGNER_SERVICE_PRIVATE_KEY_BASE64`
 - `SPLIT402_PAYOUT_SIGNER_SERVICE_SECRET_KEY_BASE64`
 - `SPLIT402_PAYOUT_SIGNER_SERVICE_SECRET_KEY_JSON`
+
+For payout signing key custody, copy
+[`docs/templates/phase6-key-custody-review.txt`](../templates/phase6-key-custody-review.txt)
+and record the key source, owner, backup policy, recovery process, access list,
+access-review record, and separation-of-duties record. Attach it to
+`key_custody_record` in the Phase 6 custody evidence bundle before any mainnet
+custody approval.
 
 For auth rotation, deploy a key ring with one active key and any retired keys,
 then update the control plane to send `x-split402-signer-key-id`.
@@ -149,4 +164,7 @@ If signing fails after a deploy:
    creation.
 
 Use [`payout-custody-incident-drill.md`](payout-custody-incident-drill.md) to
-record rollback and revocation evidence.
+record incident evidence. Use
+[`docs/templates/phase6-rollback-drill.txt`](../templates/phase6-rollback-drill.txt)
+to record rollback evidence and attach it to `rollback_drill_record` in the
+Phase 6 custody evidence bundle.

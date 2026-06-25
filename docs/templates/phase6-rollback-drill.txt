@@ -1,0 +1,17 @@
+drill_id:
+drill_date:
+owners:
+staging_environment:
+current_signer_image_digest:
+last_known_good_signer_image_digest:
+current_secret_set_reference:
+last_known_good_secret_set_reference:
+payout_batch_creation_paused_at:
+rollback_started_at:
+rollback_completed_at:
+readiness_after_rollback:
+metrics_after_rollback:
+reconciliation_records:
+batch_creation_resumed_at:
+drill_decision: no-go
+drill_notes:

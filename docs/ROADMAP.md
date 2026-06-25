@@ -269,6 +269,8 @@ Current slice:
 - private signer ingress network policy starter for custody evidence;
 - machine-checkable signer policy evidence fields and signer policy review
   template;
+- machine-checkable image provenance, emergency signer-auth revocation, payout
+  key custody, and rollback drill evidence fields and templates;
 - signed-byte payout transaction persistence and Solana broadcast submission
   boundary;
 - Solana payout transaction finality monitor with retry and outcome-unknown

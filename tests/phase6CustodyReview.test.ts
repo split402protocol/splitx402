@@ -7,6 +7,8 @@ review_date: 2026-06-25
 reviewers: security, operations, protocol
 source_commit: f932ddb
 signer_image_digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+signer_image_build_command: docker build -f apps/payout-signer/Dockerfile -t ghcr.io/split402protocol/splitx402/payout-signer@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa .
+signer_image_dependency_audit_output: attached: signer-image-audit-001.log
 control_plane_image_digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 staging_environment: split402-staging
 funding_wallet: 8jYFQwU6P4L3uYJwqN4uJtVq4n5o7x8p9a1b2c3d4e5f
@@ -21,7 +23,10 @@ signer_policy_allowed_token_program_ids: TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623V
 signer_policy_max_transaction_amount_atomic: 100000000
 smoke_check_output: attached: smoke-check-001.log
 rotation_drill_record: attached: rotation-drill-001.md
+emergency_revocation_drill_record: attached: emergency-revocation-drill-001.md
+key_custody_record: attached: key-custody-review-001.md
 incident_drill_record: attached: incident-drill-001.md
+rollback_drill_record: attached: rollback-drill-001.md
 rpc_failover_record: attached: rpc-failover-001.md
 approval_decision: approved
 approval_notes: approved for staged production custody only
@@ -90,6 +95,26 @@ approval_decision: no-go
         "signer_policy_network must start with solana:",
         "signer_policy_allowed_token_program_ids must include at least one token program",
         "signer_policy_max_transaction_amount_atomic must be a positive atomic amount",
+      ]),
+    );
+  });
+
+  it("rejects signer policy evidence that conflicts with bundle values", () => {
+    const result = validatePhase6CustodyEvidence(
+      VALID_EVIDENCE.replace(
+        "signer_policy_network: solana:devnet",
+        "signer_policy_network: solana:mainnet",
+      ).replace(
+        "signer_policy_funding_wallet: 8jYFQwU6P4L3uYJwqN4uJtVq4n5o7x8p9a1b2c3d4e5f",
+        "signer_policy_funding_wallet: different-wallet",
+      ),
+    );
+
+    expect(result.approved).toBe(false);
+    expect(result.invalidFields).toEqual(
+      expect.arrayContaining([
+        "signer_policy_network must match network",
+        "signer_policy_funding_wallet must match funding_wallet",
       ]),
     );
   });

@@ -351,6 +351,8 @@ Current slice:
   bundle;
 - add machine-checkable signer policy evidence fields and a signer policy
   review template;
+- add machine-checkable image provenance, emergency signer-auth revocation,
+  payout key custody, and rollback drill evidence fields and templates;
 - add signed-byte payout transaction persistence and Solana broadcast submission
   boundary;
 - add Solana payout transaction finality monitor with retry and outcome-unknown
