@@ -39,11 +39,11 @@ flowchart LR
 | x402 integration | Implemented: Split402 offers, referral claims, request digests, and receipts around standard x402 settlement. |
 | Demo path | Implemented for Solana Devnet paid-suite proof runs. |
 | MCP demo bundle | Implemented first Phase 7 slice: paid tool card, x402 payment metadata, Split402 campaign metadata, expected referral economics, and proof commands. |
-| Dashboard UI | Implemented first Phase 7 slice: merchant/referrer operations UI with a narrow read proxy for dashboard summary, reliability, webhook delivery, referrer routes, balances, and payouts. |
+| Dashboard UI | Implemented first Phase 7 slice: merchant/referrer operations UI with a narrow read proxy for dashboard summary, reliability, payout obligations, webhook delivery, referrer routes, balances, and payouts. |
 | Phase 7 staging proof | Implemented proof scaffold, status validator, template, and runbook for hosted end-to-end evidence. |
 | Agent SDK | Implemented for offer inspection, claim creation, paid calls, and receipt verification. |
 | Merchant SDK | Implemented for campaign caching, service-key rotation helpers, payment identifiers, operation digests, and receipt outbox primitives. |
-| Control plane | Implemented foundation: receipt ingestion, merchant/campaign/route registries, wallet auth, PostgreSQL persistence, outbox workers, chain verification, public merchant reliability profiles, merchant dashboard summaries, webhook delivery feeds, referrer balances/routes, Bazaar-compatible route metadata, and signed webhooks for accepted receipts and payout lifecycle events. |
+| Control plane | Implemented foundation: receipt ingestion, merchant/campaign/route registries, wallet auth, PostgreSQL persistence, outbox workers, chain verification, public merchant reliability profiles, merchant dashboard summaries, payout-obligation summaries, webhook delivery feeds, referrer balances/routes, Bazaar-compatible route metadata, and signed webhooks for accepted receipts and payout lifecycle events. |
 | Payout engine | In progress: preview, allocation, Solana transfer planning, simulation, signer policy, local-dev signer, remote signer client, signer appliance scaffold, signer deployment and private-network artifacts, custody evidence gates, signed-byte persistence, broadcast boundary, finality monitor, rollup, lifecycle events, unknown-outcome reconciliation queue, referrer payout views, and ledger closure are present. |
 
 ## What Is Not Built Yet

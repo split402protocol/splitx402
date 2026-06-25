@@ -859,6 +859,30 @@ describe("PostgresReceiptIngestionStore", () => {
       })
     ]);
   });
+
+  it("loads merchant obligation summaries from durable accruals and allocations", async () => {
+    const fixture = await createPostgresPayoutTransactionFixture();
+    await fixture.store.markPayoutTransactionSubmitted({
+      id: fixture.transaction.id,
+      submittedAt: "2026-06-24T00:07:00Z"
+    });
+
+    const summary = await fixture.store.getMerchantObligationSummary({
+      merchantId: fixture.bundle.artifacts.receipt.merchantId,
+      asset: fixture.bundle.artifacts.receipt.asset
+    });
+
+    expect(summary.assets).toEqual([
+      expect.objectContaining({
+        asset: fixture.bundle.artifacts.receipt.asset,
+        fundingStatus: "unknown",
+        inFlightAmountAtomic: "2000",
+        outstandingAmountAtomic: "2000",
+        totalAccruedAmountAtomic: "2000",
+        inFlightAccrualCount: 1
+      })
+    ]);
+  });
 });
 
 describe("PostgresMerchantRegistry", () => {
@@ -2117,6 +2141,24 @@ class FakePostgresDatabase {
         : undefined;
       return this.accruals
         .filter((row) => row.referrer_wallet === referrerWallet)
+        .filter((row) => asset === undefined || row.asset_mint === asset)
+        .sort(
+          (left, right) =>
+            right.created_at.localeCompare(left.created_at) ||
+            left.id.localeCompare(right.id)
+        );
+    }
+
+    if (
+      normalizedSql.includes("where merchant_id = $1") &&
+      !normalizedSql.includes("status = 'available'")
+    ) {
+      const merchantId = readString(values[0]);
+      const asset = normalizedSql.includes("asset_mint =")
+        ? readString(values[1])
+        : undefined;
+      return this.accruals
+        .filter((row) => row.merchant_id === merchantId)
         .filter((row) => asset === undefined || row.asset_mint === asset)
         .sort(
           (left, right) =>

@@ -218,6 +218,7 @@ GET  /v1/merchants/:merchantId
 GET  /v1/merchants/:merchantId/reliability-profile
 GET  /v1/merchants/:merchantId/dashboard-summary
 GET  /v1/merchants/:merchantId/webhook-events
+GET  /v1/merchants/:merchantId/payout-obligations
 POST /v1/merchants/:merchantId/origins
 POST /v1/merchants/:merchantId/keys
 POST /v1/merchants/:merchantId/keys/:kid/revoke
@@ -498,7 +499,8 @@ agent-facing demo packaging. The repository already contains the protocol core,
 x402 extension, demo path, MCP demo bundle, merchant/referrer dashboard UI,
 merchant SDK primitives, control-plane ingestion, durable PostgreSQL adapters,
 outbox workers, chain verification, payout-engine boundaries, merchant
-dashboard summaries, route discovery, referrer views, and webhook management.
+dashboard summaries, payout-obligation views, route discovery, referrer views,
+and webhook management.
 
 Phase 6 production hardening remains a launch gate:
 

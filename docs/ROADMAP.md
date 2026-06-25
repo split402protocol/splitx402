@@ -353,6 +353,8 @@ Current slice:
   payouts.
 - Phase 7 staging proof scaffold, status validator, template, and runbook for
   hosted end-to-end evidence.
+- merchant payout-obligation summary endpoint and dashboard view for pending,
+  available, held, in-flight, paid, and outstanding commission liabilities.
 
 ## Later: Token Bonding And Atomic Settlement
 

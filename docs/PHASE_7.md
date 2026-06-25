@@ -17,7 +17,8 @@ Implemented:
   dead-letter webhook outbox events;
 - MCP-facing demo bundle at `@split402/mcp-demo`;
 - merchant/referrer operations dashboard at `@split402/dashboard`;
-- staging proof scaffold, status validator, template, and runbook.
+- staging proof scaffold, status validator, template, and runbook;
+- merchant payout-obligation summary endpoint and dashboard view.
 
 ## MCP Demo Bundle
 
@@ -56,12 +57,14 @@ flowchart LR
   Proxy["Read proxy"]
   Summary["Merchant summary"]
   Reliability["Reliability profile"]
+  Obligations["Payout obligations"]
   Webhooks["Webhook feed"]
   Referrer["Referrer routes and payouts"]
 
   Browser --> Proxy
   Proxy --> Summary
   Proxy --> Reliability
+  Proxy --> Obligations
   Proxy --> Webhooks
   Proxy --> Referrer
 ```
@@ -93,8 +96,8 @@ payout obligations, and MCP bundle output from the same staging environment.
 - Run and approve the hosted end-to-end staging proof where an agent discovers a
   route, pays through x402, receives a Split402 receipt, and sees referrer
   earnings without manual database work.
-- Add merchant funding and outstanding-obligation views that make payout
-  readiness clear before production use.
+- Add live merchant funding-balance integrations so payout-obligation views can
+  report covered or deficit status instead of `unknown`.
 - Package the MCP demo into a runnable MCP gateway if the demo needs direct
   client integration rather than a manifest/runbook bundle.
 

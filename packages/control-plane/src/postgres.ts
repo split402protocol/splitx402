@@ -111,6 +111,9 @@ import type {
   MarkPayoutTransactionSubmittedInput,
   MarkPayoutTransactionFinalityInput,
   ClosePayoutBatchLedgerInput,
+  MerchantObligationSummary,
+  MerchantObligationViewInput,
+  MerchantObligationViewStore,
   PayoutLedgerClosureStore,
   PayoutReconciliationItem,
   PayoutReconciliationStore,
@@ -123,6 +126,7 @@ import type {
 } from "./payouts.js";
 import {
   PayoutBatchConflictError,
+  createMerchantObligationSummary,
   createPayoutFinalizationLedgerTransaction,
   createPayoutBatchPlan,
   createPayoutReconciliationItem,
@@ -440,6 +444,7 @@ export class PostgresReceiptIngestionStore
     PayoutTransactionStore,
     PayoutLedgerClosureStore,
     PayoutReconciliationStore,
+    MerchantObligationViewStore,
     ReferrerPayoutViewStore {
   constructor(
     private readonly db: PostgresPool | PostgresQueryExecutor,
@@ -665,6 +670,36 @@ export class PostgresReceiptIngestionStore
       accruals,
       payoutBatches
     });
+  }
+
+  async getMerchantObligationSummary(
+    input: MerchantObligationViewInput
+  ): Promise<MerchantObligationSummary> {
+    const accruals = await this.listMerchantAccruals(input);
+    const payoutBatches = await this.listPayoutBatchesForAccruals(accruals);
+    return createMerchantObligationSummary({
+      ...input,
+      accruals,
+      payoutBatches
+    });
+  }
+
+  private async listMerchantAccruals(
+    input: MerchantObligationViewInput
+  ): Promise<CommissionAccrual[]> {
+    const values: unknown[] = [input.merchantId];
+    const assetClause =
+      input.asset === undefined ? "" : ` and asset_mint = $${values.push(input.asset)}`;
+    const result = await this.db.query<CommissionAccrualRow>(
+      `select id, receipt_id, merchant_id, campaign_id, route_id, referrer_wallet,
+              payout_wallet, asset_mint, amount_atomic, status, available_at,
+              created_at
+         from commission_accruals
+        where merchant_id = $1${assetClause}
+        order by created_at desc, id asc`,
+      values
+    );
+    return result.rows.map(mapAccrual);
   }
 
   private async listReferrerAccruals(

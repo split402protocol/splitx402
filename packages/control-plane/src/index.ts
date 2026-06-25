@@ -75,6 +75,7 @@ import {
 } from "./postgres.js";
 import {
   PayoutBatchConflictError,
+  createMerchantObligationSummary,
   createReferrerBalanceSummary,
   createReferrerPayoutHistoryItems,
   createPayoutBatchPlan,
@@ -102,6 +103,7 @@ import {
   type ClosePayoutBatchLedgerInput,
   type PayoutLedgerClosureStore,
   type PayoutReconciliationStore,
+  type MerchantObligationViewStore,
   type ReferrerPayoutViewStore,
   type SaveSignedPayoutTransactionsInput
 } from "./payouts.js";
@@ -322,6 +324,7 @@ export class InMemoryReceiptIngestionStore
     PayoutTransactionStore,
     PayoutLedgerClosureStore,
     PayoutReconciliationStore,
+    MerchantObligationViewStore,
     ReferrerPayoutViewStore {
   private readonly receiptsById = new Map<string, ReceiptIngestionSnapshot>();
   private readonly receiptIdByHash = new Map<`sha256:${string}`, string>();
@@ -543,6 +546,16 @@ export class InMemoryReceiptIngestionStore
     return createReferrerPayoutHistoryItems({
       ...input,
       limit: input.limit ?? 50,
+      accruals: this.listAccruals(),
+      payoutBatches: Array.from(this.payoutBatchesById.values())
+    });
+  }
+
+  getMerchantObligationSummary(
+    input: Parameters<MerchantObligationViewStore["getMerchantObligationSummary"]>[0]
+  ) {
+    return createMerchantObligationSummary({
+      ...input,
       accruals: this.listAccruals(),
       payoutBatches: Array.from(this.payoutBatchesById.values())
     });
@@ -881,6 +894,7 @@ export interface ControlPlaneAppOptions {
   payoutBatchStore?: PayoutBatchStore;
   payoutTransactionStore?: PayoutTransactionStore;
   payoutReconciliationStore?: PayoutReconciliationStore;
+  merchantObligationViewStore?: MerchantObligationViewStore;
   referrerPayoutViewStore?: ReferrerPayoutViewStore;
   webhookEventManagementStore?: WebhookEventManagementStore;
   payoutFinalityMonitor?: PayoutFinalityMonitor;
@@ -990,6 +1004,7 @@ export function createControlPlaneRuntime(
     payoutBatchStore: receiptStore,
     payoutTransactionStore: receiptStore,
     payoutReconciliationStore: receiptStore,
+    merchantObligationViewStore: receiptStore,
     referrerPayoutViewStore: receiptStore,
     webhookEventManagementStore: outboxStore,
     ...(options.payoutFinalityMonitor === undefined
@@ -1213,6 +1228,7 @@ export function createPayoutRouter(
     | "payoutBatchStore"
     | "payoutTransactionStore"
     | "payoutReconciliationStore"
+    | "merchantObligationViewStore"
     | "referrerPayoutViewStore"
     | "payoutFinalityMonitor"
   > = {}
@@ -1275,6 +1291,40 @@ export function createPayoutRouter(
         !sendPayoutPreviewError(res, error) &&
         !sendMerchantRegistryError(res, error)
       ) {
+        next(error);
+      }
+    }
+  });
+
+  router.get("/v1/merchants/:merchantId/payout-obligations", async (req, res, next) => {
+    try {
+      const merchantId = readRouteParam(req.params.merchantId, "merchantId");
+      const session = await requireMerchantOwnerForMerchantId(
+        req,
+        res,
+        options,
+        merchantId
+      );
+      if (session === undefined && isMerchantAuthRequired(options)) {
+        return;
+      }
+      if (options.merchantObligationViewStore === undefined) {
+        res.status(500).json({
+          error: "internal_server_error",
+          message: "merchant obligation view store is required"
+        });
+        return;
+      }
+
+      const asset = readOptionalString(req.query.asset, "asset");
+      const summary =
+        await options.merchantObligationViewStore.getMerchantObligationSummary({
+          merchantId,
+          ...(asset === undefined ? {} : { asset })
+        });
+      res.json({ summary });
+    } catch (error) {
+      if (!sendMerchantRegistryError(res, error)) {
         next(error);
       }
     }
