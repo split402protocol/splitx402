@@ -194,7 +194,7 @@ describe("control-plane HTTP API", () => {
     });
   });
 
-  it("creates merchants, origins, service keys, and key revocations", async () => {
+  it("creates merchants, origins, service keys, payout wallets, and key revocations", async () => {
     const bundle = createSampleProtocolArtifacts();
     const { app } = createTestApp({ withMerchantRegistry: true });
 
@@ -222,6 +222,16 @@ describe("control-plane HTTP API", () => {
         validFrom: "2026-06-24T00:00:00Z"
       })
       .expect(201);
+    const payoutWalletResponse = await request(app)
+      .post(`/v1/merchants/${bundle.artifacts.receipt.merchantId}/payout-wallets`)
+      .send({
+        id: "mpw_ffffffffffffffffffffffffffffffff",
+        network: bundle.artifacts.receipt.network,
+        wallet: bundle.keys.payToWallet,
+        asset: bundle.artifacts.receipt.asset,
+        signerReference: "kms:split402-devnet-payout"
+      })
+      .expect(201);
     const profileResponse = await request(app)
       .get(`/v1/merchants/${bundle.artifacts.receipt.merchantId}`)
       .expect(200);
@@ -242,8 +252,19 @@ describe("control-plane HTTP API", () => {
       bundle.artifacts.receipt.merchantOrigin
     );
     expect(keyResponse.body.key.publicKey).toBe(bundle.keys.merchantPublicKey);
+    expect(payoutWalletResponse.body.payoutWallet).toEqual(
+      expect.objectContaining({
+        id: "mpw_ffffffffffffffffffffffffffffffff",
+        network: bundle.artifacts.receipt.network,
+        wallet: bundle.keys.payToWallet,
+        asset: bundle.artifacts.receipt.asset,
+        signerReference: "kms:split402-devnet-payout",
+        status: "active"
+      })
+    );
     expect(profileResponse.body.merchant.origins).toHaveLength(1);
     expect(profileResponse.body.merchant.keys).toHaveLength(1);
+    expect(profileResponse.body.merchant.payoutWallets).toHaveLength(1);
     expect(revokeResponse.body.key.revocationReason).toBe("rotation complete");
   });
 

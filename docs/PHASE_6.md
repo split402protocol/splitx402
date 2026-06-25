@@ -16,6 +16,12 @@ Status: started.
   destination wallet.
 - Added recipient minimum-threshold and max-recipient preview controls.
 - Added funding-balance inputs so previews can report covered or deficit states.
+- Added merchant payout-wallet records for merchant-controlled payout funding
+  wallets.
+- Added `POST /v1/merchants/:merchantId/payout-wallets` with the existing
+  merchant owner-auth policy.
+- Added `0009_merchant_payout_wallets.sql` for durable funding-wallet
+  registration.
 - Added PostgreSQL selection for `available` commission accruals using the
   existing payout-selection index.
 - Added `POST /v1/merchants/:merchantId/payouts/preview` for merchant payout
@@ -32,7 +38,6 @@ the merchant has enough funding.
 
 ## Remaining Milestone 4 Work
 
-- Merchant funding-wallet registration.
 - Durable payout batches, items, and allocation rows.
 - Allocation locking that prevents two workers from selecting the same accrual.
 - Solana transfer transaction planning and simulation.

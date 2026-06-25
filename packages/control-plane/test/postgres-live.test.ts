@@ -134,6 +134,14 @@ describeLive("live PostgreSQL control-plane persistence", () => {
       publicKey: bundle.keys.merchantPublicKey,
       validFrom: "2026-06-24T00:00:00Z"
     });
+    await merchantRegistry.addPayoutWallet({
+      id: "mpw_ffffffffffffffffffffffffffffffff",
+      merchantId: bundle.artifacts.receipt.merchantId,
+      network: bundle.artifacts.receipt.network,
+      wallet: bundle.keys.payToWallet,
+      asset: bundle.artifacts.receipt.asset,
+      signerReference: "kms:split402-devnet-payout"
+    });
 
     const campaign = await campaignRegistry.createCampaign({
       id: bundle.artifacts.receipt.campaignId,
@@ -208,6 +216,7 @@ describeLive("live PostgreSQL control-plane persistence", () => {
       "merchants",
       "merchant_origins",
       "merchant_keys",
+      "merchant_payout_wallets",
       "campaigns",
       "campaign_versions",
       "campaign_operations",
@@ -243,6 +252,7 @@ describeLive("live PostgreSQL control-plane persistence", () => {
       merchants: 1,
       merchant_origins: 1,
       merchant_keys: 1,
+      merchant_payout_wallets: 1,
       campaigns: 1,
       campaign_versions: 1,
       campaign_operations: 1,
