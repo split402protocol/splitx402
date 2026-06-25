@@ -63,6 +63,7 @@ import {
   PayoutBatchConflictError,
   createPayoutBatchPlan,
   createPayoutFinalizationLedgerTransaction,
+  createPayoutReconciliationItem,
   createSignedPayoutTransactionRecords,
   createPayoutPreview,
   filterPayoutEligibleAccruals,
@@ -82,6 +83,7 @@ import {
   type MarkPayoutTransactionFinalityInput,
   type ClosePayoutBatchLedgerInput,
   type PayoutLedgerClosureStore,
+  type PayoutReconciliationStore,
   type SaveSignedPayoutTransactionsInput
 } from "./payouts.js";
 
@@ -271,7 +273,8 @@ export class InMemoryReceiptIngestionStore
     PayoutAccrualStore,
     PayoutBatchStore,
     PayoutTransactionStore,
-    PayoutLedgerClosureStore {
+    PayoutLedgerClosureStore,
+    PayoutReconciliationStore {
   private readonly receiptsById = new Map<string, ReceiptIngestionSnapshot>();
   private readonly receiptIdByHash = new Map<`sha256:${string}`, string>();
   private readonly receiptIdByPaymentId = new Map<string, string>();
@@ -454,6 +457,26 @@ export class InMemoryReceiptIngestionStore
     return Array.from(this.payoutTransactionsById.values())
       .filter((transaction) => transaction.payoutBatchId === payoutBatchId)
       .sort(comparePayoutTransactions);
+  }
+
+  listPayoutReconciliationItems(
+    input: Parameters<PayoutReconciliationStore["listPayoutReconciliationItems"]>[0]
+  ) {
+    return Array.from(this.payoutBatchesById.values())
+      .filter((batch) => batch.status === "outcome_unknown")
+      .filter((batch) => batch.merchantId === input.merchantId)
+      .filter((batch) => input.asset === undefined || batch.asset === input.asset)
+      .sort(comparePayoutBatchesForReconciliation)
+      .slice(0, input.limit ?? 50)
+      .map((batch) =>
+        createPayoutReconciliationItem(
+          batch,
+          this.listPayoutTransactions(batch.id)
+        )
+      )
+      .filter(
+        (item): item is NonNullable<typeof item> => item !== undefined
+      );
   }
 
   markPayoutTransactionSubmitted(
@@ -787,6 +810,7 @@ export interface ControlPlaneAppOptions {
   routeRegistry?: RouteRegistry;
   payoutAccrualStore?: PayoutAccrualStore;
   payoutBatchStore?: PayoutBatchStore;
+  payoutReconciliationStore?: PayoutReconciliationStore;
   auth?: ControlPlaneAuthOptions;
   jsonLimit?: string;
 }
@@ -852,6 +876,7 @@ export function createControlPlaneRuntime(
     routeRegistry,
     payoutAccrualStore: receiptStore,
     payoutBatchStore: receiptStore,
+    payoutReconciliationStore: receiptStore,
     ...(options.jsonLimit === undefined ? {} : { jsonLimit: options.jsonLimit }),
     ...(authenticator === undefined
       ? {}
@@ -1062,7 +1087,11 @@ export function createPayoutRouter(
   payoutAccrualStore: PayoutAccrualStore,
   options: Pick<
     ControlPlaneAppOptions,
-    "auth" | "jsonLimit" | "merchantRegistry" | "payoutBatchStore"
+    | "auth"
+    | "jsonLimit"
+    | "merchantRegistry"
+    | "payoutBatchStore"
+    | "payoutReconciliationStore"
   > = {}
 ): Router {
   const router = express.Router();
@@ -1221,6 +1250,44 @@ export function createPayoutRouter(
       }
     }
   });
+
+  router.get(
+    "/v1/merchants/:merchantId/payouts/reconciliation",
+    async (req, res, next) => {
+      try {
+        const merchantId = readRouteParam(req.params.merchantId, "merchantId");
+        const session = await requireMerchantOwnerForMerchantId(
+          req,
+          res,
+          options,
+          merchantId
+        );
+        if (session === undefined && isMerchantAuthRequired(options)) {
+          return;
+        }
+        if (options.payoutReconciliationStore === undefined) {
+          res.status(500).json({
+            error: "internal_server_error",
+            message: "payout reconciliation store is required"
+          });
+          return;
+        }
+        const asset = readOptionalString(req.query.asset, "asset");
+        const limit = readOptionalPositiveIntegerQuery(req.query.limit, "limit");
+        const items =
+          await options.payoutReconciliationStore.listPayoutReconciliationItems({
+            merchantId,
+            ...(asset === undefined ? {} : { asset }),
+            ...(limit === undefined ? {} : { limit })
+          });
+        res.json({ items });
+      } catch (error) {
+        if (!sendMerchantRegistryError(res, error)) {
+          next(error);
+        }
+      }
+    }
+  );
 
   router.use(jsonErrorHandler);
 
@@ -2277,6 +2344,25 @@ function readOptionalPositiveInteger(
   return number;
 }
 
+function readOptionalPositiveIntegerQuery(
+  value: unknown,
+  label: string
+): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "string" || !/^[1-9][0-9]*$/u.test(value)) {
+    throw new MerchantRegistryValidationError(
+      `${label} must be a positive integer`
+    );
+  }
+  const parsed = Number.parseInt(value, 10);
+  if (parsed > 500) {
+    throw new MerchantRegistryValidationError(`${label} must be at most 500`);
+  }
+  return parsed;
+}
+
 function readOptionalBoolean(value: unknown, label: string): boolean | undefined {
   if (value === undefined) {
     return undefined;
@@ -2392,6 +2478,16 @@ function comparePayoutTransactions(
     left.sequence - right.sequence ||
     left.attempt - right.attempt ||
     left.createdAt.localeCompare(right.createdAt) ||
+    left.id.localeCompare(right.id)
+  );
+}
+
+function comparePayoutBatchesForReconciliation(
+  left: PayoutBatchRecord,
+  right: PayoutBatchRecord
+): number {
+  return (
+    left.updatedAt.localeCompare(right.updatedAt) ||
     left.id.localeCompare(right.id)
   );
 }

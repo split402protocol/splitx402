@@ -9,7 +9,8 @@ paying, losing allocations, or hiding funding deficits.
 Status: in progress. The payout engine now has preview, allocation, transaction
 planning, simulation, signer-policy checks, signed-byte persistence, broadcast
 submission, finality monitoring, status rollup, idempotent ledger closure, and
-payout lifecycle outbox/webhook events.
+payout lifecycle outbox/webhook events, plus an unknown-outcome reconciliation
+queue.
 
 ## What Changed
 
@@ -65,6 +66,9 @@ payout lifecycle outbox/webhook events.
 - Added payout submitted, confirmed, failed, and outcome-unknown internal and
   webhook outbox events that commit atomically with payout transaction state
   updates and batch rollup.
+- Added an unknown-outcome reconciliation queue and
+  `GET /v1/merchants/:merchantId/payouts/reconciliation` so merchants/operators
+  can list payout batches that must be rechecked onchain before any retry.
 - Added `0010_payout_batches.sql` for payout batches, payout items, payout
   allocations, and the `allocated` accrual status.
 - Added `0011_payout_transactions.sql` for signed payout transaction
@@ -85,7 +89,8 @@ the merchant has enough funding.
 ## Remaining Milestone 4 Work
 
 - Concrete local-dev or remote signer wiring.
-- Reconciliation for unknown transaction outcomes.
+- Reconciliation runbooks and retry decision tooling for unknown transaction
+  outcomes.
 - Referrer payout history and balance views.
 
 ## Acceptance Checks
