@@ -69,9 +69,18 @@ Before applying it:
 - replace the image tag with an immutable digest or release tag;
 - replace the signer reference, network, and funding wallet;
 - move the auth key ring and signing key into the cluster secret manager;
+- ensure control-plane pods that may call the signer are labeled
+  `app.kubernetes.io/name=split402-control-plane`;
 - keep `replicas: 1` unless custody architecture supports multiple signers for
   the same funding wallet;
 - expose the service only inside the private control-plane network.
+
+The manifest includes a `NetworkPolicy` named
+`split402-payout-signer-private-ingress`. It selects signer pods and only allows
+TCP/4022 ingress from pods labeled
+`app.kubernetes.io/name=split402-control-plane`. If your cluster uses a service
+mesh or cloud firewall instead, attach equivalent policy evidence to
+`network_policy_record` in the Phase 6 custody evidence bundle.
 
 ## Verify
 
@@ -117,6 +126,9 @@ secrets present in the local environment.
 Attach the smoke-check output to
 [`docs/checklists/phase6-custody-review.md`](../checklists/phase6-custody-review.md)
 before approving production payout custody.
+
+Attach the applied network policy, firewall rule, or service-mesh policy to
+`network_policy_record` in the same evidence bundle.
 
 ## Rollback
 
