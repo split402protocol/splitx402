@@ -43,10 +43,18 @@ Status: started.
   mint, allowed SPL Token program, destination/amount list hash, amount caps,
   serialized transaction coverage, and successful simulation before delegating
   to an isolated signing function.
+- Added signed payout transaction records and PostgreSQL persistence for exact
+  signed bytes, expected signature, sequence, attempt, blockhash metadata, and
+  submitted state before broadcast.
+- Added a Solana RPC broadcaster boundary that sends persisted signed bytes via
+  `sendTransaction` and retries the same bytes across configured RPC URLs.
 - Added `0010_payout_batches.sql` for payout batches, payout items, payout
   allocations, and the `allocated` accrual status.
+- Added `0011_payout_transactions.sql` for signed payout transaction
+  persistence.
 - Added control-plane tests for payout planning, Solana transaction planning and
-  simulation, signer policy, allocation persistence, and the HTTP payout routes.
+  simulation, signer policy, signed-byte persistence, broadcast submission,
+  allocation persistence, and the HTTP payout routes.
 
 ## Why This Comes Next
 
@@ -58,8 +66,8 @@ the merchant has enough funding.
 
 ## Remaining Milestone 4 Work
 
-- Signed-byte persistence and concrete local-dev or remote signer wiring.
-- Broadcast, confirmation, finality, and retry handling.
+- Concrete local-dev or remote signer wiring.
+- Confirmation, finality, and retry scheduling.
 - Reconciliation for unknown transaction outcomes.
 - Referrer payout history and balance views.
 

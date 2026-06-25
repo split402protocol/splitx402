@@ -100,11 +100,17 @@ import type {
   PayoutBatchStore,
   PayoutBatchStatus,
   PayoutItemRecord,
-  PayoutItemStatus
+  PayoutItemStatus,
+  PayoutTransactionRecord,
+  PayoutTransactionStatus,
+  PayoutTransactionStore,
+  SaveSignedPayoutTransactionsInput,
+  MarkPayoutTransactionSubmittedInput
 } from "./payouts.js";
 import {
   PayoutBatchConflictError,
-  createPayoutBatchPlan
+  createPayoutBatchPlan,
+  createSignedPayoutTransactionRecords
 } from "./payouts.js";
 
 export interface PostgresQueryExecutor {
@@ -253,6 +259,23 @@ interface PayoutAllocationRow extends QueryResultRow {
   amount_atomic: string;
 }
 
+interface PayoutTransactionRow extends QueryResultRow {
+  id: string;
+  payout_batch_id: string;
+  sequence: number;
+  attempt: number;
+  recent_blockhash: string | null;
+  last_valid_block_height: number | string | null;
+  signed_transaction_base64: string | null;
+  expected_signature: string | null;
+  status: string;
+  submitted_at: Date | string | null;
+  confirmed_at: Date | string | null;
+  finalized_at: Date | string | null;
+  error_json: unknown;
+  created_at: Date | string;
+}
+
 interface WalletAuthChallengeRow extends QueryResultRow {
   id: string;
   wallet: string;
@@ -381,7 +404,8 @@ export class PostgresReceiptIngestionStore
     ReceiptIngestionStore,
     ReceiptChainVerificationStore,
     PayoutAccrualStore,
-    PayoutBatchStore {
+    PayoutBatchStore,
+    PayoutTransactionStore {
   constructor(
     private readonly db: PostgresPool | PostgresQueryExecutor,
     private readonly options: PostgresReceiptIngestionStoreOptions = {}
@@ -529,6 +553,104 @@ export class PostgresReceiptIngestionStore
       itemsResult.rows,
       allocationsResult.rows
     );
+  }
+
+  async saveSignedPayoutTransactions(
+    input: SaveSignedPayoutTransactionsInput
+  ): Promise<PayoutTransactionRecord[]> {
+    const records = createSignedPayoutTransactionRecords(input);
+    if ((await this.getPayoutBatch(input.payoutBatchId)) === undefined) {
+      throw new PayoutBatchConflictError(
+        `unknown payout batch: ${input.payoutBatchId}`
+      );
+    }
+    const existingRecords = await this.listPayoutTransactions(input.payoutBatchId);
+    for (const record of records) {
+      if (
+        existingRecords.some(
+          (existing) =>
+            existing.sequence === record.sequence &&
+            existing.attempt === record.attempt
+        )
+      ) {
+        throw new PayoutBatchConflictError(
+          `payout transaction already exists for sequence ${record.sequence} attempt ${record.attempt}`
+        );
+      }
+    }
+    await this.withTransaction(async (client) => {
+      for (const record of records) {
+        await insertPayoutTransaction(client, record);
+      }
+    });
+    return records;
+  }
+
+  async listPayoutTransactions(
+    payoutBatchId: string
+  ): Promise<PayoutTransactionRecord[]> {
+    const result = await this.db.query<PayoutTransactionRow>(
+      `select id, payout_batch_id, sequence, attempt, recent_blockhash,
+              last_valid_block_height, signed_transaction_base64,
+              expected_signature, status, submitted_at, confirmed_at,
+              finalized_at, error_json, created_at
+         from payout_transactions
+        where payout_batch_id = $1
+        order by sequence, attempt, created_at, id`,
+      [payoutBatchId]
+    );
+    return result.rows.map(mapPayoutTransaction);
+  }
+
+  async markPayoutTransactionSubmitted(
+    input: MarkPayoutTransactionSubmittedInput
+  ): Promise<PayoutTransactionRecord | undefined> {
+    const existing = await this.getPayoutTransaction(input.id);
+    if (existing === undefined) {
+      return undefined;
+    }
+    if (
+      input.expectedSignature !== undefined &&
+      existing.expectedSignature !== undefined &&
+      existing.expectedSignature !== input.expectedSignature
+    ) {
+      throw new PayoutBatchConflictError(
+        "submitted payout transaction signature does not match expected signature"
+      );
+    }
+    const submittedAt = normalizeDateInput(input.submittedAt, "submittedAt");
+    const expectedSignature = input.expectedSignature ?? existing.expectedSignature ?? null;
+    const result = await this.db.query<PayoutTransactionRow>(
+      `update payout_transactions
+          set status = 'submitted',
+              submitted_at = $2,
+              expected_signature = $3
+        where id = $1
+        returning id, payout_batch_id, sequence, attempt, recent_blockhash,
+                  last_valid_block_height, signed_transaction_base64,
+                  expected_signature, status, submitted_at, confirmed_at,
+                  finalized_at, error_json, created_at`,
+      [input.id, submittedAt, expectedSignature]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapPayoutTransaction(row);
+  }
+
+  private async getPayoutTransaction(
+    id: string
+  ): Promise<PayoutTransactionRecord | undefined> {
+    const result = await this.db.query<PayoutTransactionRow>(
+      `select id, payout_batch_id, sequence, attempt, recent_blockhash,
+              last_valid_block_height, signed_transaction_base64,
+              expected_signature, status, submitted_at, confirmed_at,
+              finalized_at, error_json, created_at
+         from payout_transactions
+        where id = $1
+        limit 1`,
+      [id]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapPayoutTransaction(row);
   }
 
   async save(snapshot: ReceiptIngestionSnapshot): Promise<void> {
@@ -2291,6 +2413,37 @@ function insertPayoutAllocation(
   );
 }
 
+function insertPayoutTransaction(
+  client: PostgresQueryExecutor,
+  transaction: PayoutTransactionRecord
+): Promise<QueryResult> {
+  return client.query(
+    `insert into payout_transactions (
+       id, payout_batch_id, sequence, attempt, recent_blockhash,
+       last_valid_block_height, signed_transaction_base64, expected_signature,
+       status, submitted_at, confirmed_at, finalized_at, error_json, created_at
+     ) values (
+       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+     )`,
+    [
+      transaction.id,
+      transaction.payoutBatchId,
+      transaction.sequence,
+      transaction.attempt,
+      transaction.recentBlockhash ?? null,
+      transaction.lastValidBlockHeight ?? null,
+      transaction.signedTransactionBase64 ?? null,
+      transaction.expectedSignature ?? null,
+      transaction.status,
+      transaction.submittedAt ?? null,
+      transaction.confirmedAt ?? null,
+      transaction.finalizedAt ?? null,
+      transaction.error === undefined ? null : JSON.stringify(transaction.error),
+      transaction.createdAt
+    ]
+  );
+}
+
 function insertOutboxEvent(
   client: PostgresQueryExecutor,
   event: OutboxEventRecord
@@ -2497,6 +2650,39 @@ function mapPayoutAllocation(row: PayoutAllocationRow): PayoutAllocationRecord {
   };
 }
 
+function mapPayoutTransaction(row: PayoutTransactionRow): PayoutTransactionRecord {
+  return {
+    id: row.id,
+    payoutBatchId: row.payout_batch_id,
+    sequence: row.sequence,
+    attempt: row.attempt,
+    ...(row.recent_blockhash === null
+      ? {}
+      : { recentBlockhash: row.recent_blockhash }),
+    ...(row.last_valid_block_height === null
+      ? {}
+      : { lastValidBlockHeight: Number(row.last_valid_block_height) }),
+    ...(row.signed_transaction_base64 === null
+      ? {}
+      : { signedTransactionBase64: row.signed_transaction_base64 }),
+    ...(row.expected_signature === null
+      ? {}
+      : { expectedSignature: row.expected_signature }),
+    status: readPayoutTransactionStatus(row.status),
+    ...(row.submitted_at === null
+      ? {}
+      : { submittedAt: toIsoString(row.submitted_at) }),
+    ...(row.confirmed_at === null
+      ? {}
+      : { confirmedAt: toIsoString(row.confirmed_at) }),
+    ...(row.finalized_at === null
+      ? {}
+      : { finalizedAt: toIsoString(row.finalized_at) }),
+    ...(row.error_json === null ? {} : { error: parseOptionalJsonObject(row.error_json) }),
+    createdAt: toIsoString(row.created_at)
+  };
+}
+
 function mapOutboxEvent(row: OutboxEventRow): OutboxEventRecord {
   return {
     id: row.id,
@@ -2522,6 +2708,14 @@ function parseOutboxPayload(value: unknown): Record<string, unknown> {
   const parsed = typeof value === "string" ? JSON.parse(value) : value;
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     throw new Error("outbox payload must be an object");
+  }
+  return parsed as Record<string, unknown>;
+}
+
+function parseOptionalJsonObject(value: unknown): Record<string, unknown> {
+  const parsed = typeof value === "string" ? JSON.parse(value) : value;
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("json value must be an object");
   }
   return parsed as Record<string, unknown>;
 }
@@ -2618,8 +2812,32 @@ function readPayoutItemStatus(value: string): PayoutItemStatus {
   throw new Error(`unsupported payout item status: ${value}`);
 }
 
+function readPayoutTransactionStatus(value: string): PayoutTransactionStatus {
+  if (
+    value === "planned" ||
+    value === "signed" ||
+    value === "submitted" ||
+    value === "confirmed" ||
+    value === "finalized" ||
+    value === "expired" ||
+    value === "failed" ||
+    value === "outcome_unknown"
+  ) {
+    return value;
+  }
+  throw new Error(`unsupported payout transaction status: ${value}`);
+}
+
 function toIsoString(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : value;
+}
+
+function normalizeDateInput(value: string | undefined, label: string): string {
+  const date = value === undefined ? new Date() : new Date(value);
+  if (!Number.isFinite(date.getTime())) {
+    throw new Error(`${label} must be an ISO timestamp`);
+  }
+  return date.toISOString();
 }
 
 function isPostgresPool(value: unknown): value is PostgresPool {

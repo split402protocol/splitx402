@@ -7,12 +7,14 @@ import {
   SOLANA_TOKEN_PROGRAM_ID,
   SOLANA_TOKEN_2022_PROGRAM_ID,
   SolanaPolicyEnforcedPayoutSigner,
+  SolanaRpcPayoutTransactionBroadcaster,
   SolanaRpcPayoutTransactionSimulator,
   SolanaRpcReceiptVerifier,
   type SolanaRpcFetch
 } from "../src/index.js";
 import type {
   PayoutBatchRecord,
+  PayoutTransactionRecord,
   SolanaPayoutSignerPolicy,
   SolanaPayoutSimulationReport,
   SolanaPayoutTransactionPlan
@@ -470,6 +472,115 @@ describe("SolanaPolicyEnforcedPayoutSigner", () => {
   });
 });
 
+describe("SolanaRpcPayoutTransactionBroadcaster", () => {
+  it("submits persisted signed transaction bytes with sendTransaction", async () => {
+    const requests: unknown[] = [];
+    const broadcaster = new SolanaRpcPayoutTransactionBroadcaster({
+      rpcUrl: "https://api.devnet.solana.com",
+      network: "solana:devnet",
+      skipPreflight: true,
+      maxRetries: 0,
+      fetch: createFetch(
+        { jsonrpc: "2.0", id: "split402-payout-broadcast", result: "sig_0" },
+        requests
+      )
+    });
+
+    const result = await broadcaster.broadcast({
+      transaction: payoutTransaction({ expectedSignature: "sig_0" })
+    });
+
+    expect(result).toEqual({
+      transactionId: "ptx_ffffffffffffffffffffffffffffffff",
+      status: "submitted",
+      rpcUrl: "https://api.devnet.solana.com",
+      signature: "sig_0"
+    });
+    expect(requests).toEqual([
+      expect.objectContaining({
+        method: "sendTransaction",
+        params: [
+          "AQID",
+          {
+            encoding: "base64",
+            skipPreflight: true,
+            preflightCommitment: "confirmed",
+            maxRetries: 0
+          }
+        ]
+      })
+    ]);
+  });
+
+  it("resends identical signed bytes across RPC URLs for retryable failures", async () => {
+    const calls: string[] = [];
+    const requests: unknown[] = [];
+    const broadcaster = new SolanaRpcPayoutTransactionBroadcaster({
+      rpcUrls: ["https://primary-rpc.example", "https://secondary-rpc.example"],
+      network: "solana:devnet",
+      fetch: async (input, init) => {
+        calls.push(input);
+        requests.push(JSON.parse(init.body));
+        if (input === "https://primary-rpc.example") {
+          return {
+            ok: false,
+            status: 503,
+            async json() {
+              return {};
+            }
+          };
+        }
+        return createResponse({
+          jsonrpc: "2.0",
+          id: "split402-payout-broadcast",
+          result: "sig_0"
+        });
+      }
+    });
+
+    await expect(
+      broadcaster.broadcast({ transaction: payoutTransaction() })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        status: "submitted",
+        rpcUrl: "https://secondary-rpc.example",
+        signature: "sig_0"
+      })
+    );
+    expect(calls).toEqual([
+      "https://primary-rpc.example",
+      "https://secondary-rpc.example"
+    ]);
+    expect(
+      requests.map((request) =>
+        (request as { params: [string, Record<string, unknown>] }).params[0]
+      )
+    ).toEqual(["AQID", "AQID"]);
+  });
+
+  it("rejects transactions that do not have signed bytes ready", async () => {
+    const broadcaster = new SolanaRpcPayoutTransactionBroadcaster({
+      rpcUrl: "https://api.devnet.solana.com",
+      network: "solana:devnet",
+      fetch: createFetch({ result: "sig_0" })
+    });
+    const unsigned: PayoutTransactionRecord = {
+      id: "ptx_ffffffffffffffffffffffffffffffff",
+      payoutBatchId: "pbt_ffffffffffffffffffffffffffffffff",
+      sequence: 0,
+      attempt: 1,
+      status: "planned",
+      createdAt: "2026-06-24T00:00:00.000Z"
+    };
+
+    await expect(
+      broadcaster.broadcast({
+        transaction: unsigned
+      })
+    ).rejects.toThrow("must be signed before broadcast");
+  });
+});
+
 describe("SolanaRpcReceiptVerifier", () => {
   it("confirms receipts when the settlement signature and token transfer match", async () => {
     const receipt = createSampleProtocolArtifacts().artifacts.receipt;
@@ -917,6 +1028,22 @@ function signingPolicy(
     mint: plan.asset,
     allowedTokenProgramIds: [plan.tokenProgramId],
     expectedDestinationAmountListHash: hashSolanaPayoutDestinationAmountList(plan),
+    ...overrides
+  };
+}
+
+function payoutTransaction(
+  overrides: Partial<PayoutTransactionRecord> = {}
+): PayoutTransactionRecord {
+  return {
+    id: "ptx_ffffffffffffffffffffffffffffffff",
+    payoutBatchId: "pbt_ffffffffffffffffffffffffffffffff",
+    sequence: 0,
+    attempt: 1,
+    signedTransactionBase64: "AQID",
+    expectedSignature: "sig_0",
+    status: "signed",
+    createdAt: "2026-06-24T00:00:00.000Z",
     ...overrides
   };
 }

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   createPayoutBatchPlan,
   createPayoutPreview,
+  createSignedPayoutTransactionRecords,
   filterPayoutEligibleAccruals,
   type CommissionAccrual
 } from "../src/index.js";
@@ -185,6 +186,96 @@ describe("payout preview planner", () => {
         ]
       })
     ]);
+  });
+});
+
+describe("signed payout transaction records", () => {
+  it("creates signed transaction rows in deterministic sequence order", () => {
+    const ids = [
+      "ptx_11111111111111111111111111111111",
+      "ptx_22222222222222222222222222222222"
+    ];
+    const records = createSignedPayoutTransactionRecords({
+      payoutBatchId: "pbt_ffffffffffffffffffffffffffffffff",
+      now: NOW,
+      idFactory: () => {
+        const id = ids.shift();
+        if (id === undefined) {
+          throw new Error("missing id");
+        }
+        return id;
+      },
+      transactions: [
+        {
+          sequence: 1,
+          signedTransactionBase64: "BAUG",
+          expectedSignature: "sig_1"
+        },
+        {
+          sequence: 0,
+          attempt: 2,
+          recentBlockhash: "blockhash_0",
+          lastValidBlockHeight: 123,
+          signedTransactionBase64: "AQID",
+          expectedSignature: "sig_0"
+        }
+      ]
+    });
+
+    expect(records).toEqual([
+      {
+        id: "ptx_11111111111111111111111111111111",
+        payoutBatchId: "pbt_ffffffffffffffffffffffffffffffff",
+        sequence: 0,
+        attempt: 2,
+        recentBlockhash: "blockhash_0",
+        lastValidBlockHeight: 123,
+        signedTransactionBase64: "AQID",
+        expectedSignature: "sig_0",
+        status: "signed",
+        createdAt: NOW
+      },
+      {
+        id: "ptx_22222222222222222222222222222222",
+        payoutBatchId: "pbt_ffffffffffffffffffffffffffffffff",
+        sequence: 1,
+        attempt: 1,
+        signedTransactionBase64: "BAUG",
+        expectedSignature: "sig_1",
+        status: "signed",
+        createdAt: NOW
+      }
+    ]);
+  });
+
+  it("rejects duplicate attempts, duplicate signatures, and invalid bytes", () => {
+    expect(() =>
+      createSignedPayoutTransactionRecords({
+        payoutBatchId: "pbt_ffffffffffffffffffffffffffffffff",
+        now: NOW,
+        transactions: [
+          { sequence: 0, signedTransactionBase64: "AQID" },
+          { sequence: 0, signedTransactionBase64: "BAUG" }
+        ]
+      })
+    ).toThrow("duplicate payout transaction sequence and attempt");
+    expect(() =>
+      createSignedPayoutTransactionRecords({
+        payoutBatchId: "pbt_ffffffffffffffffffffffffffffffff",
+        now: NOW,
+        transactions: [
+          { sequence: 0, signedTransactionBase64: "AQID", expectedSignature: "sig" },
+          { sequence: 1, signedTransactionBase64: "BAUG", expectedSignature: "sig" }
+        ]
+      })
+    ).toThrow("duplicate payout transaction expectedSignature");
+    expect(() =>
+      createSignedPayoutTransactionRecords({
+        payoutBatchId: "pbt_ffffffffffffffffffffffffffffffff",
+        now: NOW,
+        transactions: [{ sequence: 0, signedTransactionBase64: "not-base64" }]
+      })
+    ).toThrow("signedTransactionBase64 must be base64");
   });
 });
 
