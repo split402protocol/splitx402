@@ -57,6 +57,14 @@ import {
 } from "./routes.js";
 import { SolanaRpcPayoutTransactionFinalityMonitor } from "./solana.js";
 import {
+  WEBHOOK_PAYOUT_CONFIRMED_EVENT_TYPE,
+  WEBHOOK_PAYOUT_FAILED_EVENT_TYPE,
+  WEBHOOK_PAYOUT_FINALIZED_EVENT_TYPE,
+  WEBHOOK_PAYOUT_OUTCOME_UNKNOWN_EVENT_TYPE,
+  WEBHOOK_PAYOUT_SUBMITTED_EVENT_TYPE,
+  WEBHOOK_RECEIPT_ACCEPTED_EVENT_TYPE
+} from "./webhooks.js";
+import {
   PostgresCampaignRegistry,
   PostgresMerchantRegistry,
   PostgresOutboxEventStore,
@@ -122,6 +130,14 @@ const DASHBOARD_ROUTE_STATUSES: readonly RouteStatus[] = [
   "suspended",
   "expired",
   "revoked"
+];
+const WEBHOOK_MANAGEMENT_EVENT_TYPES = [
+  WEBHOOK_RECEIPT_ACCEPTED_EVENT_TYPE,
+  WEBHOOK_PAYOUT_SUBMITTED_EVENT_TYPE,
+  WEBHOOK_PAYOUT_CONFIRMED_EVENT_TYPE,
+  WEBHOOK_PAYOUT_FINALIZED_EVENT_TYPE,
+  WEBHOOK_PAYOUT_FAILED_EVENT_TYPE,
+  WEBHOOK_PAYOUT_OUTCOME_UNKNOWN_EVENT_TYPE
 ];
 
 export interface ReceiptRecord {
@@ -197,6 +213,13 @@ export interface MarkOutboxEventFailedInput {
   deadLetter?: boolean;
 }
 
+export interface ListWebhookEventsInput {
+  merchantId: string;
+  eventTypes?: string[];
+  status?: OutboxEventStatus;
+  limit?: number;
+}
+
 export interface OutboxEventStore {
   getEvent(
     eventId: string
@@ -210,6 +233,12 @@ export interface OutboxEventStore {
   markFailed(
     input: MarkOutboxEventFailedInput
   ): Promise<OutboxEventRecord | undefined> | OutboxEventRecord | undefined;
+}
+
+export interface WebhookEventManagementStore {
+  listWebhookEvents(
+    input: ListWebhookEventsInput
+  ): Promise<OutboxEventRecord[]> | OutboxEventRecord[];
 }
 
 export interface MarkReceiptChainVerifiedInput {
@@ -853,6 +882,7 @@ export interface ControlPlaneAppOptions {
   payoutTransactionStore?: PayoutTransactionStore;
   payoutReconciliationStore?: PayoutReconciliationStore;
   referrerPayoutViewStore?: ReferrerPayoutViewStore;
+  webhookEventManagementStore?: WebhookEventManagementStore;
   payoutFinalityMonitor?: PayoutFinalityMonitor;
   auth?: ControlPlaneAuthOptions;
   jsonLimit?: string;
@@ -961,6 +991,7 @@ export function createControlPlaneRuntime(
     payoutTransactionStore: receiptStore,
     payoutReconciliationStore: receiptStore,
     referrerPayoutViewStore: receiptStore,
+    webhookEventManagementStore: outboxStore,
     ...(options.payoutFinalityMonitor === undefined
       ? {}
       : { payoutFinalityMonitor: options.payoutFinalityMonitor }),
@@ -1504,7 +1535,11 @@ export function createMerchantRegistryRouter(
   merchantRegistry: MerchantRegistry,
   options: Pick<
     ControlPlaneAppOptions,
-    "auth" | "campaignRegistry" | "jsonLimit" | "routeRegistry"
+    | "auth"
+    | "campaignRegistry"
+    | "jsonLimit"
+    | "routeRegistry"
+    | "webhookEventManagementStore"
   > = {}
 ): Router {
   const router = express.Router();
@@ -1643,6 +1678,49 @@ export function createMerchantRegistryRouter(
           !sendRouteRegistryError(res, error) &&
           !sendMerchantRegistryError(res, error)
         ) {
+          next(error);
+        }
+      }
+    }
+  );
+
+  router.get(
+    "/v1/merchants/:merchantId/webhook-events",
+    async (req, res, next) => {
+      try {
+        if (options.webhookEventManagementStore === undefined) {
+          res.status(500).json({
+            error: "internal_server_error",
+            message: "webhook event management store is required"
+          });
+          return;
+        }
+        const merchantId = readRouteParam(req.params.merchantId, "merchantId");
+        const merchant = await merchantRegistry.getMerchantProfile(merchantId);
+        if (merchant === undefined) {
+          res.status(404).json({ error: "merchant_not_found" });
+          return;
+        }
+        const session = await requireMerchantOwnerSession(
+          req,
+          res,
+          options,
+          merchantRegistry
+        );
+        if (session === undefined && isMerchantAuthRequired(options)) {
+          return;
+        }
+        const status = readOptionalOutboxEventStatus(req.query.status);
+        const limit = readOptionalWebhookEventLimit(req.query.limit);
+        const events = await options.webhookEventManagementStore.listWebhookEvents({
+          merchantId,
+          eventTypes: WEBHOOK_MANAGEMENT_EVENT_TYPES,
+          ...(status === undefined ? {} : { status }),
+          ...(limit === undefined ? {} : { limit })
+        });
+        res.json({ events });
+      } catch (error) {
+        if (!sendMerchantRegistryError(res, error)) {
           next(error);
         }
       }
@@ -2585,6 +2663,26 @@ function readOptionalRouteStatus(value: unknown): RouteStatus | undefined {
   );
 }
 
+function readOptionalOutboxEventStatus(
+  value: unknown
+): OutboxEventStatus | undefined {
+  const status = readOptionalRouteQueryString(value, "status");
+  if (status === undefined) {
+    return undefined;
+  }
+  if (
+    status === "pending" ||
+    status === "processing" ||
+    status === "delivered" ||
+    status === "dead_letter"
+  ) {
+    return status;
+  }
+  throw new MerchantRegistryValidationError(
+    "status must be pending, processing, delivered, or dead_letter"
+  );
+}
+
 function readOptionalRouteSearchLimit(value: unknown): number | undefined {
   const limit = readOptionalRouteQueryString(value, "limit");
   if (limit === undefined) {
@@ -2721,6 +2819,14 @@ function readOptionalPositiveIntegerQuery(
     throw new MerchantRegistryValidationError(`${label} must be at most 500`);
   }
   return parsed;
+}
+
+function readOptionalWebhookEventLimit(value: unknown): number | undefined {
+  const limit = readOptionalPositiveIntegerQuery(value, "limit");
+  if (limit !== undefined && limit > 100) {
+    throw new MerchantRegistryValidationError("limit must be at most 100");
+  }
+  return limit;
 }
 
 function readOptionalBoolean(value: unknown, label: string): boolean | undefined {
