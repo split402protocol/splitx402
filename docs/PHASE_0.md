@@ -37,5 +37,6 @@ The canonical project direction is Split402:
 
 The repo has moved well beyond setup. Phase 2 established the protocol core,
 Phase 3 proved the x402 demo path, Phase 4 added durable control-plane
-ingestion, Phase 5 added merchant SDK reliability primitives, and Phase 6 is now
-hardening the payout engine.
+ingestion, Phase 5 added merchant SDK reliability primitives, Phase 6 built the
+payout engine boundaries, and Phase 7 is now productizing dashboard, discovery,
+and agent-demo surfaces.
