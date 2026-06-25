@@ -234,6 +234,12 @@ importers:
       '@split402/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@x402/core':
+        specifier: ^2.16.0
+        version: 2.16.0
+      '@x402/extensions':
+        specifier: ^2.16.0
+        version: 2.16.0(typescript@5.7.3)
     devDependencies:
       '@types/node':
         specifier: 22.20.0

@@ -2,9 +2,10 @@
 
 Production merchant helpers for Split402-enabled x402 APIs.
 
-This package starts with two production reliability boundaries:
+This package starts with production merchant boundaries:
 
 - a cached campaign resolver for x402 offer and receipt signing;
+- explicit x402 payment-identifier helpers for idempotent paid retries;
 - operation digest helpers for production GET and JSON POST request shapes;
 - a durable receipt outbox for post-settlement control-plane ingestion.
 
@@ -62,6 +63,30 @@ const requestDigest = calculateJsonPostOperationDigest({
 `calculateGetOperationDigest` and `calculateJsonPostOperationDigest` both reject
 non-JSON-compatible values before hashing, which avoids signing request material
 that a JSON transport would later drop or mutate.
+
+## Payment Identifiers
+
+Split402 routes must require the standard x402 `payment-identifier` extension so
+logical request retries reuse one payment and one commission record.
+
+```ts
+import {
+  declareRequiredPaymentIdentifierExtension
+} from "@split402/merchant-sdk";
+import { declareSplit402 } from "@split402/x402-extension";
+
+const routeExtensions = {
+  ...declareSplit402({
+    campaignId: "cmp_...",
+    operationId: "wallet-risk-score"
+  }),
+  ...declareRequiredPaymentIdentifierExtension()
+};
+```
+
+`createSplit402PaymentIdentifier` generates IDs that are valid for both x402 and
+Split402 receipts. `assertRequiredSplit402PaymentIdentifier` fails closed when a
+settled payment payload is missing the required identifier.
 
 ## Receipt Outbox Flow
 

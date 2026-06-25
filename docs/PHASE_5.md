@@ -13,6 +13,9 @@ Status: started.
 - Added `packages/merchant-sdk`.
 - Added `CachedControlPlaneCampaignResolver` for active campaign refresh from
   the control plane and synchronous x402 extension resolution from a local cache.
+- Added x402 `payment-identifier` helpers that declare the extension as required,
+  generate Split402-compatible payment ids, and fail closed when settled payloads
+  are missing an identifier.
 - Added merchant operation digest helpers for production GET and JSON POST
   request shapes, with JSON-compatibility checks before hashing.
 - Added `MerchantReceiptOutboxStore` interfaces for durable merchant-local
@@ -37,7 +40,6 @@ retry ingestion later without creating duplicate commissions.
 
 ## Remaining Milestone 3 Work
 
-- Explicit x402 `payment-identifier` integration.
 - Service-key rotation support.
 - Compile-ready merchant integration example and compatibility matrix.
 
