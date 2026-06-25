@@ -22,10 +22,12 @@ import {
   createControlPlaneApp,
   type CampaignVersionRecord,
   type CampaignTermsInput,
+  type OutboxEventRecord,
   type PayoutFinalityMonitor,
   type PayoutReconciliationFinalityResult,
   type RouteDraft,
-  type UnsignedReferralClaim
+  type UnsignedReferralClaim,
+  type WebhookEventManagementStore
 } from "../src/index.js";
 
 const OWNER_SEED = hexToBytes(
@@ -755,6 +757,71 @@ describe("control-plane HTTP API", () => {
     expect(response.body.error).toBe("conflict");
   });
 
+  it("lists merchant webhook events for delivery management", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const webhookStore = new FakeWebhookEventManagementStore([
+      createWebhookEvent({
+        id: "22222222-2222-4222-8222-222222222222",
+        merchantId: bundle.artifacts.receipt.merchantId,
+        status: "pending",
+        eventType: "webhook.receipt.accepted.v1"
+      }),
+      createWebhookEvent({
+        id: "33333333-3333-4333-8333-333333333333",
+        merchantId: bundle.artifacts.receipt.merchantId,
+        status: "delivered",
+        eventType: "webhook.payout.finalized.v1"
+      }),
+      createWebhookEvent({
+        id: "44444444-4444-4444-8444-444444444444",
+        merchantId: "mrc_ffffffffffffffffffffffffffffffff",
+        status: "pending",
+        eventType: "webhook.receipt.accepted.v1"
+      })
+    ]);
+    const { app } = createTestApp({
+      withMerchantRegistry: true,
+      webhookEventManagementStore: webhookStore
+    });
+    await request(app)
+      .post("/v1/merchants")
+      .send({
+        id: bundle.artifacts.receipt.merchantId,
+        slug: "webhook-merchant",
+        displayName: "Webhook Merchant",
+        ownerWallet: bundle.keys.payerWallet,
+        status: "active"
+      })
+      .expect(201);
+
+    const response = await request(app)
+      .get(`/v1/merchants/${bundle.artifacts.receipt.merchantId}/webhook-events`)
+      .query({ status: "pending" })
+      .expect(200);
+
+    expect(response.body.events).toEqual([
+      expect.objectContaining({
+        id: "22222222-2222-4222-8222-222222222222",
+        eventType: "webhook.receipt.accepted.v1",
+        status: "pending",
+        attempts: 0,
+        payload: expect.objectContaining({
+          merchantId: bundle.artifacts.receipt.merchantId
+        })
+      })
+    ]);
+    expect(webhookStore.inputs).toEqual([
+      expect.objectContaining({
+        merchantId: bundle.artifacts.receipt.merchantId,
+        status: "pending",
+        eventTypes: expect.arrayContaining([
+          "webhook.receipt.accepted.v1",
+          "webhook.payout.finalized.v1"
+        ])
+      })
+    ]);
+  });
+
   it("creates wallet-auth sessions and gates merchant mutations", async () => {
     const bundle = createSampleProtocolArtifacts();
     const { app } = createTestApp({
@@ -1400,6 +1467,7 @@ function createTestApp(
     withCampaignRegistry?: boolean;
     withMerchantRegistry?: boolean;
     payoutFinalityMonitor?: PayoutFinalityMonitor;
+    webhookEventManagementStore?: WebhookEventManagementStore;
     withPayouts?: boolean;
     withRouteRegistry?: boolean;
   } = {}
@@ -1451,11 +1519,57 @@ function createTestApp(
         : {}),
       ...(options.withAuth === true
         ? { auth: { authenticator: createAuthenticator() } }
-        : {})
+        : {}),
+      ...(options.webhookEventManagementStore === undefined
+        ? {}
+        : { webhookEventManagementStore: options.webhookEventManagementStore })
     }),
     merchantRegistry,
     store,
     receipt: bundle.artifacts.receipt
+  };
+}
+
+class FakeWebhookEventManagementStore implements WebhookEventManagementStore {
+  readonly inputs: Parameters<WebhookEventManagementStore["listWebhookEvents"]>[0][] = [];
+
+  constructor(private readonly events: readonly OutboxEventRecord[]) {}
+
+  listWebhookEvents(
+    input: Parameters<WebhookEventManagementStore["listWebhookEvents"]>[0]
+  ): OutboxEventRecord[] {
+    this.inputs.push(input);
+    return this.events
+      .filter((event) => event.payload.merchantId === input.merchantId)
+      .filter(
+        (event) =>
+          input.eventTypes === undefined || input.eventTypes.includes(event.eventType)
+      )
+      .filter((event) => input.status === undefined || event.status === input.status)
+      .slice(0, input.limit ?? 50);
+  }
+}
+
+function createWebhookEvent(input: {
+  eventType: string;
+  id: string;
+  merchantId: string;
+  status: OutboxEventRecord["status"];
+}): OutboxEventRecord {
+  return {
+    id: input.id,
+    eventType: input.eventType,
+    aggregateType: "receipt",
+    aggregateId: "rcp_00000000000000000000000000000001",
+    payload: {
+      merchantId: input.merchantId,
+      receiptId: "rcp_00000000000000000000000000000001"
+    },
+    status: input.status,
+    attempts: input.status === "delivered" ? 1 : 0,
+    availableAt: "2026-06-24T00:02:00Z",
+    createdAt: "2026-06-24T00:02:00Z",
+    ...(input.status === "dead_letter" ? { lastError: "delivery failed" } : {})
   };
 }
 

@@ -344,6 +344,8 @@ Current slice:
 - Bazaar-compatible resource metadata projection for active Split402 routes.
 - merchant dashboard summary endpoint for readiness, campaign, operation, and
   route status rollups.
+- merchant webhook delivery feed for pending, processing, delivered, and
+  dead-letter webhook outbox events.
 
 ## Later: Token Bonding And Atomic Settlement
 
