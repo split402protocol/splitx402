@@ -12,7 +12,7 @@ all required gates are approved.
 | Private signer networking | `network_policy_record` proving only the control plane can reach the signer, such as `deploy/payout-signer/kubernetes.yaml` plus applied-cluster evidence. | Pending |
 | Signer readiness | `corepack pnpm signer:payout:smoke` output from staging. | Pending |
 | Secret exposure check | Smoke-check output plus log sample proving health, readiness, metrics, and audit logs do not expose shared secrets, private keys, or transaction bytes. | Pending |
-| HMAC key rotation | Completed planned rotation using `docs/runbooks/payout-signer-key-rotation.md`. | Pending |
+| HMAC key rotation | `corepack pnpm phase6:rotation-drill` output proving dual-active deploy, control-plane rotation, previous-key retirement, health, metrics, and audit-log evidence. | Pending |
 | Emergency auth revocation | `corepack pnpm phase6:emergency-revocation` output proving old-key rejection, new-key success, metrics, audit-log evidence, and payout-batch reconciliation. | Pending |
 | Payout signer key custody | `corepack pnpm phase6:key-custody` output proving key source, owner, backup policy, access list, recovery process, and separation of duties. | Pending |
 | Signer policy review | `corepack pnpm phase6:signer-policy` output plus signer policy fields proving funding wallet, source token account, USDC mint, token program allow-list, amount caps, and network settings were reviewed. | Pending |
