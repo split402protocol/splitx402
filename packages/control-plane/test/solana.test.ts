@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   createSolanaPayoutTransactionPlan,
   SOLANA_TOKEN_PROGRAM_ID,
+  SolanaRpcPayoutTransactionSimulator,
   SolanaRpcReceiptVerifier,
   type SolanaRpcFetch
 } from "../src/index.js";
@@ -116,6 +117,197 @@ describe("createSolanaPayoutTransactionPlan", () => {
         tokenDecimals: 300
       })
     ).rejects.toThrow("tokenDecimals must be an integer between 0 and 255");
+  });
+});
+
+describe("SolanaRpcPayoutTransactionSimulator", () => {
+  it("simulates serialized payout transactions and reports successful results", async () => {
+    const receipt = createSampleProtocolArtifacts().artifacts.receipt;
+    const plan = await createSolanaPayoutTransactionPlan({
+      batch: payoutBatch(receipt),
+      fundingWallet: receipt.payToWallet,
+      tokenDecimals: 6,
+      maxItemsPerTransaction: 1
+    });
+    const requests: unknown[] = [];
+    const simulator = new SolanaRpcPayoutTransactionSimulator({
+      rpcUrl: "https://api.devnet.solana.com",
+      network: receipt.network,
+      fetch: createFetchSequence([
+        simulationBody({ err: null, logs: ["ok 0"], unitsConsumed: 4 }),
+        simulationBody({ err: null, logs: ["ok 1"], unitsConsumed: 5 })
+      ], requests)
+    });
+
+    const report = await simulator.simulate({
+      plan,
+      transactions: [
+        { index: 0, transactionBase64: "AQID" },
+        { index: 1, transactionBase64: "BAUG" }
+      ]
+    });
+
+    expect(report).toEqual({
+      batchId: plan.batchId,
+      network: receipt.network,
+      status: "succeeded",
+      transactionResults: [
+        {
+          index: 0,
+          status: "succeeded",
+          rpcUrl: "https://api.devnet.solana.com",
+          logs: ["ok 0"],
+          unitsConsumed: 4
+        },
+        {
+          index: 1,
+          status: "succeeded",
+          rpcUrl: "https://api.devnet.solana.com",
+          logs: ["ok 1"],
+          unitsConsumed: 5
+        }
+      ]
+    });
+    expect(requests).toEqual([
+      expect.objectContaining({
+        method: "simulateTransaction",
+        params: [
+          "AQID",
+          {
+            commitment: "confirmed",
+            encoding: "base64",
+            replaceRecentBlockhash: true,
+            sigVerify: false
+          }
+        ]
+      }),
+      expect.objectContaining({
+        method: "simulateTransaction",
+        params: [
+          "BAUG",
+          {
+            commitment: "confirmed",
+            encoding: "base64",
+            replaceRecentBlockhash: true,
+            sigVerify: false
+          }
+        ]
+      })
+    ]);
+  });
+
+  it("falls back across RPC URLs for retryable simulation failures", async () => {
+    const receipt = createSampleProtocolArtifacts().artifacts.receipt;
+    const plan = await createSolanaPayoutTransactionPlan({
+      batch: payoutBatch(receipt, { destinationTokenAccount: receipt.payerWallet }),
+      fundingWallet: receipt.payToWallet,
+      sourceTokenAccount: receipt.payerWallet,
+      tokenDecimals: 6
+    });
+    const calls: string[] = [];
+    const simulator = new SolanaRpcPayoutTransactionSimulator({
+      rpcUrls: ["https://primary-rpc.example", "https://secondary-rpc.example"],
+      network: receipt.network,
+      fetch: async (input) => {
+        calls.push(input);
+        if (input === "https://primary-rpc.example") {
+          return {
+            ok: false,
+            status: 503,
+            async json() {
+              return {};
+            }
+          };
+        }
+        return createResponse(simulationBody({ err: null }));
+      }
+    });
+
+    await expect(
+      simulator.simulate({
+        plan,
+        transactions: [{ index: 0, transactionBase64: "AQID" }]
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        status: "succeeded",
+        transactionResults: [
+          expect.objectContaining({
+            rpcUrl: "https://secondary-rpc.example",
+            status: "succeeded"
+          })
+        ]
+      })
+    );
+    expect(calls).toEqual([
+      "https://primary-rpc.example",
+      "https://secondary-rpc.example"
+    ]);
+  });
+
+  it("reports failed simulations without retrying other providers", async () => {
+    const receipt = createSampleProtocolArtifacts().artifacts.receipt;
+    const plan = await createSolanaPayoutTransactionPlan({
+      batch: payoutBatch(receipt, { destinationTokenAccount: receipt.payerWallet }),
+      fundingWallet: receipt.payToWallet,
+      sourceTokenAccount: receipt.payerWallet,
+      tokenDecimals: 6
+    });
+    const simulator = new SolanaRpcPayoutTransactionSimulator({
+      rpcUrls: ["https://primary-rpc.example", "https://secondary-rpc.example"],
+      network: receipt.network,
+      fetch: createFetch(simulationBody({
+        err: { InstructionError: [0, "InsufficientFunds"] },
+        logs: ["failed"]
+      }))
+    });
+
+    const report = await simulator.simulate({
+      plan,
+      transactions: [{ index: 0, transactionBase64: "AQID" }]
+    });
+
+    expect(report.status).toBe("failed");
+    expect(report.transactionResults).toEqual([
+      expect.objectContaining({
+        status: "failed",
+        rpcUrl: "https://primary-rpc.example",
+        error: expect.stringContaining("InsufficientFunds"),
+        logs: ["failed"]
+      })
+    ]);
+  });
+
+  it("rejects serialized transaction sets that do not match the plan", async () => {
+    const receipt = createSampleProtocolArtifacts().artifacts.receipt;
+    const plan = await createSolanaPayoutTransactionPlan({
+      batch: payoutBatch(receipt),
+      fundingWallet: receipt.payToWallet,
+      tokenDecimals: 6,
+      maxItemsPerTransaction: 1
+    });
+    const simulator = new SolanaRpcPayoutTransactionSimulator({
+      rpcUrl: "https://api.devnet.solana.com",
+      network: receipt.network,
+      fetch: createFetch(simulationBody({ err: null }))
+    });
+
+    await expect(
+      simulator.simulate({
+        plan,
+        transactions: [{ index: 0, transactionBase64: "AQID" }]
+      })
+    ).rejects.toThrow("serialized transactions must cover every planned transaction");
+    await expect(
+      simulator.simulate({
+        plan,
+        transactions: [
+          { index: 0, transactionBase64: "AQID" },
+          { index: 0, transactionBase64: "BAUG" },
+          { index: 1, transactionBase64: "BAUG" }
+        ]
+      })
+    ).rejects.toThrow("duplicate serialized transaction");
   });
 });
 
@@ -515,6 +707,27 @@ function signatureStatusesBody(
     result: {
       context: { slot: 1 },
       value: [status]
+    }
+  };
+}
+
+function simulationBody(input: {
+  err: unknown;
+  logs?: string[];
+  unitsConsumed?: number;
+}): Record<string, unknown> {
+  return {
+    jsonrpc: "2.0",
+    id: "split402-payout-simulation",
+    result: {
+      context: { slot: 1 },
+      value: {
+        err: input.err,
+        logs: input.logs ?? [],
+        ...(input.unitsConsumed === undefined
+          ? {}
+          : { unitsConsumed: input.unitsConsumed })
+      }
     }
   };
 }
