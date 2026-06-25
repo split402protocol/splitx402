@@ -34,6 +34,19 @@ the completed record to the Phase 6 evidence bundle and copy the signer build
 command and audit output into `signer_image_build_command` and
 `signer_image_dependency_audit_output`.
 
+You can generate the correctly shaped review record with:
+
+```bash
+SPLIT402_PHASE6_IMAGE_REVIEW_ID=phase6-image-review-001 \
+SPLIT402_PHASE6_IMAGE_REVIEWERS="security, operations" \
+SPLIT402_SIGNER_IMAGE_DIGEST=sha256:<signer-image-digest> \
+SPLIT402_CONTROL_PLANE_IMAGE_DIGEST=sha256:<control-plane-image-digest> \
+SPLIT402_DEPENDENCY_AUDIT_OUTPUT="attached: signer-image-audit-001.log" \
+SPLIT402_BUILD_LOG_RECORD="attached: signer-image-build-001.log" \
+SPLIT402_SBOM_RECORD="attached: signer-image-sbom-001.spdx.json" \
+  corepack pnpm phase6:image-provenance
+```
+
 ## Configure
 
 Set non-secret policy values as deployment config:
