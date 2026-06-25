@@ -1,3 +1,5 @@
+import { address } from "@solana/kit";
+import { findAssociatedTokenPda } from "@solana-program/token";
 import type { Split402ReceiptV1 } from "@split402/protocol";
 
 import type {
@@ -8,7 +10,8 @@ import type {
 export type SolanaRpcCommitment = "confirmed" | "finalized";
 
 export interface SolanaRpcReceiptVerifierOptions {
-  rpcUrl: string;
+  rpcUrl?: string;
+  rpcUrls?: string[];
   network: string;
   commitment?: SolanaRpcCommitment;
   fetch?: SolanaRpcFetch;
@@ -80,7 +83,39 @@ export class SolanaRpcReceiptVerifier implements ReceiptChainVerifier {
       };
     }
 
+    let lastRetry:
+      | Extract<ReceiptChainVerificationResult, { status: "retry" }>
+      | undefined;
+    let lastRejected:
+      | Extract<ReceiptChainVerificationResult, { status: "rejected" }>
+      | undefined;
+    for (const rpcUrl of this.rpcUrls()) {
+      const result = await this.verifyWithRpcUrl(receipt, rpcUrl);
+      if (result.status === "confirmed") {
+        return result;
+      }
+      if (result.status === "rejected") {
+        lastRejected = result;
+      } else {
+        lastRetry = result;
+      }
+    }
+
+    return (
+      lastRetry ??
+      lastRejected ?? {
+        status: "retry",
+        error: "no Solana RPC URLs configured"
+      }
+    );
+  }
+
+  private async verifyWithRpcUrl(
+    receipt: Split402ReceiptV1,
+    rpcUrl: string
+  ): Promise<ReceiptChainVerificationResult> {
     const rpcResponse = await this.requestSignatureStatus(
+      rpcUrl,
       receipt.settlementTxSignature
     );
     if (rpcResponse.status === "retry") {
@@ -108,6 +143,7 @@ export class SolanaRpcReceiptVerifier implements ReceiptChainVerifier {
     }
 
     const transactionResponse = await this.requestConfirmedTransaction(
+      rpcUrl,
       receipt.settlementTxSignature
     );
     if (transactionResponse.status === "retry") {
@@ -122,7 +158,10 @@ export class SolanaRpcReceiptVerifier implements ReceiptChainVerifier {
       };
     }
 
-    const transactionVerification = verifyReceiptTransaction(receipt, transaction);
+    const transactionVerification = await verifyReceiptTransaction(
+      receipt,
+      transaction
+    );
     if (transactionVerification !== undefined) {
       return transactionVerification;
     }
@@ -131,6 +170,7 @@ export class SolanaRpcReceiptVerifier implements ReceiptChainVerifier {
   }
 
   private async requestSignatureStatus(
+    rpcUrl: string,
     signature: string
   ): Promise<
     | {
@@ -141,7 +181,7 @@ export class SolanaRpcReceiptVerifier implements ReceiptChainVerifier {
   > {
     let response: SolanaRpcHttpResponse;
     try {
-      response = await this.fetch()(this.options.rpcUrl, {
+      response = await this.fetch()(rpcUrl, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -188,6 +228,7 @@ export class SolanaRpcReceiptVerifier implements ReceiptChainVerifier {
   }
 
   private async requestConfirmedTransaction(
+    rpcUrl: string,
     signature: string
   ): Promise<
     | {
@@ -198,7 +239,7 @@ export class SolanaRpcReceiptVerifier implements ReceiptChainVerifier {
   > {
     let response: SolanaRpcHttpResponse;
     try {
-      response = await this.fetch()(this.options.rpcUrl, {
+      response = await this.fetch()(rpcUrl, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -257,6 +298,16 @@ export class SolanaRpcReceiptVerifier implements ReceiptChainVerifier {
 
   private fetch(): SolanaRpcFetch {
     return this.options.fetch ?? fetch;
+  }
+
+  private rpcUrls(): string[] {
+    const urls = [
+      ...(this.options.rpcUrl === undefined ? [] : [this.options.rpcUrl]),
+      ...(this.options.rpcUrls ?? [])
+    ];
+    return Array.from(
+      new Set(urls.map((url) => url.trim()).filter((url) => url.length > 0))
+    );
   }
 }
 
@@ -321,10 +372,10 @@ function readConfirmedTransaction(body: unknown): SolanaConfirmedTransaction | n
   };
 }
 
-function verifyReceiptTransaction(
+async function verifyReceiptTransaction(
   receipt: Split402ReceiptV1,
   transaction: SolanaConfirmedTransaction
-): ReceiptChainVerificationResult | undefined {
+): Promise<ReceiptChainVerificationResult | undefined> {
   if (!transaction.signatures.includes(receipt.settlementTxSignature)) {
     return {
       status: "rejected",
@@ -342,26 +393,32 @@ function verifyReceiptTransaction(
     receipt.requiredAmountAtomic,
     receipt.settledAmountAtomic
   );
-  const matchingTransfers = transaction.transfers.filter((transfer) =>
-    transferSatisfiesReceipt(transfer, receipt, requiredAmount, transaction.tokenAccounts)
-  );
-
-  if (matchingTransfers.length === 0) {
-    return {
-      status: "rejected",
-      error:
-        "settlement transaction does not contain a matching token transfer for receipt asset, payTo wallet, payer wallet, and amount"
-    };
+  for (const transfer of transaction.transfers) {
+    if (
+      await transferSatisfiesReceipt(
+        transfer,
+        receipt,
+        requiredAmount,
+        transaction.tokenAccounts
+      )
+    ) {
+      return undefined;
+    }
   }
-  return undefined;
+
+  return {
+    status: "rejected",
+    error:
+      "settlement transaction does not contain a matching token transfer for receipt asset, payTo wallet, payer wallet, and amount"
+  };
 }
 
-function transferSatisfiesReceipt(
+async function transferSatisfiesReceipt(
   transfer: SolanaTokenTransfer,
   receipt: Split402ReceiptV1,
   requiredAmount: string,
   tokenAccounts: Map<string, SolanaTokenAccountEvidence>
-): boolean {
+): Promise<boolean> {
   if (transfer.programId !== undefined && !TOKEN_PROGRAM_IDS.has(transfer.programId)) {
     return false;
   }
@@ -376,12 +433,43 @@ function transferSatisfiesReceipt(
   }
 
   const destination = tokenAccounts.get(transfer.destination);
+  const destinationProgramMatches =
+    destination?.programId === undefined || destination.programId === transfer.programId;
+  const destinationMintMatches =
+    destination === undefined || destination.mint === receipt.asset;
+  const destinationOwnerMatches = destination?.owner === receipt.payToWallet;
+  const destinationIsAssociatedTokenAccount = await isAssociatedTokenAccount({
+    account: transfer.destination,
+    owner: receipt.payToWallet,
+    mint: receipt.asset,
+    tokenProgramId: transfer.programId
+  });
   return (
-    destination !== undefined &&
-    destination.mint === receipt.asset &&
-    destination.owner === receipt.payToWallet &&
-    (destination.programId === undefined || TOKEN_PROGRAM_IDS.has(destination.programId))
+    destinationMintMatches &&
+    destinationProgramMatches &&
+    (destinationOwnerMatches || destinationIsAssociatedTokenAccount)
   );
+}
+
+async function isAssociatedTokenAccount(input: {
+  account: string;
+  owner: string;
+  mint: string;
+  tokenProgramId: string | undefined;
+}): Promise<boolean> {
+  if (input.tokenProgramId === undefined || !TOKEN_PROGRAM_IDS.has(input.tokenProgramId)) {
+    return false;
+  }
+  try {
+    const [associatedTokenAccount] = await findAssociatedTokenPda({
+      owner: address(input.owner),
+      tokenProgram: address(input.tokenProgramId),
+      mint: address(input.mint)
+    });
+    return input.account === associatedTokenAccount.toString();
+  } catch {
+    return false;
+  }
 }
 
 function readTokenAccountEvidence(

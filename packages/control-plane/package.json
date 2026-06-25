@@ -20,6 +20,8 @@
     "worker:webhook": "tsx src/webhook-worker.ts"
   },
   "dependencies": {
+    "@solana-program/token": "^0.9.0",
+    "@solana/kit": "^5.1.0",
     "@split402/protocol": "workspace:*",
     "express": "5.2.1",
     "pg": "8.22.0"

@@ -34,6 +34,7 @@ describe("chain-verification worker entrypoint", () => {
 
     expect(workerRuntime.config).toEqual({
       rpcUrl: "https://rpc.example",
+      rpcUrls: ["https://rpc.example"],
       network: "solana:devnet",
       commitment: "finalized",
       retryDelayMs: 120000,
@@ -68,6 +69,22 @@ describe("chain-verification worker entrypoint", () => {
       })
     ).toEqual({
       rpcUrl: "https://api.devnet.solana.com",
+      rpcUrls: ["https://api.devnet.solana.com"],
+      network: "solana:devnet",
+      commitment: "confirmed"
+    });
+  });
+
+  it("reads a comma-separated Solana RPC provider list", () => {
+    expect(
+      readChainWorkerConfig({
+        SPLIT402_CHAIN_WORKER_SOLANA_RPC_URLS:
+          "https://primary.example, https://secondary.example, https://primary.example",
+        SPLIT402_CHAIN_WORKER_NETWORK: "solana:devnet"
+      })
+    ).toEqual({
+      rpcUrl: "https://primary.example",
+      rpcUrls: ["https://primary.example", "https://secondary.example"],
       network: "solana:devnet",
       commitment: "confirmed"
     });
@@ -75,7 +92,7 @@ describe("chain-verification worker entrypoint", () => {
 
   it("rejects invalid worker environment configuration", () => {
     expect(() => readChainWorkerConfig({})).toThrow(
-      "SPLIT402_CHAIN_WORKER_SOLANA_RPC_URL or SPLIT402_SOLANA_RPC_URL is required"
+      "SPLIT402_CHAIN_WORKER_SOLANA_RPC_URLS or SPLIT402_CHAIN_WORKER_SOLANA_RPC_URL or SPLIT402_SOLANA_RPC_URL is required"
     );
     expect(() =>
       readChainWorkerConfig({

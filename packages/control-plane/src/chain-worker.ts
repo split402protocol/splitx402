@@ -24,6 +24,7 @@ export interface ChainVerificationWorkerConfig {
   commitment: SolanaRpcCommitment;
   network: string;
   rpcUrl: string;
+  rpcUrls: string[];
   errorDelayMs?: number;
   maxIterations?: number;
   pollIntervalMs?: number;
@@ -60,7 +61,7 @@ export function createChainVerificationWorkerRuntimeFromEnv(
     ...(options.walletAuth === undefined ? {} : { walletAuth: options.walletAuth })
   });
   const verifier = new SolanaRpcReceiptVerifier({
-    rpcUrl: config.rpcUrl,
+    rpcUrls: config.rpcUrls,
     network: config.network,
     commitment: config.commitment,
     ...(options.fetch === undefined ? {} : { fetch: options.fetch })
@@ -89,10 +90,16 @@ export function createChainVerificationWorkerRuntimeFromEnv(
 export function readChainWorkerConfig(
   env: NodeJS.ProcessEnv = process.env
 ): ChainVerificationWorkerConfig {
-  const rpcUrl = readRequiredString(
-    env.SPLIT402_CHAIN_WORKER_SOLANA_RPC_URL ?? env.SPLIT402_SOLANA_RPC_URL,
-    "SPLIT402_CHAIN_WORKER_SOLANA_RPC_URL or SPLIT402_SOLANA_RPC_URL"
+  const rpcUrls = readRpcUrls(
+    env.SPLIT402_CHAIN_WORKER_SOLANA_RPC_URLS ??
+      env.SPLIT402_CHAIN_WORKER_SOLANA_RPC_URL ??
+      env.SPLIT402_SOLANA_RPC_URL,
+    "SPLIT402_CHAIN_WORKER_SOLANA_RPC_URLS or SPLIT402_CHAIN_WORKER_SOLANA_RPC_URL or SPLIT402_SOLANA_RPC_URL"
   );
+  const rpcUrl = rpcUrls[0];
+  if (rpcUrl === undefined) {
+    throw new Error("at least one Solana RPC URL is required");
+  }
   const network = readSolanaNetwork(
     env.SPLIT402_CHAIN_WORKER_NETWORK,
     "SPLIT402_CHAIN_WORKER_NETWORK"
@@ -123,6 +130,7 @@ export function readChainWorkerConfig(
 
   return {
     rpcUrl,
+    rpcUrls,
     network,
     commitment,
     ...(retryDelayMs === undefined ? {} : { retryDelayMs }),
@@ -249,7 +257,7 @@ Runs the Split402 receipt chain-verification worker loop.
 Required environment:
   SPLIT402_DATABASE_URL
   SPLIT402_CHAIN_WORKER_NETWORK
-  SPLIT402_CHAIN_WORKER_SOLANA_RPC_URL
+  SPLIT402_CHAIN_WORKER_SOLANA_RPC_URL or SPLIT402_CHAIN_WORKER_SOLANA_RPC_URLS
 
 Optional environment:
   SPLIT402_CHAIN_WORKER_COMMITMENT=confirmed|finalized
@@ -268,6 +276,22 @@ function readRequiredString(
     throw new Error(`${label} is required`);
   }
   return value;
+}
+
+function readRpcUrls(value: string | undefined, label: string): string[] {
+  const raw = readRequiredString(value, label);
+  const urls = Array.from(
+    new Set(
+      raw
+        .split(",")
+        .map((part) => part.trim())
+        .filter((part) => part.length > 0)
+    )
+  );
+  if (urls.length === 0) {
+    throw new Error(`${label} is required`);
+  }
+  return urls;
 }
 
 function readSolanaNetwork(value: string | undefined, label: string): string {
