@@ -3,10 +3,22 @@ import {
   Split402IdSchema,
   Split402ReceiptV1Schema,
   calculateOperationDigest,
+  createPrefixedId,
   hashProtocolObject,
   type CalculateOperationDigestInput,
   type Split402ReceiptV1
 } from "@split402/protocol";
+import type { PaymentPayload } from "@x402/core/types";
+import {
+  PAYMENT_IDENTIFIER,
+  appendPaymentIdentifierToExtensions,
+  declarePaymentIdentifierExtension,
+  extractPaymentIdentifier,
+  isValidPaymentId,
+  validatePaymentIdentifierRequirement,
+  type PaymentIdentifierExtension,
+  type PaymentIdentifierValidationResult
+} from "@x402/extensions/payment-identifier";
 import { randomBytes } from "node:crypto";
 
 export interface MerchantRouteDeclaration {
@@ -77,6 +89,77 @@ export class MerchantOperationDigestError extends Error {
     super(message);
     this.name = "MerchantOperationDigestError";
   }
+}
+
+export class MerchantPaymentIdentifierError extends Error {
+  readonly code = "merchant_payment_identifier_error";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "MerchantPaymentIdentifierError";
+  }
+}
+
+export const SPLIT402_PAYMENT_IDENTIFIER_EXTENSION_KEY = PAYMENT_IDENTIFIER;
+
+export type MerchantPaymentIdentifierExtension = PaymentIdentifierExtension;
+export type MerchantPaymentIdentifierValidationResult =
+  PaymentIdentifierValidationResult;
+
+export function declareRequiredPaymentIdentifierExtension(): Record<
+  typeof SPLIT402_PAYMENT_IDENTIFIER_EXTENSION_KEY,
+  PaymentIdentifierExtension
+> {
+  return {
+    [SPLIT402_PAYMENT_IDENTIFIER_EXTENSION_KEY]:
+      declarePaymentIdentifierExtension(true)
+  };
+}
+
+export function createSplit402PaymentIdentifier(): string {
+  const paymentId = createPrefixedId("pay");
+  if (!isValidPaymentId(paymentId)) {
+    throw new MerchantPaymentIdentifierError(
+      "generated payment identifier is not valid for x402"
+    );
+  }
+  return paymentId;
+}
+
+export function appendSplit402PaymentIdentifier(
+  extensions: Record<string, unknown>,
+  paymentId = createSplit402PaymentIdentifier()
+): Record<string, unknown> {
+  assertSplit402PaymentIdentifier(paymentId);
+  return appendPaymentIdentifierToExtensions({ ...extensions }, paymentId);
+}
+
+export function extractSplit402PaymentIdentifier(
+  paymentPayload: PaymentPayload
+): string | undefined {
+  return extractPaymentIdentifier(paymentPayload) ?? undefined;
+}
+
+export function validateRequiredSplit402PaymentIdentifier(
+  paymentPayload: PaymentPayload
+): PaymentIdentifierValidationResult {
+  return validatePaymentIdentifierRequirement(paymentPayload, true);
+}
+
+export function assertRequiredSplit402PaymentIdentifier(
+  paymentPayload: PaymentPayload
+): string {
+  const validation = validateRequiredSplit402PaymentIdentifier(paymentPayload);
+  if (!validation.valid) {
+    throw new MerchantPaymentIdentifierError(
+      validation.errors?.join("; ") ?? "payment identifier is required"
+    );
+  }
+  const paymentId = extractSplit402PaymentIdentifier(paymentPayload);
+  if (paymentId === undefined) {
+    throw new MerchantPaymentIdentifierError("payment identifier is required");
+  }
+  return assertSplit402PaymentIdentifier(paymentId);
 }
 
 export class CachedControlPlaneCampaignResolver {
@@ -908,6 +991,21 @@ function assertOperationNonEmptyString(value: string, label: string): string {
     throw new MerchantOperationDigestError(`${label} must be non-empty`);
   }
   return value;
+}
+
+function assertSplit402PaymentIdentifier(value: string): string {
+  if (!isValidPaymentId(value)) {
+    throw new MerchantPaymentIdentifierError(
+      "payment identifier is not valid for x402"
+    );
+  }
+  const parsed = Split402IdSchema.safeParse(value);
+  if (!parsed.success || !parsed.data.startsWith("pay_")) {
+    throw new MerchantPaymentIdentifierError(
+      "payment identifier must be a Split402 pay_ id"
+    );
+  }
+  return parsed.data;
 }
 
 function classifyHttpFailure(status: number): "retry" | "rejected" {
