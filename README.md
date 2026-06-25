@@ -321,6 +321,12 @@ Generate the Phase 6 emergency signer-auth revocation drill record:
 corepack pnpm phase6:emergency-revocation
 ```
 
+Generate the Phase 6 payout signer rollback drill record:
+
+```bash
+corepack pnpm phase6:rollback-drill
+```
+
 Run the optional live PostgreSQL harness against an empty test database:
 
 ```powershell
