@@ -373,6 +373,9 @@ Current slice:
 - add a Phase 6 payout custody incident drill generator for pause,
   reconciliation, no-replacement-byte, smoke, metrics, audit, and resume
   evidence;
+- add a Phase 6 unknown-outcome reconciliation drill generator for list,
+  reconcile, recommended-action, persisted-status, and no-replacement-byte
+  evidence;
 - add a Phase 6 evidence status command that lists required evidence commands
   and summarizes custody-bundle blockers;
 - add a Phase 6 custody evidence bundle scaffold command that emits validator

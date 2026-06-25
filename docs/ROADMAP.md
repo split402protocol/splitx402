@@ -290,6 +290,8 @@ Current slice:
   secret-set, readiness, metrics, reconciliation, and safe batch-resume evidence;
 - Phase 6 payout custody incident drill generation for pause, reconciliation,
   no-replacement-byte, smoke, metrics, audit, and resume evidence;
+- Phase 6 unknown-outcome reconciliation drill generation for list, reconcile,
+  recommended-action, persisted-status, and no-replacement-byte evidence;
 - Phase 6 evidence status reporting for required evidence commands and
   custody-bundle blockers;
 - Phase 6 custody evidence bundle scaffolding in canonical validator order;

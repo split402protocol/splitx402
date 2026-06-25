@@ -67,6 +67,29 @@ curl -s -X POST \
 | `manual_review_before_retry` | The transaction failed onchain. Review funding, blockhash, and signer policy before creating a new attempt. |
 | `requery_chain_before_retry` | The outcome is still ambiguous. Do not rebuild or retry with new bytes. Requery later. |
 
+Before production payout custody, copy
+[`docs/templates/phase6-reconciliation-drill.txt`](../templates/phase6-reconciliation-drill.txt)
+or generate the correctly shaped unknown-outcome reconciliation record:
+
+```bash
+SPLIT402_PHASE6_RECONCILIATION_DRILL_ID=phase6-reconciliation-001 \
+SPLIT402_PHASE6_RECONCILIATION_OWNERS="operations, protocol" \
+SPLIT402_PHASE6_RECONCILIATION_STAGING_ENVIRONMENT=split402-staging \
+SPLIT402_PHASE6_RECONCILIATION_MERCHANT_ID=<merchant-id> \
+SPLIT402_PHASE6_RECONCILIATION_PAYOUT_BATCH_ID=<payout-batch-id> \
+SPLIT402_PHASE6_RECONCILIATION_EXPECTED_SIGNATURE=<expected-signature> \
+SPLIT402_PHASE6_RECONCILIATION_OUTCOME_UNKNOWN_EVIDENCE="attached: batch status outcome_unknown before reconcile" \
+SPLIT402_PHASE6_RECONCILIATION_LIST_EVIDENCE="attached: GET /v1/merchants/<merchant-id>/payouts/reconciliation returned the batch" \
+SPLIT402_PHASE6_RECONCILIATION_ENDPOINT_EVIDENCE="attached: POST /v1/payout-batches/<payout-batch-id>/reconcile returned report" \
+SPLIT402_PHASE6_RECONCILIATION_RECOMMENDED_ACTION=requery_chain_before_retry \
+SPLIT402_PHASE6_RECONCILIATION_PERSISTED_STATUS_AFTER_RECONCILE=outcome_unknown \
+SPLIT402_PHASE6_RECONCILIATION_NO_REPLACEMENT_BYTES_EVIDENCE="attached: no replacement signed bytes created before reconciliation" \
+  corepack pnpm phase6:reconciliation-drill
+```
+
+Attach the output to `unknown_outcome_reconciliation_record` in the Phase 6
+custody evidence bundle.
+
 ## Safety Checks
 
 - Reconciliation resends no funds. It only queries chain finality and persists

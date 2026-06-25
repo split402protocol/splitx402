@@ -50,6 +50,11 @@ export const PHASE6_EVIDENCE_COMMANDS = [
     evidenceField: "rollback_drill_record",
   },
   {
+    gate: "unknown_outcome_reconciliation",
+    command: "corepack pnpm phase6:reconciliation-drill",
+    evidenceField: "unknown_outcome_reconciliation_record",
+  },
+  {
     gate: "incident_drill",
     command: "corepack pnpm phase6:incident-drill",
     evidenceField: "incident_drill_record",

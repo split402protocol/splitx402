@@ -35,6 +35,7 @@ describe("Phase 6 evidence assembly", () => {
         signer_policy_record: "evidence/signer-policy.txt",
         network_policy_record: "evidence/network-policy.txt",
         smoke_check_output: "evidence/signer-smoke.txt",
+        unknown_outcome_reconciliation_record: "evidence/reconciliation.txt",
         rotation_drill_record: "evidence/rotation.txt",
         emergency_revocation_drill_record: "evidence/emergency.txt",
         key_custody_record: "evidence/key-custody.txt",
@@ -55,6 +56,9 @@ describe("Phase 6 evidence assembly", () => {
     );
     expect(bundle).toContain(
       "signer_policy_record: attached: evidence/signer-policy.txt\n",
+    );
+    expect(bundle).toContain(
+      "unknown_outcome_reconciliation_record: attached: evidence/reconciliation.txt\n",
     );
     expect(bundle).toContain("approval_decision: no-go\n");
   });

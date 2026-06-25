@@ -352,6 +352,12 @@ Generate the Phase 6 payout custody incident drill record:
 corepack pnpm phase6:incident-drill
 ```
 
+Generate the Phase 6 unknown-outcome reconciliation drill record:
+
+```bash
+corepack pnpm phase6:reconciliation-drill
+```
+
 Generate the Phase 6 RPC failover review record after running the finality
 failover drill:
 
@@ -491,6 +497,7 @@ The latest Devnet proof is recorded in
 - [Phase 6 rotation drill template](docs/templates/phase6-rotation-drill.txt)
 - [Phase 6 rollback drill template](docs/templates/phase6-rollback-drill.txt)
 - [Phase 6 incident drill template](docs/templates/phase6-incident-drill.txt)
+- [Phase 6 reconciliation drill template](docs/templates/phase6-reconciliation-drill.txt)
 - [Phase 6 RPC failover review template](docs/templates/phase6-rpc-failover-review.txt)
 - [Payout custody incident drill](docs/runbooks/payout-custody-incident-drill.md)
 - [Payout reconciliation runbook](docs/runbooks/payout-reconciliation.md)

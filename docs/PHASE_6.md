@@ -105,6 +105,9 @@ plus an unknown-outcome reconciliation queue and referrer payout views.
 - Added `corepack pnpm phase6:incident-drill` to generate a structured payout
   custody incident drill record with pause, reconciliation, no-replacement-byte,
   smoke, metrics, audit, and resume evidence.
+- Added `corepack pnpm phase6:reconciliation-drill` to generate a structured
+  unknown-outcome reconciliation drill record for list, reconcile, recommended
+  action, persisted status, and no-replacement-byte evidence.
 - Added `corepack pnpm phase6:rpc-failover` to generate a structured RPC
   failover review record that validates the finality drill passed and observed
   status from the secondary RPC.
@@ -197,6 +200,7 @@ the merchant has enough funding.
 - `corepack pnpm phase6:key-custody`
 - `corepack pnpm phase6:network-policy`
 - `corepack pnpm phase6:incident-drill`
+- `corepack pnpm phase6:reconciliation-drill`
 - `corepack pnpm phase6:rotation-drill`
 - `corepack pnpm phase6:rollback-drill`
 - `corepack pnpm phase6:rpc-failover`

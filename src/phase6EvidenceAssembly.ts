@@ -14,6 +14,7 @@ export interface Phase6EvidenceAssemblyInput {
       | "network_policy_record"
       | "signer_policy_record"
       | "smoke_check_output"
+      | "unknown_outcome_reconciliation_record"
       | "rotation_drill_record"
       | "emergency_revocation_drill_record"
       | "key_custody_record"

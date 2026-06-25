@@ -28,6 +28,7 @@
     "phase6:incident-drill": "tsx src/phase6-incident-drill.ts",
     "phase6:key-custody": "tsx src/phase6-key-custody.ts",
     "phase6:network-policy": "tsx src/phase6-network-policy.ts",
+    "phase6:reconciliation-drill": "tsx src/phase6-reconciliation-drill.ts",
     "phase6:rotation-drill": "tsx src/phase6-rotation-drill.ts",
     "phase6:rollback-drill": "tsx src/phase6-rollback-drill.ts",
     "phase6:rpc-failover": "tsx src/phase6-rpc-failover.ts",
