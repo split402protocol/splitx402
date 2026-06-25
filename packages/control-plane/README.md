@@ -72,7 +72,8 @@ POST /v1/merchants/:merchantId/payout-batches
 - payout preview and batch allocation stores that select available accruals and
   mark them `allocated` exactly once;
 - PostgreSQL payout batch creation with `FOR UPDATE SKIP LOCKED` eligible-accrual
-  selection for concurrent workers.
+  selection for concurrent workers;
+- deterministic Solana payout transfer planning for allocated batches.
 
 ## Commands
 

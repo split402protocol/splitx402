@@ -2,9 +2,122 @@ import { createSampleProtocolArtifacts } from "@split402/protocol";
 import { describe, expect, it } from "vitest";
 
 import {
+  createSolanaPayoutTransactionPlan,
+  SOLANA_TOKEN_PROGRAM_ID,
   SolanaRpcReceiptVerifier,
   type SolanaRpcFetch
 } from "../src/index.js";
+import type { PayoutBatchRecord } from "../src/index.js";
+
+describe("createSolanaPayoutTransactionPlan", () => {
+  it("derives token accounts and plans idempotent ATA creation plus transfer instructions", async () => {
+    const receipt = createSampleProtocolArtifacts().artifacts.receipt;
+    const batch = payoutBatch(receipt);
+
+    const plan = await createSolanaPayoutTransactionPlan({
+      batch,
+      fundingWallet: receipt.payToWallet,
+      tokenDecimals: 6,
+      maxItemsPerTransaction: 1
+    });
+
+    expect(plan).toEqual(
+      expect.objectContaining({
+        batchId: batch.id,
+        network: receipt.network,
+        asset: receipt.asset,
+        tokenProgramId: SOLANA_TOKEN_PROGRAM_ID,
+        tokenDecimals: 6,
+        fundingWallet: receipt.payToWallet,
+        totalAmountAtomic: "3000",
+        itemCount: 2,
+        transactionCount: 2
+      })
+    );
+    expect(plan.sourceTokenAccount).not.toBe(receipt.payToWallet);
+    expect(plan.transactions).toHaveLength(2);
+    expect(plan.transactions[0]?.instructions).toEqual([
+      expect.objectContaining({
+        kind: "createAssociatedTokenIdempotent",
+        payer: receipt.payToWallet,
+        owner: receipt.payoutWallet,
+        mint: receipt.asset,
+        tokenProgramId: SOLANA_TOKEN_PROGRAM_ID
+      }),
+      expect.objectContaining({
+        kind: "transferChecked",
+        source: plan.sourceTokenAccount,
+        mint: receipt.asset,
+        authority: receipt.payToWallet,
+        amountAtomic: "1000",
+        decimals: 6,
+        payoutItemId: "pit_11111111111111111111111111111111"
+      })
+    ]);
+    expect(plan.transactions[1]?.items[0]).toEqual(
+      expect.objectContaining({
+        destinationWallet: receipt.referrerWallet,
+        amountAtomic: "2000",
+        createAssociatedTokenAccount: true
+      })
+    );
+  });
+
+  it("uses explicit destination token accounts without creating an ATA", async () => {
+    const receipt = createSampleProtocolArtifacts().artifacts.receipt;
+    const batch = payoutBatch(receipt, {
+      destinationTokenAccount: receipt.payerWallet
+    });
+
+    const plan = await createSolanaPayoutTransactionPlan({
+      batch,
+      fundingWallet: receipt.payToWallet,
+      sourceTokenAccount: receipt.payerWallet,
+      tokenDecimals: 6
+    });
+
+    expect(plan.transactions).toHaveLength(1);
+    expect(plan.transactions[0]?.instructions).toHaveLength(2);
+    expect(plan.transactions[0]?.instructions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "transferChecked",
+          source: receipt.payerWallet,
+          destination: receipt.payerWallet,
+          amountAtomic: "1000"
+        }),
+        expect.objectContaining({
+          kind: "transferChecked",
+          source: receipt.payerWallet,
+          destination: receipt.payerWallet,
+          amountAtomic: "2000"
+        })
+      ])
+    );
+    expect(plan.transactions[0]?.items[0]?.createAssociatedTokenAccount).toBe(
+      false
+    );
+  });
+
+  it("rejects invalid payout batches before planning transactions", async () => {
+    const receipt = createSampleProtocolArtifacts().artifacts.receipt;
+
+    await expect(
+      createSolanaPayoutTransactionPlan({
+        batch: { ...payoutBatch(receipt), status: "submitted" },
+        fundingWallet: receipt.payToWallet,
+        tokenDecimals: 6
+      })
+    ).rejects.toThrow("payout batch must be planned");
+    await expect(
+      createSolanaPayoutTransactionPlan({
+        batch: payoutBatch(receipt),
+        fundingWallet: receipt.payToWallet,
+        tokenDecimals: 300
+      })
+    ).rejects.toThrow("tokenDecimals must be an integer between 0 and 255");
+  });
+});
 
 describe("SolanaRpcReceiptVerifier", () => {
   it("confirms receipts when the settlement signature and token transfer match", async () => {
@@ -332,6 +445,66 @@ describe("SolanaRpcReceiptVerifier", () => {
     );
   });
 });
+
+function payoutBatch(
+  receipt: ReturnType<typeof createSampleProtocolArtifacts>["artifacts"]["receipt"],
+  options: { destinationTokenAccount?: string } = {}
+): PayoutBatchRecord {
+  if (receipt.payoutWallet === undefined || receipt.referrerWallet === undefined) {
+    throw new Error("sample receipt must include payout and referrer wallets");
+  }
+  return {
+    id: "pbt_ffffffffffffffffffffffffffffffff",
+    merchantId: receipt.merchantId,
+    payoutWalletId: "mpw_ffffffffffffffffffffffffffffffff",
+    network: receipt.network,
+    asset: receipt.asset,
+    status: "planned",
+    totalAmountAtomic: "3000",
+    itemCount: 2,
+    accrualCount: 2,
+    createdAt: "2026-06-24T00:05:00.000Z",
+    updatedAt: "2026-06-24T00:05:00.000Z",
+    items: [
+      {
+        id: "pit_11111111111111111111111111111111",
+        payoutBatchId: "pbt_ffffffffffffffffffffffffffffffff",
+        destinationWallet: receipt.payoutWallet,
+        ...(options.destinationTokenAccount === undefined
+          ? {}
+          : { destinationTokenAccount: options.destinationTokenAccount }),
+        amountAtomic: "1000",
+        status: "allocated",
+        createdAt: "2026-06-24T00:05:00.000Z",
+        allocations: [
+          {
+            payoutItemId: "pit_11111111111111111111111111111111",
+            accrualId: "acr_11111111111111111111111111111111",
+            amountAtomic: "1000"
+          }
+        ]
+      },
+      {
+        id: "pit_22222222222222222222222222222222",
+        payoutBatchId: "pbt_ffffffffffffffffffffffffffffffff",
+        destinationWallet: receipt.referrerWallet,
+        ...(options.destinationTokenAccount === undefined
+          ? {}
+          : { destinationTokenAccount: options.destinationTokenAccount }),
+        amountAtomic: "2000",
+        status: "allocated",
+        createdAt: "2026-06-24T00:05:00.000Z",
+        allocations: [
+          {
+            payoutItemId: "pit_22222222222222222222222222222222",
+            accrualId: "acr_22222222222222222222222222222222",
+            amountAtomic: "2000"
+          }
+        ]
+      }
+    ]
+  };
+}
 
 function signatureStatusesBody(
   status: Record<string, unknown> | null

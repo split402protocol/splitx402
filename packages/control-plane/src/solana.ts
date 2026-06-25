@@ -6,8 +6,13 @@ import type {
   ReceiptChainVerificationResult,
   ReceiptChainVerifier
 } from "./workers.js";
+import type { PayoutBatchRecord, PayoutItemRecord } from "./payouts.js";
 
 export type SolanaRpcCommitment = "confirmed" | "finalized";
+export const SOLANA_TOKEN_PROGRAM_ID =
+  "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+export const SOLANA_TOKEN_2022_PROGRAM_ID =
+  "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
 
 export interface SolanaRpcReceiptVerifierOptions {
   rpcUrl?: string;
@@ -30,6 +35,69 @@ export interface SolanaRpcHttpResponse {
   ok: boolean;
   status: number;
   json(): Promise<unknown>;
+}
+
+export interface CreateSolanaPayoutTransactionPlanInput {
+  batch: PayoutBatchRecord;
+  fundingWallet: string;
+  tokenDecimals: number;
+  tokenProgramId?: string;
+  sourceTokenAccount?: string;
+  maxItemsPerTransaction?: number;
+}
+
+export interface SolanaPayoutTransactionPlan {
+  batchId: string;
+  network: string;
+  asset: string;
+  tokenProgramId: string;
+  tokenDecimals: number;
+  fundingWallet: string;
+  sourceTokenAccount: string;
+  totalAmountAtomic: string;
+  itemCount: number;
+  transactionCount: number;
+  transactions: SolanaPayoutPlannedTransaction[];
+}
+
+export interface SolanaPayoutPlannedTransaction {
+  index: number;
+  items: SolanaPayoutPlannedItem[];
+  instructions: SolanaPayoutInstructionPlan[];
+}
+
+export interface SolanaPayoutPlannedItem {
+  payoutItemId: string;
+  destinationWallet: string;
+  destinationTokenAccount: string;
+  amountAtomic: string;
+  createAssociatedTokenAccount: boolean;
+}
+
+export type SolanaPayoutInstructionPlan =
+  | SolanaCreateAssociatedTokenInstructionPlan
+  | SolanaTransferCheckedInstructionPlan;
+
+export interface SolanaCreateAssociatedTokenInstructionPlan {
+  kind: "createAssociatedTokenIdempotent";
+  programId: string;
+  payer: string;
+  associatedTokenAccount: string;
+  owner: string;
+  mint: string;
+  tokenProgramId: string;
+}
+
+export interface SolanaTransferCheckedInstructionPlan {
+  kind: "transferChecked";
+  programId: string;
+  source: string;
+  mint: string;
+  destination: string;
+  authority: string;
+  amountAtomic: string;
+  decimals: number;
+  payoutItemId: string;
 }
 
 type SolanaSignatureConfirmationStatus =
@@ -65,10 +133,94 @@ interface SolanaTokenTransfer {
   amount: string;
 }
 
+const ASSOCIATED_TOKEN_PROGRAM_ID = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
 const TOKEN_PROGRAM_IDS = new Set([
-  "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
-  "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+  SOLANA_TOKEN_PROGRAM_ID,
+  SOLANA_TOKEN_2022_PROGRAM_ID
 ]);
+
+export async function createSolanaPayoutTransactionPlan(
+  input: CreateSolanaPayoutTransactionPlanInput
+): Promise<SolanaPayoutTransactionPlan> {
+  const tokenProgramId = input.tokenProgramId ?? SOLANA_TOKEN_PROGRAM_ID;
+  assertSupportedTokenProgramId(tokenProgramId);
+  const tokenDecimals = assertTokenDecimals(input.tokenDecimals);
+  const fundingWallet = assertSolanaAddress(input.fundingWallet, "fundingWallet");
+  const asset = assertSolanaAddress(input.batch.asset, "batch.asset");
+  if (!input.batch.network.startsWith("solana:")) {
+    throw new Error("payout batch network must be a Solana network");
+  }
+  if (input.batch.status !== "planned") {
+    throw new Error("payout batch must be planned before transaction planning");
+  }
+
+  const maxItemsPerTransaction =
+    input.maxItemsPerTransaction === undefined
+      ? input.batch.items.length
+      : assertPositiveInteger(
+          input.maxItemsPerTransaction,
+          "maxItemsPerTransaction"
+        );
+  if (maxItemsPerTransaction <= 0) {
+    throw new Error("payout batch must contain at least one item");
+  }
+  const sourceTokenAccount =
+    input.sourceTokenAccount === undefined
+      ? await deriveAssociatedTokenAccount({
+          owner: fundingWallet,
+          mint: asset,
+          tokenProgramId
+        })
+      : assertSolanaAddress(input.sourceTokenAccount, "sourceTokenAccount");
+
+  const plannedItems = await Promise.all(
+    input.batch.items.map((item) =>
+      planSolanaPayoutItem({
+        item,
+        asset,
+        tokenProgramId
+      })
+    )
+  );
+  const totalAmount = plannedItems.reduce(
+    (total, item) => total + BigInt(item.amountAtomic),
+    0n
+  );
+  if (totalAmount.toString() !== input.batch.totalAmountAtomic) {
+    throw new Error("payout batch total does not match planned item total");
+  }
+
+  const transactions = chunkItems(plannedItems, maxItemsPerTransaction).map(
+    (items, index) => ({
+      index,
+      items,
+      instructions: items.flatMap((item) =>
+        createSolanaPayoutInstructions({
+          item,
+          asset,
+          fundingWallet,
+          sourceTokenAccount,
+          tokenDecimals,
+          tokenProgramId
+        })
+      )
+    })
+  );
+
+  return {
+    batchId: input.batch.id,
+    network: input.batch.network,
+    asset,
+    tokenProgramId,
+    tokenDecimals,
+    fundingWallet,
+    sourceTokenAccount,
+    totalAmountAtomic: totalAmount.toString(),
+    itemCount: plannedItems.length,
+    transactionCount: transactions.length,
+    transactions
+  };
+}
 
 export class SolanaRpcReceiptVerifier implements ReceiptChainVerifier {
   constructor(private readonly options: SolanaRpcReceiptVerifierOptions) {}
@@ -308,6 +460,133 @@ export class SolanaRpcReceiptVerifier implements ReceiptChainVerifier {
     return Array.from(
       new Set(urls.map((url) => url.trim()).filter((url) => url.length > 0))
     );
+  }
+}
+
+async function planSolanaPayoutItem(input: {
+  item: PayoutItemRecord;
+  asset: string;
+  tokenProgramId: string;
+}): Promise<SolanaPayoutPlannedItem> {
+  if (input.item.status !== "allocated") {
+    throw new Error(`payout item ${input.item.id} must be allocated`);
+  }
+  const destinationWallet = assertSolanaAddress(
+    input.item.destinationWallet,
+    `payout item ${input.item.id} destinationWallet`
+  );
+  const destinationTokenAccount =
+    input.item.destinationTokenAccount === undefined
+      ? await deriveAssociatedTokenAccount({
+          owner: destinationWallet,
+          mint: input.asset,
+          tokenProgramId: input.tokenProgramId
+        })
+      : assertSolanaAddress(
+          input.item.destinationTokenAccount,
+          `payout item ${input.item.id} destinationTokenAccount`
+        );
+  assertPositiveAtomicAmount(
+    input.item.amountAtomic,
+    `payout item ${input.item.id} amountAtomic`
+  );
+  return {
+    payoutItemId: input.item.id,
+    destinationWallet,
+    destinationTokenAccount,
+    amountAtomic: input.item.amountAtomic,
+    createAssociatedTokenAccount: input.item.destinationTokenAccount === undefined
+  };
+}
+
+function createSolanaPayoutInstructions(input: {
+  item: SolanaPayoutPlannedItem;
+  asset: string;
+  fundingWallet: string;
+  sourceTokenAccount: string;
+  tokenDecimals: number;
+  tokenProgramId: string;
+}): SolanaPayoutInstructionPlan[] {
+  const instructions: SolanaPayoutInstructionPlan[] = [];
+  if (input.item.createAssociatedTokenAccount) {
+    instructions.push({
+      kind: "createAssociatedTokenIdempotent",
+      programId: ASSOCIATED_TOKEN_PROGRAM_ID,
+      payer: input.fundingWallet,
+      associatedTokenAccount: input.item.destinationTokenAccount,
+      owner: input.item.destinationWallet,
+      mint: input.asset,
+      tokenProgramId: input.tokenProgramId
+    });
+  }
+  instructions.push({
+    kind: "transferChecked",
+    programId: input.tokenProgramId,
+    source: input.sourceTokenAccount,
+    mint: input.asset,
+    destination: input.item.destinationTokenAccount,
+    authority: input.fundingWallet,
+    amountAtomic: input.item.amountAtomic,
+    decimals: input.tokenDecimals,
+    payoutItemId: input.item.payoutItemId
+  });
+  return instructions;
+}
+
+async function deriveAssociatedTokenAccount(input: {
+  owner: string;
+  mint: string;
+  tokenProgramId: string;
+}): Promise<string> {
+  const [associatedTokenAccount] = await findAssociatedTokenPda({
+    owner: address(input.owner),
+    tokenProgram: address(input.tokenProgramId),
+    mint: address(input.mint)
+  });
+  return associatedTokenAccount.toString();
+}
+
+function chunkItems<T>(items: readonly T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
+function assertSupportedTokenProgramId(value: string): string {
+  const tokenProgramId = assertSolanaAddress(value, "tokenProgramId");
+  if (!TOKEN_PROGRAM_IDS.has(tokenProgramId)) {
+    throw new Error("tokenProgramId must be a supported SPL token program");
+  }
+  return tokenProgramId;
+}
+
+function assertSolanaAddress(value: string, label: string): string {
+  try {
+    return address(value).toString();
+  } catch {
+    throw new Error(`${label} must be a valid Solana address`);
+  }
+}
+
+function assertTokenDecimals(value: number): number {
+  if (!Number.isInteger(value) || value < 0 || value > 255) {
+    throw new Error("tokenDecimals must be an integer between 0 and 255");
+  }
+  return value;
+}
+
+function assertPositiveInteger(value: number, label: string): number {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${label} must be a positive integer`);
+  }
+  return value;
+}
+
+function assertPositiveAtomicAmount(value: string, label: string): void {
+  if (!/^[1-9][0-9]*$/u.test(value)) {
+    throw new Error(`${label} must be a positive atomic amount`);
   }
 }
 

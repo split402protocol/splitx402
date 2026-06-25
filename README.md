@@ -170,7 +170,7 @@ mainnet payment flows exist yet.
 | Solana RPC signature-status verifier | Started |
 | Solana transaction transfer verifier | Started |
 | Live PostgreSQL migration/integration harness | Started |
-| Payout engine preview, funding-wallet registry, and batch allocation | Started |
+| Payout engine preview, funding-wallet registry, batch allocation, and Solana transfer planning | Started |
 | `$SPLIT` bonding and atomic split settlement | Later research |
 
 The latest Devnet proof is recorded in
@@ -378,8 +378,11 @@ apply recipient thresholds and limits, report funding coverage or deficit throug
 batches that mark selected accruals `allocated` exactly once. PostgreSQL-backed
 batch creation can also select eligible accruals inside the allocation
 transaction with `FOR UPDATE SKIP LOCKED` so concurrent payout workers do not
-claim the same rows. Transaction signing, broadcasting, and reconciliation are
-still remaining hardening steps.
+claim the same rows. The first Solana payout planner derives source and
+destination token accounts, emits idempotent associated-token-account creation
+steps, and creates transfer-checked instruction plans for allocated batches.
+Simulation, transaction signing, broadcasting, and reconciliation are still
+remaining hardening steps.
 
 ## MVP Rules
 
