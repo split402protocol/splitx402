@@ -1,8 +1,9 @@
 # Roadmap
 
 This roadmap follows the Split402 protocol architecture v0.1 spec. The
-`splitx402/ffff` repository is the implementation reference for the first slices of
-that spec; this repository is the v2 implementation line.
+`split402protocol/splitx402` repository is the canonical public implementation
+line. The earlier `splitx402/ffff` repository remains a historical reference for
+the first implementation slices.
 
 ## Current Snapshot
 

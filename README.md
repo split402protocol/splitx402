@@ -24,10 +24,10 @@ The important money model is simple:
   merchant-controlled funding wallet.
 
 Split402 is the protocol and product name. This repository,
-`split402protocol/splitx402`, is the current v2 implementation line. The earlier
-[`splitx402/ffff`](https://github.com/splitx402/ffff) repository is the first
-implementation baseline, not a separate product direction. The canonical protocol
-scope is captured in the
+`split402protocol/splitx402`, is the canonical public implementation repository.
+The earlier [`splitx402/ffff`](https://github.com/splitx402/ffff) repository is a
+historical implementation reference, not a separate product direction. The
+canonical protocol scope is captured in the
 [Split402 protocol architecture v0.1 spec](docs/reference/split402_protocol_architecture_v0.1.md).
 
 ## Protocol In One Picture
@@ -68,7 +68,7 @@ flowchart LR
 | Chain verification | Implemented as an outbox-driven Solana JSON-RPC worker for settlement signature and transfer checks. |
 | Webhooks | Implemented for accepted-receipt and payout lifecycle events with signed delivery envelopes and retry/dead-letter handling. |
 | Merchant SDK reliability boundary | Implemented with cached campaign lookup, service-key rotation helpers, payment identifiers, operation digests, and merchant-local receipt outbox primitives. |
-| Payout engine | In progress: preview, allocation, Solana transfer planning, simulation, signer policy, signed-byte persistence, broadcast boundary, finality monitor, rollup, payout lifecycle events, unknown-outcome reconciliation queue, and idempotent ledger closure are implemented. |
+| Payout engine | In progress: preview, allocation, Solana transfer planning, simulation, signer policy, signed-byte persistence, broadcast boundary, finality monitor, rollup, payout lifecycle events, unknown-outcome reconciliation queue, referrer payout views, and idempotent ledger closure are implemented. |
 | Atomic split settlement | Later research. The MVP does not split the original x402 transaction onchain. |
 | `$SPLIT` bonding | Later research after the USDC accrual-and-payout loop is production ready. |
 

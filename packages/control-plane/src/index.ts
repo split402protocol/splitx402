@@ -965,7 +965,8 @@ export function createControlPlaneApp(
     res.json({
       status: "ok",
       service: "split402-control-plane",
-      phase: "phase-4"
+      phase: "phase-6",
+      releaseStage: "public-alpha"
     });
   });
 

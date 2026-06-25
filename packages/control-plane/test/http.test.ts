@@ -52,7 +52,7 @@ const ROTATED_PAYOUT_WALLET = deriveEd25519PublicKey(ROTATED_PAYOUT_SEED);
 const NETWORK = "solana:devnet";
 
 describe("control-plane HTTP API", () => {
-  it("exposes a Phase 4 health endpoint", async () => {
+  it("exposes a current public-alpha health endpoint", async () => {
     const { app } = createTestApp();
 
     const response = await request(app).get("/v1/health").expect(200);
@@ -60,7 +60,8 @@ describe("control-plane HTTP API", () => {
     expect(response.body).toEqual({
       status: "ok",
       service: "split402-control-plane",
-      phase: "phase-4"
+      phase: "phase-6",
+      releaseStage: "public-alpha"
     });
   });
 
