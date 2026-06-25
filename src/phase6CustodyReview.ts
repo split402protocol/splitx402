@@ -9,6 +9,13 @@ export const PHASE6_CUSTODY_REQUIRED_FIELDS = [
   "funding_wallet",
   "network",
   "network_policy_record",
+  "signer_policy_record",
+  "signer_policy_network",
+  "signer_policy_funding_wallet",
+  "signer_policy_source_token_account",
+  "signer_policy_mint",
+  "signer_policy_allowed_token_program_ids",
+  "signer_policy_max_transaction_amount_atomic",
   "smoke_check_output",
   "rotation_drill_record",
   "incident_drill_record",
@@ -60,6 +67,41 @@ export function validatePhase6CustodyEvidence(
     !/^[a-f0-9]{7,40}$/u.test(sourceCommit)
   ) {
     invalidFields.push("source_commit must be a git SHA");
+  }
+
+  const signerPolicyNetwork = fields.get("signer_policy_network")?.trim();
+  if (
+    signerPolicyNetwork !== undefined &&
+    signerPolicyNetwork.length > 0 &&
+    !signerPolicyNetwork.startsWith("solana:")
+  ) {
+    invalidFields.push("signer_policy_network must start with solana:");
+  }
+
+  const signerPolicyAllowedTokenProgramIds = fields
+    .get("signer_policy_allowed_token_program_ids")
+    ?.trim();
+  if (
+    signerPolicyAllowedTokenProgramIds !== undefined &&
+    signerPolicyAllowedTokenProgramIds.length > 0 &&
+    signerPolicyAllowedTokenProgramIds.split(",").every((item) => item.trim().length === 0)
+  ) {
+    invalidFields.push(
+      "signer_policy_allowed_token_program_ids must include at least one token program",
+    );
+  }
+
+  const signerPolicyMaxTransactionAmountAtomic = fields
+    .get("signer_policy_max_transaction_amount_atomic")
+    ?.trim();
+  if (
+    signerPolicyMaxTransactionAmountAtomic !== undefined &&
+    signerPolicyMaxTransactionAmountAtomic.length > 0 &&
+    !/^[1-9][0-9]*$/u.test(signerPolicyMaxTransactionAmountAtomic)
+  ) {
+    invalidFields.push(
+      "signer_policy_max_transaction_amount_atomic must be a positive atomic amount",
+    );
   }
 
   for (const digestField of [

@@ -74,6 +74,8 @@ plus an unknown-outcome reconciliation queue and referrer payout views.
   secret-exposure validation.
 - Added a Kubernetes network policy starter that restricts payout signer ingress
   to the control plane.
+- Added machine-checkable signer policy evidence fields and a signer policy
+  review template for custody approval.
 - Added signed payout transaction records and PostgreSQL persistence for exact
   signed bytes, expected signature, sequence, attempt, blockhash metadata, and
   submitted state before broadcast.

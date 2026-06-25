@@ -12,6 +12,13 @@ staging_environment: split402-staging
 funding_wallet: 8jYFQwU6P4L3uYJwqN4uJtVq4n5o7x8p9a1b2c3d4e5f
 network: solana:devnet
 network_policy_record: attached: network-policy-001.yaml
+signer_policy_record: attached: signer-policy-review-001.md
+signer_policy_network: solana:devnet
+signer_policy_funding_wallet: 8jYFQwU6P4L3uYJwqN4uJtVq4n5o7x8p9a1b2c3d4e5f
+signer_policy_source_token_account: 7xYFQwU6P4L3uYJwqN4uJtVq4n5o7x8p9a1b2c3d4e5f
+signer_policy_mint: usdc_mint
+signer_policy_allowed_token_program_ids: TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA
+signer_policy_max_transaction_amount_atomic: 100000000
 smoke_check_output: attached: smoke-check-001.log
 rotation_drill_record: attached: rotation-drill-001.md
 incident_drill_record: attached: incident-drill-001.md
@@ -57,6 +64,32 @@ approval_decision: no-go
       expect.arrayContaining([
         "source_commit must be a git SHA",
         "signer_image_digest must be an immutable sha256 digest",
+      ]),
+    );
+  });
+
+  it("rejects malformed signer policy evidence", () => {
+    const result = validatePhase6CustodyEvidence(
+      VALID_EVIDENCE.replace(
+        "signer_policy_network: solana:devnet",
+        "signer_policy_network: eip155:8453",
+      )
+        .replace(
+          "signer_policy_allowed_token_program_ids: TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "signer_policy_allowed_token_program_ids: ,",
+        )
+        .replace(
+          "signer_policy_max_transaction_amount_atomic: 100000000",
+          "signer_policy_max_transaction_amount_atomic: 1.5",
+        ),
+    );
+
+    expect(result.approved).toBe(false);
+    expect(result.invalidFields).toEqual(
+      expect.arrayContaining([
+        "signer_policy_network must start with solana:",
+        "signer_policy_allowed_token_program_ids must include at least one token program",
+        "signer_policy_max_transaction_amount_atomic must be a positive atomic amount",
       ]),
     );
   });

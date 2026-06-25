@@ -349,6 +349,8 @@ Current slice:
   secret-exposure validation;
 - add a private signer ingress network policy starter for the custody evidence
   bundle;
+- add machine-checkable signer policy evidence fields and a signer policy
+  review template;
 - add signed-byte payout transaction persistence and Solana broadcast submission
   boundary;
 - add Solana payout transaction finality monitor with retry and outcome-unknown

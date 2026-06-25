@@ -267,6 +267,8 @@ Current slice:
 - payout signer staging smoke checks for health, readiness, metrics, and
   secret-exposure validation;
 - private signer ingress network policy starter for custody evidence;
+- machine-checkable signer policy evidence fields and signer policy review
+  template;
 - signed-byte payout transaction persistence and Solana broadcast submission
   boundary;
 - Solana payout transaction finality monitor with retry and outcome-unknown
