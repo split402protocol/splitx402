@@ -99,6 +99,10 @@ plus an unknown-outcome reconciliation queue and referrer payout views.
   observations through the existing rollup path, and return a retry decision.
 - Added an operator runbook for unknown payout outcomes at
   `docs/runbooks/payout-reconciliation.md`.
+- Added a Phase 6 custody review checklist at
+  `docs/checklists/phase6-custody-review.md`.
+- Added a payout custody incident drill at
+  `docs/runbooks/payout-custody-incident-drill.md`.
 - Added referrer-facing balance and payout history views with
   `GET /v1/referrers/:referrerWallet/balances` and
   `GET /v1/referrers/:referrerWallet/payouts`.
@@ -121,8 +125,10 @@ the merchant has enough funding.
 
 ## Remaining Milestone 4 Work
 
-- Staging deployment validation for the packaged signer appliance.
-- Production payout custody and incident-response review.
+- Complete staging deployment validation evidence for the packaged signer
+  appliance.
+- Complete every pending gate in
+  `docs/checklists/phase6-custody-review.md`.
 
 ## Acceptance Checks
 

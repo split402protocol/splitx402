@@ -357,6 +357,7 @@ Current slice:
   internal and webhook outbox events;
 - add an unknown-outcome payout reconciliation queue for merchant/operator review;
 - add a payout reconciliation action endpoint and unknown-outcome runbook;
+- add a Phase 6 custody review checklist and payout custody incident drill;
 - expose `POST /v1/merchants/:merchantId/payout-wallets`;
 - expose `POST /v1/merchants/:merchantId/payouts/preview`;
 - expose `GET /v1/merchants/:merchantId/payouts/reconciliation`;
