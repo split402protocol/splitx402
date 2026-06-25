@@ -266,6 +266,7 @@ Current slice:
 - deployable payout signer JSONL audit logging for sanitized custody evidence;
 - payout signer staging smoke checks for health, readiness, metrics, and
   secret-exposure validation;
+- private signer ingress network policy starter for custody evidence;
 - signed-byte payout transaction persistence and Solana broadcast submission
   boundary;
 - Solana payout transaction finality monitor with retry and outcome-unknown

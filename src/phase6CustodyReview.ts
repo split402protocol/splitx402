@@ -8,6 +8,7 @@ export const PHASE6_CUSTODY_REQUIRED_FIELDS = [
   "staging_environment",
   "funding_wallet",
   "network",
+  "network_policy_record",
   "smoke_check_output",
   "rotation_drill_record",
   "incident_drill_record",
