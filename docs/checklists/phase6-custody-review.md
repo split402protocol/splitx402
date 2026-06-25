@@ -19,7 +19,7 @@ all required gates are approved.
 | Unknown-outcome reconciliation | Drill proving no replacement transaction is built before `POST /v1/payout-batches/:batchId/reconcile`. | Pending |
 | RPC failover | `corepack pnpm payout:finality:failover-drill` output with `passed: true`, primary RPC unavailable, and secondary RPC returning status. | Pending |
 | Incident drill | Completed `docs/runbooks/payout-custody-incident-drill.md` with timestamps and owners. | Pending |
-| Rollback drill | `rollback_drill_record` proving rollback to last known-good image and secret set using `docs/templates/phase6-rollback-drill.txt`. | Pending |
+| Rollback drill | `corepack pnpm phase6:rollback-drill` output proving rollback to last known-good image and secret set, readiness, metrics, reconciliation records, and safe batch resume. | Pending |
 | Production approval | Security, operations, and protocol owners approve the evidence bundle. | Pending |
 
 ## Go/No-Go Rule

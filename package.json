@@ -23,6 +23,7 @@
     "phase6:emergency-revocation": "tsx src/phase6-emergency-revocation.ts",
     "phase6:image-provenance": "tsx src/phase6-image-provenance.ts",
     "phase6:key-custody": "tsx src/phase6-key-custody.ts",
+    "phase6:rollback-drill": "tsx src/phase6-rollback-drill.ts",
     "phase6:signer-policy": "tsx src/phase6-signer-policy.ts",
     "audit": "corepack pnpm audit --audit-level high",
     "demo:merchant": "corepack pnpm --filter @split402/demo-merchant dev",

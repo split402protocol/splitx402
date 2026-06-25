@@ -218,3 +218,23 @@ record incident evidence. Use
 [`docs/templates/phase6-rollback-drill.txt`](../templates/phase6-rollback-drill.txt)
 to record rollback evidence and attach it to `rollback_drill_record` in the
 Phase 6 custody evidence bundle.
+
+You can generate the correctly shaped rollback drill record with:
+
+```bash
+SPLIT402_PHASE6_ROLLBACK_DRILL_ID=phase6-rollback-001 \
+SPLIT402_PHASE6_ROLLBACK_OWNERS="security, operations" \
+SPLIT402_PHASE6_ROLLBACK_STAGING_ENVIRONMENT=split402-staging \
+SPLIT402_PHASE6_ROLLBACK_CURRENT_SIGNER_IMAGE_DIGEST=sha256:<current-signer-image-digest> \
+SPLIT402_PHASE6_ROLLBACK_LAST_KNOWN_GOOD_SIGNER_IMAGE_DIGEST=sha256:<last-known-good-signer-image-digest> \
+SPLIT402_PHASE6_ROLLBACK_CURRENT_SECRET_SET_REFERENCE=secret-set-current \
+SPLIT402_PHASE6_ROLLBACK_LAST_KNOWN_GOOD_SECRET_SET_REFERENCE=secret-set-previous \
+SPLIT402_PHASE6_ROLLBACK_PAYOUT_BATCH_CREATION_PAUSED_AT=2026-06-25T20:00:00Z \
+SPLIT402_PHASE6_ROLLBACK_STARTED_AT=2026-06-25T20:05:00Z \
+SPLIT402_PHASE6_ROLLBACK_COMPLETED_AT=2026-06-25T20:10:00Z \
+SPLIT402_PHASE6_ROLLBACK_READINESS_AFTER_ROLLBACK="attached: /v1/ready returned HTTP 200" \
+SPLIT402_PHASE6_ROLLBACK_METRICS_AFTER_ROLLBACK="attached: signer-metrics-after-rollback.log" \
+SPLIT402_PHASE6_ROLLBACK_RECONCILIATION_RECORDS="attached: reconciliation-records-001.md" \
+SPLIT402_PHASE6_ROLLBACK_BATCH_CREATION_RESUMED_AT=2026-06-25T20:20:00Z \
+  corepack pnpm phase6:rollback-drill
+```
