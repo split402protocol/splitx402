@@ -8,14 +8,6 @@ that can later feed chain verification, payout selection, dashboards, and webhoo
 
 Status: started.
 
-Main branch currently contains the receipt-ingestion, merchant registry,
-wallet-auth, PostgreSQL receipt/merchant/auth persistence, and campaign
-draft/version/activation foundation. Wallet-auth refresh-token rotation, route
-draft/activation/suspension, durable campaign and route persistence, outbox
-stores, chain-verification workers, Solana verifier slices, runtime wiring, and a
-deployable chain-worker entrypoint are staged in the active implementation PR
-stack.
-
 ## What Changed
 
 - Added `packages/control-plane`.
@@ -37,10 +29,14 @@ stack.
   and service-key revocation routes.
 - Added wallet authentication challenge and session types.
 - Added in-memory single-use wallet authentication challenge/session storage.
-- Added `POST /v1/auth/challenges` and `POST /v1/auth/sessions`.
+- Added `POST /v1/auth/challenges`, `POST /v1/auth/sessions`, and
+  `POST /v1/auth/sessions/refresh`.
 - Added `PostgresWalletAuthStore` for durable single-use challenges and hashed
   bearer sessions.
 - Added `0003_wallet_auth.sql` for auth challenge and session tables.
+- Added rotating wallet-auth refresh tokens, backed by hashed refresh-token
+  storage and one-use refresh-token rotation.
+- Added `0007_wallet_auth_refresh_tokens.sql` for durable refresh-token records.
 - Added optional auth gating for merchant creation, origin registration,
   service-key registration, and service-key revocation.
 - Added campaign draft/version registry types.
@@ -56,6 +52,69 @@ stack.
   service-key signature.
 - Added campaign activation checks for active merchant status, verified merchant
   origin ownership, valid service-key window, and immutable version signatures.
+- Added route draft/sign/activate/suspend registry types with canonical unsigned
+  referral claims, signing bytes, signature verification, active route records,
+  and idempotent route suspension.
+- Added `POST /v1/routes/drafts`, `POST /v1/routes`,
+  `POST /v1/routes/:routeId/suspend`,
+  `POST /v1/routes/:routeId/rotate-payout`, `GET /v1/routes/search`,
+  `GET /v1/routes/:routeId/versions`, and `GET /v1/routes/:routeId`.
+- Added active campaign, resource origin, campaign version, and operation-scope
+  checks around route draft creation and activation.
+- Added in-memory and PostgreSQL route search by campaign, referrer, resource
+  origin, operation id, route status, and bounded result limit, with active
+  searches excluding expired routes.
+- Added payout-wallet rotation by requiring a new referrer-signed claim for the
+  same route scope, updating the discoverable route pointer, and preserving each
+  signed claim in immutable route versions.
+- Added `PostgresRouteRegistry` for durable active route and signed referral-claim
+  persistence.
+- Added `0005_routes.sql` for route records, claim hashes, operation scopes, and
+  campaign/referrer lookup indexes.
+- Added `0008_route_versions.sql` for immutable route version history and
+  existing-route backfill.
+- Added `0006_outbox_events.sql` for durable pending worker/webhook events.
+- Added outbox insertion to `PostgresReceiptIngestionStore` so accepted receipts
+  commit `receipt.accepted.v1` and `webhook.receipt.accepted.v1` events in the
+  same transaction as receipt, accrual, and ledger rows.
+- Added `PostgresOutboxEventStore` for worker-facing event reads, ready-event
+  claims filtered by event type, delivery marking, retry scheduling, and
+  dead-letter transitions.
+- Added a receipt chain-verification worker framework that claims
+  `receipt.accepted.v1` events, calls a pluggable verifier, marks confirmed
+  receipts as verified, moves accruals to `available`, and handles retry or
+  dead-letter verifier outcomes.
+- Added a bounded and abortable chain-verification polling loop around the worker
+  framework with idle backoff, transient error handling, and result/error hooks for
+  deployable runtime wiring.
+- Added a deployable `split402-chain-worker` process entrypoint and
+  `corepack pnpm worker:chain` script that compose the PostgreSQL runtime,
+  Solana receipt verifier, and chain-verification polling loop from environment
+  configuration.
+- Added a signed HTTP webhook dispatcher, webhook dispatch worker loop,
+  `split402-webhook-worker` process entrypoint, and
+  `corepack pnpm worker:webhook` script for `webhook.receipt.accepted.v1` outbox
+  events.
+- Added a durable control-plane runtime factory that wires PostgreSQL merchant,
+  campaign, route, wallet-auth, receipt, and outbox stores with receipt key
+  resolution and required-by-default merchant auth policy.
+- Added a Solana JSON-RPC signature-status verifier for receipt settlement
+  signatures with confirmed/finalized commitment handling, retryable RPC failures,
+  and rejected failed transactions.
+- Extended the Solana verifier to fetch parsed transaction details and reject
+  receipts whose settlement transaction does not prove the expected token mint,
+  payer authority, pay-to owner evidence, and amount.
+- Hardened the Solana verifier with explicit pay-to associated token account
+  derivation and multi-provider JSON-RPC fallback through
+  `SPLIT402_CHAIN_WORKER_SOLANA_RPC_URLS`.
+- Added `PostgresCampaignRegistry` for durable campaign, version, activation, and
+  operation persistence.
+- Added `0004_campaigns.sql` for campaign, campaign version, and campaign
+  operation tables.
+- Added a packaged PostgreSQL migration runner with checksum tracking.
+- Added an opt-in live PostgreSQL integration harness that applies migrations in
+  an isolated schema and exercises merchant, campaign, wallet-auth, receipt,
+  accrual, and ledger persistence through real `pg`.
 - Added merchant service-key resolution for receipt verification by `merchantId`,
   `kid`, purpose, and receipt issue time.
 - Added `0002_merchants_keys_origins.sql` for merchant, origin, and key tables.
@@ -83,10 +142,48 @@ stack.
 - Added wallet authentication tests for signed challenge exchange, challenge replay,
   session expiry, and auth-gated merchant mutations.
 - Added PostgreSQL wallet-auth tests for durable challenge consumption, token hash
-  persistence, and replay rejection.
+  persistence, refresh-token hash persistence, refresh rotation, and replay
+  rejection.
 - Added campaign registry and HTTP tests for immutable version creation, terms
   hashes, signing bytes, owner-authenticated campaign mutations, and merchant
   signature activation.
+- Added route registry and HTTP tests for unsigned draft creation, signed route
+  activation, duplicate activation idempotency, invalid signatures, conflicting
+  route claims, payout-wallet rotation, immutable version listing,
+  merchant-owner-authorized route suspension, idempotent suspension, and route
+  search.
+- Added PostgreSQL campaign registry tests for draft persistence, immutable
+  version persistence, operation rows, activation state, and conflict mapping.
+- Added PostgreSQL route registry tests for route persistence, duplicate claim
+  idempotency, same-route/different-claim conflicts, payout-wallet rotation,
+  immutable version persistence, idempotent suspension, and route search.
+- Extended the live PostgreSQL integration harness to apply the route migration
+  and persist one activated route row.
+- Added PostgreSQL receipt-ingestion tests for committed outbox payloads and
+  rollback behavior, plus live harness coverage for the outbox table.
+- Added PostgreSQL outbox worker tests for ready-event claiming, retry delay
+  enforcement, event-type filtering, delivery marking, and dead-letter behavior.
+- Added chain-verification worker tests for confirmed, retryable, and malformed
+  receipt events, plus PostgreSQL coverage for verified receipt/accrual state.
+- Added chain-verification loop tests for bounded idle polling, abort handling,
+  and transient processor errors.
+- Added chain-verification worker entrypoint tests for environment parsing,
+  runtime wiring, invalid configuration, and help output.
+- Added webhook dispatcher, webhook worker loop, and webhook worker entrypoint
+  tests for signed delivery, retry/rejection classification, retry scheduling,
+  dead-letter behavior, runtime wiring, invalid configuration, and help output.
+- Added control-plane runtime tests for required-by-default auth policy, disabled
+  auth embeddings, environment-driven pool configuration, close handling, and
+  invalid runtime configuration.
+- Added Solana RPC verifier tests for confirmed/finalized signatures, missing
+  signatures, RPC errors, provider failover, failed transactions, malformed
+  responses, and network mismatches.
+- Added Solana transaction verifier tests for missing transaction details,
+  malformed transaction responses, mint mismatches, pay-to owner mismatches, payer
+  authority mismatches, associated token account derivation, insufficient transfer
+  amounts, and transaction meta failures.
+- Added `corepack pnpm test:postgres` for live PostgreSQL validation when
+  `SPLIT402_TEST_DATABASE_URL` is set.
 - Reworked the README with protocol diagrams, package graph, control-plane flow,
   endpoint overview, and usage examples.
 
@@ -100,13 +197,8 @@ a zero-sum ledger transaction.
 
 ## Remaining Milestone 2 Work
 
-- Merge the active PR stack for durable campaign persistence, routes, route
-  suspension, outbox events, chain verification, Solana verification, runtime
-  wiring, chain-worker entrypoint, and wallet-auth refresh tokens.
-- Route search API and immutable route/search history.
-- Payout-wallet rotation.
-- Webhook dispatch loop and webhook worker process entrypoint.
-- Immutable campaign and route history.
+The remaining work now moves beyond Milestone 2 registry/ingestion into the
+production merchant SDK and payout engine phases.
 
 ## Acceptance Checks
 
@@ -119,3 +211,5 @@ a zero-sum ledger transaction.
 - `corepack pnpm build`
 - `corepack pnpm vectors:check`
 - `corepack pnpm audit`
+- Optional live database check:
+  `SPLIT402_TEST_DATABASE_URL=... corepack pnpm test:postgres`

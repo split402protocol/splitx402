@@ -4,110 +4,177 @@
 ![Status](https://img.shields.io/badge/status-public_alpha-orange)
 ![Runtime](https://img.shields.io/badge/node-%3E%3D22-339933)
 
-> Referral attribution, commission accounting, and payout infrastructure for
-> x402-paid APIs and agent transactions.
+> Referral, attribution, and commission infrastructure for x402-paid APIs and
+> agent tools.
 
-Split402 lets merchants sell paid API calls through standard x402 USDC payment
-flows while giving agents, apps, and route publishers a verifiable way to earn
-referral commission.
+Split402 lets merchants sell API calls through standard x402 payment flows while
+recording verifiable referral commissions for agents, apps, and route publishers.
+The MVP keeps the commercial payment simple: the buyer pays the merchant in USDC,
+the merchant receives the gross x402 settlement, and Split402 records an auditable
+commission liability that can later be paid from a merchant-funded payout worker.
 
-In simple terms: an agent pays USDC for an x402 API call, attaches a signed
-Split402 referral claim, and the merchant still receives the normal x402
-settlement. If the campaign says the referral earns 10 percent, Split402 records
-that 10 percent as an auditable commission owed to the referrer's payout wallet.
-The actual referrer payout happens later from a merchant-funded payout process.
+In plain terms: an agent can pay USDC for an x402 API call and attach a signed
+Split402 referral claim. If the merchant campaign says the referral commission is
+10 percent, Split402 records that 10 percent as an owed commission to the
+referrer's payout wallet while the merchant still receives the normal x402
+settlement.
 
-That means Split402 is a referral commission protocol, not a replacement
-settlement path in the MVP. A `1.00 USDC` call with `1000` basis points of
-commission creates a `0.10 USDC` referrer credit; it does not yet split the live
-settlement into `0.90 USDC` and `0.10 USDC` inside the same transaction.
+Split402 is the project name. This repository, `split402protocol/splitx402`, is
+the v2 implementation line for the protocol work that started in
+`splitx402/ffff`. The canonical scope is defined in the
+[Split402 protocol architecture v0.1 spec](docs/reference/split402_protocol_architecture_v0.1.md).
 
-Split402 is the project and protocol name. This repository,
-[`split402protocol/splitx402`](https://github.com/split402protocol/splitx402),
-is the v2 implementation line for the protocol work that started in
-[`splitx402/ffff`](https://github.com/splitx402/ffff). The canonical product
-scope is the [Split402 protocol architecture v0.1 spec](docs/reference/split402_protocol_architecture_v0.1.md).
+## What Split402 Does
 
-## What We Are Building
+Split402 is an accrual-and-payout protocol for referral revenue on top of normal
+x402 payments.
 
-Split402 is an accrual-and-payout protocol layered on top of x402. It does not
-fork or replace the x402 payment in the MVP.
-
-| Layer | Responsibility |
+| Step | Result |
 | --- | --- |
-| x402 payment | Buyer pays the merchant in USDC for the API call. |
-| Split402 attribution | Buyer or agent attaches a signed referral claim to the paid request. |
-| Merchant receipt | Merchant signs a receipt after x402 verification and settlement. |
-| Control plane | Receipt is verified, deduplicated, and turned into a commission accrual. |
-| Payout engine | Later worker pays accumulated commissions from merchant-funded liquidity. |
+| Buyer or agent pays an x402-protected API in USDC. | The merchant receives the normal gross x402 settlement. |
+| The request carries a signed Split402 referral claim. | The merchant can attribute the sale to a route, app, or agent. |
+| The merchant signs a Split402 receipt after settlement. | The control plane can verify who paid, which campaign applied, and which referral wallet should be credited. |
+| The control plane records a commission accrual. | A 10 percent campaign records `1000` bps as owed to the referrer. |
+| A later payout worker pays accumulated commissions. | Referrers receive USDC from a merchant-funded payout flow. |
+
+```mermaid
+flowchart LR
+  Payment["1. x402 USDC payment"]
+  Merchant["2. Merchant receives gross settlement"]
+  Receipt["3. Merchant signs Split402 receipt"]
+  Ledger["4. Split402 records referral commission"]
+  Payout["5. Merchant-funded payout pays referrer"]
+
+  Payment --> Merchant
+  Merchant --> Receipt
+  Receipt --> Ledger
+  Ledger --> Payout
+```
+
+## Protocol Model
 
 ```mermaid
 flowchart LR
   Buyer["Buyer or agent"]
-  Payment["x402 USDC payment"]
-  Merchant["Merchant API"]
-  Receipt["Signed Split402 receipt"]
-  Ledger["Commission ledger"]
+  Merchant["x402 merchant API"]
+  Facilitator["x402 facilitator"]
+  Solana["Solana settlement"]
+  Control["Split402 control plane"]
   Referrer["Referrer payout wallet"]
 
-  Buyer -->|"1. pays for API call"| Payment
-  Payment -->|"2. gross settlement"| Merchant
-  Buyer -->|"3. signed referral claim"| Merchant
-  Merchant -->|"4. receipt after settlement"| Receipt
-  Receipt -->|"5. verify and accrue"| Ledger
-  Ledger -->|"6. later payout"| Referrer
+  Buyer -->|"1. Request paid API"| Merchant
+  Merchant -->|"2. 402 response + Split402 offer"| Buyer
+  Buyer -->|"3. x402 payment + referral claim"| Merchant
+  Merchant -->|"4. Verify and settle x402 payment"| Facilitator
+  Facilitator --> Solana
+  Merchant -->|"5. Signed Split402 receipt"| Buyer
+  Merchant -->|"6. Receipt ingestion"| Control
+  Buyer -.->|"optional receipt submission"| Control
+  Control -->|"7. Accrual + ledger liability"| Referrer
 ```
 
-## Example Commission
+The important design choice: Split402 does not fork x402 settlement for the MVP.
+It adds signed attribution, signed receipts, idempotent accruals, and a ledger
+around the existing x402 payment path.
 
-| Item | Value |
-| --- | --- |
-| API price | `1.00 USDC` |
-| x402 settlement | `1.00 USDC` to the merchant |
-| Campaign commission | `1000` bps, or 10 percent |
-| Split402 accrual | `0.10 USDC` owed to the referrer |
-| Payout timing | Later, after verification and payout selection |
-
-```mermaid
-flowchart LR
-  Pay["Buyer pays 1.00 USDC"]
-  Merchant["Merchant receives 1.00 USDC"]
-  Terms["Campaign terms: 1000 bps"]
-  Accrual["Ledger records 0.10 USDC payable"]
-  Payout["Merchant-funded payout"]
-
-  Pay --> Merchant
-  Merchant --> Terms
-  Terms --> Accrual
-  Accrual --> Payout
-```
-
-## Protocol Flow
+## Payment Sequence
 
 ```mermaid
 sequenceDiagram
-  participant A as Agent
+  participant B as Buyer agent
   participant M as Merchant API
   participant X as x402 facilitator
   participant S as Solana
   participant C as Split402 control plane
 
-  A->>M: Request paid resource
-  M-->>A: 402 Payment Required with Split402 offer
-  A->>A: Verify offer and sign referral claim
-  A->>M: Retry with x402 payment and Split402 claim
-  M->>M: Check attribution and request digest
+  B->>M: Call paid resource
+  M-->>B: 402 Payment Required with Split402 offer
+  B->>B: Verify offer and attach referral claim
+  B->>M: Retry with x402 payment payload
+  M->>M: Validate attribution and request digest
   M->>X: Verify x402 payment
   X-->>M: Payment valid
-  M->>X: Settle payment
+  M->>X: Settle
   X->>S: Submit settlement transaction
-  S-->>X: Confirm transaction
+  S-->>X: Confirmed transaction
   X-->>M: Settlement response
   M->>M: Sign Split402 receipt
-  M-->>A: Paid response and receipt
+  M-->>B: Paid response + receipt
   M->>C: Submit receipt
-  C->>C: Verify signature, enforce idempotency, accrue commission
+  C->>C: Verify key, enforce idempotency, create accrual
 ```
+
+## Commission Accounting
+
+Split402 does not take funds from the x402 transaction in the current MVP. It
+records what the merchant owes after a successful paid call.
+
+| Example | Value |
+| --- | --- |
+| API price | `1.00 USDC` |
+| x402 settlement | `1.00 USDC` paid to the merchant |
+| Campaign commission | `1000` bps, or 10 percent |
+| Split402 accrual | `0.10 USDC` owed to the referrer |
+| Payout timing | Later, after chain verification and payout selection |
+
+```mermaid
+flowchart LR
+  Gross["Buyer pays 1.00 USDC"]
+  Settle["x402 settles 1.00 USDC to merchant"]
+  Terms["Campaign terms: 1000 bps"]
+  Accrual["Ledger records 0.10 USDC payable"]
+  Verify["Chain verification"]
+  Batch["Payout batch"]
+
+  Gross --> Settle
+  Settle --> Terms
+  Terms --> Accrual
+  Accrual --> Verify
+  Verify --> Batch
+```
+
+## Current Status
+
+Split402 is in staged public-alpha implementation. No production contracts or
+mainnet payment flows exist yet.
+
+| Area | Status |
+| --- | --- |
+| Protocol core and deterministic test vectors | Implemented |
+| x402 extension, Express adapter, demo merchant | Implemented |
+| Agent SDK and Devnet paid-suite harness | Implemented |
+| Existing-token Devnet receipt proof | Recorded |
+| Merchant SDK cached campaign resolver, key rotation, payment IDs, operation digests, receipt outbox, and integration example | Started |
+| Control-plane receipt ingestion API | Started |
+| PostgreSQL receipt, accrual, and ledger persistence | Started |
+| Merchant/key/origin registry APIs | Started |
+| PostgreSQL merchant/key/origin persistence | Started |
+| Wallet-authenticated merchant mutations | Started |
+| PostgreSQL wallet-auth persistence | Started |
+| Wallet-auth refresh token flow | Started |
+| Campaign draft/version APIs | Started |
+| Campaign activation APIs | Started |
+| PostgreSQL campaign persistence | Started |
+| Route draft/sign/activate/suspend APIs | Started |
+| Route search API | Started |
+| Route payout rotation and immutable route versions | Started |
+| PostgreSQL route persistence | Started |
+| Outbox event persistence | Started |
+| Outbox claim/retry/dead-letter APIs | Started |
+| Chain verification worker framework | Started |
+| Chain verification polling loop | Started |
+| Chain verification worker process entrypoint | Started |
+| Webhook dispatch worker process entrypoint | Started |
+| Durable control-plane runtime factory | Started |
+| Production auth policy wiring | Started |
+| Solana RPC signature-status verifier | Started |
+| Solana transaction transfer verifier | Started |
+| Live PostgreSQL migration/integration harness | Started |
+| Payout engine preview, funding-wallet registry, and batch allocation | Started |
+| `$SPLIT` bonding and atomic split settlement | Later research |
+
+The latest Devnet proof is recorded in
+[docs/proofs/phase3-paid-suite-2026-06-24.md](docs/proofs/phase3-paid-suite-2026-06-24.md).
 
 ## Repository Map
 
@@ -118,6 +185,7 @@ flowchart TB
   Extension["@split402/x402-extension"]
   Express["@split402/express"]
   Agent["@split402/agent-sdk"]
+  MerchantSdk["@split402/merchant-sdk"]
   Merchant["@split402/demo-merchant"]
   DemoAgent["@split402/demo-agent"]
   Control["@split402/control-plane"]
@@ -128,62 +196,38 @@ flowchart TB
   Protocol --> Control
   Express --> Merchant
   Extension --> Merchant
+  Extension --> MerchantSdk
   Agent --> DemoAgent
+  MerchantSdk --> Control
   Merchant --> DemoAgent
-  Control -->|"receipt ingestion and registries"| Protocol
+  Control -->|"receipt ingestion, registry, ledger"| Protocol
 ```
 
 | Package | Purpose |
 | --- | --- |
-| `@split402/protocol` | Schemas, canonical hashes, IDs, amount math, operation digests, signing, verification, and test-vector generation. |
-| `@split402/test-vectors` | Language-neutral protocol fixtures generated from the protocol package. |
-| `@split402/x402-extension` | x402 client and resource-server extension hooks for Split402 offers, attribution, and receipts. |
-| `@split402/express` | Express request-context adapter used to bind receipts to stable operation digests. |
+| `@split402/protocol` | Schemas, canonical hashes, IDs, amount math, operation digests, signing, and offline verification. |
+| `@split402/test-vectors` | Language-neutral fixtures generated from the protocol package. |
+| `@split402/x402-extension` | Split402 offer, attribution, and receipt hooks around x402 settlement. |
+| `@split402/express` | Request-context adapter for stable operation digest inputs. |
 | `@split402/agent-sdk` | Buyer-side offer inspection, referral claim creation, paid calls, and receipt verification. |
-| `@split402/demo-merchant` | Solana Devnet x402 merchant demo with Split402 receipt generation. |
+| `@split402/merchant-sdk` | Merchant-side cached campaign resolver, service-key rotation helpers, x402 payment-identifier helpers, operation digest helpers, durable receipt outbox, control-plane ingestion retry helpers, and compile-checked examples. |
+| `@split402/demo-merchant` | x402-protected merchant API for the Devnet demo. |
 | `@split402/demo-agent` | Runnable buyer/agent harness for setup, preflight, and paid-suite proof. |
-| `@split402/control-plane` | Receipt ingestion, merchant/key/origin registry, wallet auth, campaign versions, accruals, and ledger model. |
+| `@split402/control-plane` | Receipt ingestion, merchant/key registry, merchant payout-wallet registry, accruals, ledger model, payout preview and batch allocation planning, and PostgreSQL adapters. |
 
-## Current Status
-
-Split402 is public-alpha protocol infrastructure. There are no production
-contracts, no mainnet payment flows, and no custody of real production balances.
-
-| Area | Main branch status |
-| --- | --- |
-| Protocol core and deterministic test vectors | Implemented |
-| x402 extension and Express request context adapter | Implemented |
-| Demo merchant and demo agent Devnet harness | Implemented |
-| Existing-token Devnet receipt proof | Recorded |
-| Control-plane receipt ingestion API | Implemented foundation |
-| PostgreSQL receipt, accrual, and ledger persistence | Implemented foundation |
-| Merchant/key/origin registry APIs | Implemented foundation |
-| PostgreSQL merchant/key/origin persistence | Implemented foundation |
-| Wallet-authenticated merchant mutations | Implemented foundation |
-| PostgreSQL wallet-auth persistence | Implemented foundation |
-| Campaign draft/version/activation APIs | Implemented foundation |
-| Wallet-auth refresh-token rotation | Active PR stack |
-| Route draft/activation/suspension APIs and route persistence | Active PR stack |
-| Receipt outbox, worker stores, chain verification, runtime wiring | Active PR stack |
-| Route search, route history, payout-wallet rotation, webhooks | Not implemented |
-| Payout engine | Not implemented |
-| `$SPLIT` bonding and atomic split settlement | Later research |
-
-The latest recorded Devnet proof is
-[docs/proofs/phase3-paid-suite-2026-06-24.md](docs/proofs/phase3-paid-suite-2026-06-24.md).
-
-## Control-Plane Shape
+## Control-Plane Process
 
 ```mermaid
 flowchart TD
   Submit["POST /v1/receipts"]
   Schema["Validate receipt schema"]
-  Key["Resolve merchant service key"]
+  Key["Resolve merchant service key by merchantId + kid"]
   Signature["Verify merchant receipt signature"]
-  Idempotency["Check receipt, payment, and settlement uniqueness"]
-  Receipt["Persist receipt"]
+  Idempotency["Check receipt/payment/settlement uniqueness"]
+  Receipt["Insert receipt"]
   Accrual["Create pending commission accrual"]
-  Ledger["Create zero-sum ledger entries"]
+  Ledger["Create zero-sum ledger transaction"]
+  Outbox["Insert outbox event"]
   Response["Return created, duplicate, conflict, or rejected"]
 
   Submit --> Schema
@@ -191,51 +235,169 @@ flowchart TD
   Key --> Signature
   Signature --> Idempotency
   Idempotency --> Receipt
-  Receipt --> Accrual
+  Receipt -->|"credited receipt"| Accrual
   Accrual --> Ledger
-  Ledger --> Response
+  Ledger --> Outbox
+  Receipt -->|"zero-credit receipt"| Outbox
+  Outbox --> Response
   Idempotency -->|"existing canonical receipt"| Response
-  Idempotency -->|"same id or payment with different hash"| Response
+  Idempotency -->|"same id with different hash"| Response
 ```
 
-Current public API surface on `main`:
+## Accrual Lifecycle
+
+```mermaid
+stateDiagram-v2
+  [*] --> ReceiptAccepted: signed receipt ingested
+  ReceiptAccepted --> PendingChainVerification: commission accrual created
+  PendingChainVerification --> Available: settlement signature confirmed
+  PendingChainVerification --> Held: policy or risk hold
+  PendingChainVerification --> DeadLetter: repeated verifier failure
+  Available --> Allocated: payout batch allocation
+  Allocated --> Paid: payout finalized
+```
+
+The current control plane exposes:
 
 ```text
 GET  /v1/health
 POST /v1/auth/challenges
 POST /v1/auth/sessions
+POST /v1/auth/sessions/refresh
 POST /v1/receipts
 POST /v1/merchants
 GET  /v1/merchants/:merchantId
 POST /v1/merchants/:merchantId/origins
 POST /v1/merchants/:merchantId/keys
 POST /v1/merchants/:merchantId/keys/:kid/revoke
+POST /v1/merchants/:merchantId/payout-wallets
 POST /v1/campaigns
 GET  /v1/campaigns/:campaignId
 POST /v1/campaigns/:campaignId/activate
 GET  /v1/campaigns/:campaignId/versions/:version
 POST /v1/campaigns/:campaignId/versions
+POST /v1/routes/drafts
+POST /v1/routes
+POST /v1/routes/:routeId/suspend
+POST /v1/routes/:routeId/rotate-payout
+GET  /v1/routes/search
+GET  /v1/routes/:routeId/versions
+GET  /v1/routes/:routeId
+POST /v1/merchants/:merchantId/payouts/preview
+POST /v1/merchants/:merchantId/payout-batches
 ```
 
-The active implementation stack after `main` adds durable campaign persistence,
-route draft/activation/suspension, wallet-session refresh tokens, receipt outbox
-processing, Solana chain-verification workers, and deployable runtime wiring.
-Those capabilities are documented as active stack work until the PRs are merged.
+## Persistence Layout
+
+```mermaid
+flowchart LR
+  API["Control-plane API"]
+  Registry["Merchant and campaign registry"]
+  RouteRegistry["Route registry"]
+  Ingestion["Receipt ingestion store"]
+  Merchants[("merchants")]
+  Origins[("merchant_origins")]
+  Keys[("merchant_keys")]
+  PayoutWallets[("merchant_payout_wallets")]
+  CampaignRows[("campaigns")]
+  CampaignVersions[("campaign_versions")]
+  CampaignOps[("campaign_operations")]
+  Routes[("routes")]
+  RouteVersions[("route_versions")]
+  Challenges[("wallet_auth_challenges")]
+  Sessions[("wallet_auth_sessions")]
+  RefreshTokens[("wallet_auth_refresh_tokens")]
+  Receipts[("payment_receipts")]
+  Accruals[("commission_accruals")]
+  LedgerTx[("ledger_transactions")]
+  LedgerEntries[("ledger_entries")]
+  PayoutBatches[("payout_batches")]
+  PayoutItems[("payout_items")]
+  PayoutAllocations[("payout_allocations")]
+  Outbox[("outbox_events")]
+
+  API --> Registry
+  API --> RouteRegistry
+  API --> Ingestion
+  Registry --> Merchants
+  Registry --> Origins
+  Registry --> Keys
+  Registry --> PayoutWallets
+  Registry --> CampaignRows
+  CampaignRows --> CampaignVersions
+  CampaignVersions --> CampaignOps
+  RouteRegistry --> Routes
+  Routes --> RouteVersions
+  Routes --> CampaignRows
+  API --> Challenges
+  API --> Sessions
+  Sessions --> RefreshTokens
+  Ingestion --> Receipts
+  Ingestion --> Accruals
+  Ingestion --> LedgerTx
+  LedgerTx --> LedgerEntries
+  Ingestion --> PayoutBatches
+  PayoutBatches --> PayoutItems
+  PayoutItems --> PayoutAllocations
+  PayoutAllocations --> Accruals
+  Ingestion --> Outbox
+```
+
+Merchant profiles, origins, service keys, payout funding wallets, and campaign
+versions can run in memory for tests or through PostgreSQL adapters for durable
+control-plane state. Receipt ingestion uses the same boundary: in-memory stores
+for deterministic behavior tests, PostgreSQL stores for durable receipt, accrual,
+and ledger rows. Wallet auth also uses the same store boundary, with PostgreSQL
+persisting single-use challenges, hashed bearer sessions, and hashed rotating
+refresh tokens. Route activation and suspension records are also durable in
+PostgreSQL and searchable by campaign, referrer, origin, operation, status, and
+limit. Routes are keyed by route id and canonical referral-claim hash so exact
+duplicate activation is idempotent while conflicting claims are rejected.
+Payout-wallet rotation creates a new referrer-signed claim for the same route and
+appends it to immutable `route_versions`, while the `routes` row points at the
+latest current version for discovery. Historical receipts keep their original
+claim hash and payout wallet evidence.
+When merchant auth is required, route suspension is limited to the owner wallet
+of the route campaign's merchant. Accepted receipts also create pending
+chain-verification and webhook outbox events in the same PostgreSQL transaction,
+giving workers a durable feed for chain verification, payout selection,
+dashboards, and webhooks. The PostgreSQL outbox store can claim ready events by
+event type, mark them delivered, or reschedule/dead-letter failures without
+creating duplicate worker work. The first chain-verification worker framework can
+process `receipt.accepted.v1` events with a pluggable verifier and make
+confirmed accruals available for future payout selection. The webhook dispatch
+worker processes `webhook.receipt.accepted.v1` events and sends signed HTTP POST
+envelopes to a configured endpoint. The first Solana verifier checks settlement
+signature status through one or more JSON-RPC providers and parses confirmed
+transaction data to reject receipts whose token mint, payer authority, pay-to
+wallet or associated token account, or amount do not match the receipt. The first
+payout-engine slice can register merchant-controlled payout funding wallets,
+query eligible available accruals, group them by asset and destination wallet,
+apply recipient thresholds and limits, report funding coverage or deficit through
+`POST /v1/merchants/:merchantId/payouts/preview`, and create planned payout
+batches that mark selected accruals `allocated` exactly once. Transaction
+signing, broadcasting, and reconciliation are still remaining hardening steps.
+
+## MVP Rules
+
+- Keep x402 commercial payments in USDC.
+- Attach referral attribution through a Split402 x402 extension.
+- Settle the gross payment normally to the merchant.
+- Record a signed receipt and commission liability.
+- Pay referrers later from a merchant-funded payout worker.
+- Keep atomic split settlement and `$SPLIT` route bonding out of the critical path
+  until the payment loop works end to end.
 
 ## Quick Start
 
-Requirements:
-
-- Node.js `>=22`
-- Corepack
-- pnpm through the repository package-manager setting
+Use Corepack and pnpm:
 
 ```bash
 corepack enable
 corepack pnpm install
 ```
 
-Run the main validation suite:
+Run the core validation suite:
 
 ```bash
 corepack pnpm lint
@@ -246,7 +408,50 @@ corepack pnpm vectors:check
 corepack pnpm audit --audit-level high
 ```
 
-Run the Devnet demo flow:
+Run the optional live PostgreSQL harness against an empty test database:
+
+```powershell
+$env:SPLIT402_TEST_DATABASE_URL="postgresql://split402:split402@localhost:5432/split402_test"
+corepack pnpm test:postgres
+```
+
+Create a durable control-plane app backed by PostgreSQL:
+
+```ts
+import { createControlPlaneRuntimeFromEnv } from "@split402/control-plane";
+
+const runtime = createControlPlaneRuntimeFromEnv();
+runtime.app.listen(process.env.PORT ?? 4020);
+```
+
+The runtime reads `SPLIT402_DATABASE_URL` or `DATABASE_URL`, wires PostgreSQL
+merchant, campaign, route, auth, receipt, and outbox stores, and defaults
+`SPLIT402_CONTROL_PLANE_AUTH_POLICY` to `required` for merchant mutations.
+
+Run the deployable chain-verification worker process:
+
+```bash
+corepack pnpm worker:chain
+```
+
+The worker reads `SPLIT402_CHAIN_WORKER_NETWORK`,
+`SPLIT402_CHAIN_WORKER_SOLANA_RPC_URL` or the comma-separated
+`SPLIT402_CHAIN_WORKER_SOLANA_RPC_URLS` failover list, and optional
+polling/retry settings from the environment, then claims `receipt.accepted.v1`
+outbox events and verifies Solana settlement receipts through JSON-RPC.
+
+Run the deployable webhook dispatch worker process:
+
+```bash
+corepack pnpm worker:webhook
+```
+
+The worker reads `SPLIT402_WEBHOOK_WORKER_URL`,
+`SPLIT402_WEBHOOK_WORKER_SECRET`, and optional polling/retry settings from the
+environment, then claims `webhook.receipt.accepted.v1` outbox events and POSTs
+signed JSON webhook envelopes with `split402-webhook-signature`.
+
+Run the demo merchant and agent flows:
 
 ```bash
 corepack pnpm demo:merchant
@@ -255,78 +460,80 @@ corepack pnpm demo:preflight
 corepack pnpm demo:paid-suite
 ```
 
-The transitional root service defaults to `SPLIT402_PAYMENT_MODE=mock`, which
-emits x402-shaped HTTP 402 challenges and accepts deterministic mock payment
+By default, the transitional root service runs in `SPLIT402_PAYMENT_MODE=mock`,
+which emits x402-shaped HTTP 402 challenges and accepts deterministic mock payment
 payloads for local tests. Use `SPLIT402_PAYMENT_MODE=x402` only when exercising
 the older Phase 1 facilitator-backed path.
 
-## Agent Usage
+## Receipt Ingestion Example
 
 ```ts
 import {
-  Split402AgentClient,
-  createReferralClaim,
-  createSvmSignerFromBase58
-} from "@split402/agent-sdk";
-import { deriveEd25519PublicKey, hexToBytes } from "@split402/protocol";
+  InMemoryMerchantRegistry,
+  InMemoryReceiptIngestionStore,
+  ReceiptIngestor,
+  WalletAuthenticator,
+  createControlPlaneApp,
+  createMerchantReceiptKeyResolver
+} from "@split402/control-plane";
 
-const signer = await createSvmSignerFromBase58(process.env.SVM_PRIVATE_KEY!);
-const referrerSeed = hexToBytes(process.env.SPLIT402_REFERRER_SEED_HEX!);
-const payoutSeed = hexToBytes(process.env.SPLIT402_PAYOUT_SEED_HEX!);
+const merchantRegistry = new InMemoryMerchantRegistry();
+const receiptStore = new InMemoryReceiptIngestionStore();
+const authenticator = new WalletAuthenticator();
 
-const client = new Split402AgentClient({
-  merchantOrigin: "https://merchant.example",
-  merchantPublicKey: process.env.SPLIT402_MERCHANT_PUBLIC_KEY,
-  signer
+const ingestor = new ReceiptIngestor(receiptStore, {
+  resolveMerchantPublicKey: createMerchantReceiptKeyResolver(merchantRegistry)
 });
 
-const offer = await client.inspectOffer({
-  path: "/v1/risk",
-  body: { wallet: signer.address.toString() }
+export const app = createControlPlaneApp({
+  ingestor,
+  merchantRegistry,
+  auth: { authenticator }
 });
+```
 
-const referralClaim = createReferralClaim({
-  privateSeed: referrerSeed,
-  routeId: "rte_00000000000000000000000000000003",
-  campaignId: offer.offer.campaignId,
-  campaignVersionMin: offer.offer.campaignVersion,
-  payoutWallet: deriveEd25519PublicKey(payoutSeed),
-  resourceOrigin: offer.offer.resourceOrigin,
-  operationIds: [offer.offer.operationId],
-  expiresAt: "2099-06-24T00:00:00Z"
-});
+Register a merchant service key, then submit receipts:
 
-const result = await client.postJson({
-  path: "/v1/risk",
-  pathTemplate: "/v1/risk",
-  body: { wallet: signer.address.toString() },
-  referralClaim
-});
+```bash
+curl -X POST http://localhost:4020/v1/auth/challenges \
+  -H "content-type: application/json" \
+  -d '{"wallet":"<owner-wallet>","network":"solana:devnet","purpose":"merchant-session"}'
 
-console.log(result.receipt?.referrerCreditAtomic);
+curl -X POST http://localhost:4020/v1/auth/sessions \
+  -H "content-type: application/json" \
+  -d '{"challengeId":"<challenge-id>","signature":"<owner-wallet-signature>"}'
+
+curl -X POST http://localhost:4020/v1/auth/sessions/refresh \
+  -H "content-type: application/json" \
+  -d '{"refreshToken":"<refresh-token>"}'
+
+curl -X POST http://localhost:4020/v1/merchants \
+  -H "authorization: Bearer <access-token>" \
+  -H "content-type: application/json" \
+  -d '{"slug":"demo-merchant","displayName":"Demo Merchant","ownerWallet":"<owner-wallet>"}'
+
+curl -X POST http://localhost:4020/v1/merchants/<merchant-id>/keys \
+  -H "authorization: Bearer <access-token>" \
+  -H "content-type: application/json" \
+  -d '{"kid":"kid_demo_merchant_1","publicKey":"<service-public-key>"}'
+
+curl -X POST http://localhost:4020/v1/receipts \
+  -H "content-type: application/json" \
+  -d @receipt-submission.json
 ```
 
 ## Documentation
 
 - [Canonical architecture spec](docs/reference/split402_protocol_architecture_v0.1.md)
 - [Architecture alignment note](docs/SPLIT402_ARCHITECTURE.md)
-- [Build plan](docs/BUILD_PLAN.md)
+- [MVP build plan](docs/BUILD_PLAN.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Phase 0 status](docs/PHASE_0.md)
 - [Phase 1 status](docs/PHASE_1.md)
 - [Phase 2 status](docs/PHASE_2.md)
 - [Phase 3 status](docs/PHASE_3.md)
 - [Phase 4 status](docs/PHASE_4.md)
+- [Phase 5 status](docs/PHASE_5.md)
+- [Phase 6 status](docs/PHASE_6.md)
 - [Architecture baseline decision](docs/decisions/0003-adopt-architecture-and-ffff-baseline.md)
-- [Contributing](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
-
-## MVP Rules
-
-- Keep x402 commercial payments in USDC.
-- Attach referral attribution through signed Split402 claims.
-- Settle the gross payment normally to the merchant.
-- Record signed receipts and idempotent commission liabilities.
-- Pay referrers later from merchant-funded payout liquidity.
-- Keep atomic split settlement and `$SPLIT` route bonding out of the critical path
-  until the USDC referral-payment loop is proven end to end.

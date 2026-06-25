@@ -5,14 +5,23 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "split402-chain-worker": "./dist/chain-worker.js",
+    "split402-webhook-worker": "./dist/webhook-worker.js"
+  },
   "files": ["dist", "migrations"],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "lint": "eslint .",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "test:postgres": "node -e \"if (!process.env.SPLIT402_TEST_DATABASE_URL) { console.error('Set SPLIT402_TEST_DATABASE_URL to run live PostgreSQL tests.'); process.exit(1); }\" && vitest run test/postgres-live.test.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "worker:chain": "tsx src/chain-worker.ts",
+    "worker:webhook": "tsx src/webhook-worker.ts"
   },
   "dependencies": {
+    "@solana-program/token": "^0.9.0",
+    "@solana/kit": "^5.1.0",
     "@split402/protocol": "workspace:*",
     "express": "5.2.1",
     "pg": "8.22.0"

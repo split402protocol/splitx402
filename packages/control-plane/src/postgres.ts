@@ -3,19 +3,39 @@ import {
   Split402ReceiptV1Schema,
   Split402IdSchema,
   createPrefixedId,
+  ReferralClaimV1Schema,
   type Split402ReceiptV1
 } from "@split402/protocol";
+import { randomUUID } from "node:crypto";
 import type { QueryResult, QueryResultRow } from "pg";
 
 import type {
   AuthenticatedWalletSession,
   WalletAuthChallengeRecord,
+  WalletAuthRefreshTokenRecord,
   WalletAuthStore
 } from "./auth.js";
+import {
+  CampaignRegistryConflictError,
+  CampaignRegistryValidationError,
+  createCampaignVersionRecord,
+  verifyCampaignTermsSignature,
+  type ActivateCampaignVersionInput,
+  type CampaignOperation,
+  type CampaignProfile,
+  type CampaignRecord,
+  type CampaignRegistry,
+  type CampaignStatus,
+  type CampaignTerms,
+  type CampaignVersionRecord,
+  type CreateCampaignInput,
+  type CreateCampaignVersionInput
+} from "./campaigns.js";
 import { ReceiptIngestionPersistenceConflictError } from "./errors.js";
 import {
   MerchantRegistryConflictError,
   MerchantRegistryValidationError,
+  type AddMerchantPayoutWalletInput,
   type AddMerchantKeyInput,
   type AddMerchantOriginInput,
   type CreateMerchantInput,
@@ -25,6 +45,8 @@ import {
   type MerchantOriginRecord,
   type MerchantOriginStatus,
   type MerchantOriginVerificationMethod,
+  type MerchantPayoutWalletRecord,
+  type MerchantPayoutWalletStatus,
   type MerchantProfile,
   type MerchantRecord,
   type MerchantRegistry,
@@ -32,18 +54,57 @@ import {
   type ResolveMerchantKeyInput,
   type RevokeMerchantKeyInput
 } from "./merchants.js";
+import {
+  InMemoryRouteRegistry,
+  normalizeRouteSearchInput,
+  RouteRegistryConflictError,
+  RouteRegistryValidationError,
+  type ActivateRouteInput,
+  type CreateRouteDraftInput,
+  type InMemoryRouteRegistryOptions,
+  type RouteDraft,
+  type RouteOperationScope,
+  type RouteRecord,
+  type RouteRegistry,
+  type RouteVersionRecord,
+  type RotateRoutePayoutInput,
+  type SearchRoutesInput,
+  type RouteStatus,
+  type SuspendRouteInput
+} from "./routes.js";
 import type {
   AccrualStatus,
   CommissionAccrual,
   LedgerAccountType,
   LedgerEntry,
   LedgerTransaction,
+  MarkOutboxEventDeliveredInput,
+  MarkOutboxEventFailedInput,
+  OutboxEventRecord,
+  OutboxEventStore,
   ReceiptIngestSource,
   ReceiptIngestionSnapshot,
   ReceiptIngestionStore,
+  ReceiptChainVerificationStore,
+  MarkReceiptChainVerifiedInput,
   ReceiptRecord,
   ReceiptVerificationState
 } from "./index.js";
+import type {
+  CreatePayoutBatchInput,
+  ListPayoutEligibleAccrualsInput,
+  PayoutAccrualStore,
+  PayoutAllocationRecord,
+  PayoutBatchRecord,
+  PayoutBatchStore,
+  PayoutBatchStatus,
+  PayoutItemRecord,
+  PayoutItemStatus
+} from "./payouts.js";
+import {
+  PayoutBatchConflictError,
+  createPayoutBatchPlan
+} from "./payouts.js";
 
 export interface PostgresQueryExecutor {
   query<Row extends QueryResultRow = QueryResultRow>(
@@ -81,6 +142,7 @@ interface CommissionAccrualRow extends QueryResultRow {
   asset_mint: string;
   amount_atomic: string;
   status: string;
+  available_at: Date | string | null;
   created_at: Date | string;
 }
 
@@ -99,6 +161,20 @@ interface LedgerEntryRow extends QueryResultRow {
   account_reference: string;
   asset_mint: string;
   amount_atomic: string;
+}
+
+interface OutboxEventRow extends QueryResultRow {
+  id: string;
+  event_type: string;
+  aggregate_type: string;
+  aggregate_id: string;
+  payload: unknown;
+  status: string;
+  attempts: number;
+  available_at: Date | string;
+  locked_at: Date | string | null;
+  last_error: string | null;
+  created_at: Date | string;
 }
 
 interface MerchantRow extends QueryResultRow {
@@ -133,6 +209,49 @@ interface MerchantKeyRow extends QueryResultRow {
   created_at: Date | string;
 }
 
+interface MerchantPayoutWalletRow extends QueryResultRow {
+  id: string;
+  merchant_id: string;
+  network: string;
+  wallet: string;
+  asset_mint: string;
+  signer_reference: string;
+  status: string;
+  created_at: Date | string;
+}
+
+interface PayoutBatchRow extends QueryResultRow {
+  id: string;
+  merchant_id: string;
+  payout_wallet_id: string;
+  network: string;
+  asset_mint: string;
+  status: string;
+  total_amount_atomic: string;
+  item_count: number;
+  accrual_count: number;
+  failure_code: string | null;
+  failure_message: string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+interface PayoutItemRow extends QueryResultRow {
+  id: string;
+  payout_batch_id: string;
+  destination_wallet: string;
+  destination_token_account: string | null;
+  amount_atomic: string;
+  status: string;
+  created_at: Date | string;
+}
+
+interface PayoutAllocationRow extends QueryResultRow {
+  payout_item_id: string;
+  accrual_id: string;
+  amount_atomic: string;
+}
+
 interface WalletAuthChallengeRow extends QueryResultRow {
   id: string;
   wallet: string;
@@ -156,13 +275,116 @@ interface WalletAuthSessionRow extends QueryResultRow {
   expires_at: Date | string;
 }
 
+interface WalletAuthRefreshTokenRow extends QueryResultRow {
+  token_hash: string;
+  refresh_token_id: string;
+  session_id: string;
+  wallet: string;
+  network: string;
+  purpose: string;
+  challenge_id: string;
+  issued_at: Date | string;
+  expires_at: Date | string;
+  revoked_at: Date | string | null;
+  replaced_by_session_id: string | null;
+}
+
+interface CampaignRow extends QueryResultRow {
+  id: string;
+  merchant_id: string;
+  resource_origin: string;
+  status: string;
+  current_version: number;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+interface CampaignVersionRow extends QueryResultRow {
+  campaign_id: string;
+  version: number;
+  terms_hash: `sha256:${string}`;
+  terms_json: unknown;
+  signing_bytes_hex: string;
+  network: string;
+  asset_mint: string;
+  commission_bps: number;
+  protocol_fee_bps: number;
+  payout_threshold_atomic: string;
+  starts_at: Date | string;
+  ends_at: Date | string | null;
+  merchant_kid: string | null;
+  merchant_signature: string | null;
+  activated_at: Date | string | null;
+  created_at: Date | string;
+}
+
+interface RouteRow extends QueryResultRow {
+  id: string;
+  current_version: number;
+  campaign_id: string;
+  campaign_version_min: number;
+  referrer_wallet: string;
+  payout_wallet: string;
+  resource_origin: string;
+  operation_ids: unknown;
+  claim_hash: `sha256:${string}`;
+  claim_json: unknown;
+  signing_bytes_hex: string;
+  status: string;
+  issued_at: Date | string;
+  expires_at: Date | string;
+  nonce: string;
+  metadata_hash: `sha256:${string}` | null;
+  created_at: Date | string;
+  activated_at: Date | string;
+}
+
+interface RouteVersionRow extends QueryResultRow {
+  route_id: string;
+  version: number;
+  campaign_version_min: number;
+  payout_wallet: string;
+  claim_hash: `sha256:${string}`;
+  claim_json: unknown;
+  signing_bytes_hex: string;
+  issued_at: Date | string;
+  expires_at: Date | string;
+  nonce: string;
+  metadata_hash: `sha256:${string}` | null;
+  created_at: Date | string;
+}
+
 export interface PostgresMerchantRegistryOptions {
   now?: () => Date;
   merchantIdFactory?: () => string;
+  merchantPayoutWalletIdFactory?: () => string;
 }
 
-export class PostgresReceiptIngestionStore implements ReceiptIngestionStore {
-  constructor(private readonly db: PostgresPool | PostgresQueryExecutor) {}
+export interface PostgresCampaignRegistryOptions {
+  now?: () => Date;
+  campaignIdFactory?: () => string;
+}
+
+export interface PostgresReceiptIngestionStoreOptions {
+  outboxEventIdFactory?: () => string;
+}
+
+export interface PostgresOutboxEventStoreOptions {
+  now?: () => Date;
+}
+
+export type PostgresRouteRegistryOptions = InMemoryRouteRegistryOptions;
+
+export class PostgresReceiptIngestionStore
+  implements
+    ReceiptIngestionStore,
+    ReceiptChainVerificationStore,
+    PayoutAccrualStore,
+    PayoutBatchStore {
+  constructor(
+    private readonly db: PostgresPool | PostgresQueryExecutor,
+    private readonly options: PostgresReceiptIngestionStoreOptions = {}
+  ) {}
 
   async getByReceiptId(
     receiptId: string
@@ -188,24 +410,176 @@ export class PostgresReceiptIngestionStore implements ReceiptIngestionStore {
     return this.loadSnapshot("settlement_tx_signature = $1", [signature]);
   }
 
+  getReceiptForChainVerification(
+    receiptId: string
+  ): Promise<ReceiptIngestionSnapshot | undefined> {
+    return this.getByReceiptId(receiptId);
+  }
+
+  async markReceiptChainVerified(
+    input: MarkReceiptChainVerifiedInput
+  ): Promise<ReceiptIngestionSnapshot | undefined> {
+    await this.withTransaction(async (client) => {
+      await client.query(
+        `update payment_receipts
+            set verification_state = 'signature_verified'
+          where id = $1
+            and verification_state = 'pending_chain_verification'`,
+        [input.receiptId]
+      );
+      await client.query(
+        `update commission_accruals
+            set status = 'available',
+                available_at = $2
+          where receipt_id = $1
+            and status = 'pending_chain_verification'`,
+        [input.receiptId, input.verifiedAt]
+      );
+    });
+    return this.getByReceiptId(input.receiptId);
+  }
+
+  async listPayoutEligibleAccruals(
+    input: ListPayoutEligibleAccrualsInput
+  ): Promise<CommissionAccrual[]> {
+    const now = input.now ?? new Date().toISOString();
+    if (!Number.isFinite(Date.parse(now))) {
+      throw new MerchantRegistryValidationError("now must be an ISO timestamp");
+    }
+    if (
+      input.limit !== undefined &&
+      (!Number.isInteger(input.limit) || input.limit <= 0)
+    ) {
+      throw new MerchantRegistryValidationError("limit must be a positive integer");
+    }
+
+    const values: unknown[] = [input.merchantId, now];
+    const conditions = [
+      "merchant_id = $1",
+      "status = 'available'",
+      "(available_at is null or available_at <= $2)"
+    ];
+    if (input.asset !== undefined) {
+      values.push(input.asset);
+      conditions.push(`asset_mint = $${values.length}`);
+    }
+    if (input.campaignId !== undefined) {
+      values.push(input.campaignId);
+      conditions.push(`campaign_id = $${values.length}`);
+    }
+    if (input.routeId !== undefined) {
+      values.push(input.routeId);
+      conditions.push(`route_id = $${values.length}`);
+    }
+
+    let limitClause = "";
+    if (input.limit !== undefined) {
+      values.push(input.limit);
+      limitClause = `limit $${values.length}`;
+    }
+
+    const result = await this.db.query<CommissionAccrualRow>(
+      `select id, receipt_id, merchant_id, campaign_id, route_id, referrer_wallet,
+              payout_wallet, asset_mint, amount_atomic, status, available_at,
+              created_at
+         from commission_accruals
+        where ${conditions.join("\n          and ")}
+        order by asset_mint, payout_wallet, available_at nulls first, created_at, id
+        ${limitClause}`,
+      values
+    );
+    return result.rows.map(mapAccrual);
+  }
+
+  async createPayoutBatch(
+    input: CreatePayoutBatchInput
+  ): Promise<PayoutBatchRecord> {
+    const batch = createPayoutBatchPlan(input);
+    await this.withTransaction(async (client) => {
+      for (const item of batch.items) {
+        for (const allocation of item.allocations) {
+          const result = await client.query<Pick<CommissionAccrualRow, "id">>(
+            `update commission_accruals
+                set status = 'allocated'
+              where id = $1
+                and merchant_id = $2
+                and asset_mint = $3
+                and status = 'available'
+              returning id`,
+            [allocation.accrualId, batch.merchantId, batch.asset]
+          );
+          if (result.rows[0] === undefined) {
+            throw new PayoutBatchConflictError(
+              `accrual is not available for payout: ${allocation.accrualId}`
+            );
+          }
+        }
+      }
+
+      await insertPayoutBatch(client, batch);
+      for (const item of batch.items) {
+        await insertPayoutItem(client, item);
+        for (const allocation of item.allocations) {
+          await insertPayoutAllocation(client, allocation);
+        }
+      }
+    });
+    return batch;
+  }
+
+  async getPayoutBatch(batchId: string): Promise<PayoutBatchRecord | undefined> {
+    const batchResult = await this.db.query<PayoutBatchRow>(
+      `select id, merchant_id, payout_wallet_id, network, asset_mint, status,
+              total_amount_atomic, item_count, accrual_count, failure_code,
+              failure_message, created_at, updated_at
+         from payout_batches
+        where id = $1
+        limit 1`,
+      [batchId]
+    );
+    const batchRow = batchResult.rows[0];
+    if (batchRow === undefined) {
+      return undefined;
+    }
+    const itemsResult = await this.db.query<PayoutItemRow>(
+      `select id, payout_batch_id, destination_wallet, destination_token_account,
+              amount_atomic, status, created_at
+         from payout_items
+        where payout_batch_id = $1
+        order by created_at, id`,
+      [batchId]
+    );
+    const allocationsResult = await this.db.query<PayoutAllocationRow>(
+      `select payout_item_id, accrual_id, amount_atomic
+         from payout_allocations
+        where payout_item_id = any($1)
+        order by payout_item_id, accrual_id`,
+      [itemsResult.rows.map((item) => item.id)]
+    );
+    return mapPayoutBatch(
+      batchRow,
+      itemsResult.rows,
+      allocationsResult.rows
+    );
+  }
+
   async save(snapshot: ReceiptIngestionSnapshot): Promise<void> {
     await this.withTransaction(async (client) => {
       await insertReceipt(client, snapshot.receipt);
 
-      if (snapshot.accrual === undefined) {
-        return;
+      if (snapshot.accrual !== undefined) {
+        await insertAccrual(client, snapshot.accrual);
+
+        if (snapshot.ledgerTransaction !== undefined) {
+          await insertLedgerTransaction(client, snapshot.ledgerTransaction);
+          for (const entry of snapshot.ledgerTransaction.entries) {
+            await insertLedgerEntry(client, entry);
+          }
+        }
       }
 
-      await insertAccrual(client, snapshot.accrual);
-
-      if (snapshot.ledgerTransaction === undefined) {
-        return;
-      }
-
-      await insertLedgerTransaction(client, snapshot.ledgerTransaction);
-      for (const entry of snapshot.ledgerTransaction.entries) {
-        await insertLedgerEntry(client, entry);
-      }
+      await insertOutboxEvent(client, this.createReceiptAcceptedEvent(snapshot));
+      await insertOutboxEvent(client, this.createWebhookReceiptAcceptedEvent(snapshot));
     });
   }
 
@@ -244,7 +618,8 @@ export class PostgresReceiptIngestionStore implements ReceiptIngestionStore {
   ): Promise<CommissionAccrual | undefined> {
     const accrualResult = await this.db.query<CommissionAccrualRow>(
       `select id, receipt_id, merchant_id, campaign_id, route_id, referrer_wallet,
-              payout_wallet, asset_mint, amount_atomic, status, created_at
+              payout_wallet, asset_mint, amount_atomic, status, available_at,
+              created_at
          from commission_accruals
         where receipt_id = $1
         limit 1`,
@@ -282,6 +657,24 @@ export class PostgresReceiptIngestionStore implements ReceiptIngestionStore {
     return mapLedgerTransaction(row, entriesResult.rows.map(mapLedgerEntry));
   }
 
+  private createReceiptAcceptedEvent(
+    snapshot: ReceiptIngestionSnapshot
+  ): OutboxEventRecord {
+    return createReceiptAcceptedOutboxEvent(
+      snapshot,
+      this.options.outboxEventIdFactory?.() ?? randomUUID()
+    );
+  }
+
+  private createWebhookReceiptAcceptedEvent(
+    snapshot: ReceiptIngestionSnapshot
+  ): OutboxEventRecord {
+    return createWebhookReceiptAcceptedOutboxEvent(
+      snapshot,
+      this.options.outboxEventIdFactory?.() ?? randomUUID()
+    );
+  }
+
   private async withTransaction(
     operation: (client: PostgresQueryExecutor) => Promise<void>
   ): Promise<void> {
@@ -309,6 +702,664 @@ export class PostgresReceiptIngestionStore implements ReceiptIngestionStore {
       return this.db.connect();
     }
     return this.db;
+  }
+}
+
+export class PostgresOutboxEventStore implements OutboxEventStore {
+  constructor(
+    private readonly db: PostgresPool | PostgresQueryExecutor,
+    private readonly options: PostgresOutboxEventStoreOptions = {}
+  ) {}
+
+  async getEvent(eventId: string): Promise<OutboxEventRecord | undefined> {
+    const result = await this.db.query<OutboxEventRow>(
+      `select id, event_type, aggregate_type, aggregate_id, payload, status,
+              attempts, available_at, locked_at, last_error, created_at
+         from outbox_events
+        where id = $1::uuid
+        limit 1`,
+      [eventId]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapOutboxEvent(row);
+  }
+
+  async claimNext(
+    input: { eventTypes?: string[]; now?: string } = {}
+  ): Promise<OutboxEventRecord | undefined> {
+    const now = input.now ?? this.now();
+    const eventTypes = normalizeOutboxEventTypes(input.eventTypes);
+    const result = await this.db.query<OutboxEventRow>(
+      `update outbox_events
+          set status = 'processing',
+              attempts = attempts + 1,
+              locked_at = $1,
+              last_error = null
+        where id = (
+          select id
+            from outbox_events
+           where status = 'pending'
+             and available_at <= $1
+             and ($2::text[] is null or event_type = any($2::text[]))
+           order by available_at, created_at, id
+           for update skip locked
+           limit 1
+        )
+      returning id, event_type, aggregate_type, aggregate_id, payload, status,
+                attempts, available_at, locked_at, last_error, created_at`,
+      [now, eventTypes]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapOutboxEvent(row);
+  }
+
+  async markDelivered(
+    input: MarkOutboxEventDeliveredInput
+  ): Promise<OutboxEventRecord | undefined> {
+    const result = await this.db.query<OutboxEventRow>(
+      `update outbox_events
+          set status = 'delivered',
+              locked_at = null,
+              last_error = null
+        where id = $1::uuid
+          and status = 'processing'
+      returning id, event_type, aggregate_type, aggregate_id, payload, status,
+                attempts, available_at, locked_at, last_error, created_at`,
+      [input.eventId]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapOutboxEvent(row);
+  }
+
+  async markFailed(
+    input: MarkOutboxEventFailedInput
+  ): Promise<OutboxEventRecord | undefined> {
+    const result = await this.db.query<OutboxEventRow>(
+      `update outbox_events
+          set status = $4,
+              available_at = $3,
+              locked_at = null,
+              last_error = $2
+        where id = $1::uuid
+          and status = 'processing'
+      returning id, event_type, aggregate_type, aggregate_id, payload, status,
+                attempts, available_at, locked_at, last_error, created_at`,
+      [
+        input.eventId,
+        input.lastError,
+        input.availableAt,
+        input.deadLetter === true ? "dead_letter" : "pending"
+      ]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapOutboxEvent(row);
+  }
+
+  private now(): string {
+    return (this.options.now?.() ?? new Date()).toISOString();
+  }
+}
+
+export class PostgresCampaignRegistry implements CampaignRegistry {
+  constructor(
+    private readonly db: PostgresPool | PostgresQueryExecutor,
+    private readonly options: PostgresCampaignRegistryOptions = {}
+  ) {}
+
+  async createCampaign(input: CreateCampaignInput): Promise<CampaignProfile> {
+    const now = this.now();
+    const campaignId = assertCampaignSplit402Id(
+      input.id ?? this.options.campaignIdFactory?.() ?? createPrefixedId("cmp"),
+      "campaign id"
+    );
+    const merchantId = assertCampaignSplit402Id(input.merchantId, "merchant id");
+    const version = createCampaignVersionRecord(
+      { id: campaignId, merchantId },
+      1,
+      input,
+      now
+    );
+    const campaign: CampaignRecord = {
+      id: campaignId,
+      merchantId,
+      resourceOrigin: version.terms.resourceOrigin,
+      status: "draft",
+      currentVersion: 1,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    try {
+      await this.withTransaction(async (client) => {
+        await insertCampaign(client, campaign);
+        await insertCampaignVersion(client, version);
+        await insertCampaignOperations(client, version);
+      });
+    } catch (error) {
+      throw mapCampaignWriteError(error);
+    }
+
+    return { ...campaign, current: version };
+  }
+
+  async getCampaign(campaignId: string): Promise<CampaignProfile | undefined> {
+    const campaign = await this.loadCampaign(campaignId);
+    if (campaign === undefined) {
+      return undefined;
+    }
+    const current = await this.getCampaignVersion(
+      campaign.id,
+      campaign.currentVersion
+    );
+    if (current === undefined) {
+      throw new Error(`missing current campaign version: ${campaign.id}`);
+    }
+    return { ...campaign, current };
+  }
+
+  async getCampaignVersion(
+    campaignId: string,
+    version: number
+  ): Promise<CampaignVersionRecord | undefined> {
+    assertCampaignPositiveVersion(version);
+    const result = await this.db.query<CampaignVersionRow>(
+      `select campaign_id, version, terms_hash, terms_json, signing_bytes_hex,
+              network, asset_mint, commission_bps, protocol_fee_bps,
+              payout_threshold_atomic, starts_at, ends_at, merchant_kid,
+              merchant_signature, activated_at, created_at
+         from campaign_versions
+        where campaign_id = $1
+          and version = $2
+        limit 1`,
+      [campaignId, version]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapCampaignVersion(row);
+  }
+
+  async createCampaignVersion(
+    input: CreateCampaignVersionInput
+  ): Promise<CampaignVersionRecord> {
+    const campaign = await this.loadCampaign(input.campaignId);
+    if (campaign === undefined) {
+      throw new CampaignRegistryValidationError(
+        `unknown campaign: ${input.campaignId}`
+      );
+    }
+    if (campaign.status === "closed") {
+      throw new CampaignRegistryValidationError("closed campaigns cannot be versioned");
+    }
+
+    const now = this.now();
+    const nextVersion = campaign.currentVersion + 1;
+    const version = createCampaignVersionRecord(campaign, nextVersion, input, now);
+
+    try {
+      await this.withTransaction(async (client) => {
+        await insertCampaignVersion(client, version);
+        await insertCampaignOperations(client, version);
+        await client.query(
+          `update campaigns
+              set resource_origin = $2,
+                  status = 'draft',
+                  current_version = $3,
+                  updated_at = $4
+            where id = $1`,
+          [campaign.id, version.terms.resourceOrigin, nextVersion, now]
+        );
+      });
+    } catch (error) {
+      throw mapCampaignWriteError(error);
+    }
+
+    return version;
+  }
+
+  async activateCampaignVersion(
+    input: ActivateCampaignVersionInput
+  ): Promise<CampaignProfile> {
+    const campaign = await this.loadCampaign(input.campaignId);
+    if (campaign === undefined) {
+      throw new CampaignRegistryValidationError(`unknown campaign: ${input.campaignId}`);
+    }
+    if (campaign.status === "closed") {
+      throw new CampaignRegistryValidationError("closed campaigns cannot be activated");
+    }
+
+    const versionNumber = assertCampaignPositiveVersion(
+      input.version ?? campaign.currentVersion
+    );
+    if (versionNumber !== campaign.currentVersion) {
+      throw new CampaignRegistryValidationError(
+        "only the current campaign version can be activated"
+      );
+    }
+    const version = await this.getCampaignVersion(campaign.id, versionNumber);
+    if (version === undefined) {
+      throw new CampaignRegistryValidationError(
+        `unknown campaign version: ${campaign.id}:${versionNumber}`
+      );
+    }
+
+    const merchantKid = assertCampaignNonEmptyString(
+      input.merchantKid,
+      "merchantKid"
+    );
+    const merchantPublicKey = assertCampaignBase58PublicKey(
+      input.merchantPublicKey,
+      "merchantPublicKey"
+    );
+    const merchantSignature = assertCampaignNonEmptyString(
+      input.merchantSignature,
+      "merchantSignature"
+    );
+
+    if (
+      version.merchantKid !== undefined ||
+      version.merchantSignature !== undefined
+    ) {
+      if (
+        version.merchantKid === merchantKid &&
+        version.merchantSignature === merchantSignature
+      ) {
+        return { ...campaign, current: version };
+      }
+      throw new CampaignRegistryConflictError(
+        "campaign version is already activated with a different signature"
+      );
+    }
+
+    if (
+      !verifyCampaignTermsSignature(
+        version.terms,
+        merchantPublicKey,
+        merchantSignature
+      )
+    ) {
+      throw new CampaignRegistryValidationError("invalid campaign terms signature");
+    }
+
+    const now = this.now();
+    const activatedVersion: CampaignVersionRecord = {
+      ...version,
+      merchantKid,
+      merchantSignature,
+      activatedAt: now
+    };
+    const activatedCampaign: CampaignRecord = {
+      ...campaign,
+      status: "active",
+      updatedAt: now
+    };
+
+    let activationInserted = false;
+    try {
+      await this.withTransaction(async (client) => {
+        const activationResult = await client.query(
+          `update campaign_versions
+              set merchant_kid = $3,
+                  merchant_signature = $4,
+                  activated_at = $5
+            where campaign_id = $1
+              and version = $2
+              and merchant_kid is null
+              and merchant_signature is null
+              and activated_at is null`,
+          [campaign.id, versionNumber, merchantKid, merchantSignature, now]
+        );
+        activationInserted = activationResult.rowCount === 1;
+        if (!activationInserted) {
+          return;
+        }
+        await client.query(
+          `update campaigns
+              set status = 'active',
+                  updated_at = $2
+            where id = $1`,
+          [campaign.id, now]
+        );
+      });
+    } catch (error) {
+      throw mapCampaignWriteError(error);
+    }
+
+    if (activationInserted) {
+      return { ...activatedCampaign, current: activatedVersion };
+    }
+
+    const latest = await this.getCampaign(campaign.id);
+    if (latest === undefined) {
+      throw new Error(`missing campaign after activation race: ${campaign.id}`);
+    }
+    if (
+      latest.current.merchantKid === merchantKid &&
+      latest.current.merchantSignature === merchantSignature
+    ) {
+      return latest;
+    }
+    throw new CampaignRegistryConflictError(
+      "campaign version is already activated with a different signature"
+    );
+  }
+
+  private async loadCampaign(campaignId: string): Promise<CampaignRecord | undefined> {
+    const result = await this.db.query<CampaignRow>(
+      `select id, merchant_id, resource_origin, status, current_version,
+              created_at, updated_at
+         from campaigns
+        where id = $1
+        limit 1`,
+      [campaignId]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapCampaign(row);
+  }
+
+  private async withTransaction(
+    operation: (client: PostgresQueryExecutor) => Promise<void>
+  ): Promise<void> {
+    const client = await this.createTransactionClient();
+    let transactionStarted = false;
+    try {
+      await client.query("begin");
+      transactionStarted = true;
+      await operation(client);
+      await client.query("commit");
+    } catch (error) {
+      if (transactionStarted) {
+        await rollbackQuietly(client);
+      }
+      throw error;
+    } finally {
+      client.release?.();
+    }
+  }
+
+  private async createTransactionClient(): Promise<
+    PostgresQueryExecutor & { release?: () => void }
+  > {
+    if (isPostgresPool(this.db)) {
+      return this.db.connect();
+    }
+    return this.db;
+  }
+
+  private now(): string {
+    return (this.options.now?.() ?? new Date()).toISOString();
+  }
+}
+
+export class PostgresRouteRegistry implements RouteRegistry {
+  constructor(
+    private readonly db: PostgresPool | PostgresQueryExecutor,
+    private readonly options: PostgresRouteRegistryOptions = {}
+  ) {}
+
+  createRouteDraft(input: CreateRouteDraftInput): RouteDraft {
+    return this.memoryRegistry().createRouteDraft(input);
+  }
+
+  async activateRoute(input: ActivateRouteInput): Promise<RouteRecord> {
+    const route = this.memoryRegistry().activateRoute(input);
+    try {
+      await insertRoute(this.db, route);
+      return route;
+    } catch (error) {
+      if (!isUniqueViolation(error)) {
+        throw error;
+      }
+      const existingByClaimHash = await this.getRouteByClaimHash(route.claimHash);
+      if (existingByClaimHash !== undefined) {
+        return existingByClaimHash;
+      }
+      const existingVersionByClaimHash = await this.getRouteVersionByClaimHash(
+        route.claimHash
+      );
+      if (existingVersionByClaimHash !== undefined) {
+        const existingRoute = await this.getRoute(existingVersionByClaimHash.routeId);
+        if (existingRoute !== undefined) {
+          return existingRoute;
+        }
+      }
+      const existingById = await this.getRoute(route.id);
+      if (existingById !== undefined) {
+        throw new RouteRegistryConflictError(`route already exists: ${route.id}`);
+      }
+      throw mapRouteWriteError(error);
+    }
+  }
+
+  async getRoute(routeId: string): Promise<RouteRecord | undefined> {
+    const result = await this.db.query<RouteRow>(
+      `select id, current_version, campaign_id, campaign_version_min, referrer_wallet,
+              payout_wallet, resource_origin, operation_ids, claim_hash,
+              claim_json, signing_bytes_hex, status, issued_at, expires_at,
+              nonce, metadata_hash, created_at, activated_at
+         from routes
+        where id = $1
+        limit 1`,
+      [routeId]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapRoute(row);
+  }
+
+  async listRouteVersions(routeId: string): Promise<RouteVersionRecord[]> {
+    const result = await this.db.query<RouteVersionRow>(
+      `select route_id, version, campaign_version_min, payout_wallet,
+              claim_hash, claim_json, signing_bytes_hex, issued_at, expires_at,
+              nonce, metadata_hash, created_at
+         from route_versions
+        where route_id = $1
+        order by version asc`,
+      [routeId]
+    );
+    return result.rows.map(mapRouteVersion);
+  }
+
+  async rotateRoutePayout(input: RotateRoutePayoutInput): Promise<RouteRecord> {
+    const existing = await this.getRoute(input.routeId);
+    if (existing === undefined) {
+      throw new RouteRegistryValidationError(`unknown route: ${input.routeId}`);
+    }
+    if (existing.status !== "active") {
+      throw new RouteRegistryValidationError(
+        `route must be active to rotate payout; current status is ${existing.status}`
+      );
+    }
+
+    const validated = this.memoryRegistry().activateRoute({ claim: input.claim });
+    assertPostgresRouteRotation(existing, validated);
+    const existingVersion = await this.getRouteVersionByClaimHash(
+      validated.claimHash
+    );
+    if (existingVersion !== undefined) {
+      if (existingVersion.routeId !== existing.id) {
+        throw new RouteRegistryConflictError(
+          `route claim already exists for another route: ${existingVersion.routeId}`
+        );
+      }
+      return existing;
+    }
+
+    const nextVersion = existing.currentVersion + 1;
+    const now = this.now();
+    const rotated: RouteRecord = {
+      ...existing,
+      currentVersion: nextVersion,
+      campaignVersionMin: validated.campaignVersionMin,
+      payoutWallet: validated.payoutWallet,
+      claimHash: validated.claimHash,
+      claim: validated.claim,
+      signingBytesHex: validated.signingBytesHex,
+      issuedAt: validated.issuedAt,
+      expiresAt: validated.expiresAt,
+      nonce: validated.nonce
+    };
+    if (validated.metadataHash === undefined) {
+      delete rotated.metadataHash;
+    } else {
+      rotated.metadataHash = validated.metadataHash;
+    }
+    const version: RouteVersionRecord = {
+      routeId: rotated.id,
+      version: nextVersion,
+      campaignVersionMin: rotated.campaignVersionMin,
+      payoutWallet: rotated.payoutWallet,
+      claimHash: rotated.claimHash,
+      claim: rotated.claim,
+      signingBytesHex: rotated.signingBytesHex,
+      issuedAt: rotated.issuedAt,
+      expiresAt: rotated.expiresAt,
+      nonce: rotated.nonce,
+      ...(rotated.metadataHash === undefined
+        ? {}
+        : { metadataHash: rotated.metadataHash }),
+      createdAt: now
+    };
+
+    try {
+      await insertRouteVersion(this.db, version);
+      const updated = await updateRouteCurrentVersion(this.db, rotated);
+      return updated ?? rotated;
+    } catch (error) {
+      if (!isUniqueViolation(error)) {
+        throw error;
+      }
+      const duplicate = await this.getRouteVersionByClaimHash(rotated.claimHash);
+      if (duplicate !== undefined && duplicate.routeId === rotated.id) {
+        const current = await this.getRoute(rotated.id);
+        if (current !== undefined) {
+          return current;
+        }
+      }
+      throw mapRouteWriteError(error);
+    }
+  }
+
+  async suspendRoute(input: SuspendRouteInput): Promise<RouteRecord | undefined> {
+    const existing = await this.getRoute(input.routeId);
+    if (existing === undefined) {
+      return undefined;
+    }
+    if (existing.status === "suspended") {
+      return existing;
+    }
+    if (existing.status !== "active") {
+      throw new RouteRegistryValidationError(
+        `route must be active to suspend; current status is ${existing.status}`
+      );
+    }
+
+    const result = await this.db.query<RouteRow>(
+      `update routes
+          set status = 'suspended'
+        where id = $1
+          and status = 'active'
+        returning id, current_version, campaign_id, campaign_version_min, referrer_wallet,
+                  payout_wallet, resource_origin, operation_ids, claim_hash,
+                  claim_json, signing_bytes_hex, status, issued_at, expires_at,
+                  nonce, metadata_hash, created_at, activated_at`,
+      [input.routeId]
+    );
+    const row = result.rows[0];
+    if (row !== undefined) {
+      return mapRoute(row);
+    }
+
+    const current = await this.getRoute(input.routeId);
+    if (current?.status === "suspended") {
+      return current;
+    }
+    if (current === undefined) {
+      return undefined;
+    }
+    throw new RouteRegistryValidationError(
+      `route must be active to suspend; current status is ${current.status}`
+    );
+  }
+
+  async searchRoutes(input: SearchRoutesInput = {}): Promise<RouteRecord[]> {
+    const search = normalizeRouteSearchInput(input, this.now());
+    const values: unknown[] = [];
+    const pushValue = (value: unknown): number => {
+      values.push(value);
+      return values.length;
+    };
+    const where = [`status = $${pushValue(search.status)}`];
+    if (search.status === "active") {
+      where.push(`expires_at > $${pushValue(search.now)}`);
+    }
+    if (search.campaignId !== undefined) {
+      where.push(`campaign_id = $${pushValue(search.campaignId)}`);
+    }
+    if (search.referrerWallet !== undefined) {
+      where.push(`referrer_wallet = $${pushValue(search.referrerWallet)}`);
+    }
+    if (search.resourceOrigin !== undefined) {
+      where.push(`resource_origin = $${pushValue(search.resourceOrigin)}`);
+    }
+    if (search.operationId !== undefined) {
+      const operationIdParam = pushValue(search.operationId);
+      const wildcardParam = pushValue("*");
+      where.push(
+        `(operation_ids ? $${operationIdParam} or operation_ids ? $${wildcardParam})`
+      );
+    }
+    const limitParam = pushValue(search.limit);
+    const result = await this.db.query<RouteRow>(
+      `select id, current_version, campaign_id, campaign_version_min, referrer_wallet,
+              payout_wallet, resource_origin, operation_ids, claim_hash,
+              claim_json, signing_bytes_hex, status, issued_at, expires_at,
+              nonce, metadata_hash, created_at, activated_at
+         from routes
+        where ${where.join(" and ")}
+        order by created_at desc, id desc
+        limit $${limitParam}`,
+      values
+    );
+    return result.rows.map(mapRoute);
+  }
+
+  private async getRouteByClaimHash(
+    claimHash: `sha256:${string}`
+  ): Promise<RouteRecord | undefined> {
+    const result = await this.db.query<RouteRow>(
+      `select id, current_version, campaign_id, campaign_version_min, referrer_wallet,
+              payout_wallet, resource_origin, operation_ids, claim_hash,
+              claim_json, signing_bytes_hex, status, issued_at, expires_at,
+              nonce, metadata_hash, created_at, activated_at
+         from routes
+        where claim_hash = $1
+        limit 1`,
+      [claimHash]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapRoute(row);
+  }
+
+  private async getRouteVersionByClaimHash(
+    claimHash: `sha256:${string}`
+  ): Promise<RouteVersionRecord | undefined> {
+    const result = await this.db.query<RouteVersionRow>(
+      `select route_id, version, campaign_version_min, payout_wallet,
+              claim_hash, claim_json, signing_bytes_hex, issued_at, expires_at,
+              nonce, metadata_hash, created_at
+         from route_versions
+        where claim_hash = $1
+        limit 1`,
+      [claimHash]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapRouteVersion(row);
+  }
+
+  private now(): string {
+    return (this.options.now?.() ?? new Date()).toISOString();
+  }
+
+  private memoryRegistry(): InMemoryRouteRegistry {
+    return new InMemoryRouteRegistry(this.options);
   }
 }
 
@@ -388,11 +1439,20 @@ export class PostgresMerchantRegistry implements MerchantRegistry {
         order by created_at, kid`,
       [merchantId]
     );
+    const payoutWalletsResult = await this.db.query<MerchantPayoutWalletRow>(
+      `select id, merchant_id, network, wallet, asset_mint, signer_reference,
+              status, created_at
+         from merchant_payout_wallets
+        where merchant_id = $1
+        order by created_at, id`,
+      [merchantId]
+    );
 
     return {
       ...mapMerchant(merchantRow),
       origins: originsResult.rows.map(mapMerchantOrigin),
-      keys: keysResult.rows.map(mapMerchantKey)
+      keys: keysResult.rows.map(mapMerchantKey),
+      payoutWallets: payoutWalletsResult.rows.map(mapMerchantPayoutWallet)
     };
   }
 
@@ -478,6 +1538,54 @@ export class PostgresMerchantRegistry implements MerchantRegistry {
         ]
       );
       return mapMerchantKey(requiredRow(result));
+    } catch (error) {
+      throw mapMerchantWriteError(error);
+    }
+  }
+
+  async addPayoutWallet(
+    input: AddMerchantPayoutWalletInput
+  ): Promise<MerchantPayoutWalletRecord> {
+    await this.assertMerchantExists(input.merchantId);
+    const wallet: MerchantPayoutWalletRecord = {
+      id: assertSplit402Id(
+        input.id ??
+          this.options.merchantPayoutWalletIdFactory?.() ??
+          createMerchantPayoutWalletId(),
+        "merchant payout wallet id"
+      ),
+      merchantId: input.merchantId,
+      network: assertNonEmptyString(input.network, "network"),
+      wallet: assertBase58PublicKey(input.wallet, "wallet"),
+      asset: assertBase58PublicKey(input.asset, "asset"),
+      signerReference: assertNonEmptyString(input.signerReference, "signerReference"),
+      status: input.status ?? "active",
+      createdAt: this.now()
+    };
+    assertMerchantPayoutWalletStatus(wallet.status);
+
+    try {
+      const result = await this.db.query<MerchantPayoutWalletRow>(
+        `insert into merchant_payout_wallets (
+           id, merchant_id, network, wallet, asset_mint, signer_reference,
+           status, created_at
+         ) values (
+           $1, $2, $3, $4, $5, $6, $7, $8
+         )
+         returning id, merchant_id, network, wallet, asset_mint,
+                   signer_reference, status, created_at`,
+        [
+          wallet.id,
+          wallet.merchantId,
+          wallet.network,
+          wallet.wallet,
+          wallet.asset,
+          wallet.signerReference,
+          wallet.status,
+          wallet.createdAt
+        ]
+      );
+      return mapMerchantPayoutWallet(requiredRow(result));
     } catch (error) {
       throw mapMerchantWriteError(error);
     }
@@ -636,6 +1744,317 @@ export class PostgresWalletAuthStore implements WalletAuthStore {
     const row = result.rows[0];
     return row === undefined ? undefined : mapWalletAuthSession(row);
   }
+
+  async saveRefreshToken(
+    tokenHash: string,
+    refreshToken: WalletAuthRefreshTokenRecord
+  ): Promise<void> {
+    await this.db.query(
+      `insert into wallet_auth_refresh_tokens (
+         token_hash, refresh_token_id, session_id, wallet, network, purpose,
+         challenge_id, issued_at, expires_at, revoked_at, replaced_by_session_id
+       ) values (
+         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+       )`,
+      [
+        tokenHash,
+        refreshToken.refreshTokenId,
+        refreshToken.sessionId,
+        refreshToken.wallet,
+        refreshToken.network,
+        refreshToken.purpose,
+        refreshToken.challengeId,
+        refreshToken.issuedAt,
+        refreshToken.expiresAt,
+        refreshToken.revokedAt ?? null,
+        refreshToken.replacedBySessionId ?? null
+      ]
+    );
+  }
+
+  async getRefreshToken(
+    tokenHash: string
+  ): Promise<WalletAuthRefreshTokenRecord | undefined> {
+    const result = await this.db.query<WalletAuthRefreshTokenRow>(
+      `select token_hash, refresh_token_id, session_id, wallet, network, purpose,
+              challenge_id, issued_at, expires_at, revoked_at, replaced_by_session_id
+         from wallet_auth_refresh_tokens
+        where token_hash = $1
+        limit 1`,
+      [tokenHash]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapWalletAuthRefreshToken(row);
+  }
+
+  async revokeRefreshToken(
+    tokenHash: string,
+    revokedAt: string,
+    replacedBySessionId?: string
+  ): Promise<boolean> {
+    const result = await this.db.query<Pick<WalletAuthRefreshTokenRow, "token_hash">>(
+      `update wallet_auth_refresh_tokens
+          set revoked_at = $2,
+              replaced_by_session_id = $3
+        where token_hash = $1
+          and revoked_at is null
+        returning token_hash`,
+      [tokenHash, revokedAt, replacedBySessionId ?? null]
+    );
+    return result.rows[0] !== undefined;
+  }
+}
+
+function insertCampaign(
+  client: PostgresQueryExecutor,
+  campaign: CampaignRecord
+): Promise<QueryResult> {
+  return client.query(
+    `insert into campaigns (
+       id, merchant_id, resource_origin, status, current_version, created_at,
+       updated_at
+     ) values (
+       $1, $2, $3, $4, $5, $6, $7
+     )`,
+    [
+      campaign.id,
+      campaign.merchantId,
+      campaign.resourceOrigin,
+      campaign.status,
+      campaign.currentVersion,
+      campaign.createdAt,
+      campaign.updatedAt
+    ]
+  );
+}
+
+function insertCampaignVersion(
+  client: PostgresQueryExecutor,
+  version: CampaignVersionRecord
+): Promise<QueryResult> {
+  return client.query(
+    `insert into campaign_versions (
+       campaign_id, version, terms_hash, terms_json, signing_bytes_hex, network,
+       asset_mint, commission_bps, protocol_fee_bps, payout_threshold_atomic,
+       starts_at, ends_at, merchant_kid, merchant_signature, activated_at,
+       created_at
+     ) values (
+       $1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+       $15, $16
+     )`,
+    [
+      version.campaignId,
+      version.version,
+      version.termsHash,
+      JSON.stringify(version.terms),
+      version.signingBytesHex,
+      version.terms.network,
+      version.terms.asset,
+      version.terms.commissionBps,
+      version.terms.protocolFeeBps,
+      version.terms.payoutThresholdAtomic,
+      version.terms.startsAt,
+      version.terms.endsAt,
+      version.merchantKid ?? null,
+      version.merchantSignature ?? null,
+      version.activatedAt ?? null,
+      version.createdAt
+    ]
+  );
+}
+
+async function insertCampaignOperations(
+  client: PostgresQueryExecutor,
+  version: CampaignVersionRecord
+): Promise<void> {
+  for (const operation of version.terms.operations) {
+    await client.query(
+      `insert into campaign_operations (
+         campaign_id, campaign_version, operation_id, method, path_template,
+         input_schema
+       ) values (
+         $1, $2, $3, $4, $5, $6::jsonb
+       )`,
+      [
+        version.campaignId,
+        version.version,
+        operation.operationId,
+        operation.method,
+        operation.pathTemplate,
+        operation.inputSchema === undefined
+          ? null
+          : JSON.stringify(operation.inputSchema)
+      ]
+    );
+  }
+}
+
+function insertRoute(
+  client: PostgresQueryExecutor,
+  route: RouteRecord
+): Promise<QueryResult> {
+  const version: RouteVersionRecord = {
+    routeId: route.id,
+    version: route.currentVersion,
+    campaignVersionMin: route.campaignVersionMin,
+    payoutWallet: route.payoutWallet,
+    claimHash: route.claimHash,
+    claim: route.claim,
+    signingBytesHex: route.signingBytesHex,
+    issuedAt: route.issuedAt,
+    expiresAt: route.expiresAt,
+    nonce: route.nonce,
+    ...(route.metadataHash === undefined ? {} : { metadataHash: route.metadataHash }),
+    createdAt: route.activatedAt
+  };
+  return client.query(
+    `insert into routes (
+       id, current_version, campaign_id, campaign_version_min, referrer_wallet,
+       payout_wallet, resource_origin, operation_ids, claim_hash, claim_json,
+       signing_bytes_hex, status, issued_at, expires_at, nonce, metadata_hash,
+       created_at, activated_at
+     ) values (
+       $1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10::jsonb, $11, $12, $13,
+       $14, $15, $16, $17, $18
+     )`,
+    [
+      route.id,
+      route.currentVersion,
+      route.campaignId,
+      route.campaignVersionMin,
+      route.referrerWallet,
+      route.payoutWallet,
+      route.resourceOrigin,
+      JSON.stringify(route.operationIds),
+      route.claimHash,
+      JSON.stringify(route.claim),
+      route.signingBytesHex,
+      route.status,
+      route.issuedAt,
+      route.expiresAt,
+      route.nonce,
+      route.metadataHash ?? null,
+      route.createdAt,
+      route.activatedAt
+    ]
+  ).then(async (result) => {
+    await insertRouteVersion(client, version);
+    return result;
+  });
+}
+
+function insertRouteVersion(
+  client: PostgresQueryExecutor,
+  version: RouteVersionRecord
+): Promise<QueryResult> {
+  return client.query(
+    `insert into route_versions (
+       route_id, version, campaign_version_min, payout_wallet, claim_hash,
+       claim_json, signing_bytes_hex, issued_at, expires_at, nonce,
+       metadata_hash, created_at
+     ) values (
+       $1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12
+     )`,
+    [
+      version.routeId,
+      version.version,
+      version.campaignVersionMin,
+      version.payoutWallet,
+      version.claimHash,
+      JSON.stringify(version.claim),
+      version.signingBytesHex,
+      version.issuedAt,
+      version.expiresAt,
+      version.nonce,
+      version.metadataHash ?? null,
+      version.createdAt
+    ]
+  );
+}
+
+async function updateRouteCurrentVersion(
+  client: PostgresQueryExecutor,
+  route: RouteRecord
+): Promise<RouteRecord | undefined> {
+  const result = await client.query<RouteRow>(
+    `update routes
+        set current_version = $2,
+            campaign_version_min = $3,
+            payout_wallet = $4,
+            claim_hash = $5,
+            claim_json = $6::jsonb,
+            signing_bytes_hex = $7,
+            issued_at = $8,
+            expires_at = $9,
+            nonce = $10,
+            metadata_hash = $11
+      where id = $1
+        and current_version = $12
+      returning id, current_version, campaign_id, campaign_version_min,
+                referrer_wallet, payout_wallet, resource_origin, operation_ids,
+                claim_hash, claim_json, signing_bytes_hex, status, issued_at,
+                expires_at, nonce, metadata_hash, created_at, activated_at`,
+    [
+      route.id,
+      route.currentVersion,
+      route.campaignVersionMin,
+      route.payoutWallet,
+      route.claimHash,
+      JSON.stringify(route.claim),
+      route.signingBytesHex,
+      route.issuedAt,
+      route.expiresAt,
+      route.nonce,
+      route.metadataHash ?? null,
+      route.currentVersion - 1
+    ]
+  );
+  const row = result.rows[0];
+  return row === undefined ? undefined : mapRoute(row);
+}
+
+function assertPostgresRouteRotation(
+  existing: RouteRecord,
+  validated: RouteRecord
+): void {
+  if (validated.id !== existing.id) {
+    throw new RouteRegistryValidationError("rotated claim routeId must match route");
+  }
+  if (validated.campaignId !== existing.campaignId) {
+    throw new RouteRegistryValidationError(
+      "rotated claim campaignId must match route"
+    );
+  }
+  if (validated.campaignVersionMin !== existing.campaignVersionMin) {
+    throw new RouteRegistryValidationError(
+      "rotated claim campaignVersionMin must match route"
+    );
+  }
+  if (validated.referrerWallet !== existing.referrerWallet) {
+    throw new RouteRegistryValidationError(
+      "rotated claim referrerWallet must match route"
+    );
+  }
+  if (validated.resourceOrigin !== existing.resourceOrigin) {
+    throw new RouteRegistryValidationError(
+      "rotated claim resourceOrigin must match route"
+    );
+  }
+  if (!routeOperationScopesEqual(validated.operationIds, existing.operationIds)) {
+    throw new RouteRegistryValidationError(
+      "rotated claim operationIds must match route"
+    );
+  }
+}
+
+function routeOperationScopesEqual(
+  left: RouteOperationScope,
+  right: RouteOperationScope
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((operationId, index) => operationId === right[index])
+  );
 }
 
 function insertReceipt(
@@ -741,6 +2160,163 @@ function insertLedgerEntry(
   );
 }
 
+function insertPayoutBatch(
+  client: PostgresQueryExecutor,
+  batch: PayoutBatchRecord
+): Promise<QueryResult> {
+  return client.query(
+    `insert into payout_batches (
+       id, merchant_id, payout_wallet_id, network, asset_mint, status,
+       total_amount_atomic, item_count, accrual_count, failure_code,
+       failure_message, created_at, updated_at
+     ) values (
+       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+     )`,
+    [
+      batch.id,
+      batch.merchantId,
+      batch.payoutWalletId,
+      batch.network,
+      batch.asset,
+      batch.status,
+      batch.totalAmountAtomic,
+      batch.itemCount,
+      batch.accrualCount,
+      batch.failureCode ?? null,
+      batch.failureMessage ?? null,
+      batch.createdAt,
+      batch.updatedAt
+    ]
+  );
+}
+
+function insertPayoutItem(
+  client: PostgresQueryExecutor,
+  item: PayoutItemRecord
+): Promise<QueryResult> {
+  return client.query(
+    `insert into payout_items (
+       id, payout_batch_id, destination_wallet, destination_token_account,
+       amount_atomic, status, created_at
+     ) values (
+       $1, $2, $3, $4, $5, $6, $7
+     )`,
+    [
+      item.id,
+      item.payoutBatchId,
+      item.destinationWallet,
+      item.destinationTokenAccount ?? null,
+      item.amountAtomic,
+      item.status,
+      item.createdAt
+    ]
+  );
+}
+
+function insertPayoutAllocation(
+  client: PostgresQueryExecutor,
+  allocation: PayoutAllocationRecord
+): Promise<QueryResult> {
+  return client.query(
+    `insert into payout_allocations (
+       payout_item_id, accrual_id, amount_atomic
+     ) values (
+       $1, $2, $3
+     )`,
+    [
+      allocation.payoutItemId,
+      allocation.accrualId,
+      allocation.amountAtomic
+    ]
+  );
+}
+
+function insertOutboxEvent(
+  client: PostgresQueryExecutor,
+  event: OutboxEventRecord
+): Promise<QueryResult> {
+  return client.query(
+    `insert into outbox_events (
+       id, event_type, aggregate_type, aggregate_id, payload, status, attempts,
+       available_at, locked_at, last_error, created_at
+     ) values (
+       $1::uuid, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11
+     )`,
+    [
+      event.id,
+      event.eventType,
+      event.aggregateType,
+      event.aggregateId,
+      JSON.stringify(event.payload),
+      event.status,
+      event.attempts,
+      event.availableAt,
+      event.lockedAt ?? null,
+      event.lastError ?? null,
+      event.createdAt
+    ]
+  );
+}
+
+function createReceiptAcceptedOutboxEvent(
+  snapshot: ReceiptIngestionSnapshot,
+  id: string
+): OutboxEventRecord {
+  return createReceiptOutboxEvent(snapshot, id, "receipt.accepted.v1");
+}
+
+function createWebhookReceiptAcceptedOutboxEvent(
+  snapshot: ReceiptIngestionSnapshot,
+  id: string
+): OutboxEventRecord {
+  return createReceiptOutboxEvent(snapshot, id, "webhook.receipt.accepted.v1");
+}
+
+function createReceiptOutboxEvent(
+  snapshot: ReceiptIngestionSnapshot,
+  id: string,
+  eventType: "receipt.accepted.v1" | "webhook.receipt.accepted.v1"
+): OutboxEventRecord {
+  const receipt = snapshot.receipt.receipt;
+  return {
+    id,
+    eventType,
+    aggregateType: "receipt",
+    aggregateId: snapshot.receipt.id,
+    payload: {
+      receiptId: snapshot.receipt.id,
+      receiptHash: snapshot.receipt.receiptHash,
+      merchantId: receipt.merchantId,
+      campaignId: receipt.campaignId,
+      routeId: receipt.routeId ?? null,
+      paymentId: receipt.paymentId,
+      settlementTxSignature: receipt.settlementTxSignature,
+      network: receipt.network,
+      asset: receipt.asset,
+      source: snapshot.receipt.source,
+      verificationState: snapshot.receipt.verificationState,
+      accrualId: snapshot.accrual?.id ?? null,
+      ledgerTransactionId: snapshot.ledgerTransaction?.id ?? null
+    },
+    status: "pending",
+    attempts: 0,
+    availableAt: snapshot.receipt.createdAt,
+    createdAt: snapshot.receipt.createdAt
+  };
+}
+
+function normalizeOutboxEventTypes(
+  eventTypes: string[] | undefined
+): string[] | null {
+  if (eventTypes === undefined) {
+    return null;
+  }
+  if (eventTypes.length === 0) {
+    throw new Error("eventTypes must not be empty");
+  }
+  return eventTypes;
+}
+
 function mapReceiptRecord(row: PaymentReceiptRow): ReceiptRecord {
   const parsedReceipt = parseReceiptJson(row.receipt_json);
   return {
@@ -766,6 +2342,7 @@ function mapAccrual(row: CommissionAccrualRow): CommissionAccrual {
     asset: row.asset_mint,
     amountAtomic: row.amount_atomic,
     status: readAccrualStatus(row.status),
+    ...(row.available_at === null ? {} : { availableAt: toIsoString(row.available_at) }),
     createdAt: toIsoString(row.created_at)
   };
 }
@@ -799,9 +2376,94 @@ function mapLedgerEntry(row: LedgerEntryRow): LedgerEntry {
   };
 }
 
+function mapPayoutBatch(
+  batch: PayoutBatchRow,
+  itemRows: PayoutItemRow[],
+  allocationRows: PayoutAllocationRow[]
+): PayoutBatchRecord {
+  const allocationsByItemId = new Map<string, PayoutAllocationRecord[]>();
+  for (const row of allocationRows) {
+    const allocation = mapPayoutAllocation(row);
+    allocationsByItemId.set(row.payout_item_id, [
+      ...(allocationsByItemId.get(row.payout_item_id) ?? []),
+      allocation
+    ]);
+  }
+  return {
+    id: batch.id,
+    merchantId: batch.merchant_id,
+    payoutWalletId: batch.payout_wallet_id,
+    network: batch.network,
+    asset: batch.asset_mint,
+    status: readPayoutBatchStatus(batch.status),
+    totalAmountAtomic: batch.total_amount_atomic,
+    itemCount: batch.item_count,
+    accrualCount: batch.accrual_count,
+    ...(batch.failure_code === null ? {} : { failureCode: batch.failure_code }),
+    ...(batch.failure_message === null
+      ? {}
+      : { failureMessage: batch.failure_message }),
+    createdAt: toIsoString(batch.created_at),
+    updatedAt: toIsoString(batch.updated_at),
+    items: itemRows.map((item) =>
+      mapPayoutItem(item, allocationsByItemId.get(item.id) ?? [])
+    )
+  };
+}
+
+function mapPayoutItem(
+  row: PayoutItemRow,
+  allocations: PayoutAllocationRecord[]
+): PayoutItemRecord {
+  return {
+    id: row.id,
+    payoutBatchId: row.payout_batch_id,
+    destinationWallet: row.destination_wallet,
+    ...(row.destination_token_account === null
+      ? {}
+      : { destinationTokenAccount: row.destination_token_account }),
+    amountAtomic: row.amount_atomic,
+    status: readPayoutItemStatus(row.status),
+    createdAt: toIsoString(row.created_at),
+    allocations
+  };
+}
+
+function mapPayoutAllocation(row: PayoutAllocationRow): PayoutAllocationRecord {
+  return {
+    payoutItemId: row.payout_item_id,
+    accrualId: row.accrual_id,
+    amountAtomic: row.amount_atomic
+  };
+}
+
+function mapOutboxEvent(row: OutboxEventRow): OutboxEventRecord {
+  return {
+    id: row.id,
+    eventType: row.event_type,
+    aggregateType: row.aggregate_type,
+    aggregateId: row.aggregate_id,
+    payload: parseOutboxPayload(row.payload),
+    status: readOutboxEventStatus(row.status),
+    attempts: row.attempts,
+    availableAt: toIsoString(row.available_at),
+    ...(row.locked_at === null ? {} : { lockedAt: toIsoString(row.locked_at) }),
+    ...(row.last_error === null ? {} : { lastError: row.last_error }),
+    createdAt: toIsoString(row.created_at)
+  };
+}
+
 function parseReceiptJson(value: unknown): Split402ReceiptV1 {
   const parsed = typeof value === "string" ? JSON.parse(value) : value;
   return Split402ReceiptV1Schema.parse(parsed);
+}
+
+function parseOutboxPayload(value: unknown): Record<string, unknown> {
+  const parsed = typeof value === "string" ? JSON.parse(value) : value;
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("outbox payload must be an object");
+  }
+  return parsed as Record<string, unknown>;
 }
 
 function readReceiptSource(value: string): ReceiptIngestSource {
@@ -834,7 +2496,8 @@ function readAccrualStatus(value: string): AccrualStatus {
   if (
     value === "pending_chain_verification" ||
     value === "available" ||
-    value === "held"
+    value === "held" ||
+    value === "allocated"
   ) {
     return value;
   }
@@ -850,6 +2513,49 @@ function readLedgerAccountType(value: string): LedgerAccountType {
     return value;
   }
   throw new Error(`unsupported ledger account type: ${value}`);
+}
+
+function readOutboxEventStatus(value: string): OutboxEventRecord["status"] {
+  if (
+    value === "pending" ||
+    value === "processing" ||
+    value === "delivered" ||
+    value === "dead_letter"
+  ) {
+    return value;
+  }
+  throw new Error(`unsupported outbox event status: ${value}`);
+}
+
+function readPayoutBatchStatus(value: string): PayoutBatchStatus {
+  if (
+    value === "draft" ||
+    value === "planned" ||
+    value === "signing" ||
+    value === "submitted" ||
+    value === "confirmed" ||
+    value === "finalized" ||
+    value === "failed" ||
+    value === "cancelled" ||
+    value === "outcome_unknown"
+  ) {
+    return value;
+  }
+  throw new Error(`unsupported payout batch status: ${value}`);
+}
+
+function readPayoutItemStatus(value: string): PayoutItemStatus {
+  if (
+    value === "allocated" ||
+    value === "submitted" ||
+    value === "confirmed" ||
+    value === "finalized" ||
+    value === "failed" ||
+    value === "released"
+  ) {
+    return value;
+  }
+  throw new Error(`unsupported payout item status: ${value}`);
 }
 
 function toIsoString(value: Date | string): string {
@@ -924,6 +2630,21 @@ function mapMerchantKey(row: MerchantKeyRow): MerchantKeyRecord {
   };
 }
 
+function mapMerchantPayoutWallet(
+  row: MerchantPayoutWalletRow
+): MerchantPayoutWalletRecord {
+  return {
+    id: row.id,
+    merchantId: row.merchant_id,
+    network: row.network,
+    wallet: row.wallet,
+    asset: row.asset_mint,
+    signerReference: row.signer_reference,
+    status: readMerchantPayoutWalletStatus(row.status),
+    createdAt: toIsoString(row.created_at)
+  };
+}
+
 function mapWalletAuthChallenge(
   row: WalletAuthChallengeRow
 ): WalletAuthChallengeRecord {
@@ -956,12 +2677,284 @@ function mapWalletAuthSession(
   };
 }
 
+function mapWalletAuthRefreshToken(
+  row: WalletAuthRefreshTokenRow
+): WalletAuthRefreshTokenRecord {
+  return {
+    refreshTokenId: row.refresh_token_id,
+    sessionId: row.session_id,
+    wallet: row.wallet,
+    network: row.network,
+    purpose: readWalletAuthPurpose(row.purpose),
+    challengeId: row.challenge_id,
+    issuedAt: toIsoString(row.issued_at),
+    expiresAt: toIsoString(row.expires_at),
+    ...(row.revoked_at === null ? {} : { revokedAt: toIsoString(row.revoked_at) }),
+    ...(row.replaced_by_session_id === null
+      ? {}
+      : { replacedBySessionId: row.replaced_by_session_id })
+  };
+}
+
 function requiredRow<Row extends QueryResultRow>(result: QueryResult<Row>): Row {
   const row = result.rows[0];
   if (row === undefined) {
     throw new Error("database did not return a row");
   }
   return row;
+}
+
+function mapCampaign(row: CampaignRow): CampaignRecord {
+  return {
+    id: row.id,
+    merchantId: row.merchant_id,
+    resourceOrigin: row.resource_origin,
+    status: readCampaignStatus(row.status),
+    currentVersion: row.current_version,
+    createdAt: toIsoString(row.created_at),
+    updatedAt: toIsoString(row.updated_at)
+  };
+}
+
+function mapCampaignVersion(row: CampaignVersionRow): CampaignVersionRecord {
+  return {
+    campaignId: row.campaign_id,
+    version: row.version,
+    terms: parseCampaignTermsJson(row.terms_json),
+    termsHash: row.terms_hash,
+    signingBytesHex: row.signing_bytes_hex,
+    ...(row.merchant_kid === null ? {} : { merchantKid: row.merchant_kid }),
+    ...(row.merchant_signature === null
+      ? {}
+      : { merchantSignature: row.merchant_signature }),
+    ...(row.activated_at === null
+      ? {}
+      : { activatedAt: toIsoString(row.activated_at) }),
+    createdAt: toIsoString(row.created_at)
+  };
+}
+
+function mapRoute(row: RouteRow): RouteRecord {
+  return {
+    id: row.id,
+    currentVersion: row.current_version,
+    campaignId: row.campaign_id,
+    campaignVersionMin: row.campaign_version_min,
+    referrerWallet: row.referrer_wallet,
+    payoutWallet: row.payout_wallet,
+    resourceOrigin: row.resource_origin,
+    operationIds: parseRouteOperationScope(row.operation_ids),
+    claimHash: row.claim_hash,
+    claim: parseReferralClaimJson(row.claim_json),
+    signingBytesHex: row.signing_bytes_hex,
+    status: readRouteStatus(row.status),
+    issuedAt: toIsoString(row.issued_at),
+    expiresAt: toIsoString(row.expires_at),
+    nonce: row.nonce,
+    ...(row.metadata_hash === null ? {} : { metadataHash: row.metadata_hash }),
+    createdAt: toIsoString(row.created_at),
+    activatedAt: toIsoString(row.activated_at)
+  };
+}
+
+function mapRouteVersion(row: RouteVersionRow): RouteVersionRecord {
+  return {
+    routeId: row.route_id,
+    version: row.version,
+    campaignVersionMin: row.campaign_version_min,
+    payoutWallet: row.payout_wallet,
+    claimHash: row.claim_hash,
+    claim: parseReferralClaimJson(row.claim_json),
+    signingBytesHex: row.signing_bytes_hex,
+    issuedAt: toIsoString(row.issued_at),
+    expiresAt: toIsoString(row.expires_at),
+    nonce: row.nonce,
+    ...(row.metadata_hash === null ? {} : { metadataHash: row.metadata_hash }),
+    createdAt: toIsoString(row.created_at)
+  };
+}
+
+function parseReferralClaimJson(value: unknown): RouteRecord["claim"] {
+  const parsed = typeof value === "string" ? JSON.parse(value) : value;
+  return ReferralClaimV1Schema.parse(parsed);
+}
+
+function parseRouteOperationScope(value: unknown): RouteOperationScope {
+  const parsed = typeof value === "string" ? JSON.parse(value) : value;
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    throw new Error("route operation_ids must be a non-empty array");
+  }
+  if (parsed.includes("*")) {
+    if (parsed.length !== 1 || parsed[0] !== "*") {
+      throw new Error("route operation_ids wildcard must be the only entry");
+    }
+    return ["*"];
+  }
+  return parsed.map((item) => {
+    if (typeof item !== "string" || item.trim().length === 0) {
+      throw new Error("route operation_ids entries must be non-empty strings");
+    }
+    return item;
+  });
+}
+
+function parseCampaignTermsJson(value: unknown): CampaignTerms {
+  const parsed = typeof value === "string" ? JSON.parse(value) : value;
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("campaign terms_json must be an object");
+  }
+  const terms = parsed as Record<string, unknown>;
+  return {
+    protocolVersion: readLiteral(terms.protocolVersion, "0.1", "protocolVersion"),
+    campaignId: readJsonString(terms.campaignId, "campaignId"),
+    campaignVersion: readJsonNumber(terms.campaignVersion, "campaignVersion"),
+    merchantId: readJsonString(terms.merchantId, "merchantId"),
+    resourceOrigin: readJsonString(terms.resourceOrigin, "resourceOrigin"),
+    operations: readCampaignOperationsJson(terms.operations),
+    network: readJsonString(terms.network, "network"),
+    asset: readJsonString(terms.asset, "asset"),
+    requiredAmountAtomic: readJsonString(
+      terms.requiredAmountAtomic,
+      "requiredAmountAtomic"
+    ),
+    payToWallet: readJsonString(terms.payToWallet, "payToWallet"),
+    commissionBps: readJsonNumber(terms.commissionBps, "commissionBps"),
+    protocolFeeBps: readJsonNumber(terms.protocolFeeBps, "protocolFeeBps"),
+    commissionBase: readLiteral(
+      terms.commissionBase,
+      "required_amount",
+      "commissionBase"
+    ),
+    settlementMode: readLiteral(terms.settlementMode, "accrual", "settlementMode"),
+    attributionRequired: readJsonBoolean(
+      terms.attributionRequired,
+      "attributionRequired"
+    ),
+    allowSelfReferral: readJsonBoolean(
+      terms.allowSelfReferral,
+      "allowSelfReferral"
+    ),
+    payoutThresholdAtomic: readJsonString(
+      terms.payoutThresholdAtomic,
+      "payoutThresholdAtomic"
+    ),
+    startsAt: readJsonString(terms.startsAt, "startsAt"),
+    endsAt: readJsonNullableString(terms.endsAt, "endsAt")
+  };
+}
+
+function readCampaignOperationsJson(value: unknown): CampaignOperation[] {
+  if (!Array.isArray(value)) {
+    throw new Error("campaign operations must be an array");
+  }
+  return value.map((item) => {
+    if (typeof item !== "object" || item === null || Array.isArray(item)) {
+      throw new Error("campaign operation must be an object");
+    }
+    const operation = item as Record<string, unknown>;
+    return {
+      operationId: readJsonString(operation.operationId, "operationId"),
+      method: readJsonString(operation.method, "method"),
+      pathTemplate: readJsonString(operation.pathTemplate, "pathTemplate"),
+      ...(operation.inputSchema === undefined
+        ? {}
+        : { inputSchema: operation.inputSchema })
+    };
+  });
+}
+
+function readJsonString(value: unknown, label: string): string {
+  if (typeof value !== "string") {
+    throw new Error(`${label} must be a string`);
+  }
+  return value;
+}
+
+function readJsonNullableString(value: unknown, label: string): string | null {
+  return value === null ? null : readJsonString(value, label);
+}
+
+function readJsonNumber(value: unknown, label: string): number {
+  if (typeof value !== "number") {
+    throw new Error(`${label} must be a number`);
+  }
+  return value;
+}
+
+function readJsonBoolean(value: unknown, label: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new Error(`${label} must be a boolean`);
+  }
+  return value;
+}
+
+function readLiteral<Value extends string>(
+  value: unknown,
+  expected: Value,
+  label: string
+): Value {
+  if (value !== expected) {
+    throw new Error(`${label} must be ${expected}`);
+  }
+  return expected;
+}
+
+function assertCampaignSplit402Id(value: string, label: string): string {
+  if (!Split402IdSchema.safeParse(value).success) {
+    throw new CampaignRegistryValidationError(`${label} must be a Split402 id`);
+  }
+  return value;
+}
+
+function assertCampaignBase58PublicKey(value: string, label: string): string {
+  if (!Base58PublicKeySchema.safeParse(value).success) {
+    throw new CampaignRegistryValidationError(
+      `${label} must be a base58 public key`
+    );
+  }
+  return value;
+}
+
+function assertCampaignNonEmptyString(value: string, label: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new CampaignRegistryValidationError(
+      `${label} must be a non-empty string`
+    );
+  }
+  return value;
+}
+
+function assertCampaignPositiveVersion(value: number): number {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new CampaignRegistryValidationError(
+      "version must be a positive integer"
+    );
+  }
+  return value;
+}
+
+function readCampaignStatus(value: string): CampaignStatus {
+  if (
+    value === "draft" ||
+    value === "active" ||
+    value === "paused" ||
+    value === "closed"
+  ) {
+    return value;
+  }
+  throw new Error(`unsupported campaign status: ${value}`);
+}
+
+function readRouteStatus(value: string): RouteStatus {
+  if (
+    value === "active" ||
+    value === "suspended" ||
+    value === "expired" ||
+    value === "revoked"
+  ) {
+    return value;
+  }
+  throw new Error(`unsupported route status: ${value}`);
 }
 
 function assertSplit402Id(value: string, label: string): string {
@@ -1042,6 +3035,12 @@ function assertMerchantKeyPurpose(value: MerchantKeyPurpose): void {
   readMerchantKeyPurpose(value);
 }
 
+function assertMerchantPayoutWalletStatus(
+  value: MerchantPayoutWalletStatus
+): void {
+  readMerchantPayoutWalletStatus(value);
+}
+
 function readMerchantStatus(value: string): MerchantStatus {
   if (
     value === "pending" ||
@@ -1087,6 +3086,17 @@ function readMerchantKeyPurpose(value: string): MerchantKeyPurpose {
   throw new Error(`unsupported merchant key purpose: ${value}`);
 }
 
+function readMerchantPayoutWalletStatus(value: string): MerchantPayoutWalletStatus {
+  if (value === "active" || value === "paused" || value === "retired") {
+    return value;
+  }
+  throw new Error(`unsupported merchant payout wallet status: ${value}`);
+}
+
+function createMerchantPayoutWalletId(): string {
+  return `mpw_${randomUUID().replaceAll("-", "")}`;
+}
+
 function readWalletAuthPurpose(value: string): "merchant-session" {
   if (value === "merchant-session") {
     return value;
@@ -1097,5 +3107,17 @@ function readWalletAuthPurpose(value: string): "merchant-session" {
 function mapMerchantWriteError(error: unknown): unknown {
   return isUniqueViolation(error)
     ? new MerchantRegistryConflictError("merchant registry record already exists")
+    : error;
+}
+
+function mapCampaignWriteError(error: unknown): unknown {
+  return isUniqueViolation(error)
+    ? new CampaignRegistryConflictError("campaign registry record already exists")
+    : error;
+}
+
+function mapRouteWriteError(error: unknown): unknown {
+  return isUniqueViolation(error)
+    ? new RouteRegistryConflictError("route registry record already exists")
     : error;
 }
