@@ -21,6 +21,7 @@
     "vectors:check": "corepack pnpm --filter @split402/protocol vectors:check",
     "phase6:custody:check": "tsx src/phase6-custody-check.ts",
     "phase6:image-provenance": "tsx src/phase6-image-provenance.ts",
+    "phase6:signer-policy": "tsx src/phase6-signer-policy.ts",
     "audit": "corepack pnpm audit --audit-level high",
     "demo:merchant": "corepack pnpm --filter @split402/demo-merchant dev",
     "demo:inspect-offer": "corepack pnpm --filter @split402/demo-agent inspect-offer",
