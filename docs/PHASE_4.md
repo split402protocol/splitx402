@@ -29,10 +29,14 @@ Status: started.
   and service-key revocation routes.
 - Added wallet authentication challenge and session types.
 - Added in-memory single-use wallet authentication challenge/session storage.
-- Added `POST /v1/auth/challenges` and `POST /v1/auth/sessions`.
+- Added `POST /v1/auth/challenges`, `POST /v1/auth/sessions`, and
+  `POST /v1/auth/sessions/refresh`.
 - Added `PostgresWalletAuthStore` for durable single-use challenges and hashed
   bearer sessions.
 - Added `0003_wallet_auth.sql` for auth challenge and session tables.
+- Added rotating wallet-auth refresh tokens, backed by hashed refresh-token
+  storage and one-use refresh-token rotation.
+- Added `0007_wallet_auth_refresh_tokens.sql` for durable refresh-token records.
 - Added optional auth gating for merchant creation, origin registration,
   service-key registration, and service-key revocation.
 - Added campaign draft/version registry types.
@@ -120,7 +124,8 @@ Status: started.
 - Added wallet authentication tests for signed challenge exchange, challenge replay,
   session expiry, and auth-gated merchant mutations.
 - Added PostgreSQL wallet-auth tests for durable challenge consumption, token hash
-  persistence, and replay rejection.
+  persistence, refresh-token hash persistence, refresh rotation, and replay
+  rejection.
 - Added campaign registry and HTTP tests for immutable version creation, terms
   hashes, signing bytes, owner-authenticated campaign mutations, and merchant
   signature activation.
@@ -169,7 +174,6 @@ a zero-sum ledger transaction.
 
 ## Remaining Milestone 2 Work
 
-- Wallet-auth refresh token flow.
 - Full x402 SVM settlement-verifier parity, including explicit associated token
   account derivation and multi-provider RPC hardening.
 - Webhook dispatch loop and webhook worker process entrypoint.

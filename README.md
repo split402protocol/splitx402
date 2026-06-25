@@ -150,6 +150,7 @@ mainnet payment flows exist yet.
 | PostgreSQL merchant/key/origin persistence | Started |
 | Wallet-authenticated merchant mutations | Started |
 | PostgreSQL wallet-auth persistence | Started |
+| Wallet-auth refresh token flow | Started |
 | Campaign draft/version APIs | Started |
 | Campaign activation APIs | Started |
 | PostgreSQL campaign persistence | Started |
@@ -254,6 +255,7 @@ The current Phase 4 control plane exposes:
 GET  /v1/health
 POST /v1/auth/challenges
 POST /v1/auth/sessions
+POST /v1/auth/sessions/refresh
 POST /v1/receipts
 POST /v1/merchants
 GET  /v1/merchants/:merchantId
@@ -288,6 +290,7 @@ flowchart LR
   Routes[("routes")]
   Challenges[("wallet_auth_challenges")]
   Sessions[("wallet_auth_sessions")]
+  RefreshTokens[("wallet_auth_refresh_tokens")]
   Receipts[("payment_receipts")]
   Accruals[("commission_accruals")]
   LedgerTx[("ledger_transactions")]
@@ -307,6 +310,7 @@ flowchart LR
   Routes --> CampaignRows
   API --> Challenges
   API --> Sessions
+  Sessions --> RefreshTokens
   Ingestion --> Receipts
   Ingestion --> Accruals
   Ingestion --> LedgerTx
@@ -318,8 +322,8 @@ Merchant profiles, origins, service keys, and campaign versions can run in memor
 for tests or through PostgreSQL adapters for durable control-plane state. Receipt
 ingestion uses the same boundary: in-memory stores for deterministic behavior
 tests, PostgreSQL stores for durable receipt, accrual, and ledger rows. Wallet auth
-also uses the same store boundary, with PostgreSQL persisting single-use challenges
-and hashed bearer sessions. Route activation and suspension records are also
+also uses the same store boundary, with PostgreSQL persisting single-use challenges,
+hashed bearer sessions, and hashed rotating refresh tokens. Route activation and suspension records are also
 durable in PostgreSQL, keyed by route id and canonical referral-claim hash so
 exact duplicate activation is idempotent while conflicting claims are rejected.
 When merchant auth is required, route suspension is limited to the owner wallet
@@ -447,6 +451,10 @@ curl -X POST http://localhost:4020/v1/auth/challenges \
 curl -X POST http://localhost:4020/v1/auth/sessions \
   -H "content-type: application/json" \
   -d '{"challengeId":"<challenge-id>","signature":"<owner-wallet-signature>"}'
+
+curl -X POST http://localhost:4020/v1/auth/sessions/refresh \
+  -H "content-type: application/json" \
+  -d '{"refreshToken":"<refresh-token>"}'
 
 curl -X POST http://localhost:4020/v1/merchants \
   -H "authorization: Bearer <access-token>" \

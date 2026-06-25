@@ -694,6 +694,20 @@ export function createWalletAuthRouter(
     }
   });
 
+  router.post("/v1/auth/sessions/refresh", async (req, res, next) => {
+    try {
+      const body = requireJsonObject(req.body);
+      const session = await authenticator.refreshSession({
+        refreshToken: readRequiredString(body.refreshToken, "refreshToken")
+      });
+      res.status(201).json({ session });
+    } catch (error) {
+      if (!sendWalletAuthError(res, error) && !sendMerchantRegistryError(res, error)) {
+        next(error);
+      }
+    }
+  });
+
   router.use(jsonErrorHandler);
 
   return router;
@@ -1750,9 +1764,14 @@ function readWalletAuthEnvOptions(
     env.SPLIT402_WALLET_AUTH_SESSION_TTL_MS,
     "SPLIT402_WALLET_AUTH_SESSION_TTL_MS"
   );
+  const refreshTokenTtlMs = readOptionalRuntimePositiveInteger(
+    env.SPLIT402_WALLET_AUTH_REFRESH_TOKEN_TTL_MS,
+    "SPLIT402_WALLET_AUTH_REFRESH_TOKEN_TTL_MS"
+  );
   return {
     ...(challengeTtlMs === undefined ? {} : { challengeTtlMs }),
-    ...(sessionTtlMs === undefined ? {} : { sessionTtlMs })
+    ...(sessionTtlMs === undefined ? {} : { sessionTtlMs }),
+    ...(refreshTokenTtlMs === undefined ? {} : { refreshTokenTtlMs })
   };
 }
 

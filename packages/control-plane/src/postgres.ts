@@ -12,6 +12,7 @@ import type { QueryResult, QueryResultRow } from "pg";
 import type {
   AuthenticatedWalletSession,
   WalletAuthChallengeRecord,
+  WalletAuthRefreshTokenRecord,
   WalletAuthStore
 } from "./auth.js";
 import {
@@ -207,6 +208,20 @@ interface WalletAuthSessionRow extends QueryResultRow {
   challenge_id: string;
   issued_at: Date | string;
   expires_at: Date | string;
+}
+
+interface WalletAuthRefreshTokenRow extends QueryResultRow {
+  token_hash: string;
+  refresh_token_id: string;
+  session_id: string;
+  wallet: string;
+  network: string;
+  purpose: string;
+  challenge_id: string;
+  issued_at: Date | string;
+  expires_at: Date | string;
+  revoked_at: Date | string | null;
+  replaced_by_session_id: string | null;
 }
 
 interface CampaignRow extends QueryResultRow {
@@ -1284,6 +1299,65 @@ export class PostgresWalletAuthStore implements WalletAuthStore {
     const row = result.rows[0];
     return row === undefined ? undefined : mapWalletAuthSession(row);
   }
+
+  async saveRefreshToken(
+    tokenHash: string,
+    refreshToken: WalletAuthRefreshTokenRecord
+  ): Promise<void> {
+    await this.db.query(
+      `insert into wallet_auth_refresh_tokens (
+         token_hash, refresh_token_id, session_id, wallet, network, purpose,
+         challenge_id, issued_at, expires_at, revoked_at, replaced_by_session_id
+       ) values (
+         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+       )`,
+      [
+        tokenHash,
+        refreshToken.refreshTokenId,
+        refreshToken.sessionId,
+        refreshToken.wallet,
+        refreshToken.network,
+        refreshToken.purpose,
+        refreshToken.challengeId,
+        refreshToken.issuedAt,
+        refreshToken.expiresAt,
+        refreshToken.revokedAt ?? null,
+        refreshToken.replacedBySessionId ?? null
+      ]
+    );
+  }
+
+  async getRefreshToken(
+    tokenHash: string
+  ): Promise<WalletAuthRefreshTokenRecord | undefined> {
+    const result = await this.db.query<WalletAuthRefreshTokenRow>(
+      `select token_hash, refresh_token_id, session_id, wallet, network, purpose,
+              challenge_id, issued_at, expires_at, revoked_at, replaced_by_session_id
+         from wallet_auth_refresh_tokens
+        where token_hash = $1
+        limit 1`,
+      [tokenHash]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapWalletAuthRefreshToken(row);
+  }
+
+  async revokeRefreshToken(
+    tokenHash: string,
+    revokedAt: string,
+    replacedBySessionId?: string
+  ): Promise<boolean> {
+    const result = await this.db.query<Pick<WalletAuthRefreshTokenRow, "token_hash">>(
+      `update wallet_auth_refresh_tokens
+          set revoked_at = $2,
+              replaced_by_session_id = $3
+        where token_hash = $1
+          and revoked_at is null
+        returning token_hash`,
+      [tokenHash, revokedAt, replacedBySessionId ?? null]
+    );
+    return result.rows[0] !== undefined;
+  }
 }
 
 function insertCampaign(
@@ -1817,6 +1891,25 @@ function mapWalletAuthSession(
     challengeId: row.challenge_id,
     issuedAt: toIsoString(row.issued_at),
     expiresAt: toIsoString(row.expires_at)
+  };
+}
+
+function mapWalletAuthRefreshToken(
+  row: WalletAuthRefreshTokenRow
+): WalletAuthRefreshTokenRecord {
+  return {
+    refreshTokenId: row.refresh_token_id,
+    sessionId: row.session_id,
+    wallet: row.wallet,
+    network: row.network,
+    purpose: readWalletAuthPurpose(row.purpose),
+    challengeId: row.challenge_id,
+    issuedAt: toIsoString(row.issued_at),
+    expiresAt: toIsoString(row.expires_at),
+    ...(row.revoked_at === null ? {} : { revokedAt: toIsoString(row.revoked_at) }),
+    ...(row.replaced_by_session_id === null
+      ? {}
+      : { replacedBySessionId: row.replaced_by_session_id })
   };
 }
 

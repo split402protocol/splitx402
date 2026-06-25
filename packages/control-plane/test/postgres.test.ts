@@ -569,7 +569,48 @@ describe("PostgresWalletAuthStore", () => {
     expect(fakePool.database.walletAuthSessions[0]?.token_hash).not.toContain(
       session.accessToken
     );
+    expect(fakePool.database.walletAuthRefreshTokens).toHaveLength(1);
+    expect(fakePool.database.walletAuthRefreshTokens[0]?.token_hash).toMatch(
+      /^sha256:[0-9a-f]{64}$/u
+    );
+    expect(fakePool.database.walletAuthRefreshTokens[0]?.token_hash).not.toContain(
+      session.refreshToken
+    );
     expect(authenticated?.wallet).toBe(OWNER_WALLET);
+  });
+
+  it("rotates persisted refresh tokens into new sessions", async () => {
+    const fakePool = new FakePostgresPool();
+    const authenticator = createPostgresAuthenticator(fakePool);
+    const challenge = await authenticator.createChallenge({
+      wallet: OWNER_WALLET,
+      network: NETWORK
+    });
+    const signature = signEd25519Message(
+      new TextEncoder().encode(challenge.message),
+      OWNER_SEED
+    ).signature;
+    const session = await authenticator.createSession({
+      challengeId: challenge.challengeId,
+      signature
+    });
+
+    const refreshed = await authenticator.refreshSession({
+      refreshToken: session.refreshToken
+    });
+
+    expect(refreshed.sessionId).not.toBe(session.sessionId);
+    expect(fakePool.database.walletAuthSessions).toHaveLength(2);
+    expect(fakePool.database.walletAuthRefreshTokens).toHaveLength(2);
+    expect(fakePool.database.walletAuthRefreshTokens[0]?.revoked_at).toBe(
+      "2026-06-24T00:00:00.000Z"
+    );
+    expect(
+      fakePool.database.walletAuthRefreshTokens[0]?.replaced_by_session_id
+    ).toBe(refreshed.sessionId);
+    await expect(
+      authenticator.refreshSession({ refreshToken: session.refreshToken })
+    ).rejects.toBeInstanceOf(WalletAuthRejectedError);
   });
 
   it("prevents replay after a challenge is consumed in PostgreSQL", async () => {
@@ -639,12 +680,14 @@ function createPostgresAuthenticator(
     now: () => new Date("2026-06-24T00:00:00Z"),
     challengeIdFactory: () => nextAuthId("chl", ++idSequence),
     sessionIdFactory: () => nextAuthId("ses", ++idSequence),
+    refreshTokenIdFactory: () => nextAuthId("rft", ++idSequence),
     nonceFactory: () => `nonce-${idSequence}`,
-    accessTokenFactory: () => `postgres-token-${idSequence}`
+    accessTokenFactory: () => `postgres-token-${idSequence}`,
+    refreshTokenFactory: () => `postgres-refresh-token-${idSequence}`
   });
 }
 
-function nextAuthId(prefix: "chl" | "ses", sequence: number): string {
+function nextAuthId(prefix: "chl" | "ses" | "rft", sequence: number): string {
   return `${prefix}_${sequence.toString(16).padStart(32, "0")}`;
 }
 
@@ -816,6 +859,10 @@ class FakePostgresClient implements PostgresTransactionClient {
       this.database.insertWalletAuthSession(values);
       return result([]);
     }
+    if (normalized.startsWith("insert into wallet_auth_refresh_tokens")) {
+      this.database.insertWalletAuthRefreshToken(values);
+      return result([]);
+    }
     if (normalized.startsWith("update merchant_keys")) {
       return result(this.database.revokeMerchantKey(values) as unknown as Row[]);
     }
@@ -832,6 +879,11 @@ class FakePostgresClient implements PostgresTransactionClient {
     if (normalized.startsWith("update wallet_auth_challenges")) {
       return result(
         this.database.consumeWalletAuthChallenge(values) as unknown as Row[]
+      );
+    }
+    if (normalized.startsWith("update wallet_auth_refresh_tokens")) {
+      return result(
+        this.database.revokeWalletAuthRefreshToken(values) as unknown as Row[]
       );
     }
     if (normalized.startsWith("update payment_receipts")) {
@@ -917,6 +969,11 @@ class FakePostgresClient implements PostgresTransactionClient {
         this.database.selectWalletAuthSession(values[0]) as unknown as Row[]
       );
     }
+    if (normalized.includes("from wallet_auth_refresh_tokens")) {
+      return result(
+        this.database.selectWalletAuthRefreshToken(values[0]) as unknown as Row[]
+      );
+    }
 
     throw new Error(`unsupported query: ${normalized}`);
   }
@@ -937,6 +994,7 @@ class FakePostgresDatabase {
   routes: StoredRouteRow[] = [];
   walletAuthChallenges: StoredWalletAuthChallengeRow[] = [];
   walletAuthSessions: StoredWalletAuthSessionRow[] = [];
+  walletAuthRefreshTokens: StoredWalletAuthRefreshTokenRow[] = [];
   failNextInsertWithUniqueViolation = false;
 
   insertReceipt(values: readonly unknown[]): void {
@@ -1505,11 +1563,51 @@ class FakePostgresDatabase {
     });
   }
 
+  insertWalletAuthRefreshToken(values: readonly unknown[]): void {
+    this.walletAuthRefreshTokens.push({
+      token_hash: readString(values[0]),
+      refresh_token_id: readString(values[1]),
+      session_id: readString(values[2]),
+      wallet: readString(values[3]),
+      network: readString(values[4]),
+      purpose: readString(values[5]),
+      challenge_id: readString(values[6]),
+      issued_at: readString(values[7]),
+      expires_at: readString(values[8]),
+      revoked_at: readNullableString(values[9]),
+      replaced_by_session_id: readNullableString(values[10])
+    });
+  }
+
   selectWalletAuthSession(tokenHash: unknown): StoredWalletAuthSessionRow[] {
     const session = this.walletAuthSessions.find(
       (row) => row.token_hash === readString(tokenHash)
     );
     return session === undefined ? [] : [session];
+  }
+
+  selectWalletAuthRefreshToken(
+    tokenHash: unknown
+  ): StoredWalletAuthRefreshTokenRow[] {
+    const refreshToken = this.walletAuthRefreshTokens.find(
+      (row) => row.token_hash === readString(tokenHash)
+    );
+    return refreshToken === undefined ? [] : [refreshToken];
+  }
+
+  revokeWalletAuthRefreshToken(values: readonly unknown[]): QueryResultRow[] {
+    const tokenHash = readString(values[0]);
+    const revokedAt = readString(values[1]);
+    const replacedBySessionId = readNullableString(values[2]);
+    const refreshToken = this.walletAuthRefreshTokens.find(
+      (row) => row.token_hash === tokenHash
+    );
+    if (refreshToken === undefined || refreshToken.revoked_at !== null) {
+      return [];
+    }
+    refreshToken.revoked_at = revokedAt;
+    refreshToken.replaced_by_session_id = replacedBySessionId;
+    return [{ token_hash: refreshToken.token_hash }];
   }
 }
 
@@ -1690,6 +1788,20 @@ type StoredWalletAuthSessionRow = QueryResultRow & {
   challenge_id: string;
   issued_at: string;
   expires_at: string;
+};
+
+type StoredWalletAuthRefreshTokenRow = QueryResultRow & {
+  token_hash: string;
+  refresh_token_id: string;
+  session_id: string;
+  wallet: string;
+  network: string;
+  purpose: string;
+  challenge_id: string;
+  issued_at: string;
+  expires_at: string;
+  revoked_at: string | null;
+  replaced_by_session_id: string | null;
 };
 
 function result<Row extends QueryResultRow>(rows: Row[]): QueryResult<Row> {
