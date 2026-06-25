@@ -171,7 +171,9 @@ SPLIT402_REMOTE_PAYOUT_SIGNER_TIMEOUT_MS=5000
 
 When a shared secret is configured, requests include
 `x-split402-signature-timestamp` and `x-split402-signature`, where the signature
-is HMAC-SHA256 over `timestamp.body` and encoded as `v1=<hex>`.
+is HMAC-SHA256 over `timestamp.body` and encoded as `v1=<hex>`. The isolated
+signer rejects stale or future timestamps outside its configured signature
+tolerance window, so keep control-plane clocks synchronized.
 
 ## Payout Reconciliation
 

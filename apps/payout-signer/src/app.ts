@@ -32,6 +32,7 @@ export interface PayoutSignerConfig {
   privateKeyBase64?: string;
   secretKeyBase64?: string;
   secretKeyJson?: string;
+  signatureToleranceSeconds?: number;
   auditSink?: PayoutSignerAuditSink;
   now?: () => Date;
 }
@@ -51,8 +52,9 @@ interface PayoutSignerAuthKey {
 }
 
 interface NormalizedPayoutSignerConfig
-  extends Omit<PayoutSignerConfig, "authKeys"> {
+  extends Omit<PayoutSignerConfig, "authKeys" | "signatureToleranceSeconds"> {
   authKeys: PayoutSignerAuthKey[];
+  signatureToleranceSeconds: number;
 }
 
 type PayoutSigner = Awaited<ReturnType<typeof createSigner>>;
@@ -161,7 +163,7 @@ export function createPayoutSignerApp(config: PayoutSignerConfig): express.Expre
       authKeyId = assertRequestSignature(
         req,
         rawBody,
-        normalizedConfig.authKeys
+        normalizedConfig
       ).keyId;
       signRequest = readRemotePayoutSignRequest(req.body);
       assertRemotePayoutSignRequest(signRequest, normalizedConfig);
@@ -247,6 +249,11 @@ export function readPayoutSignerConfigFromEnv(
       env.SPLIT402_PAYOUT_SIGNER_SERVICE_PORT,
       "SPLIT402_PAYOUT_SIGNER_SERVICE_PORT"
     ) ?? 4022,
+    signatureToleranceSeconds:
+      readOptionalPositiveIntegerEnv(
+        env.SPLIT402_PAYOUT_SIGNER_SERVICE_SIGNATURE_TOLERANCE_SECONDS,
+        "SPLIT402_PAYOUT_SIGNER_SERVICE_SIGNATURE_TOLERANCE_SECONDS"
+      ) ?? 300,
     ...(env.SPLIT402_PAYOUT_SIGNER_SERVICE_PRIVATE_KEY_BASE64 === undefined
       ? {}
       : {
@@ -279,6 +286,10 @@ function normalizePayoutSignerConfig(
     ),
     authKeys: normalizeAuthKeys(config),
     port: assertPositiveInteger(config.port, "port"),
+    signatureToleranceSeconds: assertPositiveInteger(
+      config.signatureToleranceSeconds ?? 300,
+      "signatureToleranceSeconds"
+    ),
     ...(config.privateKeyBytes === undefined
       ? {}
       : { privateKeyBytes: config.privateKeyBytes }),
@@ -416,11 +427,12 @@ function normalizeAuthKeys(config: PayoutSignerConfig): PayoutSignerAuthKey[] {
 function assertRequestSignature(
   req: Request,
   body: string,
-  authKeys: readonly PayoutSignerAuthKey[]
+  config: NormalizedPayoutSignerConfig
 ): PayoutSignerAuthKey {
   const timestamp = readHeader(req, "x-split402-signature-timestamp");
   const signature = readHeader(req, "x-split402-signature");
-  const authKey = selectAuthKey(req, authKeys);
+  assertFreshSignatureTimestamp(timestamp, config);
+  const authKey = selectAuthKey(req, config.authKeys);
   const expected = createRequestSignature({
     timestamp,
     body,
@@ -430,6 +442,29 @@ function assertRequestSignature(
     throw new SignerHttpError(401, "unauthorized", "invalid request signature");
   }
   return authKey;
+}
+
+function assertFreshSignatureTimestamp(
+  timestamp: string,
+  config: NormalizedPayoutSignerConfig
+): void {
+  const observedAt = Date.parse(timestamp);
+  if (!Number.isFinite(observedAt)) {
+    throw new SignerHttpError(
+      401,
+      "unauthorized",
+      "x-split402-signature-timestamp must be an ISO timestamp"
+    );
+  }
+  const now = (config.now?.() ?? new Date()).getTime();
+  const toleranceMs = config.signatureToleranceSeconds * 1000;
+  if (Math.abs(now - observedAt) > toleranceMs) {
+    throw new SignerHttpError(
+      401,
+      "unauthorized",
+      "request signature timestamp is outside tolerance"
+    );
+  }
 }
 
 function selectAuthKey(

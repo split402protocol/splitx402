@@ -261,6 +261,8 @@ Current slice:
 - payout signer metrics and safe audit events for signed/rejected attempts;
 - payout signer readiness checks, container build path, and Kubernetes
   deployment starter artifacts;
+- payout signer HMAC timestamp freshness checks to reject replayed stale or
+  future signing requests;
 - signed-byte payout transaction persistence and Solana broadcast submission
   boundary;
 - Solana payout transaction finality monitor with retry and outcome-unknown
