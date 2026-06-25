@@ -210,6 +210,23 @@ describe("WebhookDispatchWorker", () => {
     expect(outboxStore.event?.attempts).toBe(1);
   });
 
+  it("claims payout finalized webhook events by default", async () => {
+    const outboxStore = new FakeOutboxEventStore(createPayoutFinalizedWebhookEvent());
+    const dispatcher = new FakeWebhookDispatcher([
+      { status: "delivered", statusCode: 202 }
+    ]);
+    const worker = new WebhookDispatchWorker(outboxStore, dispatcher, {
+      now: () => FIXED_NOW
+    });
+
+    await worker.processNext();
+
+    expect(dispatcher.events.map((event) => event.eventType)).toEqual([
+      "webhook.payout.finalized.v1"
+    ]);
+    expect(outboxStore.event?.status).toBe("delivered");
+  });
+
   it("reschedules retryable webhook failures", async () => {
     const outboxStore = new FakeOutboxEventStore(createWebhookEvent());
     const worker = new WebhookDispatchWorker(
@@ -333,6 +350,24 @@ function createWebhookEvent(): OutboxEventRecord {
     payload: {
       receiptId: "rcp_00000000000000000000000000000001",
       merchantId: "mrc_00000000000000000000000000000001"
+    },
+    status: "pending",
+    attempts: 0,
+    availableAt: "2026-06-24T00:02:00Z",
+    createdAt: "2026-06-24T00:02:00Z"
+  };
+}
+
+function createPayoutFinalizedWebhookEvent(): OutboxEventRecord {
+  return {
+    id: "33333333-3333-4333-8333-333333333333",
+    eventType: "webhook.payout.finalized.v1",
+    aggregateType: "payout_batch",
+    aggregateId: "pbt_00000000000000000000000000000001",
+    payload: {
+      payoutBatchId: "pbt_00000000000000000000000000000001",
+      merchantId: "mrc_00000000000000000000000000000001",
+      totalAmountAtomic: "2000"
     },
     status: "pending",
     attempts: 0,

@@ -8,7 +8,8 @@ paying, losing allocations, or hiding funding deficits.
 
 Status: in progress. The payout engine now has preview, allocation, transaction
 planning, simulation, signer-policy checks, signed-byte persistence, broadcast
-submission, finality monitoring, status rollup, and idempotent ledger closure.
+submission, finality monitoring, status rollup, idempotent ledger closure, and
+finalized-payout outbox/webhook events.
 
 ## What Changed
 
@@ -58,6 +59,9 @@ submission, finality monitoring, status rollup, and idempotent ledger closure.
   status conservatively.
 - Added idempotent payout-batch ledger closure for finalized batches so referrer
   payable and merchant commission liability accounts close exactly once.
+- Added finalized-payout internal and webhook outbox events that commit
+  atomically with first-time payout-batch ledger closure and remain idempotent on
+  repeated closure calls.
 - Added `0010_payout_batches.sql` for payout batches, payout items, payout
   allocations, and the `allocated` accrual status.
 - Added `0011_payout_transactions.sql` for signed payout transaction
@@ -78,7 +82,7 @@ the merchant has enough funding.
 ## Remaining Milestone 4 Work
 
 - Concrete local-dev or remote signer wiring.
-- Worker wiring for payout webhook events beyond receipt acceptance.
+- Payout webhook events for submitted, failed, and outcome-unknown states.
 - Reconciliation for unknown transaction outcomes.
 - Referrer payout history and balance views.
 
