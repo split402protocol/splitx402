@@ -225,6 +225,7 @@ GET  /v1/routes/:routeId/versions
 GET  /v1/routes/:routeId
 POST /v1/merchants/:merchantId/payouts/preview
 GET  /v1/merchants/:merchantId/payouts/reconciliation
+POST /v1/payout-batches/:batchId/reconcile
 POST /v1/merchants/:merchantId/payout-batches
 GET  /v1/referrers/:referrerWallet/balances
 GET  /v1/referrers/:referrerWallet/payouts
@@ -392,7 +393,6 @@ payout-engine boundaries.
 Active hardening is focused on Phase 6:
 
 - remote/isolated production signer runtime wiring;
-- reconciliation runbooks for unknown payout outcomes;
 - production security review before any mainnet use.
 
 The latest Devnet proof is recorded in
@@ -403,6 +403,7 @@ The latest Devnet proof is recorded in
 - [Canonical architecture spec](docs/reference/split402_protocol_architecture_v0.1.md)
 - [Current state](docs/CURRENT_STATE.md)
 - [Architecture alignment note](docs/SPLIT402_ARCHITECTURE.md)
+- [Payout reconciliation runbook](docs/runbooks/payout-reconciliation.md)
 - [MVP build plan](docs/BUILD_PLAN.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Phase 0 status](docs/PHASE_0.md)

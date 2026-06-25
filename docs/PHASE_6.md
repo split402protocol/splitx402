@@ -73,6 +73,11 @@ unknown-outcome reconciliation queue and referrer payout views.
 - Added an unknown-outcome reconciliation queue and
   `GET /v1/merchants/:merchantId/payouts/reconciliation` so merchants/operators
   can list payout batches that must be rechecked onchain before any retry.
+- Added `POST /v1/payout-batches/:batchId/reconcile` to requery payout
+  transaction finality, persist confirmed/finalized/failed/outcome-unknown
+  observations through the existing rollup path, and return a retry decision.
+- Added an operator runbook for unknown payout outcomes at
+  `docs/runbooks/payout-reconciliation.md`.
 - Added referrer-facing balance and payout history views with
   `GET /v1/referrers/:referrerWallet/balances` and
   `GET /v1/referrers/:referrerWallet/payouts`.
@@ -96,8 +101,7 @@ the merchant has enough funding.
 ## Remaining Milestone 4 Work
 
 - Remote/isolated production signer wiring.
-- Reconciliation runbooks and retry decision tooling for unknown transaction
-  outcomes.
+- Production payout custody and incident-response review.
 
 ## Acceptance Checks
 

@@ -21,8 +21,9 @@ Express adapter, demo merchant, demo agent, agent SDK, merchant SDK primitives,
 control-plane ingestion, PostgreSQL persistence, outbox workers, Solana chain
 verification, and the first payout-engine execution boundaries, including payout
 lifecycle outbox/webhook events, an unknown-outcome reconciliation queue, and
-referrer payout views. Phase 6 now includes disposable local-dev signer wiring
-and remains active for remote signer isolation and reconciliation runbooks.
+referrer payout views, and payout reconciliation decision tooling. Phase 6 now
+includes disposable local-dev signer wiring and remains active for remote signer
+isolation and production custody review.
 
 ## Architecture Rule
 
@@ -342,9 +343,11 @@ Current slice:
 - add payout submitted, confirmed, finalized, failed, and outcome-unknown
   internal and webhook outbox events;
 - add an unknown-outcome payout reconciliation queue for merchant/operator review;
+- add a payout reconciliation action endpoint and unknown-outcome runbook;
 - expose `POST /v1/merchants/:merchantId/payout-wallets`;
 - expose `POST /v1/merchants/:merchantId/payouts/preview`;
 - expose `GET /v1/merchants/:merchantId/payouts/reconciliation`;
+- expose `POST /v1/payout-batches/:batchId/reconcile`;
 - expose `POST /v1/merchants/:merchantId/payout-batches`.
 
 Exit criteria:

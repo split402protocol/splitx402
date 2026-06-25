@@ -88,6 +88,7 @@ GET  /v1/routes/:routeId/versions
 GET  /v1/routes/:routeId
 POST /v1/merchants/:merchantId/payouts/preview
 GET  /v1/merchants/:merchantId/payouts/reconciliation
+POST /v1/payout-batches/:batchId/reconcile
 POST /v1/merchants/:merchantId/payout-batches
 GET  /v1/referrers/:referrerWallet/balances
 GET  /v1/referrers/:referrerWallet/payouts
@@ -104,6 +105,8 @@ GET  /v1/referrers/:referrerWallet/payouts
 - payout preview and batch allocation stores that select available accruals and
   mark them `allocated` exactly once;
 - unknown-outcome reconciliation queue for merchant/operator review before retry;
+- payout reconciliation action endpoint that rechecks chain finality and persists
+  observed transaction outcomes before any retry decision;
 - referrer payout balance and history views from accruals and payout allocations;
 - PostgreSQL payout batch creation with `FOR UPDATE SKIP LOCKED` eligible-accrual
   selection for concurrent workers;
@@ -146,6 +149,21 @@ SPLIT402_PAYOUT_SIGNER_PRIVATE_KEY_BASE64=<32-byte-private-key-base64>
 
 The local-dev signer verifies the configured address against the payout policy
 before signing. Do not use these environment variables for production custody.
+
+## Payout Reconciliation
+
+`POST /v1/payout-batches/:batchId/reconcile` uses the configured payout finality
+monitor to requery Solana before an operator makes a retry decision. Runtime
+configuration is read from `SPLIT402_PAYOUT_FINALITY_*` variables and falls back
+to the chain-worker RPC settings when omitted:
+
+```bash
+SPLIT402_PAYOUT_FINALITY_NETWORK=solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1
+SPLIT402_PAYOUT_FINALITY_SOLANA_RPC_URL=https://api.devnet.solana.com
+SPLIT402_PAYOUT_FINALITY_SOLANA_RPC_URLS=
+SPLIT402_PAYOUT_FINALITY_RETRY_DELAY_MS=30000
+SPLIT402_PAYOUT_FINALITY_UNKNOWN_OUTCOME_AFTER_MS=300000
+```
 
 ## Package Status
 
