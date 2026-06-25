@@ -62,6 +62,7 @@ import {
 import {
   PayoutBatchConflictError,
   createPayoutBatchPlan,
+  createPayoutFinalizationLedgerTransaction,
   createSignedPayoutTransactionRecords,
   createPayoutPreview,
   filterPayoutEligibleAccruals,
@@ -79,6 +80,8 @@ import {
   type PayoutTransactionStore,
   type MarkPayoutTransactionSubmittedInput,
   type MarkPayoutTransactionFinalityInput,
+  type ClosePayoutBatchLedgerInput,
+  type PayoutLedgerClosureStore,
   type SaveSignedPayoutTransactionsInput
 } from "./payouts.js";
 
@@ -128,7 +131,7 @@ export interface CommissionAccrual {
 
 export interface LedgerTransaction {
   id: string;
-  sourceType: "commission_accrual";
+  sourceType: "commission_accrual" | "payout_batch";
   sourceId: string;
   asset: string;
   entries: LedgerEntry[];
@@ -267,7 +270,8 @@ export class InMemoryReceiptIngestionStore
     ReceiptIngestionStore,
     PayoutAccrualStore,
     PayoutBatchStore,
-    PayoutTransactionStore {
+    PayoutTransactionStore,
+    PayoutLedgerClosureStore {
   private readonly receiptsById = new Map<string, ReceiptIngestionSnapshot>();
   private readonly receiptIdByHash = new Map<`sha256:${string}`, string>();
   private readonly receiptIdByPaymentId = new Map<string, string>();
@@ -276,6 +280,10 @@ export class InMemoryReceiptIngestionStore
   private readonly payoutTransactionsById = new Map<
     string,
     PayoutTransactionRecord
+  >();
+  private readonly payoutLedgerTransactionsByBatchId = new Map<
+    string,
+    LedgerTransaction
   >();
 
   getByReceiptId(receiptId: string): ReceiptIngestionSnapshot | undefined {
@@ -537,6 +545,31 @@ export class InMemoryReceiptIngestionStore
               status: itemStatus
             }))
     });
+  }
+
+  closeFinalizedPayoutBatchLedger(
+    input: ClosePayoutBatchLedgerInput
+  ): LedgerTransaction | undefined {
+    const existing = this.payoutLedgerTransactionsByBatchId.get(input.payoutBatchId);
+    if (existing !== undefined) {
+      return existing;
+    }
+    const batch = this.payoutBatchesById.get(input.payoutBatchId);
+    if (batch === undefined) {
+      return undefined;
+    }
+    const transaction = createPayoutFinalizationLedgerTransaction({
+      batch,
+      ...(input.now === undefined ? {} : { now: input.now }),
+      ...(input.transactionId === undefined
+        ? {}
+        : { transactionId: input.transactionId }),
+      ...(input.entryIdFactory === undefined
+        ? {}
+        : { entryIdFactory: input.entryIdFactory })
+    });
+    this.payoutLedgerTransactionsByBatchId.set(input.payoutBatchId, transaction);
+    return transaction;
   }
 }
 

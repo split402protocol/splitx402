@@ -54,14 +54,16 @@ Status: started.
 - Added payout batch finality rollup so submitted, confirmed, finalized, failed,
   expired, and outcome-unknown transaction states update payout batch and item
   status conservatively.
+- Added idempotent payout-batch ledger closure for finalized batches so referrer
+  payable and merchant commission liability accounts close exactly once.
 - Added `0010_payout_batches.sql` for payout batches, payout items, payout
   allocations, and the `allocated` accrual status.
 - Added `0011_payout_transactions.sql` for signed payout transaction
   persistence.
 - Added control-plane tests for payout planning, Solana transaction planning and
   simulation, signer policy, signed-byte persistence, broadcast submission,
-  finality monitoring, batch/item rollup, allocation persistence, and the HTTP
-  payout routes.
+  finality monitoring, batch/item rollup, payout ledger closure, allocation
+  persistence, and the HTTP payout routes.
 
 ## Why This Comes Next
 
@@ -74,7 +76,7 @@ the merchant has enough funding.
 ## Remaining Milestone 4 Work
 
 - Concrete local-dev or remote signer wiring.
-- Worker wiring for ledger accounting closure and webhook events.
+- Worker wiring for payout webhook events.
 - Reconciliation for unknown transaction outcomes.
 - Referrer payout history and balance views.
 
