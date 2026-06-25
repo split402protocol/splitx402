@@ -154,11 +154,12 @@ Current slice:
 - PostgreSQL outbox event persistence committed atomically with accepted receipts
   and accounting rows;
 - PostgreSQL outbox claiming, retry scheduling, delivery marking, and dead-letter
-  state transitions;
+  state transitions, with event-type filtering for independent workers;
 - receipt chain-verification worker framework with a pluggable verifier and
   PostgreSQL state transition to available accruals;
 - bounded/abortable chain-verification polling loop for deployable worker wiring;
 - deployable chain-verification worker process entrypoint and package script;
+- signed HTTP webhook dispatch worker loop and process entrypoint;
 - durable control-plane runtime factory with PostgreSQL store wiring and
   required-by-default merchant auth policy;
 - Solana JSON-RPC verifier for receipt settlement signatures and parsed transfer

@@ -84,8 +84,16 @@ describe("PostgresReceiptIngestionStore", () => {
       })
     );
     expect(loaded?.ledgerTransaction?.entries).toHaveLength(3);
-    expect(fakePool.database.outboxEvents).toHaveLength(1);
-    expect(fakePool.database.outboxEvents[0]).toEqual(
+    expect(fakePool.database.outboxEvents).toHaveLength(2);
+    const receiptAcceptedEvent = findOutboxEvent(
+      fakePool.database.outboxEvents,
+      "receipt.accepted.v1"
+    );
+    const webhookEvent = findOutboxEvent(
+      fakePool.database.outboxEvents,
+      "webhook.receipt.accepted.v1"
+    );
+    expect(receiptAcceptedEvent).toEqual(
       expect.objectContaining({
         event_type: "receipt.accepted.v1",
         aggregate_type: "receipt",
@@ -96,13 +104,21 @@ describe("PostgresReceiptIngestionStore", () => {
         created_at: "2026-06-24T00:02:00.000Z"
       })
     );
-    expect(readJsonPayload(fakePool.database.outboxEvents[0]?.payload)).toEqual(
+    expect(readJsonPayload(receiptAcceptedEvent?.payload)).toEqual(
       expect.objectContaining({
         receiptId: bundle.artifacts.receipt.receiptId,
         receiptHash: loaded?.receipt.receiptHash,
         merchantId: bundle.artifacts.receipt.merchantId,
         accrualId: loaded?.accrual?.id,
         ledgerTransactionId: loaded?.ledgerTransaction?.id
+      })
+    );
+    expect(webhookEvent).toEqual(
+      expect.objectContaining({
+        event_type: "webhook.receipt.accepted.v1",
+        aggregate_type: "receipt",
+        aggregate_id: bundle.artifacts.receipt.receiptId,
+        status: "pending"
       })
     );
   });
@@ -125,8 +141,13 @@ describe("PostgresReceiptIngestionStore", () => {
     expect(fakePool.database.accruals).toHaveLength(0);
     expect(fakePool.database.ledgerTransactions).toHaveLength(0);
     expect(fakePool.database.ledgerEntries).toHaveLength(0);
-    expect(fakePool.database.outboxEvents).toHaveLength(1);
-    expect(readJsonPayload(fakePool.database.outboxEvents[0]?.payload)).toEqual(
+    expect(fakePool.database.outboxEvents).toHaveLength(2);
+    expect(
+      readJsonPayload(
+        findOutboxEvent(fakePool.database.outboxEvents, "receipt.accepted.v1")
+          ?.payload
+      )
+    ).toEqual(
       expect.objectContaining({
         receiptId: snapshot.receipt.id,
         accrualId: null,
@@ -163,7 +184,8 @@ describe("PostgresReceiptIngestionStore", () => {
     await ingestor.ingest({ receipt: bundle.artifacts.receipt, source: "merchant" });
 
     const claimed = await outboxStore.claimNext({
-      now: "2026-06-24T00:03:00Z"
+      now: "2026-06-24T00:03:00Z",
+      eventTypes: ["receipt.accepted.v1"]
     });
 
     expect(claimed).toEqual(
@@ -179,7 +201,10 @@ describe("PostgresReceiptIngestionStore", () => {
       throw new Error("expected claimed outbox event");
     }
     expect(
-      await outboxStore.claimNext({ now: "2026-06-24T00:03:01Z" })
+      await outboxStore.claimNext({
+        now: "2026-06-24T00:03:01Z",
+        eventTypes: ["receipt.accepted.v1"]
+      })
     ).toBeUndefined();
 
     const failed = await outboxStore.markFailed({
@@ -198,11 +223,15 @@ describe("PostgresReceiptIngestionStore", () => {
     );
     expect(failed?.lockedAt).toBeUndefined();
     expect(
-      await outboxStore.claimNext({ now: "2026-06-24T00:04:59Z" })
+      await outboxStore.claimNext({
+        now: "2026-06-24T00:04:59Z",
+        eventTypes: ["receipt.accepted.v1"]
+      })
     ).toBeUndefined();
 
     const retry = await outboxStore.claimNext({
-      now: "2026-06-24T00:05:00Z"
+      now: "2026-06-24T00:05:00Z",
+      eventTypes: ["receipt.accepted.v1"]
     });
     expect(retry?.status).toBe("processing");
     expect(retry?.attempts).toBe(2);
@@ -219,8 +248,17 @@ describe("PostgresReceiptIngestionStore", () => {
     expect(delivered?.lastError).toBeUndefined();
     expect(loaded?.status).toBe("delivered");
     expect(
-      await outboxStore.claimNext({ now: "2026-06-24T00:06:00Z" })
+      await outboxStore.claimNext({
+        now: "2026-06-24T00:06:00Z",
+        eventTypes: ["receipt.accepted.v1"]
+      })
     ).toBeUndefined();
+
+    const webhookEvent = await outboxStore.claimNext({
+      now: "2026-06-24T00:06:00Z",
+      eventTypes: ["webhook.receipt.accepted.v1"]
+    });
+    expect(webhookEvent?.eventType).toBe("webhook.receipt.accepted.v1");
   });
 
   it("dead-letters failed processing outbox events", async () => {
@@ -234,7 +272,8 @@ describe("PostgresReceiptIngestionStore", () => {
     });
     await ingestor.ingest({ receipt: bundle.artifacts.receipt, source: "relay" });
     const claimed = await outboxStore.claimNext({
-      now: "2026-06-24T00:03:00Z"
+      now: "2026-06-24T00:03:00Z",
+      eventTypes: ["receipt.accepted.v1"]
     });
     if (claimed === undefined) {
       throw new Error("expected claimed outbox event");
@@ -255,7 +294,10 @@ describe("PostgresReceiptIngestionStore", () => {
       })
     );
     expect(
-      await outboxStore.claimNext({ now: "2026-06-24T00:10:00Z" })
+      await outboxStore.claimNext({
+        now: "2026-06-24T00:10:00Z",
+        eventTypes: ["receipt.accepted.v1"]
+      })
     ).toBeUndefined();
   });
 
@@ -1149,11 +1191,13 @@ class FakePostgresDatabase {
 
   claimNextOutboxEvent(values: readonly unknown[]): StoredOutboxEventRow[] {
     const now = readString(values[0]);
+    const eventTypes = readNullableStringArray(values[1]);
     const readyEvent = this.outboxEvents
       .filter(
         (event) =>
           event.status === "pending" &&
-          Date.parse(event.available_at) <= Date.parse(now)
+          Date.parse(event.available_at) <= Date.parse(now) &&
+          (eventTypes === null || eventTypes.includes(event.event_type))
       )
       .sort(compareOutboxEvents)[0];
     if (readyEvent === undefined) {
@@ -1960,10 +2004,27 @@ function readNullableString(value: unknown): string | null {
   return readString(value);
 }
 
+function readNullableStringArray(value: unknown): string[] | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
+    throw new Error("expected nullable string array query value");
+  }
+  return value;
+}
+
 function readJsonPayload(value: unknown): Record<string, unknown> {
   const payload = JSON.parse(readString(value));
   if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
     throw new Error("expected object payload");
   }
   return payload as Record<string, unknown>;
+}
+
+function findOutboxEvent(
+  events: StoredOutboxEventRow[],
+  eventType: string
+): StoredOutboxEventRow | undefined {
+  return events.find((event) => event.event_type === eventType);
 }

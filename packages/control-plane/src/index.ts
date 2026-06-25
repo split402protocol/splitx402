@@ -132,6 +132,7 @@ export interface OutboxEventRecord {
 }
 
 export interface ClaimNextOutboxEventInput {
+  eventTypes?: string[];
   now?: string;
 }
 
@@ -1894,6 +1895,7 @@ export * from "./migrations.js";
 export * from "./postgres.js";
 export * from "./routes.js";
 export * from "./solana.js";
+export * from "./webhooks.js";
 export * from "./workers.js";
 
 function isMerchantAuthRequired(

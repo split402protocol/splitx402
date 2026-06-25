@@ -5,7 +5,9 @@ import {
   InMemoryReceiptIngestionStore,
   ReceiptChainVerificationWorker,
   ReceiptIngestor,
+  WebhookDispatchWorker,
   runReceiptChainVerificationWorkerLoop,
+  runWebhookDispatchWorkerLoop,
   type MarkOutboxEventFailedInput,
   type OutboxEventRecord,
   type OutboxEventStore,
@@ -13,7 +15,10 @@ import {
   type ReceiptChainVerificationResult,
   type ReceiptChainVerificationWorkerResult,
   type ReceiptChainVerificationStore,
-  type ReceiptIngestionSnapshot
+  type ReceiptIngestionSnapshot,
+  type WebhookDeliveryResult,
+  type WebhookDispatchProcessor,
+  type WebhookDispatchWorkerResult
 } from "../src/index.js";
 
 const FIXED_NOW = new Date("2026-06-24T00:04:00Z");
@@ -183,6 +188,111 @@ describe("runReceiptChainVerificationWorkerLoop", () => {
   });
 });
 
+describe("WebhookDispatchWorker", () => {
+  it("marks delivered webhook events delivered", async () => {
+    const outboxStore = new FakeOutboxEventStore(createWebhookEvent());
+    const dispatcher = new FakeWebhookDispatcher([
+      { status: "delivered", statusCode: 202 }
+    ]);
+    const worker = new WebhookDispatchWorker(outboxStore, dispatcher, {
+      now: () => FIXED_NOW
+    });
+
+    const result = await worker.processNext();
+
+    expect(result).toEqual(
+      expect.objectContaining({ status: "delivered", statusCode: 202 })
+    );
+    expect(dispatcher.events.map((event) => event.eventType)).toEqual([
+      "webhook.receipt.accepted.v1"
+    ]);
+    expect(outboxStore.event?.status).toBe("delivered");
+    expect(outboxStore.event?.attempts).toBe(1);
+  });
+
+  it("reschedules retryable webhook failures", async () => {
+    const outboxStore = new FakeOutboxEventStore(createWebhookEvent());
+    const worker = new WebhookDispatchWorker(
+      outboxStore,
+      new FakeWebhookDispatcher([{ status: "retry", error: "503 unavailable" }]),
+      { now: () => FIXED_NOW, retryDelayMs: 120_000 }
+    );
+
+    const result = await worker.processNext();
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        status: "retry_scheduled",
+        lastError: "503 unavailable",
+        availableAt: "2026-06-24T00:06:00.000Z"
+      })
+    );
+    expect(outboxStore.event?.status).toBe("pending");
+    expect(outboxStore.event?.availableAt).toBe("2026-06-24T00:06:00.000Z");
+  });
+
+  it("dead-letters rejected or exhausted webhook failures", async () => {
+    const rejectedStore = new FakeOutboxEventStore(createWebhookEvent());
+    const rejectedWorker = new WebhookDispatchWorker(
+      rejectedStore,
+      new FakeWebhookDispatcher([{ status: "rejected", error: "400 bad request" }]),
+      { now: () => FIXED_NOW }
+    );
+    const exhaustedStore = new FakeOutboxEventStore({
+      ...createWebhookEvent(),
+      attempts: 1
+    });
+    const exhaustedWorker = new WebhookDispatchWorker(
+      exhaustedStore,
+      new FakeWebhookDispatcher([{ status: "retry", error: "timeout" }]),
+      { now: () => FIXED_NOW, maxAttempts: 2 }
+    );
+
+    await expect(rejectedWorker.processNext()).resolves.toEqual(
+      expect.objectContaining({
+        status: "dead_letter",
+        lastError: "400 bad request"
+      })
+    );
+    await expect(exhaustedWorker.processNext()).resolves.toEqual(
+      expect.objectContaining({
+        status: "dead_letter",
+        lastError: "webhook delivery attempts exhausted: timeout"
+      })
+    );
+    expect(rejectedStore.event?.status).toBe("dead_letter");
+    expect(exhaustedStore.event?.status).toBe("dead_letter");
+  });
+});
+
+describe("runWebhookDispatchWorkerLoop", () => {
+  it("polls webhook workers with idle sleeps and transient errors", async () => {
+    const sleeps: number[] = [];
+    const errors: string[] = [];
+    const processor = new FakeWebhookLoopProcessor([
+      { status: "idle" },
+      new Error("database unavailable"),
+      { status: "idle" }
+    ]);
+
+    const summary = await runWebhookDispatchWorkerLoop(processor, {
+      maxIterations: 3,
+      pollIntervalMs: 250,
+      errorDelayMs: 500,
+      sleep: (delayMs) => {
+        sleeps.push(delayMs);
+      },
+      onError: (error) => {
+        errors.push(error instanceof Error ? error.message : "unknown");
+      }
+    });
+
+    expect(summary).toEqual({ iterations: 3, stoppedBy: "max_iterations" });
+    expect(sleeps).toEqual([250, 500]);
+    expect(errors).toEqual(["database unavailable"]);
+  });
+});
+
 async function createSnapshot(): Promise<ReceiptIngestionSnapshot> {
   const bundle = createSampleProtocolArtifacts();
   const store = new InMemoryReceiptIngestionStore();
@@ -214,6 +324,23 @@ function createReceiptAcceptedEvent(receiptId: string): OutboxEventRecord {
   };
 }
 
+function createWebhookEvent(): OutboxEventRecord {
+  return {
+    id: "22222222-2222-4222-8222-222222222222",
+    eventType: "webhook.receipt.accepted.v1",
+    aggregateType: "receipt",
+    aggregateId: "rcp_00000000000000000000000000000001",
+    payload: {
+      receiptId: "rcp_00000000000000000000000000000001",
+      merchantId: "mrc_00000000000000000000000000000001"
+    },
+    status: "pending",
+    attempts: 0,
+    availableAt: "2026-06-24T00:02:00Z",
+    createdAt: "2026-06-24T00:02:00Z"
+  };
+}
+
 class FakeOutboxEventStore implements OutboxEventStore {
   constructor(public event: OutboxEventRecord | undefined) {}
 
@@ -223,10 +350,12 @@ class FakeOutboxEventStore implements OutboxEventStore {
 
   claimNext(input = {}): OutboxEventRecord | undefined {
     const now = readNow(input);
+    const eventTypes = readEventTypes(input);
     if (
       this.event === undefined ||
       this.event.status !== "pending" ||
-      Date.parse(this.event.availableAt) > Date.parse(now)
+      Date.parse(this.event.availableAt) > Date.parse(now) ||
+      (eventTypes !== undefined && !eventTypes.includes(this.event.eventType))
     ) {
       return undefined;
     }
@@ -317,8 +446,40 @@ class FakeLoopProcessor implements ReceiptChainVerificationProcessor {
   }
 }
 
+class FakeWebhookDispatcher {
+  readonly events: OutboxEventRecord[] = [];
+
+  constructor(private readonly results: WebhookDeliveryResult[]) {}
+
+  dispatch(event: OutboxEventRecord): WebhookDeliveryResult {
+    this.events.push(event);
+    return this.results.shift() ?? { status: "delivered" };
+  }
+}
+
+class FakeWebhookLoopProcessor implements WebhookDispatchProcessor {
+  private index = 0;
+
+  constructor(
+    private readonly results: Array<WebhookDispatchWorkerResult | Error>
+  ) {}
+
+  processNext(): WebhookDispatchWorkerResult {
+    const result = this.results[this.index];
+    this.index += 1;
+    if (result instanceof Error) {
+      throw result;
+    }
+    return result ?? { status: "idle" };
+  }
+}
+
 function readNow(input: { now?: string }): string {
   return input.now ?? new Date().toISOString();
+}
+
+function readEventTypes(input: { eventTypes?: string[] }): string[] | undefined {
+  return input.eventTypes;
 }
 
 function withoutOutboxOptionals(

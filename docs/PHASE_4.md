@@ -69,10 +69,11 @@ Status: started.
   campaign/referrer lookup indexes.
 - Added `0006_outbox_events.sql` for durable pending worker/webhook events.
 - Added outbox insertion to `PostgresReceiptIngestionStore` so accepted receipts
-  commit a `receipt.accepted.v1` event in the same transaction as receipt,
-  accrual, and ledger rows.
+  commit `receipt.accepted.v1` and `webhook.receipt.accepted.v1` events in the
+  same transaction as receipt, accrual, and ledger rows.
 - Added `PostgresOutboxEventStore` for worker-facing event reads, ready-event
-  claims, delivery marking, retry scheduling, and dead-letter transitions.
+  claims filtered by event type, delivery marking, retry scheduling, and
+  dead-letter transitions.
 - Added a receipt chain-verification worker framework that claims
   `receipt.accepted.v1` events, calls a pluggable verifier, marks confirmed
   receipts as verified, moves accruals to `available`, and handles retry or
@@ -84,6 +85,10 @@ Status: started.
   `corepack pnpm worker:chain` script that compose the PostgreSQL runtime,
   Solana receipt verifier, and chain-verification polling loop from environment
   configuration.
+- Added a signed HTTP webhook dispatcher, webhook dispatch worker loop,
+  `split402-webhook-worker` process entrypoint, and
+  `corepack pnpm worker:webhook` script for `webhook.receipt.accepted.v1` outbox
+  events.
 - Added a durable control-plane runtime factory that wires PostgreSQL merchant,
   campaign, route, wallet-auth, receipt, and outbox stores with receipt key
   resolution and required-by-default merchant auth policy.
@@ -147,13 +152,16 @@ Status: started.
 - Added PostgreSQL receipt-ingestion tests for committed outbox payloads and
   rollback behavior, plus live harness coverage for the outbox table.
 - Added PostgreSQL outbox worker tests for ready-event claiming, retry delay
-  enforcement, delivery marking, and dead-letter behavior.
+  enforcement, event-type filtering, delivery marking, and dead-letter behavior.
 - Added chain-verification worker tests for confirmed, retryable, and malformed
   receipt events, plus PostgreSQL coverage for verified receipt/accrual state.
 - Added chain-verification loop tests for bounded idle polling, abort handling,
   and transient processor errors.
 - Added chain-verification worker entrypoint tests for environment parsing,
   runtime wiring, invalid configuration, and help output.
+- Added webhook dispatcher, webhook worker loop, and webhook worker entrypoint
+  tests for signed delivery, retry/rejection classification, retry scheduling,
+  dead-letter behavior, runtime wiring, invalid configuration, and help output.
 - Added control-plane runtime tests for required-by-default auth policy, disabled
   auth embeddings, environment-driven pool configuration, close handling, and
   invalid runtime configuration.
@@ -181,7 +189,6 @@ a zero-sum ledger transaction.
 
 - Full x402 SVM settlement-verifier parity, including explicit associated token
   account derivation and multi-provider RPC hardening.
-- Webhook dispatch loop and webhook worker process entrypoint.
 - Payout-wallet rotation and immutable route/search history.
 
 ## Acceptance Checks
