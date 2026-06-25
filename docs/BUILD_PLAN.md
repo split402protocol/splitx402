@@ -295,6 +295,17 @@ Deliverables:
 - reconciliation and unknown-outcome runbook;
 - referrer payout history.
 
+Current slice:
+
+- add a payout preview planner over `available` commission accruals;
+- add an eligible-accrual selection interface with in-memory and PostgreSQL
+  implementations;
+- group preview items by merchant, asset, and destination payout wallet;
+- apply recipient thresholds and max-recipient limits without mutating accrual
+  state;
+- report merchant funding coverage or deficit by asset;
+- expose `POST /v1/merchants/:merchantId/payouts/preview`.
+
 Exit criteria:
 
 - Devnet payout closes ledger obligation exactly once;

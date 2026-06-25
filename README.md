@@ -170,7 +170,7 @@ mainnet payment flows exist yet.
 | Solana RPC signature-status verifier | Started |
 | Solana transaction transfer verifier | Started |
 | Live PostgreSQL migration/integration harness | Started |
-| Payout engine | Not implemented |
+| Payout engine preview and eligible-accrual selector | Started |
 | `$SPLIT` bonding and atomic split settlement | Later research |
 
 The latest Devnet proof is recorded in
@@ -213,7 +213,7 @@ flowchart TB
 | `@split402/merchant-sdk` | Merchant-side cached campaign resolver, service-key rotation helpers, x402 payment-identifier helpers, operation digest helpers, durable receipt outbox, control-plane ingestion retry helpers, and compile-checked examples. |
 | `@split402/demo-merchant` | x402-protected merchant API for the Devnet demo. |
 | `@split402/demo-agent` | Runnable buyer/agent harness for setup, preflight, and paid-suite proof. |
-| `@split402/control-plane` | Receipt ingestion, merchant/key registry, accruals, ledger model, and PostgreSQL adapters. |
+| `@split402/control-plane` | Receipt ingestion, merchant/key registry, accruals, ledger model, payout preview planning, and PostgreSQL adapters. |
 
 ## Control-Plane Process
 
@@ -257,7 +257,7 @@ stateDiagram-v2
   PayoutSelected --> Paid: payout finalized
 ```
 
-The current Phase 4 control plane exposes:
+The current control plane exposes:
 
 ```text
 GET  /v1/health
@@ -282,6 +282,7 @@ POST /v1/routes/:routeId/rotate-payout
 GET  /v1/routes/search
 GET  /v1/routes/:routeId/versions
 GET  /v1/routes/:routeId
+POST /v1/merchants/:merchantId/payouts/preview
 ```
 
 ## Persistence Layout
@@ -358,8 +359,12 @@ worker processes `webhook.receipt.accepted.v1` events and sends signed HTTP POST
 envelopes to a configured endpoint. The first Solana verifier checks settlement
 signature status through one or more JSON-RPC providers and parses confirmed
 transaction data to reject receipts whose token mint, payer authority, pay-to
-wallet or associated token account, or amount do not match the receipt.
-Payout execution is still a remaining hardening step.
+wallet or associated token account, or amount do not match the receipt. The first
+payout-engine slice can query eligible available accruals, group them by asset and
+destination wallet, apply recipient thresholds and limits, and report funding
+coverage or deficit through `POST /v1/merchants/:merchantId/payouts/preview`.
+Payout allocation persistence, transaction signing, broadcasting, and
+reconciliation are still remaining hardening steps.
 
 ## MVP Rules
 
