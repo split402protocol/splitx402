@@ -68,7 +68,7 @@ flowchart LR
 | Chain verification | Implemented as an outbox-driven Solana JSON-RPC worker for settlement signature and transfer checks. |
 | Webhooks | Implemented for accepted-receipt and payout lifecycle events with signed delivery envelopes and retry/dead-letter handling. |
 | Merchant SDK reliability boundary | Implemented with cached campaign lookup, service-key rotation helpers, payment identifiers, operation digests, and merchant-local receipt outbox primitives. |
-| Payout engine | In progress: preview, allocation, Solana transfer planning, simulation, signer policy, local-dev signer wiring, signed-byte persistence, broadcast boundary, finality monitor, rollup, payout lifecycle events, unknown-outcome reconciliation queue, referrer payout views, and idempotent ledger closure are implemented. |
+| Payout engine | In progress: preview, allocation, Solana transfer planning, simulation, signer policy, local-dev and remote signer wiring, signed-byte persistence, broadcast boundary, finality monitor, rollup, payout lifecycle events, unknown-outcome reconciliation queue, referrer payout views, and idempotent ledger closure are implemented. |
 | Atomic split settlement | Later research. The MVP does not split the original x402 transaction onchain. |
 | `$SPLIT` bonding | Later research after the USDC accrual-and-payout loop is production ready. |
 
@@ -392,7 +392,7 @@ payout-engine boundaries.
 
 Active hardening is focused on Phase 6:
 
-- remote/isolated production signer runtime wiring;
+- production signer appliance integration and custody review;
 - production security review before any mainnet use.
 
 The latest Devnet proof is recorded in

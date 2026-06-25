@@ -15,6 +15,8 @@ import { describe, expect, it } from "vitest";
 import {
   createLocalDevSolanaPayoutSigner,
   createLocalDevSolanaPayoutSignerFromEnv,
+  createRemoteSolanaPayoutSigner,
+  createRemoteSolanaPayoutSignerFromEnv,
   createSolanaPayoutTransactionPlan,
   hashSolanaPayoutDestinationAmountList,
   SOLANA_TOKEN_PROGRAM_ID,
@@ -582,6 +584,187 @@ describe("local-dev Solana payout signer", () => {
         privateKeyBytes
       })
     ).rejects.toThrow("local-dev signer address does not match expectedAddress");
+  });
+});
+
+describe("remote Solana payout signer", () => {
+  it("delegates policy-checked signing requests to an authenticated remote signer", async () => {
+    const requests: Array<{
+      input: string;
+      init: {
+        method: "POST";
+        headers: Record<string, string>;
+        body: string;
+      };
+    }> = [];
+    const receipt = createSampleProtocolArtifacts().artifacts.receipt;
+    const plan = await createSolanaPayoutTransactionPlan({
+      batch: payoutBatch(receipt, { destinationTokenAccount: receipt.payerWallet }),
+      fundingWallet: receipt.payToWallet,
+      sourceTokenAccount: receipt.payerWallet,
+      tokenDecimals: 6
+    });
+    const signer = createRemoteSolanaPayoutSigner({
+      policy: signingPolicy(plan, {
+        signerReference: "kms:split402-devnet-payout",
+        requireSuccessfulSimulation: false
+      }),
+      signerReference: "kms:split402-devnet-payout",
+      endpointUrl: "https://signer.example/v1/solana/payouts/sign",
+      keyId: "cp-key-1",
+      sharedSecret: "shared-secret",
+      now: () => new Date("2026-06-24T00:00:00.000Z"),
+      fetch: async (input, init) => {
+        requests.push({
+          input,
+          init: {
+            method: init.method,
+            headers: init.headers,
+            body: init.body
+          }
+        });
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            transactionIndex: 0,
+            signedTransactionBase64: "CQkJ",
+            expectedSignature: "sig_0"
+          })
+        };
+      }
+    });
+
+    const report = await signer.sign({
+      plan,
+      transactions: [{ index: 0, transactionBase64: "AQID" }]
+    });
+
+    expect(report.signedTransactions).toEqual([
+      {
+        index: 0,
+        signedTransactionBase64: "CQkJ",
+        expectedSignature: "sig_0"
+      }
+    ]);
+    expect(requests).toHaveLength(1);
+    const request = requests[0];
+    if (request === undefined) {
+      throw new Error("expected remote signer request");
+    }
+    expect(request.input).toBe("https://signer.example/v1/solana/payouts/sign");
+    expect(request.init.headers).toEqual(
+      expect.objectContaining({
+        "content-type": "application/json",
+        accept: "application/json",
+        "x-split402-request-schema":
+          "split402.solana.remote_payout_sign_request.v1",
+        "x-split402-signer-key-id": "cp-key-1",
+        "x-split402-signature-timestamp": "2026-06-24T00:00:00.000Z",
+        "x-split402-signature": expect.stringMatching(/^v1=[0-9a-f]{64}$/u)
+      })
+    );
+    expect(JSON.parse(request.init.body)).toEqual(
+      expect.objectContaining({
+        schema: "split402.solana.remote_payout_sign_request.v1",
+        batchId: plan.batchId,
+        network: plan.network,
+        signerReference: "kms:split402-devnet-payout",
+        transactionIndex: 0,
+        transactionBase64: "AQID",
+        amountAtomic: "3000",
+        destinationAmountListHash: hashSolanaPayoutDestinationAmountList(plan),
+        policy: expect.objectContaining({
+          signerReference: "kms:split402-devnet-payout",
+          fundingWallet: receipt.payToWallet
+        })
+      })
+    );
+  });
+
+  it("loads remote signer configuration from environment variables", async () => {
+    const receipt = createSampleProtocolArtifacts().artifacts.receipt;
+    const plan = await createSolanaPayoutTransactionPlan({
+      batch: payoutBatch(receipt, { destinationTokenAccount: receipt.payerWallet }),
+      fundingWallet: receipt.payToWallet,
+      sourceTokenAccount: receipt.payerWallet,
+      tokenDecimals: 6
+    });
+    const signer = createRemoteSolanaPayoutSignerFromEnv({
+      policy: signingPolicy(plan, {
+        signerReference: "kms:env-payout-key",
+        requireSuccessfulSimulation: false
+      }),
+      env: {
+        SPLIT402_REMOTE_PAYOUT_SIGNER_REF: "kms:env-payout-key",
+        SPLIT402_REMOTE_PAYOUT_SIGNER_URL: "https://signer.example/sign",
+        SPLIT402_REMOTE_PAYOUT_SIGNER_KEY_ID: "cp-key-1",
+        SPLIT402_REMOTE_PAYOUT_SIGNER_SHARED_SECRET: "shared-secret",
+        SPLIT402_REMOTE_PAYOUT_SIGNER_TIMEOUT_MS: "1000"
+      },
+      fetch: async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          signedTransactionBase64: "CQkJ"
+        })
+      })
+    });
+
+    await expect(
+      signer.sign({
+        plan,
+        transactions: [{ index: 0, transactionBase64: "AQID" }]
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        signerReference: "kms:env-payout-key"
+      })
+    );
+  });
+
+  it("rejects local references and invalid remote signer responses", async () => {
+    const receipt = createSampleProtocolArtifacts().artifacts.receipt;
+    const plan = await createSolanaPayoutTransactionPlan({
+      batch: payoutBatch(receipt, { destinationTokenAccount: receipt.payerWallet }),
+      fundingWallet: receipt.payToWallet,
+      sourceTokenAccount: receipt.payerWallet,
+      tokenDecimals: 6
+    });
+
+    expect(() =>
+      createRemoteSolanaPayoutSigner({
+        policy: signingPolicy(plan, {
+          signerReference: "local-dev:payout-key",
+          requireSuccessfulSimulation: false
+        }),
+        signerReference: "local-dev:payout-key",
+        endpointUrl: "https://signer.example/sign"
+      })
+    ).toThrow("remote signerReference must not start with local-dev:");
+
+    const signer = createRemoteSolanaPayoutSigner({
+      policy: signingPolicy(plan, {
+        signerReference: "kms:payout-key",
+        requireSuccessfulSimulation: false
+      }),
+      signerReference: "kms:payout-key",
+      endpointUrl: "https://signer.example/sign",
+      fetch: async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          transactionIndex: 1,
+          signedTransactionBase64: "CQkJ"
+        })
+      })
+    });
+    await expect(
+      signer.sign({
+        plan,
+        transactions: [{ index: 0, transactionBase64: "AQID" }]
+      })
+    ).rejects.toThrow("remote payout signer returned mismatched transactionIndex");
   });
 });
 
