@@ -1,7 +1,20 @@
 import { createSampleProtocolArtifacts } from "@split402/protocol";
+import {
+  address,
+  compileTransaction,
+  createKeyPairSignerFromPrivateKeyBytes,
+  createTransactionMessage,
+  getBase64EncodedWireTransaction,
+  getTransactionDecoder,
+  setTransactionMessageFeePayer,
+  setTransactionMessageLifetimeUsingBlockhash
+} from "@solana/kit";
+import type { Blockhash } from "@solana/kit";
 import { describe, expect, it } from "vitest";
 
 import {
+  createLocalDevSolanaPayoutSigner,
+  createLocalDevSolanaPayoutSignerFromEnv,
   createSolanaPayoutTransactionPlan,
   hashSolanaPayoutDestinationAmountList,
   SOLANA_TOKEN_PROGRAM_ID,
@@ -470,6 +483,105 @@ describe("SolanaPolicyEnforcedPayoutSigner", () => {
         expectedDestinationAmountListHash: `sha256:${"f".repeat(64)}`
       }))
     ).rejects.toThrow("destination amount list hash mismatch");
+  });
+});
+
+describe("local-dev Solana payout signer", () => {
+  it("signs serialized payout transactions with disposable local key material", async () => {
+    const privateKeyBytes = new Uint8Array(32).fill(1);
+    const signer = await createKeyPairSignerFromPrivateKeyBytes(privateKeyBytes);
+    const receipt = createSampleProtocolArtifacts().artifacts.receipt;
+    const plan = await createSolanaPayoutTransactionPlan({
+      batch: payoutBatch(receipt, { destinationTokenAccount: receipt.payerWallet }),
+      fundingWallet: signer.address,
+      sourceTokenAccount: receipt.payerWallet,
+      tokenDecimals: 6
+    });
+    const payoutSigner = await createLocalDevSolanaPayoutSigner({
+      policy: signingPolicy(plan, {
+        signerReference: "local-dev:payout-key",
+        requireSuccessfulSimulation: false
+      }),
+      signerReference: "local-dev:payout-key",
+      privateKeyBytes
+    });
+    const transactionBase64 = createUnsignedTransactionBase64(signer.address);
+
+    const report = await payoutSigner.sign({
+      plan,
+      transactions: [{ index: 0, transactionBase64 }]
+    });
+    const signed = report.signedTransactions[0];
+    if (signed === undefined) {
+      throw new Error("expected signed payout transaction");
+    }
+    const decoded = getTransactionDecoder().decode(
+      Buffer.from(signed.signedTransactionBase64, "base64")
+    );
+
+    expect(report.signerReference).toBe("local-dev:payout-key");
+    expect(signed.expectedSignature).toMatch(/^[1-9A-HJ-NP-Za-km-z]+$/u);
+    expect(decoded.signatures[signer.address]).not.toBeNull();
+  });
+
+  it("loads local-dev signer configuration from environment variables", async () => {
+    const privateKeyBytes = new Uint8Array(32).fill(2);
+    const signer = await createKeyPairSignerFromPrivateKeyBytes(privateKeyBytes);
+    const receipt = createSampleProtocolArtifacts().artifacts.receipt;
+    const plan = await createSolanaPayoutTransactionPlan({
+      batch: payoutBatch(receipt, { destinationTokenAccount: receipt.payerWallet }),
+      fundingWallet: signer.address,
+      sourceTokenAccount: receipt.payerWallet,
+      tokenDecimals: 6
+    });
+
+    await expect(
+      createLocalDevSolanaPayoutSignerFromEnv({
+        policy: signingPolicy(plan, {
+          signerReference: "local-dev:env-payout-key",
+          requireSuccessfulSimulation: false
+        }),
+        env: {
+          SPLIT402_PAYOUT_SIGNER_REF: "local-dev:env-payout-key",
+          SPLIT402_PAYOUT_SIGNER_PRIVATE_KEY_BASE64:
+            Buffer.from(privateKeyBytes).toString("base64")
+        }
+      })
+    ).resolves.toBeInstanceOf(SolanaPolicyEnforcedPayoutSigner);
+  });
+
+  it("rejects non-local signer references and address mismatches", async () => {
+    const privateKeyBytes = new Uint8Array(32).fill(1);
+    const signer = await createKeyPairSignerFromPrivateKeyBytes(privateKeyBytes);
+    const receipt = createSampleProtocolArtifacts().artifacts.receipt;
+    const plan = await createSolanaPayoutTransactionPlan({
+      batch: payoutBatch(receipt, { destinationTokenAccount: receipt.payerWallet }),
+      fundingWallet: signer.address,
+      sourceTokenAccount: receipt.payerWallet,
+      tokenDecimals: 6
+    });
+
+    await expect(
+      createLocalDevSolanaPayoutSigner({
+        policy: signingPolicy(plan, {
+          signerReference: "kms:payout-key",
+          requireSuccessfulSimulation: false
+        }),
+        signerReference: "kms:payout-key",
+        privateKeyBytes
+      })
+    ).rejects.toThrow("local-dev signerReference must start with local-dev:");
+    await expect(
+      createLocalDevSolanaPayoutSigner({
+        policy: signingPolicy(plan, {
+          signerReference: "local-dev:payout-key",
+          requireSuccessfulSimulation: false
+        }),
+        signerReference: "local-dev:payout-key",
+        expectedAddress: receipt.payToWallet,
+        privateKeyBytes
+      })
+    ).rejects.toThrow("local-dev signer address does not match expectedAddress");
   });
 });
 
@@ -1176,6 +1288,23 @@ function signingPolicy(
     expectedDestinationAmountListHash: hashSolanaPayoutDestinationAmountList(plan),
     ...overrides
   };
+}
+
+function createUnsignedTransactionBase64(feePayer: string): string {
+  return getBase64EncodedWireTransaction(
+    compileTransaction(
+      setTransactionMessageLifetimeUsingBlockhash(
+        {
+          blockhash: feePayer as Blockhash,
+          lastValidBlockHeight: 1n
+        },
+        setTransactionMessageFeePayer(
+          address(feePayer),
+          createTransactionMessage({ version: 0 })
+        )
+      )
+    )
+  );
 }
 
 function payoutTransaction(

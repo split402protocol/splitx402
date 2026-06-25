@@ -57,8 +57,8 @@ stateDiagram-v2
 The current payout engine is still public-alpha infrastructure. It has the
 accounting, transaction, and eventing boundaries needed to prevent duplicate
 allocation, duplicate lifecycle notifications, and duplicate ledger closure,
-while signer runtime wiring and unknown-outcome reconciliation remain active
-hardening work.
+plus disposable local-dev signer wiring for Devnet testing. Remote signer
+isolation and unknown-outcome reconciliation remain active hardening work.
 
 ## API Surface
 
@@ -110,6 +110,8 @@ GET  /v1/referrers/:referrerWallet/payouts
 - deterministic Solana payout transfer planning for allocated batches;
 - Solana RPC payout transaction simulation before submission;
 - policy-enforced Solana payout signing boundary;
+- local-dev Solana payout signer factory backed by disposable key material or
+  `SPLIT402_PAYOUT_SIGNER_*` environment variables;
 - signed-byte payout transaction persistence before broadcast;
 - Solana RPC broadcast submission boundary for persisted signed bytes;
 - Solana RPC finality monitoring with retry and outcome-unknown classification;
@@ -128,6 +130,22 @@ corepack pnpm test:postgres
 corepack pnpm worker:chain
 corepack pnpm worker:webhook
 ```
+
+## Local-Dev Payout Signer
+
+For Devnet-only payout tests, construct the signer with
+`createLocalDevSolanaPayoutSigner` or
+`createLocalDevSolanaPayoutSignerFromEnv`. The signer reference must start with
+`local-dev:` and exactly one key source must be provided:
+
+```bash
+SPLIT402_PAYOUT_SIGNER_REF=local-dev:payout-key
+SPLIT402_PAYOUT_SIGNER_EXPECTED_ADDRESS=<funding-wallet-address>
+SPLIT402_PAYOUT_SIGNER_PRIVATE_KEY_BASE64=<32-byte-private-key-base64>
+```
+
+The local-dev signer verifies the configured address against the payout policy
+before signing. Do not use these environment variables for production custody.
 
 ## Package Status
 
