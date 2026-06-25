@@ -1,0 +1,15 @@
+drill_id:
+drill_date:
+owners:
+staging_environment:
+merchant_id:
+payout_batch_id:
+expected_signature:
+outcome_unknown_evidence:
+reconciliation_list_evidence:
+reconcile_endpoint_evidence:
+recommended_action:
+persisted_status_after_reconcile:
+no_replacement_bytes_evidence:
+drill_decision: no-go
+drill_notes:

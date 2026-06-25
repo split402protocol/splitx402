@@ -22,6 +22,7 @@ signer_policy_mint: usdc_mint
 signer_policy_allowed_token_program_ids: TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA
 signer_policy_max_transaction_amount_atomic: 100000000
 smoke_check_output: attached: smoke-check-001.log
+unknown_outcome_reconciliation_record: attached: reconciliation-drill-001.md
 rotation_drill_record: attached: rotation-drill-001.md
 emergency_revocation_drill_record: attached: emergency-revocation-drill-001.md
 key_custody_record: attached: key-custody-review-001.md

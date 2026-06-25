@@ -16,7 +16,7 @@ all required gates are approved.
 | Emergency auth revocation | `corepack pnpm phase6:emergency-revocation` output proving old-key rejection, new-key success, metrics, audit-log evidence, and payout-batch reconciliation. | Pending |
 | Payout signer key custody | `corepack pnpm phase6:key-custody` output proving key source, owner, backup policy, access list, recovery process, and separation of duties. | Pending |
 | Signer policy review | `corepack pnpm phase6:signer-policy` output plus signer policy fields proving funding wallet, source token account, USDC mint, token program allow-list, amount caps, and network settings were reviewed. | Pending |
-| Unknown-outcome reconciliation | Drill proving no replacement transaction is built before `POST /v1/payout-batches/:batchId/reconcile`. | Pending |
+| Unknown-outcome reconciliation | `corepack pnpm phase6:reconciliation-drill` output proving no replacement transaction is built before `POST /v1/payout-batches/:batchId/reconcile`. | Pending |
 | RPC failover | `corepack pnpm payout:finality:failover-drill` output plus `corepack pnpm phase6:rpc-failover` review proving `passed: true`, primary RPC unavailable, secondary RPC returning status, and finality observed from the secondary RPC. | Pending |
 | Incident drill | `corepack pnpm phase6:incident-drill` output proving payout creation paused, affected batches reconciled, no replacement bytes were created while unsafe, smoke/metrics/audit evidence was captured, and payout creation resumed only after review. | Pending |
 | Rollback drill | `corepack pnpm phase6:rollback-drill` output proving rollback to last known-good image and secret set, readiness, metrics, reconciliation records, and safe batch resume. | Pending |
@@ -67,6 +67,7 @@ signer_policy_mint:
 signer_policy_allowed_token_program_ids:
 signer_policy_max_transaction_amount_atomic:
 smoke_check_output:
+unknown_outcome_reconciliation_record:
 rotation_drill_record:
 emergency_revocation_drill_record:
 key_custody_record:
