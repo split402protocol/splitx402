@@ -5,6 +5,7 @@ Production merchant helpers for Split402-enabled x402 APIs.
 This package starts with two production reliability boundaries:
 
 - a cached campaign resolver for x402 offer and receipt signing;
+- operation digest helpers for production GET and JSON POST request shapes;
 - a durable receipt outbox for post-settlement control-plane ingestion.
 
 ## Cached Campaign Resolver
@@ -37,6 +38,30 @@ The resolver keeps serving the last good active campaign snapshot even after the
 refresh window becomes stale. Merchants should refresh campaigns on startup and
 from a background job so a temporary control-plane outage does not stop paid API
 responses from carrying signed Split402 offers.
+
+## Operation Digests
+
+Use the digest helpers when a merchant integration or test needs to precompute
+the exact request hash that Split402 binds to payment attribution.
+
+```ts
+import { calculateJsonPostOperationDigest } from "@split402/merchant-sdk";
+
+const requestDigest = calculateJsonPostOperationDigest({
+  merchantId: "mrc_...",
+  operationId: "wallet-risk-score",
+  pathTemplate: "/v1/risk/:wallet",
+  pathParams: { wallet: "..." },
+  query: { includeLabels: "true" },
+  body: { includeScore: true },
+  paymentId: "pay_...",
+  offerNonce: "ofn_..."
+});
+```
+
+`calculateGetOperationDigest` and `calculateJsonPostOperationDigest` both reject
+non-JSON-compatible values before hashing, which avoids signing request material
+that a JSON transport would later drop or mutate.
 
 ## Receipt Outbox Flow
 

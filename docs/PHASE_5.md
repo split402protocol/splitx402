@@ -13,6 +13,8 @@ Status: started.
 - Added `packages/merchant-sdk`.
 - Added `CachedControlPlaneCampaignResolver` for active campaign refresh from
   the control plane and synchronous x402 extension resolution from a local cache.
+- Added merchant operation digest helpers for production GET and JSON POST
+  request shapes, with JSON-compatibility checks before hashing.
 - Added `MerchantReceiptOutboxStore` interfaces for durable merchant-local
   receipt persistence.
 - Added `InMemoryMerchantReceiptOutboxStore` for deterministic tests and examples.
@@ -35,7 +37,6 @@ retry ingestion later without creating duplicate commissions.
 
 ## Remaining Milestone 3 Work
 
-- Operation digest coverage for production GET and JSON POST integrations.
 - Explicit x402 `payment-identifier` integration.
 - Service-key rotation support.
 - Compile-ready merchant integration example and compatibility matrix.
