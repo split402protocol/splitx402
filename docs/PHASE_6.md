@@ -32,10 +32,13 @@ Status: started.
   available accruals into a durable batch.
 - Added worker-safe payout batch creation that selects eligible PostgreSQL
   accruals inside the allocation transaction with `FOR UPDATE SKIP LOCKED`.
+- Added deterministic Solana payout transaction planning that derives source and
+  destination token accounts, adds idempotent associated-token-account creation
+  steps, and emits transfer-checked instruction plans for allocated batches.
 - Added `0010_payout_batches.sql` for payout batches, payout items, payout
   allocations, and the `allocated` accrual status.
-- Added control-plane tests for payout planning, allocation persistence, and the
-  HTTP payout routes.
+- Added control-plane tests for payout planning, Solana transaction planning,
+  allocation persistence, and the HTTP payout routes.
 
 ## Why This Comes Next
 
@@ -47,7 +50,7 @@ the merchant has enough funding.
 
 ## Remaining Milestone 4 Work
 
-- Solana transfer transaction planning and simulation.
+- Solana transaction simulation.
 - Isolated payout signer policy.
 - Broadcast, confirmation, finality, and retry handling.
 - Reconciliation for unknown transaction outcomes.
