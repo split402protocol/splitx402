@@ -95,6 +95,17 @@ export function createDashboardApp(
     );
   });
 
+  app.get("/api/merchants/:merchantId/payout-obligations", async (req, res) => {
+    await proxyControlPlaneJson(
+      req,
+      res,
+      fetchJson,
+      config,
+      `/v1/merchants/${encodePathSegment(req.params.merchantId)}/payout-obligations`,
+      readAllowedQuery(req, ["asset"])
+    );
+  });
+
   app.get("/api/referrers/:referrerWallet/balances", async (req, res) => {
     await proxyControlPlaneJson(
       req,
@@ -533,6 +544,14 @@ function renderDashboardHtml(config: DashboardConfig): string {
         <span class="status">USDC atomic</span>
       </section>
 
+      <section class="panel span-12">
+        <div class="section-title">
+          <h2>Merchant Payout Obligations</h2>
+          <span class="status" id="obligationStatus">Waiting</span>
+        </div>
+        <div id="obligationTable"></div>
+      </section>
+
       <section class="panel span-6">
         <div class="section-title">
           <h2>Merchant Summary</h2>
@@ -601,9 +620,10 @@ function renderDashboardHtml(config: DashboardConfig): string {
           ? [
               loadJson("/api/merchants/" + encodeURIComponent(merchantId) + "/dashboard-summary"),
               loadJson("/api/merchants/" + encodeURIComponent(merchantId) + "/reliability-profile"),
-              loadJson("/api/merchants/" + encodeURIComponent(merchantId) + "/webhook-events" + webhookQuery())
+              loadJson("/api/merchants/" + encodeURIComponent(merchantId) + "/webhook-events" + webhookQuery()),
+              loadJson("/api/merchants/" + encodeURIComponent(merchantId) + "/payout-obligations")
             ]
-          : [undefined, undefined, { events: [] }];
+          : [undefined, undefined, { events: [] }, { summary: { assets: [] } }];
         const referrerRequests = referrerWallet
           ? [
               loadJson("/api/referrers/" + encodeURIComponent(referrerWallet) + "/balances"),
@@ -611,11 +631,12 @@ function renderDashboardHtml(config: DashboardConfig): string {
               loadJson("/api/referrers/" + encodeURIComponent(referrerWallet) + "/payouts?limit=25")
             ]
           : [undefined, { routes: [] }, { payouts: [] }];
-        const [summary, profile, webhookEvents, balances, routes, payouts] =
+        const [summary, profile, webhookEvents, obligations, balances, routes, payouts] =
           await Promise.all([...merchantRequests, ...referrerRequests]);
         renderSummary(summary);
         renderProfile(profile);
         renderWebhooks(webhookEvents?.events ?? []);
+        renderObligations(obligations?.summary?.assets ?? []);
         renderRoutes(routes?.routes ?? []);
         renderPayouts(payouts?.payouts ?? []);
         renderBalance(balances);
@@ -676,6 +697,19 @@ function renderDashboardHtml(config: DashboardConfig): string {
     function renderWebhooks(events) {
       document.querySelector("#webhookCount").textContent = events.length + " events";
       renderTable("#webhookTable", events, ["eventType", "status", "attempts", "createdAt"]);
+    }
+
+    function renderObligations(assets) {
+      document.querySelector("#obligationStatus").textContent = assets.length + " assets";
+      renderTable("#obligationTable", assets, [
+        "asset",
+        "fundingStatus",
+        "outstandingAmountAtomic",
+        "availableAmountAtomic",
+        "inFlightAmountAtomic",
+        "paidAmountAtomic",
+        "accrualCount"
+      ]);
     }
 
     function renderRoutes(routes) {

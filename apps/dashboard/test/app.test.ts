@@ -83,6 +83,34 @@ describe("Split402 dashboard app", () => {
     ]);
   });
 
+  it("proxies merchant payout obligation reads with asset filters", async () => {
+    const calls: Array<{ url: string; authorization?: string }> = [];
+    const { app } = createDashboardApp({
+      config: {
+        controlPlaneUrl: "https://control.example",
+        port: 4027,
+        controlPlaneBearerToken: "configured-token"
+      },
+      fetch: fakeFetch(calls, {
+        summary: {
+          schema: "split402.merchant_obligation_summary.v1",
+          assets: []
+        }
+      })
+    });
+
+    await request(app)
+      .get("/api/merchants/mrc_1/payout-obligations?asset=usdc_mint&ignored=yes")
+      .expect(200);
+
+    expect(calls).toEqual([
+      {
+        url: "https://control.example/v1/merchants/mrc_1/payout-obligations?asset=usdc_mint",
+        authorization: "Bearer configured-token"
+      }
+    ]);
+  });
+
   it("validates dashboard env configuration", () => {
     expect(() =>
       readDashboardConfig({}, {

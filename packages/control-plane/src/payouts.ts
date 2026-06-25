@@ -339,6 +339,43 @@ export interface ReferrerPayoutViewStore {
   ): Promise<ReferrerPayoutHistoryItem[]> | ReferrerPayoutHistoryItem[];
 }
 
+export interface MerchantObligationViewInput {
+  merchantId: string;
+  asset?: string;
+  now?: string;
+}
+
+export interface MerchantObligationSummary {
+  schema: "split402.merchant_obligation_summary.v1";
+  merchantId: string;
+  generatedAt: string;
+  assets: MerchantObligationAssetSummary[];
+}
+
+export interface MerchantObligationAssetSummary {
+  asset: string;
+  fundingStatus: PayoutFundingStatus;
+  pendingAmountAtomic: string;
+  availableAmountAtomic: string;
+  heldAmountAtomic: string;
+  inFlightAmountAtomic: string;
+  paidAmountAtomic: string;
+  outstandingAmountAtomic: string;
+  totalAccruedAmountAtomic: string;
+  accrualCount: number;
+  pendingAccrualCount: number;
+  availableAccrualCount: number;
+  heldAccrualCount: number;
+  inFlightAccrualCount: number;
+  paidAccrualCount: number;
+}
+
+export interface MerchantObligationViewStore {
+  getMerchantObligationSummary(
+    input: MerchantObligationViewInput
+  ): Promise<MerchantObligationSummary> | MerchantObligationSummary;
+}
+
 export interface PayoutBatchFinalityRollup {
   batchStatus: PayoutBatchStatus;
   itemStatus?: PayoutItemStatus;
@@ -996,6 +1033,112 @@ export function createReferrerPayoutHistoryItems(input: {
   return limit === undefined ? items : items.slice(0, limit);
 }
 
+export function createMerchantObligationSummary(input: {
+  merchantId: string;
+  accruals: readonly CommissionAccrual[];
+  payoutBatches: readonly PayoutBatchRecord[];
+  asset?: string;
+  now?: string;
+}): MerchantObligationSummary {
+  const merchantId = assertNonEmptyString(input.merchantId, "merchantId");
+  const generatedAt = normalizeTimestamp(
+    input.now ?? new Date().toISOString(),
+    "now"
+  );
+  const payoutIndex = buildPayoutAllocationIndex(input.payoutBatches);
+  const assetsByMint = new Map<
+    string,
+    {
+      pending: bigint;
+      available: bigint;
+      held: bigint;
+      inFlight: bigint;
+      paid: bigint;
+      accrualCount: number;
+      pendingCount: number;
+      availableCount: number;
+      heldCount: number;
+      inFlightCount: number;
+      paidCount: number;
+    }
+  >();
+
+  for (const accrual of input.accruals) {
+    if (
+      accrual.merchantId !== merchantId ||
+      (input.asset !== undefined && accrual.asset !== input.asset)
+    ) {
+      continue;
+    }
+    const amount = readAtomicAmount(accrual.amountAtomic, "amountAtomic");
+    const bucket = assetsByMint.get(accrual.asset) ?? {
+      pending: 0n,
+      available: 0n,
+      held: 0n,
+      inFlight: 0n,
+      paid: 0n,
+      accrualCount: 0,
+      pendingCount: 0,
+      availableCount: 0,
+      heldCount: 0,
+      inFlightCount: 0,
+      paidCount: 0
+    };
+    bucket.accrualCount += 1;
+    const status = readMerchantObligationStatus(
+      accrual,
+      payoutIndex.get(accrual.id)
+    );
+    if (status === "pending") {
+      bucket.pending += amount;
+      bucket.pendingCount += 1;
+    } else if (status === "available") {
+      bucket.available += amount;
+      bucket.availableCount += 1;
+    } else if (status === "held") {
+      bucket.held += amount;
+      bucket.heldCount += 1;
+    } else if (status === "in_flight") {
+      bucket.inFlight += amount;
+      bucket.inFlightCount += 1;
+    } else {
+      bucket.paid += amount;
+      bucket.paidCount += 1;
+    }
+    assetsByMint.set(accrual.asset, bucket);
+  }
+
+  return {
+    schema: "split402.merchant_obligation_summary.v1",
+    merchantId,
+    generatedAt,
+    assets: Array.from(assetsByMint.entries())
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([asset, totals]) => {
+        const outstanding =
+          totals.pending + totals.available + totals.held + totals.inFlight;
+        const total = outstanding + totals.paid;
+        return {
+          asset,
+          fundingStatus: "unknown",
+          pendingAmountAtomic: serializeAtomicAmount(totals.pending),
+          availableAmountAtomic: serializeAtomicAmount(totals.available),
+          heldAmountAtomic: serializeAtomicAmount(totals.held),
+          inFlightAmountAtomic: serializeAtomicAmount(totals.inFlight),
+          paidAmountAtomic: serializeAtomicAmount(totals.paid),
+          outstandingAmountAtomic: serializeAtomicAmount(outstanding),
+          totalAccruedAmountAtomic: serializeAtomicAmount(total),
+          accrualCount: totals.accrualCount,
+          pendingAccrualCount: totals.pendingCount,
+          availableAccrualCount: totals.availableCount,
+          heldAccrualCount: totals.heldCount,
+          inFlightAccrualCount: totals.inFlightCount,
+          paidAccrualCount: totals.paidCount
+        };
+      })
+  };
+}
+
 function readPositiveAtomicAmount(value: string, label: string): bigint {
   const amount = readAtomicAmount(value, label);
   if (amount <= 0n) {
@@ -1064,6 +1207,17 @@ function readReferrerPayoutHistoryStatus(
     return "held";
   }
   return "in_flight";
+}
+
+function readMerchantObligationStatus(
+  accrual: CommissionAccrual,
+  payout:
+    | {
+        item: PayoutItemRecord;
+      }
+    | undefined
+): ReferrerPayoutHistoryStatus {
+  return readReferrerPayoutHistoryStatus(accrual, payout);
 }
 
 function buildPayoutAllocationIndex(
