@@ -10,6 +10,7 @@ import {
 import { findAssociatedTokenPda } from "@solana-program/token";
 import { hashProtocolObject, type Split402ReceiptV1 } from "@split402/protocol";
 import { Buffer } from "node:buffer";
+import { createHmac } from "node:crypto";
 
 import type {
   ReceiptChainVerificationResult,
@@ -238,6 +239,38 @@ export interface CreateLocalDevSolanaPayoutSignerInput
 export interface CreateLocalDevSolanaPayoutSignerFromEnvInput {
   policy: SolanaPayoutSignerPolicy;
   env?: NodeJS.ProcessEnv;
+}
+
+export type RemoteSolanaPayoutSignerFetch = (
+  input: string,
+  init: {
+    method: "POST";
+    headers: Record<string, string>;
+    body: string;
+    signal?: AbortSignal;
+  }
+) => Promise<SolanaRpcHttpResponse>;
+
+export interface RemoteSolanaPayoutSignerOptions {
+  signerReference: string;
+  endpointUrl: string;
+  keyId?: string;
+  sharedSecret?: string;
+  timeoutMs?: number;
+  fetch?: RemoteSolanaPayoutSignerFetch;
+  now?: () => Date;
+}
+
+export interface CreateRemoteSolanaPayoutSignerInput
+  extends RemoteSolanaPayoutSignerOptions {
+  policy: SolanaPayoutSignerPolicy;
+}
+
+export interface CreateRemoteSolanaPayoutSignerFromEnvInput {
+  policy: SolanaPayoutSignerPolicy;
+  env?: NodeJS.ProcessEnv;
+  fetch?: RemoteSolanaPayoutSignerFetch;
+  now?: () => Date;
 }
 
 export interface SolanaRpcPayoutTransactionBroadcasterOptions {
@@ -679,6 +712,67 @@ export async function createLocalDevSolanaPayoutSignerFromEnv(
   });
 }
 
+export function createRemoteSolanaPayoutSigner(
+  input: CreateRemoteSolanaPayoutSignerInput
+): SolanaPolicyEnforcedPayoutSigner {
+  const signerReference = assertRemoteSignerReference(input.signerReference);
+  if (input.policy.signerReference !== signerReference) {
+    throw new Error("remote signer reference does not match policy");
+  }
+  const endpointUrl = assertHttpUrl(input.endpointUrl, "endpointUrl");
+  const timeoutMs =
+    input.timeoutMs === undefined
+      ? 5_000
+      : assertPositiveInteger(input.timeoutMs, "timeoutMs");
+  return new SolanaPolicyEnforcedPayoutSigner({
+    policy: input.policy,
+    signTransaction: createRemoteSolanaPayoutSigningDelegate({
+      signerReference,
+      endpointUrl,
+      ...(input.keyId === undefined
+        ? {}
+        : { keyId: assertNonEmptyString(input.keyId, "keyId") }),
+      ...(input.sharedSecret === undefined
+        ? {}
+        : {
+            sharedSecret: assertNonEmptyString(
+              input.sharedSecret,
+              "sharedSecret"
+            )
+          }),
+      timeoutMs,
+      ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+      ...(input.now === undefined ? {} : { now: input.now }),
+      policy: input.policy
+    })
+  });
+}
+
+export function createRemoteSolanaPayoutSignerFromEnv(
+  input: CreateRemoteSolanaPayoutSignerFromEnvInput
+): SolanaPolicyEnforcedPayoutSigner {
+  const env = input.env ?? process.env;
+  const timeoutMs = readOptionalIntegerEnv(
+    env.SPLIT402_REMOTE_PAYOUT_SIGNER_TIMEOUT_MS,
+    "SPLIT402_REMOTE_PAYOUT_SIGNER_TIMEOUT_MS"
+  );
+  return createRemoteSolanaPayoutSigner({
+    policy: input.policy,
+    signerReference:
+      env.SPLIT402_REMOTE_PAYOUT_SIGNER_REF ?? input.policy.signerReference,
+    endpointUrl: env.SPLIT402_REMOTE_PAYOUT_SIGNER_URL ?? "",
+    ...(env.SPLIT402_REMOTE_PAYOUT_SIGNER_KEY_ID === undefined
+      ? {}
+      : { keyId: env.SPLIT402_REMOTE_PAYOUT_SIGNER_KEY_ID }),
+    ...(env.SPLIT402_REMOTE_PAYOUT_SIGNER_SHARED_SECRET === undefined
+      ? {}
+      : { sharedSecret: env.SPLIT402_REMOTE_PAYOUT_SIGNER_SHARED_SECRET }),
+    ...(timeoutMs === undefined ? {} : { timeoutMs }),
+    ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+    ...(input.now === undefined ? {} : { now: input.now })
+  });
+}
+
 function createLocalDevSolanaPayoutSigningDelegate(input: {
   signerReference: string;
   keyPair: LocalDevSolanaKeyPair;
@@ -700,6 +794,59 @@ function createLocalDevSolanaPayoutSigningDelegate(input: {
       signedTransactionBase64: getBase64EncodedWireTransaction(signed),
       expectedSignature: getSignatureFromTransaction(signed)
     };
+  };
+}
+
+function createRemoteSolanaPayoutSigningDelegate(input: {
+  signerReference: string;
+  endpointUrl: string;
+  keyId?: string;
+  sharedSecret?: string;
+  timeoutMs: number;
+  fetch?: RemoteSolanaPayoutSignerFetch;
+  now?: () => Date;
+  policy: SolanaPayoutSignerPolicy;
+}): SolanaPayoutTransactionSigningDelegate {
+  return async (transactionInput) => {
+    if (transactionInput.signerReference !== input.signerReference) {
+      throw new Error("remote signer received an unexpected signerReference");
+    }
+    const payload = {
+      schema: "split402.solana.remote_payout_sign_request.v1",
+      batchId: transactionInput.batchId,
+      network: transactionInput.network,
+      signerReference: transactionInput.signerReference,
+      destinationAmountListHash: transactionInput.destinationAmountListHash,
+      transactionIndex: transactionInput.plannedTransaction.index,
+      amountAtomic: transactionInput.amountAtomic,
+      transactionBase64: transactionInput.transactionBase64,
+      plannedTransaction: transactionInput.plannedTransaction,
+      policy: input.policy
+    };
+    const body = JSON.stringify(payload);
+    const headers: Record<string, string> = {
+      "content-type": "application/json",
+      accept: "application/json",
+      "x-split402-request-schema": payload.schema
+    };
+    if (input.keyId !== undefined) {
+      headers["x-split402-signer-key-id"] = input.keyId;
+    }
+    if (input.sharedSecret !== undefined) {
+      const timestamp = (input.now?.() ?? new Date()).toISOString();
+      headers["x-split402-signature-timestamp"] = timestamp;
+      headers["x-split402-signature"] = createRemoteSignerRequestSignature({
+        timestamp,
+        body,
+        sharedSecret: input.sharedSecret
+      });
+    }
+
+    const response = await fetchRemoteSigner(input, body, headers);
+    return readRemoteSignerResponse(
+      response,
+      transactionInput.plannedTransaction.index
+    );
   };
 }
 
@@ -1583,6 +1730,115 @@ function assertLocalDevSignerReference(value: string): string {
     throw new Error("local-dev signerReference must start with local-dev:");
   }
   return signerReference;
+}
+
+function assertRemoteSignerReference(value: string): string {
+  const signerReference = assertNonEmptyString(value, "signerReference");
+  if (signerReference.startsWith("local-dev:")) {
+    throw new Error("remote signerReference must not start with local-dev:");
+  }
+  return signerReference;
+}
+
+function assertHttpUrl(value: string, label: string): string {
+  const url = assertNonEmptyString(value, label);
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`${label} must be an HTTP URL`);
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    throw new Error(`${label} must be an HTTP URL`);
+  }
+  return parsed.toString();
+}
+
+async function fetchRemoteSigner(
+  input: {
+    endpointUrl: string;
+    timeoutMs: number;
+    fetch?: RemoteSolanaPayoutSignerFetch;
+  },
+  body: string,
+  headers: Record<string, string>
+): Promise<unknown> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), input.timeoutMs);
+  try {
+    const response = await (input.fetch ?? fetch)(input.endpointUrl, {
+      method: "POST",
+      headers,
+      body,
+      signal: controller.signal
+    });
+    if (!response.ok) {
+      throw new Error(`remote payout signer returned HTTP ${response.status}`);
+    }
+    return response.json();
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("remote payout signer request timed out");
+    }
+    throw new Error(`remote payout signer request failed: ${readErrorMessage(error)}`);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function readRemoteSignerResponse(
+  body: unknown,
+  transactionIndex: number
+): SolanaPayoutTransactionSigningDelegateResult {
+  const record = readRecord(body);
+  const responseIndex = readOptionalInteger(
+    record.transactionIndex,
+    "transactionIndex"
+  );
+  if (responseIndex !== undefined && responseIndex !== transactionIndex) {
+    throw new Error("remote payout signer returned mismatched transactionIndex");
+  }
+  return {
+    signedTransactionBase64: assertBase64Transaction(
+      readRequiredString(
+        record.signedTransactionBase64,
+        "signedTransactionBase64"
+      ),
+      "signedTransactionBase64"
+    ),
+    ...(record.expectedSignature === undefined
+      ? {}
+      : {
+          expectedSignature: readRequiredString(
+            record.expectedSignature,
+            "expectedSignature"
+          )
+        })
+  };
+}
+
+function createRemoteSignerRequestSignature(input: {
+  timestamp: string;
+  body: string;
+  sharedSecret: string;
+}): string {
+  const digest = createHmac("sha256", input.sharedSecret)
+    .update(`${input.timestamp}.${input.body}`)
+    .digest("hex");
+  return `v1=${digest}`;
+}
+
+function readOptionalIntegerEnv(
+  value: string | undefined,
+  label: string
+): number | undefined {
+  if (value === undefined || value.trim().length === 0) {
+    return undefined;
+  }
+  if (!/^[1-9][0-9]*$/u.test(value.trim())) {
+    throw new Error(`${label} must be a positive integer`);
+  }
+  return Number.parseInt(value.trim(), 10);
 }
 
 function readSecretKeyJson(value: string): Uint8Array {
