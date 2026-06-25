@@ -184,6 +184,14 @@ Deliverables:
 - service-key rotation;
 - integration examples and compatibility docs.
 
+Current slice:
+
+- `@split402/merchant-sdk` package;
+- durable receipt outbox interfaces;
+- in-memory receipt outbox store for tests and examples;
+- control-plane receipt submitter;
+- retrying receipt outbox dispatcher with dead-letter behavior.
+
 ## Phase 6: Payout Engine
 
 Goal: implement architecture Milestone 4.

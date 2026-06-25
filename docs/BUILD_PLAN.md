@@ -254,6 +254,17 @@ Deliverables:
 - compile-ready integration example;
 - package documentation and version compatibility matrix.
 
+Current slice:
+
+- add `@split402/merchant-sdk`;
+- add durable merchant receipt outbox store interfaces;
+- add an in-memory outbox implementation for deterministic tests and examples;
+- add a receipt outbox dispatcher with retry scheduling, max-attempt dead-lettering,
+  and permanent conflict handling;
+- add a control-plane receipt submitter that treats created and duplicate
+  ingestion responses as accepted;
+- document the outbox flow and production storage boundary.
+
 Exit criteria:
 
 - platform outage after settlement still returns a signed deferred receipt;
