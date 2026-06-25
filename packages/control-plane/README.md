@@ -53,9 +53,11 @@ POST /v1/campaigns/:campaignId/versions
 - PostgreSQL merchant/key/origin registry;
 - PostgreSQL wallet-auth challenge and session store.
 
-Route persistence, durable campaign persistence, outbox processing, chain
-verification workers, and runtime wiring are being developed in the active PR
-stack and are not part of the current `main` package surface yet.
+Active PR-stack work adds PostgreSQL campaign and route persistence, route
+draft/activation/suspension APIs, durable receipt outbox stores, wallet-auth
+refresh-token rotation, Solana chain-verification workers, runtime wiring, and a
+chain-worker process entrypoint. Those slices are not part of the current `main`
+package surface until their PRs are merged.
 
 ## Package Status
 
