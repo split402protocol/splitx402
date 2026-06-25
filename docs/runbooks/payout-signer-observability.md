@@ -10,6 +10,13 @@ Read bounded counters:
 curl -s "$SPLIT402_PAYOUT_SIGNER_URL/v1/metrics"
 ```
 
+For staging and post-deploy validation, run:
+
+```bash
+SPLIT402_PAYOUT_SIGNER_SMOKE_URL="$SPLIT402_PAYOUT_SIGNER_URL" \
+  corepack pnpm signer:payout:smoke
+```
+
 Expected fields:
 
 - `requestsTotal`

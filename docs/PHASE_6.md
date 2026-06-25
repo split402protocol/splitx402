@@ -70,6 +70,8 @@ plus an unknown-outcome reconciliation queue and referrer payout views.
   or future signing requests.
 - Added deployable payout signer JSONL audit logging for sanitized custody and
   incident-response evidence.
+- Added a payout signer staging smoke check for health, readiness, metrics, and
+  secret-exposure validation.
 - Added signed payout transaction records and PostgreSQL persistence for exact
   signed bytes, expected signature, sequence, attempt, blockhash metadata, and
   submitted state before broadcast.
