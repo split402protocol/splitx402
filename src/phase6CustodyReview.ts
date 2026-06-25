@@ -19,6 +19,7 @@ export const PHASE6_CUSTODY_REQUIRED_FIELDS = [
   "signer_policy_allowed_token_program_ids",
   "signer_policy_max_transaction_amount_atomic",
   "smoke_check_output",
+  "unknown_outcome_reconciliation_record",
   "rotation_drill_record",
   "emergency_revocation_drill_record",
   "key_custody_record",
