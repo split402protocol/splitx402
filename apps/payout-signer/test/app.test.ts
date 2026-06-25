@@ -19,7 +19,11 @@ import request from "supertest";
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
-import { createPayoutSignerApp, readPayoutSignerConfigFromEnv } from "../src/app.js";
+import {
+  createPayoutSignerApp,
+  readPayoutSignerConfigFromEnv,
+  type PayoutSignerAuditEvent
+} from "../src/app.js";
 
 const PRIVATE_KEY_BYTES = new Uint8Array(32).fill(7);
 const SHARED_SECRET = "signer-shared-secret";
@@ -155,6 +159,68 @@ describe("payout signer app", () => {
     expect(JSON.stringify(response.body)).not.toContain(NEXT_SHARED_SECRET);
   });
 
+  it("records safe audit events and metrics for signed and rejected requests", async () => {
+    const auditEvents: PayoutSignerAuditEvent[] = [];
+    const signer = await createKeyPairSignerFromPrivateKeyBytes(PRIVATE_KEY_BYTES);
+    const { app, body } = await createFixture({
+      fundingWallet: signer.address,
+      auditSink: (event) => {
+        auditEvents.push(event);
+      }
+    });
+
+    await request(app)
+      .post("/v1/solana/payouts/sign")
+      .set(signHeaders(body))
+      .send(body)
+      .expect(200);
+    await request(app)
+      .post("/v1/solana/payouts/sign")
+      .set(signHeaders({ ...body, signerReference: "kms:other" }))
+      .send({ ...body, signerReference: "kms:other" })
+      .expect(403);
+
+    const metricsResponse = await request(app).get("/v1/metrics").expect(200);
+    expect(metricsResponse.body.metrics).toEqual(
+      expect.objectContaining({
+        requestsTotal: 2,
+        signedTotal: 1,
+        rejectedTotal: 1,
+        rejectedByCode: {
+          forbidden: 1
+        }
+      })
+    );
+    expect(auditEvents).toHaveLength(2);
+    expect(auditEvents[0]).toEqual(
+      expect.objectContaining({
+        schema: "split402.payout_signer.audit_event.v1",
+        outcome: "signed",
+        statusCode: 200,
+        code: "signed",
+        signerReference: "kms:test-payout",
+        batchId: body.batchId,
+        transactionIndex: 0,
+        amountAtomic: "3000",
+        destinationAmountListHash: body.destinationAmountListHash,
+        expectedSignature: expect.stringMatching(/^[1-9A-HJ-NP-Za-km-z]+$/u)
+      })
+    );
+    expect(auditEvents[1]).toEqual(
+      expect.objectContaining({
+        outcome: "rejected",
+        statusCode: 403,
+        code: "forbidden",
+        signerReference: "kms:test-payout",
+        message: expect.stringContaining("signerReference")
+      })
+    );
+    const serializedEvents = JSON.stringify(auditEvents);
+    expect(serializedEvents).not.toContain(body.transactionBase64);
+    expect(serializedEvents).not.toContain(SHARED_SECRET);
+    expect(serializedEvents).not.toContain(NEXT_SHARED_SECRET);
+  });
+
   it("loads configuration from environment variables", () => {
     expect(
       readPayoutSignerConfigFromEnv({
@@ -202,6 +268,7 @@ describe("payout signer app", () => {
 async function createFixture(input: {
   fundingWallet: string;
   authKeys?: Parameters<typeof createPayoutSignerApp>[0]["authKeys"];
+  auditSink?: Parameters<typeof createPayoutSignerApp>[0]["auditSink"];
 }) {
   const receipt = createSampleProtocolArtifacts().artifacts.receipt;
   const batch = {
@@ -277,6 +344,8 @@ async function createFixture(input: {
     ...(input.authKeys === undefined
       ? { sharedSecret: SHARED_SECRET }
       : { authKeys: input.authKeys }),
+    ...(input.auditSink === undefined ? {} : { auditSink: input.auditSink }),
+    now: () => new Date(TIMESTAMP),
     port: 4022,
     privateKeyBytes: PRIVATE_KEY_BYTES
   });

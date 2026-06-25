@@ -406,6 +406,7 @@ The latest Devnet proof is recorded in
 - [Architecture alignment note](docs/SPLIT402_ARCHITECTURE.md)
 - [Payout reconciliation runbook](docs/runbooks/payout-reconciliation.md)
 - [Payout signer key rotation runbook](docs/runbooks/payout-signer-key-rotation.md)
+- [Payout signer observability runbook](docs/runbooks/payout-signer-observability.md)
 - [MVP build plan](docs/BUILD_PLAN.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Phase 0 status](docs/PHASE_0.md)

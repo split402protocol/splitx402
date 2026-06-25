@@ -59,3 +59,5 @@ If a control-plane auth secret is suspected compromised:
 - A request without `x-split402-signer-key-id` returns `401` when more than one
   auth key is configured.
 - `GET /v1/health` lists auth key IDs and statuses but never secrets.
+- `GET /v1/metrics` increments `rejectedByCode.unauthorized` for old-key
+  attempts and does not expose secrets.
