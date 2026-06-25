@@ -1,0 +1,16 @@
+drill_id:
+drill_date:
+owners:
+staging_environment:
+previous_key_id:
+current_key_id:
+dual_active_deploy_time:
+control_plane_rotation_time:
+retired_key_deploy_time:
+current_key_traffic_evidence:
+previous_key_retired_evidence:
+health_evidence:
+metrics_evidence:
+audit_log_evidence:
+drill_decision: no-go
+drill_notes:

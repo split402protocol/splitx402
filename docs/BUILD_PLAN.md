@@ -360,6 +360,9 @@ Current slice:
   backup, recovery, access, and separation-of-duties evidence;
 - add a Phase 6 emergency signer-auth revocation drill generator for old-key
   rejection, new-key success, metrics, audit-log, and reconciliation evidence;
+- add a Phase 6 planned signer-auth rotation drill generator for dual-active
+  deploy, control-plane rotation, previous-key retirement, health, metrics, and
+  audit-log evidence;
 - add a Phase 6 payout signer rollback drill generator for immutable image,
   secret-set, readiness, metrics, reconciliation, and safe batch-resume evidence;
 - add a Phase 6 evidence status command that lists required evidence commands
