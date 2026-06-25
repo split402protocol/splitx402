@@ -100,6 +100,44 @@ export interface SolanaTransferCheckedInstructionPlan {
   payoutItemId: string;
 }
 
+export interface SolanaRpcPayoutTransactionSimulatorOptions {
+  rpcUrl?: string;
+  rpcUrls?: string[];
+  network: string;
+  commitment?: SolanaRpcCommitment;
+  fetch?: SolanaRpcFetch;
+  sigVerify?: boolean;
+  replaceRecentBlockhash?: boolean;
+}
+
+export interface SimulateSolanaPayoutTransactionPlanInput {
+  plan: SolanaPayoutTransactionPlan;
+  transactions: readonly SolanaSerializedPayoutTransaction[];
+}
+
+export interface SolanaSerializedPayoutTransaction {
+  index: number;
+  transactionBase64: string;
+}
+
+export type SolanaPayoutSimulationStatus = "succeeded" | "failed" | "retry";
+
+export interface SolanaPayoutSimulationReport {
+  batchId: string;
+  network: string;
+  status: SolanaPayoutSimulationStatus;
+  transactionResults: SolanaPayoutSimulationTransactionResult[];
+}
+
+export interface SolanaPayoutSimulationTransactionResult {
+  index: number;
+  status: SolanaPayoutSimulationStatus;
+  rpcUrl?: string;
+  error?: string;
+  logs?: string[];
+  unitsConsumed?: number;
+}
+
 type SolanaSignatureConfirmationStatus =
   | "processed"
   | "confirmed"
@@ -220,6 +258,160 @@ export async function createSolanaPayoutTransactionPlan(
     transactionCount: transactions.length,
     transactions
   };
+}
+
+export class SolanaRpcPayoutTransactionSimulator {
+  constructor(private readonly options: SolanaRpcPayoutTransactionSimulatorOptions) {}
+
+  async simulate(
+    input: SimulateSolanaPayoutTransactionPlanInput
+  ): Promise<SolanaPayoutSimulationReport> {
+    if (input.plan.network !== this.options.network) {
+      throw new Error(
+        `payout plan network ${input.plan.network} does not match simulator network ${this.options.network}`
+      );
+    }
+    const serializedTransactions = readSerializedPayoutTransactions(input);
+    const transactionResults: SolanaPayoutSimulationTransactionResult[] = [];
+    for (const plannedTransaction of input.plan.transactions) {
+      const transactionBase64 = serializedTransactions.get(plannedTransaction.index);
+      if (transactionBase64 === undefined) {
+        throw new Error(
+          `missing serialized transaction for payout plan index ${plannedTransaction.index}`
+        );
+      }
+      transactionResults.push(
+        await this.simulateWithFailover(
+          plannedTransaction.index,
+          transactionBase64
+        )
+      );
+    }
+
+    return {
+      batchId: input.plan.batchId,
+      network: input.plan.network,
+      status: summarizeSimulationStatus(transactionResults),
+      transactionResults
+    };
+  }
+
+  private async simulateWithFailover(
+    index: number,
+    transactionBase64: string
+  ): Promise<SolanaPayoutSimulationTransactionResult> {
+    let lastRetry: SolanaPayoutSimulationTransactionResult | undefined;
+    for (const rpcUrl of this.rpcUrls()) {
+      const result = await this.simulateWithRpcUrl(
+        rpcUrl,
+        index,
+        transactionBase64
+      );
+      if (result.status !== "retry") {
+        return result;
+      }
+      lastRetry = result;
+    }
+    return (
+      lastRetry ?? {
+        index,
+        status: "retry",
+        error: "no Solana RPC URLs configured"
+      }
+    );
+  }
+
+  private async simulateWithRpcUrl(
+    rpcUrl: string,
+    index: number,
+    transactionBase64: string
+  ): Promise<SolanaPayoutSimulationTransactionResult> {
+    let response: SolanaRpcHttpResponse;
+    try {
+      response = await this.fetch()(rpcUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: `split402-payout-simulation-${index}`,
+          method: "simulateTransaction",
+          params: [
+            transactionBase64,
+            {
+              commitment: this.commitment(),
+              encoding: "base64",
+              replaceRecentBlockhash: this.replaceRecentBlockhash(),
+              sigVerify: this.sigVerify()
+            }
+          ]
+        })
+      });
+    } catch (error) {
+      return {
+        index,
+        status: "retry",
+        rpcUrl,
+        error: `Solana RPC request failed: ${readErrorMessage(error)}`
+      };
+    }
+
+    if (!response.ok) {
+      return {
+        index,
+        status: "retry",
+        rpcUrl,
+        error: `Solana RPC returned HTTP ${response.status}`
+      };
+    }
+
+    try {
+      const body = await response.json();
+      const rpcError = readRpcError(body);
+      if (rpcError !== undefined) {
+        return {
+          index,
+          status: "retry",
+          rpcUrl,
+          error: `Solana RPC returned error: ${rpcError}`
+        };
+      }
+
+      return readPayoutSimulationTransactionResult(index, rpcUrl, body);
+    } catch (error) {
+      return {
+        index,
+        status: "retry",
+        rpcUrl,
+        error: `Solana RPC response was invalid: ${readErrorMessage(error)}`
+      };
+    }
+  }
+
+  private commitment(): SolanaRpcCommitment {
+    return this.options.commitment ?? "confirmed";
+  }
+
+  private fetch(): SolanaRpcFetch {
+    return this.options.fetch ?? fetch;
+  }
+
+  private replaceRecentBlockhash(): boolean {
+    return this.options.replaceRecentBlockhash ?? true;
+  }
+
+  private sigVerify(): boolean {
+    return this.options.sigVerify ?? false;
+  }
+
+  private rpcUrls(): string[] {
+    const urls = [
+      ...(this.options.rpcUrl === undefined ? [] : [this.options.rpcUrl]),
+      ...(this.options.rpcUrls ?? [])
+    ];
+    return Array.from(
+      new Set(urls.map((url) => url.trim()).filter((url) => url.length > 0))
+    );
+  }
 }
 
 export class SolanaRpcReceiptVerifier implements ReceiptChainVerifier {
@@ -590,6 +782,88 @@ function assertPositiveAtomicAmount(value: string, label: string): void {
   }
 }
 
+function readSerializedPayoutTransactions(
+  input: SimulateSolanaPayoutTransactionPlanInput
+): Map<number, string> {
+  const expectedIndexes = new Set(
+    input.plan.transactions.map((transaction) => transaction.index)
+  );
+  const serializedTransactions = new Map<number, string>();
+  for (const transaction of input.transactions) {
+    if (!expectedIndexes.has(transaction.index)) {
+      throw new Error(
+        `serialized transaction index ${transaction.index} is not in payout plan`
+      );
+    }
+    if (serializedTransactions.has(transaction.index)) {
+      throw new Error(
+        `duplicate serialized transaction for payout plan index ${transaction.index}`
+      );
+    }
+    serializedTransactions.set(
+      transaction.index,
+      assertBase64Transaction(
+        transaction.transactionBase64,
+        `serialized transaction ${transaction.index}`
+      )
+    );
+  }
+  if (serializedTransactions.size !== input.plan.transactions.length) {
+    throw new Error("serialized transactions must cover every planned transaction");
+  }
+  return serializedTransactions;
+}
+
+function assertBase64Transaction(value: string, label: string): string {
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value.length % 4 !== 0 ||
+    !/^[A-Za-z0-9+/]+={0,2}$/u.test(value)
+  ) {
+    throw new Error(`${label} must be a base64 serialized transaction`);
+  }
+  return value;
+}
+
+function readPayoutSimulationTransactionResult(
+  index: number,
+  rpcUrl: string,
+  body: unknown
+): SolanaPayoutSimulationTransactionResult {
+  const result = readRecord(readRecord(body).result);
+  const value = readRecord(result.value);
+  const err = value.err;
+  if (err === undefined) {
+    throw new Error("simulation.value.err is required");
+  }
+  const logs = readOptionalStringArray(value.logs, "simulation.value.logs");
+  const unitsConsumed = readOptionalInteger(
+    value.unitsConsumed,
+    "simulation.value.unitsConsumed"
+  );
+  return {
+    index,
+    status: err === null ? "succeeded" : "failed",
+    rpcUrl,
+    ...(err === null ? {} : { error: JSON.stringify(err) }),
+    ...(logs === undefined ? {} : { logs }),
+    ...(unitsConsumed === undefined ? {} : { unitsConsumed })
+  };
+}
+
+function summarizeSimulationStatus(
+  results: readonly SolanaPayoutSimulationTransactionResult[]
+): SolanaPayoutSimulationStatus {
+  if (results.some((result) => result.status === "failed")) {
+    return "failed";
+  }
+  if (results.some((result) => result.status === "retry")) {
+    return "retry";
+  }
+  return "succeeded";
+}
+
 function hasRequiredCommitment(
   status: SolanaSignatureStatus,
   required: SolanaRpcCommitment
@@ -877,6 +1151,16 @@ function readStringArray(value: unknown, label: string): string[] {
   return readArray(value, label).map((item) => readRequiredString(item, label));
 }
 
+function readOptionalStringArray(
+  value: unknown,
+  label: string
+): string[] | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  return readStringArray(value, label);
+}
+
 function readArray(value: unknown, label: string): unknown[] {
   if (!Array.isArray(value)) {
     throw new Error(`${label} must be an array`);
@@ -911,6 +1195,13 @@ function readInteger(value: unknown, label: string): number {
     throw new Error(`${label} must be an integer`);
   }
   return value as number;
+}
+
+function readOptionalInteger(value: unknown, label: string): number | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  return readInteger(value, label);
 }
 
 function readRequiredString(value: unknown, label: string): string {
