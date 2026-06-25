@@ -11,6 +11,7 @@ control_plane_image_digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 staging_environment: split402-staging
 funding_wallet: 8jYFQwU6P4L3uYJwqN4uJtVq4n5o7x8p9a1b2c3d4e5f
 network: solana:devnet
+network_policy_record: attached: network-policy-001.yaml
 smoke_check_output: attached: smoke-check-001.log
 rotation_drill_record: attached: rotation-drill-001.md
 incident_drill_record: attached: incident-drill-001.md

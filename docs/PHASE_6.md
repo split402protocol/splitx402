@@ -72,6 +72,8 @@ plus an unknown-outcome reconciliation queue and referrer payout views.
   incident-response evidence.
 - Added a payout signer staging smoke check for health, readiness, metrics, and
   secret-exposure validation.
+- Added a Kubernetes network policy starter that restricts payout signer ingress
+  to the control plane.
 - Added signed payout transaction records and PostgreSQL persistence for exact
   signed bytes, expected signature, sequence, attempt, blockhash metadata, and
   submitted state before broadcast.

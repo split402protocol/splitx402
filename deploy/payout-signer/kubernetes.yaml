@@ -102,3 +102,25 @@ spec:
     - name: http
       port: 4022
       targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: split402-payout-signer-private-ingress
+  labels:
+    app.kubernetes.io/name: split402-payout-signer
+    app.kubernetes.io/part-of: split402
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: split402-payout-signer
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: split402-control-plane
+      ports:
+        - protocol: TCP
+          port: 4022
