@@ -10,9 +10,11 @@ Status: started.
 
 Main branch currently contains the receipt-ingestion, merchant registry,
 wallet-auth, PostgreSQL receipt/merchant/auth persistence, and campaign
-draft/version/activation foundation. The route registry, durable campaign
-persistence, outbox stores, chain-verification workers, Solana verifier slices,
-and runtime factory are staged in the active implementation PR stack.
+draft/version/activation foundation. Wallet-auth refresh-token rotation, route
+draft/activation/suspension, durable campaign and route persistence, outbox
+stores, chain-verification workers, Solana verifier slices, runtime wiring, and a
+deployable chain-worker entrypoint are staged in the active implementation PR
+stack.
 
 ## What Changed
 
@@ -98,11 +100,12 @@ a zero-sum ledger transaction.
 
 ## Remaining Milestone 2 Work
 
-- Wallet-auth refresh token flow.
-- Merge the active PR stack for durable campaign persistence, routes, outbox
-  events, chain verification, Solana verification, and runtime wiring.
-- Payout-wallet rotation and route search history.
-- Webhook dispatch loop and deployable worker process entrypoints.
+- Merge the active PR stack for durable campaign persistence, routes, route
+  suspension, outbox events, chain verification, Solana verification, runtime
+  wiring, chain-worker entrypoint, and wallet-auth refresh tokens.
+- Route search API and immutable route/search history.
+- Payout-wallet rotation.
+- Webhook dispatch loop and webhook worker process entrypoint.
 - Immutable campaign and route history.
 
 ## Acceptance Checks
