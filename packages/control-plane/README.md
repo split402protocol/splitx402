@@ -55,9 +55,10 @@ stateDiagram-v2
 ```
 
 The current payout engine is still public-alpha infrastructure. It has the
-accounting and transaction boundaries needed to prevent duplicate allocation and
-duplicate ledger closure, while signer runtime wiring, payout webhooks, and
-unknown-outcome reconciliation remain active hardening work.
+accounting, transaction, and eventing boundaries needed to prevent duplicate
+allocation, duplicate lifecycle notifications, and duplicate ledger closure,
+while signer runtime wiring and unknown-outcome reconciliation remain active
+hardening work.
 
 ## API Surface
 
@@ -109,8 +110,8 @@ POST /v1/merchants/:merchantId/payout-batches
 - Solana RPC finality monitoring with retry and outcome-unknown classification;
 - payout batch and item status rollup from transaction finality;
 - idempotent payout-batch ledger closure for finalized payouts;
-- finalized-payout internal and webhook outbox events committed with payout
-  ledger closure.
+- payout submitted, confirmed, finalized, failed, and outcome-unknown internal
+  and webhook outbox events.
 
 ## Commands
 

@@ -35,7 +35,7 @@ flowchart LR
 | Demo path | Implemented for Solana Devnet paid-suite proof runs. |
 | Agent SDK | Implemented for offer inspection, claim creation, paid calls, and receipt verification. |
 | Merchant SDK | Implemented for campaign caching, service-key rotation helpers, payment identifiers, operation digests, and receipt outbox primitives. |
-| Control plane | Implemented foundation: receipt ingestion, merchant/campaign/route registries, wallet auth, PostgreSQL persistence, outbox workers, chain verification, and signed webhooks for accepted receipts and finalized payouts. |
+| Control plane | Implemented foundation: receipt ingestion, merchant/campaign/route registries, wallet auth, PostgreSQL persistence, outbox workers, chain verification, and signed webhooks for accepted receipts and payout lifecycle events. |
 | Payout engine | In progress: preview, allocation, Solana transfer planning, simulation, signer policy, signed-byte persistence, broadcast boundary, finality monitor, rollup, and ledger closure are present. |
 
 ## What Is Not Built Yet
@@ -43,9 +43,8 @@ flowchart LR
 - The original x402 payment is not atomically split onchain in the MVP.
 - `$SPLIT` route bonding is not in the critical path yet.
 - Mainnet production operation is not approved.
-- Phase 6 still needs signer runtime wiring, payout webhooks for non-finalized
-  outcomes, reconciliation for unknown outcomes, and referrer-facing payout
-  history.
+- Phase 6 still needs signer runtime wiring, reconciliation for unknown payout
+  outcomes, and referrer-facing payout history.
 
 ## Current Direction
 
