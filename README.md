@@ -170,7 +170,7 @@ mainnet payment flows exist yet.
 | Solana RPC signature-status verifier | Started |
 | Solana transaction transfer verifier | Started |
 | Live PostgreSQL migration/integration harness | Started |
-| Payout engine preview, eligible-accrual selector, and funding-wallet registry | Started |
+| Payout engine preview, funding-wallet registry, and batch allocation | Started |
 | `$SPLIT` bonding and atomic split settlement | Later research |
 
 The latest Devnet proof is recorded in
@@ -213,7 +213,7 @@ flowchart TB
 | `@split402/merchant-sdk` | Merchant-side cached campaign resolver, service-key rotation helpers, x402 payment-identifier helpers, operation digest helpers, durable receipt outbox, control-plane ingestion retry helpers, and compile-checked examples. |
 | `@split402/demo-merchant` | x402-protected merchant API for the Devnet demo. |
 | `@split402/demo-agent` | Runnable buyer/agent harness for setup, preflight, and paid-suite proof. |
-| `@split402/control-plane` | Receipt ingestion, merchant/key registry, merchant payout-wallet registry, accruals, ledger model, payout preview planning, and PostgreSQL adapters. |
+| `@split402/control-plane` | Receipt ingestion, merchant/key registry, merchant payout-wallet registry, accruals, ledger model, payout preview and batch allocation planning, and PostgreSQL adapters. |
 
 ## Control-Plane Process
 
@@ -253,8 +253,8 @@ stateDiagram-v2
   PendingChainVerification --> Available: settlement signature confirmed
   PendingChainVerification --> Held: policy or risk hold
   PendingChainVerification --> DeadLetter: repeated verifier failure
-  Available --> PayoutSelected: payout worker allocation
-  PayoutSelected --> Paid: payout finalized
+  Available --> Allocated: payout batch allocation
+  Allocated --> Paid: payout finalized
 ```
 
 The current control plane exposes:
@@ -284,6 +284,7 @@ GET  /v1/routes/search
 GET  /v1/routes/:routeId/versions
 GET  /v1/routes/:routeId
 POST /v1/merchants/:merchantId/payouts/preview
+POST /v1/merchants/:merchantId/payout-batches
 ```
 
 ## Persistence Layout
@@ -310,6 +311,9 @@ flowchart LR
   Accruals[("commission_accruals")]
   LedgerTx[("ledger_transactions")]
   LedgerEntries[("ledger_entries")]
+  PayoutBatches[("payout_batches")]
+  PayoutItems[("payout_items")]
+  PayoutAllocations[("payout_allocations")]
   Outbox[("outbox_events")]
 
   API --> Registry
@@ -332,6 +336,10 @@ flowchart LR
   Ingestion --> Accruals
   Ingestion --> LedgerTx
   LedgerTx --> LedgerEntries
+  Ingestion --> PayoutBatches
+  PayoutBatches --> PayoutItems
+  PayoutItems --> PayoutAllocations
+  PayoutAllocations --> Accruals
   Ingestion --> Outbox
 ```
 
@@ -365,10 +373,10 @@ transaction data to reject receipts whose token mint, payer authority, pay-to
 wallet or associated token account, or amount do not match the receipt. The first
 payout-engine slice can register merchant-controlled payout funding wallets,
 query eligible available accruals, group them by asset and destination wallet,
-apply recipient thresholds and limits, and report funding coverage or deficit
-through `POST /v1/merchants/:merchantId/payouts/preview`.
-Payout allocation persistence, transaction signing, broadcasting, and
-reconciliation are still remaining hardening steps.
+apply recipient thresholds and limits, report funding coverage or deficit through
+`POST /v1/merchants/:merchantId/payouts/preview`, and create planned payout
+batches that mark selected accruals `allocated` exactly once. Transaction
+signing, broadcasting, and reconciliation are still remaining hardening steps.
 
 ## MVP Rules
 

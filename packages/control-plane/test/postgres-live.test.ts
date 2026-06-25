@@ -134,7 +134,7 @@ describeLive("live PostgreSQL control-plane persistence", () => {
       publicKey: bundle.keys.merchantPublicKey,
       validFrom: "2026-06-24T00:00:00Z"
     });
-    await merchantRegistry.addPayoutWallet({
+    const merchantPayoutWallet = await merchantRegistry.addPayoutWallet({
       id: "mpw_ffffffffffffffffffffffffffffffff",
       merchantId: bundle.artifacts.receipt.merchantId,
       network: bundle.artifacts.receipt.network,
@@ -212,26 +212,6 @@ describeLive("live PostgreSQL control-plane persistence", () => {
     const deliveredOutboxEvent = await outboxStore.markDelivered({
       eventId: claimedOutboxEvent.id
     });
-    const counts = await readTableCounts(pool, [
-      "merchants",
-      "merchant_origins",
-      "merchant_keys",
-      "merchant_payout_wallets",
-      "campaigns",
-      "campaign_versions",
-      "campaign_operations",
-      "routes",
-      "route_versions",
-      "wallet_auth_challenges",
-      "wallet_auth_sessions",
-      "wallet_auth_refresh_tokens",
-      "payment_receipts",
-      "commission_accruals",
-      "ledger_transactions",
-      "ledger_entries",
-      "outbox_events"
-    ]);
-
     if (ingestion.status !== "created") {
       throw new Error(`expected created ingestion, got ${ingestion.status}`);
     }
@@ -247,12 +227,52 @@ describeLive("live PostgreSQL control-plane persistence", () => {
     expect(verifiedSnapshot?.receipt.verificationState).toBe("signature_verified");
     expect(verifiedSnapshot?.accrual?.status).toBe("available");
     expect(verifiedSnapshot?.accrual?.availableAt).toBe("2026-06-24T00:04:00Z");
+    if (verifiedSnapshot?.accrual === undefined) {
+      throw new Error("expected verified accrual");
+    }
+    const payoutBatch = await receiptStore.createPayoutBatch({
+      merchantId: bundle.artifacts.receipt.merchantId,
+      payoutWalletId: merchantPayoutWallet.id,
+      network: bundle.artifacts.receipt.network,
+      asset: bundle.artifacts.receipt.asset,
+      accruals: [verifiedSnapshot.accrual],
+      batchId: "pbt_ffffffffffffffffffffffffffffffff",
+      itemIdFactory: () => "pit_ffffffffffffffffffffffffffffffff",
+      now: "2026-06-24T00:05:00Z"
+    });
+    const loadedPayoutBatch = await receiptStore.getPayoutBatch(payoutBatch.id);
+    const counts = await readTableCounts(pool, [
+      "merchants",
+      "merchant_origins",
+      "merchant_keys",
+      "merchant_payout_wallets",
+      "payout_batches",
+      "payout_items",
+      "payout_allocations",
+      "campaigns",
+      "campaign_versions",
+      "campaign_operations",
+      "routes",
+      "route_versions",
+      "wallet_auth_challenges",
+      "wallet_auth_sessions",
+      "wallet_auth_refresh_tokens",
+      "payment_receipts",
+      "commission_accruals",
+      "ledger_transactions",
+      "ledger_entries",
+      "outbox_events"
+    ]);
     expect(deliveredOutboxEvent?.status).toBe("delivered");
+    expect(loadedPayoutBatch?.status).toBe("planned");
     expect(counts).toEqual({
       merchants: 1,
       merchant_origins: 1,
       merchant_keys: 1,
       merchant_payout_wallets: 1,
+      payout_batches: 1,
+      payout_items: 1,
+      payout_allocations: 1,
       campaigns: 1,
       campaign_versions: 1,
       campaign_operations: 1,

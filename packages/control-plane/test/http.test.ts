@@ -163,6 +163,97 @@ describe("control-plane HTTP API", () => {
     ]);
   });
 
+  it("creates a planned payout batch and marks selected accruals allocated", async () => {
+    const { app, store, receipt, merchantRegistry } = createTestApp({
+      withMerchantRegistry: true,
+      withPayouts: true
+    });
+    if (merchantRegistry === undefined) {
+      throw new Error("expected merchant registry");
+    }
+    await request(app)
+      .post("/v1/merchants")
+      .send({
+        id: receipt.merchantId,
+        slug: "batch-merchant",
+        displayName: "Batch Merchant",
+        ownerWallet: receipt.payerWallet,
+        status: "active"
+      })
+      .expect(201);
+    await request(app)
+      .post(`/v1/merchants/${receipt.merchantId}/payout-wallets`)
+      .send({
+        id: "mpw_ffffffffffffffffffffffffffffffff",
+        network: receipt.network,
+        wallet: receipt.payToWallet,
+        asset: receipt.asset,
+        signerReference: "kms:split402-devnet-payout"
+      })
+      .expect(201);
+    await request(app).post("/v1/receipts").send({ receipt }).expect(201);
+    const snapshot = store.getByReceiptId(receipt.receiptId);
+    if (snapshot?.accrual === undefined) {
+      throw new Error("expected receipt accrual");
+    }
+    store.save({
+      ...snapshot,
+      receipt: {
+        ...snapshot.receipt,
+        verificationState: "signature_verified"
+      },
+      accrual: {
+        ...snapshot.accrual,
+        status: "available",
+        availableAt: "2026-06-24T00:04:00.000Z"
+      }
+    });
+
+    const response = await request(app)
+      .post(`/v1/merchants/${receipt.merchantId}/payout-batches`)
+      .send({
+        payoutWalletId: "mpw_ffffffffffffffffffffffffffffffff",
+        now: "2026-06-24T00:05:00Z"
+      })
+      .expect(201);
+
+    expect(response.body.batch).toEqual(
+      expect.objectContaining({
+        merchantId: receipt.merchantId,
+        payoutWalletId: "mpw_ffffffffffffffffffffffffffffffff",
+        network: receipt.network,
+        asset: receipt.asset,
+        status: "planned",
+        totalAmountAtomic: "2000",
+        itemCount: 1,
+        accrualCount: 1
+      })
+    );
+    expect(response.body.batch.items).toEqual([
+      expect.objectContaining({
+        destinationWallet: receipt.payoutWallet,
+        amountAtomic: "2000",
+        status: "allocated",
+        allocations: [
+          expect.objectContaining({
+            accrualId: snapshot.accrual.id,
+            amountAtomic: "2000"
+          })
+        ]
+      })
+    ]);
+    expect(store.getByReceiptId(receipt.receiptId)?.accrual?.status).toBe(
+      "allocated"
+    );
+    expect(
+      store.listPayoutEligibleAccruals({
+        merchantId: receipt.merchantId,
+        asset: receipt.asset,
+        now: "2026-06-24T00:05:00Z"
+      })
+    ).toHaveLength(0);
+  });
+
   it("rejects malformed receipt submission envelopes", async () => {
     const { app } = createTestApp();
 
@@ -810,6 +901,12 @@ function createTestApp(
 ) {
   const bundle = createSampleProtocolArtifacts();
   const store = new InMemoryReceiptIngestionStore();
+  const merchantRegistry =
+    options.withMerchantRegistry === true
+      ? new InMemoryMerchantRegistry({
+          now: () => new Date("2026-06-24T00:02:00Z")
+        })
+      : undefined;
   const ingestor = new ReceiptIngestor(store, {
     resolveMerchantPublicKey: () => bundle.keys.merchantPublicKey,
     now: () => new Date("2026-06-24T00:02:00Z")
@@ -818,13 +915,7 @@ function createTestApp(
   return {
     app: createControlPlaneApp({
       ingestor,
-      ...(options.withMerchantRegistry === true
-        ? {
-            merchantRegistry: new InMemoryMerchantRegistry({
-              now: () => new Date("2026-06-24T00:02:00Z")
-            })
-          }
-        : {}),
+      ...(merchantRegistry === undefined ? {} : { merchantRegistry }),
       ...(options.withCampaignRegistry === true
         ? {
             campaignRegistry: new InMemoryCampaignRegistry({
@@ -841,11 +932,14 @@ function createTestApp(
             })
           }
         : {}),
-      ...(options.withPayouts === true ? { payoutAccrualStore: store } : {}),
+      ...(options.withPayouts === true
+        ? { payoutAccrualStore: store, payoutBatchStore: store }
+        : {}),
       ...(options.withAuth === true
         ? { auth: { authenticator: createAuthenticator() } }
         : {})
     }),
+    merchantRegistry,
     store,
     receipt: bundle.artifacts.receipt
   };

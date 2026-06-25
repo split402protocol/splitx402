@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  createPayoutBatchPlan,
   createPayoutPreview,
   filterPayoutEligibleAccruals,
   type CommissionAccrual
@@ -133,6 +134,57 @@ describe("payout preview planner", () => {
     );
 
     expect(eligible.map((item) => item.id)).toEqual(["acr_1"]);
+  });
+
+  it("creates a planned payout batch from selected preview items", () => {
+    const batch = createPayoutBatchPlan({
+      merchantId: "mrc_1",
+      payoutWalletId: "mpw_ffffffffffffffffffffffffffffffff",
+      network: "solana:devnet",
+      asset: "usdc_mint",
+      batchId: "pbt_ffffffffffffffffffffffffffffffff",
+      itemIdFactory: () => "pit_ffffffffffffffffffffffffffffffff",
+      now: NOW,
+      accruals: [
+        accrual({ id: "acr_1", payoutWallet: "payout_a", amountAtomic: "70" }),
+        accrual({ id: "acr_2", payoutWallet: "payout_a", amountAtomic: "30" }),
+        accrual({ id: "acr_3", payoutWallet: "payout_b", amountAtomic: "90" })
+      ],
+      maxRecipients: 1
+    });
+
+    expect(batch).toEqual(
+      expect.objectContaining({
+        id: "pbt_ffffffffffffffffffffffffffffffff",
+        merchantId: "mrc_1",
+        payoutWalletId: "mpw_ffffffffffffffffffffffffffffffff",
+        network: "solana:devnet",
+        asset: "usdc_mint",
+        status: "planned",
+        totalAmountAtomic: "100",
+        itemCount: 1,
+        accrualCount: 2
+      })
+    );
+    expect(batch.items).toEqual([
+      expect.objectContaining({
+        destinationWallet: "payout_a",
+        amountAtomic: "100",
+        status: "allocated",
+        allocations: [
+          {
+            payoutItemId: "pit_ffffffffffffffffffffffffffffffff",
+            accrualId: "acr_1",
+            amountAtomic: "70"
+          },
+          {
+            payoutItemId: "pit_ffffffffffffffffffffffffffffffff",
+            accrualId: "acr_2",
+            amountAtomic: "30"
+          }
+        ]
+      })
+    ]);
   });
 });
 

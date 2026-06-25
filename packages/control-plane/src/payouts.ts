@@ -1,8 +1,26 @@
 import { parseAtomicAmount, serializeAtomicAmount } from "@split402/protocol";
+import { randomBytes } from "node:crypto";
 
 import type { CommissionAccrual } from "./index.js";
 
 export type PayoutFundingStatus = "unknown" | "covered" | "deficit";
+export type PayoutBatchStatus =
+  | "draft"
+  | "planned"
+  | "signing"
+  | "submitted"
+  | "confirmed"
+  | "finalized"
+  | "failed"
+  | "cancelled"
+  | "outcome_unknown";
+export type PayoutItemStatus =
+  | "allocated"
+  | "submitted"
+  | "confirmed"
+  | "finalized"
+  | "failed"
+  | "released";
 export type PayoutSkippedAccrualReason =
   | "merchant_mismatch"
   | "not_available"
@@ -24,6 +42,26 @@ export interface PayoutAccrualStore {
   listPayoutEligibleAccruals(
     input: ListPayoutEligibleAccrualsInput
   ): Promise<CommissionAccrual[]> | CommissionAccrual[];
+}
+
+export interface CreatePayoutBatchInput {
+  merchantId: string;
+  payoutWalletId: string;
+  network: string;
+  asset: string;
+  accruals: readonly CommissionAccrual[];
+  now?: string;
+  batchId?: string;
+  itemIdFactory?: () => string;
+  minimumPayoutAmountAtomic?: string;
+  maxRecipients?: number;
+}
+
+export interface PayoutBatchStore {
+  createPayoutBatch(input: CreatePayoutBatchInput): Promise<PayoutBatchRecord> | PayoutBatchRecord;
+  getPayoutBatch(
+    batchId: string
+  ): Promise<PayoutBatchRecord | undefined> | PayoutBatchRecord | undefined;
 }
 
 export interface PayoutFundingBalance {
@@ -77,6 +115,40 @@ export interface PayoutPreviewSkippedAccrual {
   reason: PayoutSkippedAccrualReason;
 }
 
+export interface PayoutBatchRecord {
+  id: string;
+  merchantId: string;
+  payoutWalletId: string;
+  network: string;
+  asset: string;
+  status: PayoutBatchStatus;
+  totalAmountAtomic: string;
+  itemCount: number;
+  accrualCount: number;
+  failureCode?: string;
+  failureMessage?: string;
+  createdAt: string;
+  updatedAt: string;
+  items: PayoutItemRecord[];
+}
+
+export interface PayoutItemRecord {
+  id: string;
+  payoutBatchId: string;
+  destinationWallet: string;
+  destinationTokenAccount?: string;
+  amountAtomic: string;
+  status: PayoutItemStatus;
+  createdAt: string;
+  allocations: PayoutAllocationRecord[];
+}
+
+export interface PayoutAllocationRecord {
+  payoutItemId: string;
+  accrualId: string;
+  amountAtomic: string;
+}
+
 interface MutablePayoutItem {
   destinationWallet: string;
   referrerWallets: Set<string>;
@@ -91,6 +163,24 @@ export class PayoutPreviewValidationError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "PayoutPreviewValidationError";
+  }
+}
+
+export class PayoutBatchValidationError extends Error {
+  readonly code = "payout_batch_validation_error";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "PayoutBatchValidationError";
+  }
+}
+
+export class PayoutBatchConflictError extends Error {
+  readonly code = "payout_batch_conflict";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "PayoutBatchConflictError";
   }
 }
 
@@ -243,6 +333,92 @@ export function isPayoutPreviewValidationError(
   error: unknown
 ): error is PayoutPreviewValidationError {
   return error instanceof PayoutPreviewValidationError;
+}
+
+export function createPayoutBatchPlan(
+  input: CreatePayoutBatchInput
+): PayoutBatchRecord {
+  const merchantId = assertNonEmptyString(input.merchantId, "merchantId");
+  const payoutWalletId = assertSplit402Id(input.payoutWalletId, "payoutWalletId");
+  const network = assertNonEmptyString(input.network, "network");
+  const asset = assertNonEmptyString(input.asset, "asset");
+  const createdAt = normalizeTimestamp(input.now ?? new Date().toISOString(), "now");
+  const batchId = assertSplit402Id(
+    input.batchId ?? createPayoutBatchId(),
+    "batchId"
+  );
+  const itemIdFactory = input.itemIdFactory ?? createPayoutItemId;
+  const accruals = input.accruals.filter((accrual) => accrual.asset === asset);
+  const preview = createPayoutPreview({
+    merchantId,
+    accruals,
+    now: createdAt,
+    ...(input.minimumPayoutAmountAtomic === undefined
+      ? {}
+      : { minimumPayoutAmountAtomic: input.minimumPayoutAmountAtomic }),
+    ...(input.maxRecipients === undefined ? {} : { maxRecipients: input.maxRecipients })
+  });
+  const previewBatch = preview.batches.find((batch) => batch.asset === asset);
+  if (previewBatch === undefined || previewBatch.items.length === 0) {
+    throw new PayoutBatchValidationError("no payout items selected");
+  }
+
+  const accrualById = new Map(accruals.map((accrual) => [accrual.id, accrual]));
+  const items = previewBatch.items.map((previewItem) => {
+    const itemId = assertSplit402Id(itemIdFactory(), "payoutItemId");
+    const allocations = previewItem.accrualIds.map((accrualId) => {
+      const accrual = accrualById.get(accrualId);
+      if (accrual === undefined) {
+        throw new PayoutBatchValidationError(
+          `missing selected accrual: ${accrualId}`
+        );
+      }
+      return {
+        payoutItemId: itemId,
+        accrualId,
+        amountAtomic: accrual.amountAtomic
+      };
+    });
+    return {
+      id: itemId,
+      payoutBatchId: batchId,
+      destinationWallet: previewItem.destinationWallet,
+      amountAtomic: previewItem.amountAtomic,
+      status: "allocated" as const,
+      createdAt,
+      allocations
+    };
+  });
+
+  return {
+    id: batchId,
+    merchantId,
+    payoutWalletId,
+    network,
+    asset,
+    status: "planned",
+    totalAmountAtomic: previewBatch.totalAmountAtomic,
+    itemCount: items.length,
+    accrualCount: items.reduce(
+      (total, item) => total + item.allocations.length,
+      0
+    ),
+    createdAt,
+    updatedAt: createdAt,
+    items
+  };
+}
+
+export function isPayoutBatchValidationError(
+  error: unknown
+): error is PayoutBatchValidationError {
+  return error instanceof PayoutBatchValidationError;
+}
+
+export function isPayoutBatchConflictError(
+  error: unknown
+): error is PayoutBatchConflictError {
+  return error instanceof PayoutBatchConflictError;
 }
 
 function createPreviewBatch(input: {
@@ -446,6 +622,21 @@ function assertNonEmptyString(value: string, label: string): string {
     throw new PayoutPreviewValidationError(`${label} must be a non-empty string`);
   }
   return value;
+}
+
+function assertSplit402Id(value: string, label: string): string {
+  if (!/^[a-z]{3}_[0-9a-f]{32,}$/u.test(value)) {
+    throw new PayoutBatchValidationError(`${label} must be a Split402 id`);
+  }
+  return value;
+}
+
+function createPayoutBatchId(): string {
+  return `pbt_${randomBytes(16).toString("hex")}`;
+}
+
+function createPayoutItemId(): string {
+  return `pit_${randomBytes(16).toString("hex")}`;
 }
 
 function maxBigInt(left: bigint, right: bigint): bigint {

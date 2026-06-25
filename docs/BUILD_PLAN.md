@@ -307,8 +307,12 @@ Current slice:
 - apply recipient thresholds and max-recipient limits without mutating accrual
   state;
 - report merchant funding coverage or deficit by asset;
+- add durable payout batch, item, and allocation rows;
+- mark selected accruals `allocated` with compare-and-set updates before
+  inserting payout allocations;
 - expose `POST /v1/merchants/:merchantId/payout-wallets`;
 - expose `POST /v1/merchants/:merchantId/payouts/preview`.
+- expose `POST /v1/merchants/:merchantId/payout-batches`.
 
 Exit criteria:
 
