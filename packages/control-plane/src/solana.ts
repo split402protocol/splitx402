@@ -6,7 +6,11 @@ import type {
   ReceiptChainVerificationResult,
   ReceiptChainVerifier
 } from "./workers.js";
-import type { PayoutBatchRecord, PayoutItemRecord } from "./payouts.js";
+import type {
+  PayoutBatchRecord,
+  PayoutItemRecord,
+  PayoutTransactionRecord
+} from "./payouts.js";
 
 export type SolanaRpcCommitment = "confirmed" | "finalized";
 export const SOLANA_TOKEN_PROGRAM_ID =
@@ -201,6 +205,30 @@ export interface SolanaPayoutTransactionSigningDelegateResult {
 export interface SolanaPolicyEnforcedPayoutSignerOptions {
   policy: SolanaPayoutSignerPolicy;
   signTransaction: SolanaPayoutTransactionSigningDelegate;
+}
+
+export interface SolanaRpcPayoutTransactionBroadcasterOptions {
+  rpcUrl?: string;
+  rpcUrls?: string[];
+  network: string;
+  commitment?: SolanaRpcCommitment;
+  fetch?: SolanaRpcFetch;
+  skipPreflight?: boolean;
+  maxRetries?: number;
+}
+
+export interface BroadcastSolanaPayoutTransactionInput {
+  transaction: PayoutTransactionRecord;
+}
+
+export type SolanaPayoutBroadcastStatus = "submitted" | "retry";
+
+export interface SolanaPayoutBroadcastResult {
+  transactionId: string;
+  status: SolanaPayoutBroadcastStatus;
+  rpcUrl?: string;
+  signature?: string;
+  error?: string;
 }
 
 type SolanaSignatureConfirmationStatus =
@@ -537,6 +565,154 @@ export class SolanaPolicyEnforcedPayoutSigner
       destinationAmountListHash,
       signedTransactions
     };
+  }
+}
+
+export class SolanaRpcPayoutTransactionBroadcaster {
+  constructor(
+    private readonly options: SolanaRpcPayoutTransactionBroadcasterOptions
+  ) {}
+
+  async broadcast(
+    input: BroadcastSolanaPayoutTransactionInput
+  ): Promise<SolanaPayoutBroadcastResult> {
+    const transaction = input.transaction;
+    if (!canBroadcastPayoutTransaction(transaction)) {
+      throw new Error(
+        `payout transaction ${transaction.id} must be signed before broadcast`
+      );
+    }
+    const signedTransactionBase64 = assertBase64Transaction(
+      transaction.signedTransactionBase64 ?? "",
+      `payout transaction ${transaction.id} signedTransactionBase64`
+    );
+
+    let lastRetry: SolanaPayoutBroadcastResult | undefined;
+    for (const rpcUrl of this.rpcUrls()) {
+      const result = await this.broadcastWithRpcUrl(
+        rpcUrl,
+        transaction,
+        signedTransactionBase64
+      );
+      if (result.status === "submitted") {
+        return result;
+      }
+      lastRetry = result;
+    }
+    return (
+      lastRetry ?? {
+        transactionId: transaction.id,
+        status: "retry",
+        error: "no Solana RPC URLs configured"
+      }
+    );
+  }
+
+  private async broadcastWithRpcUrl(
+    rpcUrl: string,
+    transaction: PayoutTransactionRecord,
+    signedTransactionBase64: string
+  ): Promise<SolanaPayoutBroadcastResult> {
+    let response: SolanaRpcHttpResponse;
+    try {
+      response = await this.fetch()(rpcUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: `split402-payout-broadcast-${transaction.id}`,
+          method: "sendTransaction",
+          params: [
+            signedTransactionBase64,
+            {
+              encoding: "base64",
+              skipPreflight: this.skipPreflight(),
+              preflightCommitment: this.commitment(),
+              ...(this.options.maxRetries === undefined
+                ? {}
+                : { maxRetries: this.options.maxRetries })
+            }
+          ]
+        })
+      });
+    } catch (error) {
+      return {
+        transactionId: transaction.id,
+        status: "retry",
+        rpcUrl,
+        error: `Solana RPC request failed: ${readErrorMessage(error)}`
+      };
+    }
+
+    if (!response.ok) {
+      return {
+        transactionId: transaction.id,
+        status: "retry",
+        rpcUrl,
+        error: `Solana RPC returned HTTP ${response.status}`
+      };
+    }
+
+    try {
+      const body = await response.json();
+      const rpcError = readRpcError(body);
+      if (rpcError !== undefined) {
+        return {
+          transactionId: transaction.id,
+          status: "retry",
+          rpcUrl,
+          error: `Solana RPC returned error: ${rpcError}`
+        };
+      }
+
+      const signature = readSendTransactionSignature(body);
+      if (
+        transaction.expectedSignature !== undefined &&
+        transaction.expectedSignature !== signature
+      ) {
+        return {
+          transactionId: transaction.id,
+          status: "retry",
+          rpcUrl,
+          error: "Solana RPC returned a signature that does not match expectedSignature"
+        };
+      }
+      return {
+        transactionId: transaction.id,
+        status: "submitted",
+        rpcUrl,
+        signature
+      };
+    } catch (error) {
+      return {
+        transactionId: transaction.id,
+        status: "retry",
+        rpcUrl,
+        error: `Solana RPC response was invalid: ${readErrorMessage(error)}`
+      };
+    }
+  }
+
+  private commitment(): SolanaRpcCommitment {
+    return this.options.commitment ?? "confirmed";
+  }
+
+  private fetch(): SolanaRpcFetch {
+    return this.options.fetch ?? fetch;
+  }
+
+  private skipPreflight(): boolean {
+    return this.options.skipPreflight ?? false;
+  }
+
+  private rpcUrls(): string[] {
+    const urls = [
+      ...(this.options.rpcUrl === undefined ? [] : [this.options.rpcUrl]),
+      ...(this.options.rpcUrls ?? [])
+    ];
+    return Array.from(
+      new Set(urls.map((url) => url.trim()).filter((url) => url.length > 0))
+    );
   }
 }
 
@@ -1483,6 +1659,20 @@ function readRpcError(body: unknown): string | undefined {
     return undefined;
   }
   return JSON.stringify(record.error);
+}
+
+function readSendTransactionSignature(body: unknown): string {
+  return readRequiredString(readRecord(body).result, "sendTransaction result");
+}
+
+function canBroadcastPayoutTransaction(
+  transaction: PayoutTransactionRecord
+): boolean {
+  return (
+    transaction.status === "signed" ||
+    transaction.status === "submitted" ||
+    transaction.status === "outcome_unknown"
+  );
 }
 
 function readAccountKeys(value: unknown): string[] {

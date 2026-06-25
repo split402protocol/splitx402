@@ -21,7 +21,8 @@ describe("control-plane migrations", () => {
       "0007_wallet_auth_refresh_tokens.sql",
       "0008_route_versions.sql",
       "0009_merchant_payout_wallets.sql",
-      "0010_payout_batches.sql"
+      "0010_payout_batches.sql",
+      "0011_payout_transactions.sql"
     ]);
     expect(
       migrations.every((migration) =>

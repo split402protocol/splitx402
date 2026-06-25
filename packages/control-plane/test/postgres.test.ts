@@ -430,6 +430,76 @@ describe("PostgresReceiptIngestionStore", () => {
       expect.stringContaining("limit $4 for update skip locked")
     );
   });
+
+  it("persists signed payout transactions before submission", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const fakePool = new FakePostgresPool();
+    const store = new PostgresReceiptIngestionStore(fakePool);
+    const ingestor = new ReceiptIngestor(store, {
+      resolveMerchantPublicKey: () => bundle.keys.merchantPublicKey,
+      now: () => new Date("2026-06-24T00:02:00Z")
+    });
+    await ingestor.ingest({ receipt: bundle.artifacts.receipt, source: "merchant" });
+    const verified = await store.markReceiptChainVerified({
+      receiptId: bundle.artifacts.receipt.receiptId,
+      verifiedAt: "2026-06-24T00:04:00Z"
+    });
+    if (verified?.accrual === undefined) {
+      throw new Error("expected verified accrual");
+    }
+    const batch = await store.createPayoutBatch({
+      merchantId: bundle.artifacts.receipt.merchantId,
+      payoutWalletId: "mpw_ffffffffffffffffffffffffffffffff",
+      network: bundle.artifacts.receipt.network,
+      asset: bundle.artifacts.receipt.asset,
+      accruals: [verified.accrual],
+      batchId: "pbt_ffffffffffffffffffffffffffffffff",
+      itemIdFactory: () => "pit_ffffffffffffffffffffffffffffffff",
+      now: "2026-06-24T00:05:00Z"
+    });
+
+    const saved = await store.saveSignedPayoutTransactions({
+      payoutBatchId: batch.id,
+      now: "2026-06-24T00:06:00Z",
+      idFactory: () => "ptx_ffffffffffffffffffffffffffffffff",
+      transactions: [
+        {
+          sequence: 0,
+          recentBlockhash: "blockhash_0",
+          lastValidBlockHeight: 123,
+          signedTransactionBase64: "AQID",
+          expectedSignature: "expected_sig_0"
+        }
+      ]
+    });
+    const listed = await store.listPayoutTransactions(batch.id);
+    const submitted = await store.markPayoutTransactionSubmitted({
+      id: saved[0]?.id ?? "",
+      submittedAt: "2026-06-24T00:07:00Z",
+      expectedSignature: "expected_sig_0"
+    });
+
+    expect(saved).toHaveLength(1);
+    expect(listed).toEqual(saved);
+    expect(submitted).toEqual(
+      expect.objectContaining({
+        id: "ptx_ffffffffffffffffffffffffffffffff",
+        status: "submitted",
+        submittedAt: "2026-06-24T00:07:00.000Z",
+        signedTransactionBase64: "AQID",
+        expectedSignature: "expected_sig_0"
+      })
+    );
+    expect(fakePool.database.payoutTransactions).toHaveLength(1);
+    await expect(
+      store.saveSignedPayoutTransactions({
+        payoutBatchId: batch.id,
+        now: "2026-06-24T00:08:00Z",
+        idFactory: () => "ptx_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        transactions: [{ sequence: 0, signedTransactionBase64: "BAUG" }]
+      })
+    ).rejects.toBeInstanceOf(PayoutBatchConflictError);
+  });
 });
 
 describe("PostgresMerchantRegistry", () => {
@@ -1114,6 +1184,10 @@ class FakePostgresClient implements PostgresTransactionClient {
       this.database.insertPayoutAllocation(values);
       return result([]);
     }
+    if (normalized.startsWith("insert into payout_transactions")) {
+      this.database.insertPayoutTransaction(values);
+      return result([]);
+    }
     if (normalized.startsWith("insert into campaigns")) {
       this.database.insertCampaign(values);
       return result([]);
@@ -1187,6 +1261,11 @@ class FakePostgresClient implements PostgresTransactionClient {
     ) {
       return result(this.database.allocateAccrual(values) as unknown as Row[]);
     }
+    if (normalized.startsWith("update payout_transactions")) {
+      return result(
+        this.database.markPayoutTransactionSubmitted(values) as unknown as Row[]
+      );
+    }
     if (normalized.startsWith("update commission_accruals")) {
       this.database.markAccrualChainVerified(values);
       return result([]);
@@ -1258,6 +1337,11 @@ class FakePostgresClient implements PostgresTransactionClient {
         this.database.selectPayoutAllocations(values[0]) as unknown as Row[]
       );
     }
+    if (normalized.includes("from payout_transactions")) {
+      return result(
+        this.database.selectPayoutTransactions(normalized, values) as unknown as Row[]
+      );
+    }
     if (normalized.includes("from campaigns")) {
       return result(this.database.selectCampaign(values[0]) as unknown as Row[]);
     }
@@ -1312,6 +1396,7 @@ class FakePostgresDatabase {
   payoutBatches: StoredPayoutBatchRow[] = [];
   payoutItems: StoredPayoutItemRow[] = [];
   payoutAllocations: StoredPayoutAllocationRow[] = [];
+  payoutTransactions: StoredPayoutTransactionRow[] = [];
   campaigns: StoredCampaignRow[] = [];
   campaignVersions: StoredCampaignVersionRow[] = [];
   campaignOperations: StoredCampaignOperationRow[] = [];
@@ -1726,6 +1811,55 @@ class FakePostgresDatabase {
     this.payoutAllocations.push(row);
   }
 
+  insertPayoutTransaction(values: readonly unknown[]): void {
+    const row: StoredPayoutTransactionRow = {
+      id: readString(values[0]),
+      payout_batch_id: readString(values[1]),
+      sequence: readNumber(values[2]),
+      attempt: readNumber(values[3]),
+      recent_blockhash: readNullableString(values[4]),
+      last_valid_block_height: readNullableNumber(values[5]),
+      signed_transaction_base64: readNullableString(values[6]),
+      expected_signature: readNullableString(values[7]),
+      status: readString(values[8]),
+      submitted_at: readNullableString(values[9]),
+      confirmed_at: readNullableString(values[10]),
+      finalized_at: readNullableString(values[11]),
+      error_json: values[12] === null ? null : readString(values[12]),
+      created_at: readString(values[13])
+    };
+    if (
+      this.payoutTransactions.some(
+        (transaction) =>
+          transaction.id === row.id ||
+          (transaction.payout_batch_id === row.payout_batch_id &&
+            transaction.sequence === row.sequence &&
+            transaction.attempt === row.attempt) ||
+          (row.expected_signature !== null &&
+            transaction.expected_signature === row.expected_signature)
+      )
+    ) {
+      throw Object.assign(new Error("duplicate key"), { code: "23505" });
+    }
+    this.payoutTransactions.push(row);
+  }
+
+  markPayoutTransactionSubmitted(
+    values: readonly unknown[]
+  ): StoredPayoutTransactionRow[] {
+    const id = readString(values[0]);
+    const submittedAt = readString(values[1]);
+    const expectedSignature = readNullableString(values[2]);
+    const transaction = this.payoutTransactions.find((row) => row.id === id);
+    if (transaction === undefined) {
+      return [];
+    }
+    transaction.status = "submitted";
+    transaction.submitted_at = submittedAt;
+    transaction.expected_signature = expectedSignature;
+    return [transaction];
+  }
+
   revokeMerchantKey(values: readonly unknown[]): StoredMerchantKeyRow[] {
     const merchantId = readString(values[0]);
     const kid = readString(values[1]);
@@ -1815,6 +1949,26 @@ class FakePostgresDatabase {
     return this.payoutAllocations.filter((row) =>
       ids.includes(row.payout_item_id)
     );
+  }
+
+  selectPayoutTransactions(
+    normalizedSql: string,
+    values: readonly unknown[]
+  ): StoredPayoutTransactionRow[] {
+    if (normalizedSql.includes("where id = $1")) {
+      const id = readString(values[0]);
+      return this.payoutTransactions.filter((row) => row.id === id);
+    }
+    const batchId = readString(values[0]);
+    return this.payoutTransactions
+      .filter((row) => row.payout_batch_id === batchId)
+      .sort(
+        (left, right) =>
+          left.sequence - right.sequence ||
+          left.attempt - right.attempt ||
+          left.created_at.localeCompare(right.created_at) ||
+          left.id.localeCompare(right.id)
+      );
   }
 
   insertCampaign(values: readonly unknown[]): void {
@@ -2337,6 +2491,23 @@ type StoredPayoutAllocationRow = QueryResultRow & {
   amount_atomic: string;
 };
 
+type StoredPayoutTransactionRow = QueryResultRow & {
+  id: string;
+  payout_batch_id: string;
+  sequence: number;
+  attempt: number;
+  recent_blockhash: string | null;
+  last_valid_block_height: number | null;
+  signed_transaction_base64: string | null;
+  expected_signature: string | null;
+  status: string;
+  submitted_at: string | null;
+  confirmed_at: string | null;
+  finalized_at: string | null;
+  error_json: string | null;
+  created_at: string;
+};
+
 type StoredCampaignRow = QueryResultRow & {
   id: string;
   merchant_id: string;
@@ -2524,6 +2695,13 @@ function readNumber(value: unknown): number {
     throw new Error("expected number query value");
   }
   return value;
+}
+
+function readNullableNumber(value: unknown): number | null {
+  if (value === null) {
+    return null;
+  }
+  return readNumber(value);
 }
 
 function readNullableString(value: unknown): string | null {

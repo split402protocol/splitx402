@@ -21,6 +21,15 @@ export type PayoutItemStatus =
   | "finalized"
   | "failed"
   | "released";
+export type PayoutTransactionStatus =
+  | "planned"
+  | "signed"
+  | "submitted"
+  | "confirmed"
+  | "finalized"
+  | "expired"
+  | "failed"
+  | "outcome_unknown";
 export type PayoutSkippedAccrualReason =
   | "merchant_mismatch"
   | "not_available"
@@ -80,6 +89,41 @@ export interface PayoutBatchStore {
   getPayoutBatch(
     batchId: string
   ): Promise<PayoutBatchRecord | undefined> | PayoutBatchRecord | undefined;
+}
+
+export interface SaveSignedPayoutTransactionsInput {
+  payoutBatchId: string;
+  transactions: readonly SaveSignedPayoutTransactionInput[];
+  now?: string;
+  idFactory?: () => string;
+}
+
+export interface SaveSignedPayoutTransactionInput {
+  id?: string;
+  sequence: number;
+  attempt?: number;
+  recentBlockhash?: string;
+  lastValidBlockHeight?: number;
+  signedTransactionBase64: string;
+  expectedSignature?: string;
+}
+
+export interface MarkPayoutTransactionSubmittedInput {
+  id: string;
+  submittedAt?: string;
+  expectedSignature?: string;
+}
+
+export interface PayoutTransactionStore {
+  saveSignedPayoutTransactions(
+    input: SaveSignedPayoutTransactionsInput
+  ): Promise<PayoutTransactionRecord[]> | PayoutTransactionRecord[];
+  listPayoutTransactions(
+    payoutBatchId: string
+  ): Promise<PayoutTransactionRecord[]> | PayoutTransactionRecord[];
+  markPayoutTransactionSubmitted(
+    input: MarkPayoutTransactionSubmittedInput
+  ): Promise<PayoutTransactionRecord | undefined> | PayoutTransactionRecord | undefined;
 }
 
 export interface PayoutFundingBalance {
@@ -165,6 +209,23 @@ export interface PayoutAllocationRecord {
   payoutItemId: string;
   accrualId: string;
   amountAtomic: string;
+}
+
+export interface PayoutTransactionRecord {
+  id: string;
+  payoutBatchId: string;
+  sequence: number;
+  attempt: number;
+  recentBlockhash?: string;
+  lastValidBlockHeight?: number;
+  signedTransactionBase64?: string;
+  expectedSignature?: string;
+  status: PayoutTransactionStatus;
+  submittedAt?: string;
+  confirmedAt?: string;
+  finalizedAt?: string;
+  error?: Record<string, unknown>;
+  createdAt: string;
 }
 
 interface MutablePayoutItem {
@@ -439,6 +500,85 @@ export function isPayoutBatchConflictError(
   return error instanceof PayoutBatchConflictError;
 }
 
+export function createSignedPayoutTransactionRecords(
+  input: SaveSignedPayoutTransactionsInput
+): PayoutTransactionRecord[] {
+  const payoutBatchId = assertSplit402Id(input.payoutBatchId, "payoutBatchId");
+  const createdAt = normalizeTimestamp(input.now ?? new Date().toISOString(), "now");
+  const idFactory = input.idFactory ?? createPayoutTransactionId;
+  if (input.transactions.length === 0) {
+    throw new PayoutBatchValidationError("signed payout transactions are required");
+  }
+
+  const sequenceAttempts = new Set<string>();
+  const expectedSignatures = new Set<string>();
+  return [...input.transactions]
+    .sort((left, right) => left.sequence - right.sequence || readAttempt(left) - readAttempt(right))
+    .map((transaction) => {
+      const sequence = assertNonNegativeInteger(
+        transaction.sequence,
+        "payout transaction sequence"
+      );
+      const attempt = assertPositiveInteger(readAttempt(transaction), "payout transaction attempt");
+      const sequenceAttempt = `${sequence}:${attempt}`;
+      if (sequenceAttempts.has(sequenceAttempt)) {
+        throw new PayoutBatchValidationError(
+          `duplicate payout transaction sequence and attempt: ${sequenceAttempt}`
+        );
+      }
+      sequenceAttempts.add(sequenceAttempt);
+
+      const expectedSignature =
+        transaction.expectedSignature === undefined
+          ? undefined
+          : assertNonEmptyString(
+              transaction.expectedSignature,
+              "payout transaction expectedSignature"
+            );
+      if (expectedSignature !== undefined) {
+        if (expectedSignatures.has(expectedSignature)) {
+          throw new PayoutBatchValidationError(
+            "duplicate payout transaction expectedSignature"
+          );
+        }
+        expectedSignatures.add(expectedSignature);
+      }
+
+      return {
+        id: assertSplit402Id(
+          transaction.id ?? idFactory(),
+          "payout transaction id"
+        ),
+        payoutBatchId,
+        sequence,
+        attempt,
+        ...(transaction.recentBlockhash === undefined
+          ? {}
+          : {
+              recentBlockhash: assertNonEmptyString(
+                transaction.recentBlockhash,
+                "payout transaction recentBlockhash"
+              )
+            }),
+        ...(transaction.lastValidBlockHeight === undefined
+          ? {}
+          : {
+              lastValidBlockHeight: assertNonNegativeInteger(
+                transaction.lastValidBlockHeight,
+                "payout transaction lastValidBlockHeight"
+              )
+            }),
+        signedTransactionBase64: assertBase64String(
+          transaction.signedTransactionBase64,
+          "payout transaction signedTransactionBase64"
+        ),
+        ...(expectedSignature === undefined ? {} : { expectedSignature }),
+        status: "signed" as const,
+        createdAt
+      };
+    });
+}
+
 function createPreviewBatch(input: {
   merchantId: string;
   asset: string;
@@ -624,6 +764,20 @@ function readOptionalPositiveInteger(
   return value;
 }
 
+function assertNonNegativeInteger(value: number, label: string): number {
+  if (!Number.isInteger(value) || value < 0) {
+    throw new PayoutBatchValidationError(`${label} must be a non-negative integer`);
+  }
+  return value;
+}
+
+function assertPositiveInteger(value: number, label: string): number {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new PayoutBatchValidationError(`${label} must be a positive integer`);
+  }
+  return value;
+}
+
 function normalizeTimestamp(value: string, label: string): string {
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new PayoutPreviewValidationError(`${label} must be an ISO timestamp`);
@@ -642,6 +796,18 @@ function assertNonEmptyString(value: string, label: string): string {
   return value;
 }
 
+function assertBase64String(value: string, label: string): string {
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value.length % 4 !== 0 ||
+    !/^[A-Za-z0-9+/]+={0,2}$/u.test(value)
+  ) {
+    throw new PayoutBatchValidationError(`${label} must be base64`);
+  }
+  return value;
+}
+
 function assertSplit402Id(value: string, label: string): string {
   if (!/^[a-z]{3}_[0-9a-f]{32,}$/u.test(value)) {
     throw new PayoutBatchValidationError(`${label} must be a Split402 id`);
@@ -655,6 +821,14 @@ function createPayoutBatchId(): string {
 
 function createPayoutItemId(): string {
   return `pit_${randomBytes(16).toString("hex")}`;
+}
+
+function createPayoutTransactionId(): string {
+  return `ptx_${randomBytes(16).toString("hex")}`;
+}
+
+function readAttempt(transaction: SaveSignedPayoutTransactionInput): number {
+  return transaction.attempt ?? 1;
 }
 
 function maxBigInt(left: bigint, right: bigint): bigint {
