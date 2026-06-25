@@ -12,9 +12,9 @@ the first Phase 6 payout-engine boundaries. The protocol core, test vectors, x40
 extension, demo merchant, demo agent, agent SDK, merchant SDK primitives,
 control-plane ingestion, PostgreSQL adapters, outbox workers, Solana chain
 verification, payout preview/allocation, payout transaction persistence,
-broadcast/finality boundaries, rollup, payout lifecycle outbox/webhook events,
-unknown-outcome reconciliation queue, referrer payout views, and idempotent
-payout ledger closure are present.
+broadcast/finality boundaries, local-dev signer wiring, rollup, payout lifecycle
+outbox/webhook events, unknown-outcome reconciliation queue, referrer payout
+views, and idempotent payout ledger closure are present.
 
 The MVP still uses normal x402 settlement to the merchant and records a
 commission liability for later merchant-funded payout. Atomic split settlement and
@@ -251,6 +251,7 @@ Current slice:
 - Solana RPC payout transaction simulation with per-transaction
   succeeded/failed/retry outcomes;
 - Solana payout signer interface and policy gate before isolated signing;
+- disposable local-dev signer wiring for Devnet payout tests;
 - signed-byte payout transaction persistence and Solana broadcast submission
   boundary;
 - Solana payout transaction finality monitor with retry and outcome-unknown
