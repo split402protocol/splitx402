@@ -265,6 +265,8 @@ Current slice:
   Split402-compatible id generation, and fail-closed settled payload validation;
 - add merchant operation digest helpers for production GET and JSON POST request
   shapes with JSON-compatibility validation;
+- add a compile-checked Express/x402 merchant integration example and package
+  compatibility matrix;
 - add durable merchant receipt outbox store interfaces;
 - add an in-memory outbox implementation for deterministic tests and examples;
 - add a receipt outbox dispatcher with retry scheduling, max-attempt dead-lettering,

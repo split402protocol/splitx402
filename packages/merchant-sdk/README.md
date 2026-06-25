@@ -123,6 +123,29 @@ const split402Extension = createSplit402ResourceServerExtension({
 New offers and receipts use the current key. Offers issued before rotation can
 still verify as long as their `kid` remains resolvable.
 
+## Integration Example
+
+The compile-checked example in
+[`examples/express-integration.ts`](examples/express-integration.ts) wires the
+merchant SDK pieces into the x402 extension route config:
+
+- cached campaign refresh;
+- required `payment-identifier` declaration;
+- service-key provider;
+- receipt outbox sink;
+- control-plane receipt dispatcher.
+
+## Compatibility
+
+| Component | Supported Version | Notes |
+| --- | --- | --- |
+| Node.js | `>=22` | Matches the repository engine. |
+| TypeScript | `5.7.x` | Checked through the workspace typecheck. |
+| `@x402/core` | `2.16.x` | Route config and payment payload types. |
+| `@x402/extensions` | `2.16.x` | Standard `payment-identifier` extension. |
+| `@split402/protocol` | `0.1.x` | Receipt, digest, ID, and key primitives. |
+| `@split402/x402-extension` | `0.1.x` | Resource-server offer/receipt extension. |
+
 ## Receipt Outbox Flow
 
 ```mermaid
