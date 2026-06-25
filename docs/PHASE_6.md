@@ -8,9 +8,9 @@ paying, losing allocations, or hiding funding deficits.
 
 Status: in progress. The payout engine now has preview, allocation, transaction
 planning, simulation, signer-policy checks, signed-byte persistence, broadcast
-submission, finality monitoring, status rollup, idempotent ledger closure, and
-payout lifecycle outbox/webhook events, plus an unknown-outcome reconciliation
-queue and referrer payout views.
+submission, local-dev signer wiring, finality monitoring, status rollup,
+idempotent ledger closure, and payout lifecycle outbox/webhook events, plus an
+unknown-outcome reconciliation queue and referrer payout views.
 
 ## What Changed
 
@@ -47,6 +47,10 @@ queue and referrer payout views.
   mint, allowed SPL Token program, destination/amount list hash, amount caps,
   serialized transaction coverage, and successful simulation before delegating
   to an isolated signing function.
+- Added a disposable local-dev Solana payout signer factory that loads explicit
+  key material or `SPLIT402_PAYOUT_SIGNER_*` environment variables, verifies the
+  signer address against the payout policy, signs serialized transactions, and
+  returns the expected transaction signature.
 - Added signed payout transaction records and PostgreSQL persistence for exact
   signed bytes, expected signature, sequence, attempt, blockhash metadata, and
   submitted state before broadcast.
@@ -91,7 +95,7 @@ the merchant has enough funding.
 
 ## Remaining Milestone 4 Work
 
-- Concrete local-dev or remote signer wiring.
+- Remote/isolated production signer wiring.
 - Reconciliation runbooks and retry decision tooling for unknown transaction
   outcomes.
 

@@ -1,6 +1,15 @@
-import { address } from "@solana/kit";
+import {
+  address,
+  createKeyPairSignerFromBytes,
+  createKeyPairSignerFromPrivateKeyBytes,
+  getBase64EncodedWireTransaction,
+  getSignatureFromTransaction,
+  getTransactionDecoder,
+  signTransaction
+} from "@solana/kit";
 import { findAssociatedTokenPda } from "@solana-program/token";
 import { hashProtocolObject, type Split402ReceiptV1 } from "@split402/protocol";
+import { Buffer } from "node:buffer";
 
 import type {
   ReceiptChainVerificationResult,
@@ -11,6 +20,10 @@ import type {
   PayoutItemRecord,
   PayoutTransactionRecord
 } from "./payouts.js";
+
+type LocalDevSolanaKeyPair = Awaited<
+  ReturnType<typeof createKeyPairSignerFromPrivateKeyBytes>
+>["keyPair"];
 
 export type SolanaRpcCommitment = "confirmed" | "finalized";
 export const SOLANA_TOKEN_PROGRAM_ID =
@@ -205,6 +218,26 @@ export interface SolanaPayoutTransactionSigningDelegateResult {
 export interface SolanaPolicyEnforcedPayoutSignerOptions {
   policy: SolanaPayoutSignerPolicy;
   signTransaction: SolanaPayoutTransactionSigningDelegate;
+}
+
+export interface LocalDevSolanaPayoutSignerOptions {
+  signerReference: string;
+  expectedAddress?: string;
+  secretKeyBytes?: Uint8Array | readonly number[];
+  privateKeyBytes?: Uint8Array | readonly number[];
+  secretKeyJson?: string;
+  secretKeyBase64?: string;
+  privateKeyBase64?: string;
+}
+
+export interface CreateLocalDevSolanaPayoutSignerInput
+  extends LocalDevSolanaPayoutSignerOptions {
+  policy: SolanaPayoutSignerPolicy;
+}
+
+export interface CreateLocalDevSolanaPayoutSignerFromEnvInput {
+  policy: SolanaPayoutSignerPolicy;
+  env?: NodeJS.ProcessEnv;
 }
 
 export interface SolanaRpcPayoutTransactionBroadcasterOptions {
@@ -598,6 +631,133 @@ export class SolanaPolicyEnforcedPayoutSigner
       signedTransactions
     };
   }
+}
+
+export async function createLocalDevSolanaPayoutSigner(
+  input: CreateLocalDevSolanaPayoutSignerInput
+): Promise<SolanaPolicyEnforcedPayoutSigner> {
+  const signerReference = assertLocalDevSignerReference(input.signerReference);
+  if (input.policy.signerReference !== signerReference) {
+    throw new Error("local-dev signer reference does not match policy");
+  }
+  const signer = await createLocalDevSigner(input);
+  const expectedAddress = assertSolanaAddress(
+    input.expectedAddress ?? input.policy.fundingWallet,
+    "expectedAddress"
+  );
+  if (signer.address !== expectedAddress) {
+    throw new Error("local-dev signer address does not match expectedAddress");
+  }
+  return new SolanaPolicyEnforcedPayoutSigner({
+    policy: input.policy,
+    signTransaction: createLocalDevSolanaPayoutSigningDelegate({
+      signerReference,
+      keyPair: signer.keyPair
+    })
+  });
+}
+
+export async function createLocalDevSolanaPayoutSignerFromEnv(
+  input: CreateLocalDevSolanaPayoutSignerFromEnvInput
+): Promise<SolanaPolicyEnforcedPayoutSigner> {
+  const env = input.env ?? process.env;
+  return createLocalDevSolanaPayoutSigner({
+    policy: input.policy,
+    signerReference:
+      env.SPLIT402_PAYOUT_SIGNER_REF ?? input.policy.signerReference,
+    expectedAddress:
+      env.SPLIT402_PAYOUT_SIGNER_EXPECTED_ADDRESS ?? input.policy.fundingWallet,
+    ...(env.SPLIT402_PAYOUT_SIGNER_SECRET_KEY_JSON === undefined
+      ? {}
+      : { secretKeyJson: env.SPLIT402_PAYOUT_SIGNER_SECRET_KEY_JSON }),
+    ...(env.SPLIT402_PAYOUT_SIGNER_SECRET_KEY_BASE64 === undefined
+      ? {}
+      : { secretKeyBase64: env.SPLIT402_PAYOUT_SIGNER_SECRET_KEY_BASE64 }),
+    ...(env.SPLIT402_PAYOUT_SIGNER_PRIVATE_KEY_BASE64 === undefined
+      ? {}
+      : { privateKeyBase64: env.SPLIT402_PAYOUT_SIGNER_PRIVATE_KEY_BASE64 })
+  });
+}
+
+function createLocalDevSolanaPayoutSigningDelegate(input: {
+  signerReference: string;
+  keyPair: LocalDevSolanaKeyPair;
+}): SolanaPayoutTransactionSigningDelegate {
+  return async (transactionInput) => {
+    if (transactionInput.signerReference !== input.signerReference) {
+      throw new Error("local-dev signer received an unexpected signerReference");
+    }
+    const transactionBytes = Buffer.from(
+      assertBase64Transaction(
+        transactionInput.transactionBase64,
+        "transactionBase64"
+      ),
+      "base64"
+    );
+    const transaction = getTransactionDecoder().decode(transactionBytes);
+    const signed = await signTransaction([input.keyPair], transaction);
+    return {
+      signedTransactionBase64: getBase64EncodedWireTransaction(signed),
+      expectedSignature: getSignatureFromTransaction(signed)
+    };
+  };
+}
+
+async function createLocalDevSigner(input: LocalDevSolanaPayoutSignerOptions) {
+  const keyMaterial = readLocalDevSignerKeyMaterial(input);
+  if (keyMaterial.kind === "secret") {
+    return createKeyPairSignerFromBytes(keyMaterial.bytes, false);
+  }
+  return createKeyPairSignerFromPrivateKeyBytes(keyMaterial.bytes, false);
+}
+
+function readLocalDevSignerKeyMaterial(
+  input: LocalDevSolanaPayoutSignerOptions
+): { kind: "secret" | "private"; bytes: Uint8Array } {
+  const provided = [
+    input.secretKeyBytes,
+    input.privateKeyBytes,
+    input.secretKeyJson,
+    input.secretKeyBase64,
+    input.privateKeyBase64
+  ].filter((value) => value !== undefined);
+  if (provided.length !== 1) {
+    throw new Error(
+      "local-dev signer requires exactly one key material input"
+    );
+  }
+  if (input.secretKeyBytes !== undefined) {
+    return {
+      kind: "secret",
+      bytes: readByteArray(input.secretKeyBytes, "secretKeyBytes", 64)
+    };
+  }
+  if (input.privateKeyBytes !== undefined) {
+    return {
+      kind: "private",
+      bytes: readByteArray(input.privateKeyBytes, "privateKeyBytes", 32)
+    };
+  }
+  if (input.secretKeyJson !== undefined) {
+    return {
+      kind: "secret",
+      bytes: readSecretKeyJson(input.secretKeyJson)
+    };
+  }
+  if (input.secretKeyBase64 !== undefined) {
+    return {
+      kind: "secret",
+      bytes: readBase64Bytes(input.secretKeyBase64, "secretKeyBase64", 64)
+    };
+  }
+  return {
+    kind: "private",
+    bytes: readBase64Bytes(
+      input.privateKeyBase64 ?? "",
+      "privateKeyBase64",
+      32
+    )
+  };
 }
 
 export class SolanaRpcPayoutTransactionBroadcaster {
@@ -1415,6 +1575,56 @@ function readAllowedTokenProgramIds(
       assertSupportedTokenProgramId(tokenProgramId)
     )
   );
+}
+
+function assertLocalDevSignerReference(value: string): string {
+  const signerReference = assertNonEmptyString(value, "signerReference");
+  if (!signerReference.startsWith("local-dev:")) {
+    throw new Error("local-dev signerReference must start with local-dev:");
+  }
+  return signerReference;
+}
+
+function readSecretKeyJson(value: string): Uint8Array {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new Error("secretKeyJson must be a JSON array");
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error("secretKeyJson must be a JSON array");
+  }
+  return readByteArray(parsed, "secretKeyJson", 64);
+}
+
+function readBase64Bytes(value: string, label: string, length: number): Uint8Array {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`${label} must be a non-empty base64 string`);
+  }
+  const normalized = value.trim();
+  const bytes = Buffer.from(normalized, "base64");
+  if (bytes.length !== length || bytes.toString("base64") !== normalized) {
+    throw new Error(`${label} must decode to ${length} bytes`);
+  }
+  return new Uint8Array(bytes);
+}
+
+function readByteArray(
+  value: Uint8Array | readonly number[],
+  label: string,
+  length: number
+): Uint8Array {
+  const raw = Array.from(value);
+  if (raw.length !== length) {
+    throw new Error(`${label} must contain ${length} bytes`);
+  }
+  for (const byte of raw) {
+    if (!Number.isInteger(byte) || byte < 0 || byte > 255) {
+      throw new Error(`${label} must contain byte values`);
+    }
+  }
+  return new Uint8Array(raw);
 }
 
 function assertPayoutSignerInstructionPolicy(input: {
