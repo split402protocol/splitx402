@@ -84,6 +84,9 @@ plus an unknown-outcome reconciliation queue and referrer payout views.
 - Added `corepack pnpm phase6:signer-policy` to generate a structured signer
   policy review record while validating Solana network, token program allow-list,
   atomic amount caps, and required simulation.
+- Added `corepack pnpm phase6:key-custody` to generate a structured payout
+  signer key custody review record with ownership, backup, recovery, access, and
+  separation-of-duties evidence.
 - Added signed payout transaction records and PostgreSQL persistence for exact
   signed bytes, expected signature, sequence, attempt, blockhash metadata, and
   submitted state before broadcast.
@@ -157,5 +160,6 @@ the merchant has enough funding.
 - `corepack pnpm build`
 - `corepack pnpm phase6:custody:check <evidence-bundle.txt>`
 - `corepack pnpm phase6:image-provenance`
+- `corepack pnpm phase6:key-custody`
 - `corepack pnpm phase6:signer-policy`
 - `corepack pnpm payout:finality:failover-drill`

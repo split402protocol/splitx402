@@ -309,6 +309,12 @@ values:
 corepack pnpm phase6:signer-policy
 ```
 
+Generate the Phase 6 payout signer key custody review record:
+
+```bash
+corepack pnpm phase6:key-custody
+```
+
 Run the optional live PostgreSQL harness against an empty test database:
 
 ```powershell
