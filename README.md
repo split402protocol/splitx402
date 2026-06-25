@@ -327,6 +327,13 @@ Generate the Phase 6 payout signer rollback drill record:
 corepack pnpm phase6:rollback-drill
 ```
 
+List the Phase 6 evidence commands and check the current custody bundle:
+
+```bash
+corepack pnpm phase6:evidence:status
+corepack pnpm phase6:evidence:status <evidence-bundle.txt>
+```
+
 Run the optional live PostgreSQL harness against an empty test database:
 
 ```powershell
