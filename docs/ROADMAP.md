@@ -223,8 +223,12 @@ Current slice:
 - minimum-threshold and max-recipient controls;
 - funding coverage and deficit reporting;
 - PostgreSQL eligible-accrual selector;
+- durable payout batch, item, and allocation rows;
+- compare-and-set allocation that moves selected accruals from `available` to
+  `allocated`;
 - `POST /v1/merchants/:merchantId/payout-wallets`;
 - `POST /v1/merchants/:merchantId/payouts/preview`.
+- `POST /v1/merchants/:merchantId/payout-batches`.
 
 ## Phase 7: Dashboard And Discovery
 

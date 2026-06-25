@@ -15,6 +15,7 @@ import {
   CampaignRegistryConflictError,
   InMemoryReceiptIngestionStore,
   MerchantRegistryConflictError,
+  PayoutBatchConflictError,
   PostgresCampaignRegistry,
   PostgresMerchantRegistry,
   PostgresOutboxEventStore,
@@ -332,6 +333,63 @@ describe("PostgresReceiptIngestionStore", () => {
       })
     );
     expect(replayed?.accrual?.availableAt).toBe("2026-06-24T00:04:00Z");
+  });
+
+  it("persists payout batches and allocates selected accruals once", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const fakePool = new FakePostgresPool();
+    const store = new PostgresReceiptIngestionStore(fakePool);
+    const ingestor = new ReceiptIngestor(store, {
+      resolveMerchantPublicKey: () => bundle.keys.merchantPublicKey,
+      now: () => new Date("2026-06-24T00:02:00Z")
+    });
+    await ingestor.ingest({ receipt: bundle.artifacts.receipt, source: "merchant" });
+    const verified = await store.markReceiptChainVerified({
+      receiptId: bundle.artifacts.receipt.receiptId,
+      verifiedAt: "2026-06-24T00:04:00Z"
+    });
+    if (verified?.accrual === undefined) {
+      throw new Error("expected verified accrual");
+    }
+
+    const batch = await store.createPayoutBatch({
+      merchantId: bundle.artifacts.receipt.merchantId,
+      payoutWalletId: "mpw_ffffffffffffffffffffffffffffffff",
+      network: bundle.artifacts.receipt.network,
+      asset: bundle.artifacts.receipt.asset,
+      accruals: [verified.accrual],
+      batchId: "pbt_ffffffffffffffffffffffffffffffff",
+      itemIdFactory: () => "pit_ffffffffffffffffffffffffffffffff",
+      now: "2026-06-24T00:05:00Z"
+    });
+    const loaded = await store.getPayoutBatch(batch.id);
+
+    expect(batch.status).toBe("planned");
+    expect(batch.totalAmountAtomic).toBe("2000");
+    expect(batch.items[0]?.allocations).toEqual([
+      {
+        payoutItemId: "pit_ffffffffffffffffffffffffffffffff",
+        accrualId: verified.accrual.id,
+        amountAtomic: "2000"
+      }
+    ]);
+    expect(loaded).toEqual(batch);
+    expect(fakePool.database.accruals[0]?.status).toBe("allocated");
+    expect(fakePool.database.payoutBatches).toHaveLength(1);
+    expect(fakePool.database.payoutItems).toHaveLength(1);
+    expect(fakePool.database.payoutAllocations).toHaveLength(1);
+    await expect(
+      store.createPayoutBatch({
+        merchantId: bundle.artifacts.receipt.merchantId,
+        payoutWalletId: "mpw_ffffffffffffffffffffffffffffffff",
+        network: bundle.artifacts.receipt.network,
+        asset: bundle.artifacts.receipt.asset,
+        accruals: [verified.accrual],
+        batchId: "pbt_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        itemIdFactory: () => "pit_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        now: "2026-06-24T00:05:00Z"
+      })
+    ).rejects.toBeInstanceOf(PayoutBatchConflictError);
   });
 });
 
@@ -1005,6 +1063,18 @@ class FakePostgresClient implements PostgresTransactionClient {
         this.database.insertMerchantPayoutWallet(values) as unknown as Row[]
       );
     }
+    if (normalized.startsWith("insert into payout_batches")) {
+      this.database.insertPayoutBatch(values);
+      return result([]);
+    }
+    if (normalized.startsWith("insert into payout_items")) {
+      this.database.insertPayoutItem(values);
+      return result([]);
+    }
+    if (normalized.startsWith("insert into payout_allocations")) {
+      this.database.insertPayoutAllocation(values);
+      return result([]);
+    }
     if (normalized.startsWith("insert into campaigns")) {
       this.database.insertCampaign(values);
       return result([]);
@@ -1072,6 +1142,12 @@ class FakePostgresClient implements PostgresTransactionClient {
       this.database.markReceiptChainVerified(values);
       return result([]);
     }
+    if (
+      normalized.startsWith("update commission_accruals") &&
+      normalized.includes("set status = 'allocated'")
+    ) {
+      return result(this.database.allocateAccrual(values) as unknown as Row[]);
+    }
     if (normalized.startsWith("update commission_accruals")) {
       this.database.markAccrualChainVerified(values);
       return result([]);
@@ -1104,7 +1180,9 @@ class FakePostgresClient implements PostgresTransactionClient {
       return result(this.database.selectReceipt(normalized, values) as unknown as Row[]);
     }
     if (normalized.includes("from commission_accruals")) {
-      return result(this.database.selectAccrual(values[0]) as unknown as Row[]);
+      return result(
+        this.database.selectAccrual(normalized, values) as unknown as Row[]
+      );
     }
     if (normalized.includes("from ledger_transactions")) {
       return result(
@@ -1128,6 +1206,17 @@ class FakePostgresClient implements PostgresTransactionClient {
     if (normalized.includes("from merchant_payout_wallets")) {
       return result(
         this.database.selectMerchantPayoutWallets(values[0]) as unknown as Row[]
+      );
+    }
+    if (normalized.includes("from payout_batches")) {
+      return result(this.database.selectPayoutBatch(values[0]) as unknown as Row[]);
+    }
+    if (normalized.includes("from payout_items")) {
+      return result(this.database.selectPayoutItems(values[0]) as unknown as Row[]);
+    }
+    if (normalized.includes("from payout_allocations")) {
+      return result(
+        this.database.selectPayoutAllocations(values[0]) as unknown as Row[]
       );
     }
     if (normalized.includes("from campaigns")) {
@@ -1181,6 +1270,9 @@ class FakePostgresDatabase {
   merchantOrigins: StoredMerchantOriginRow[] = [];
   merchantKeys: StoredMerchantKeyRow[] = [];
   merchantPayoutWallets: StoredMerchantPayoutWalletRow[] = [];
+  payoutBatches: StoredPayoutBatchRow[] = [];
+  payoutItems: StoredPayoutItemRow[] = [];
+  payoutAllocations: StoredPayoutAllocationRow[] = [];
   campaigns: StoredCampaignRow[] = [];
   campaignVersions: StoredCampaignVersionRow[] = [];
   campaignOperations: StoredCampaignOperationRow[] = [];
@@ -1360,11 +1452,45 @@ class FakePostgresDatabase {
     return receipt === undefined ? [] : [receipt];
   }
 
-  selectAccrual(receiptId: unknown): StoredAccrualRow[] {
-    const accrual = this.accruals.find(
-      (row) => row.receipt_id === readString(receiptId)
+  selectAccrual(
+    normalizedSql: string,
+    values: readonly unknown[]
+  ): StoredAccrualRow[] {
+    if (normalizedSql.includes("where receipt_id = $1")) {
+      const accrual = this.accruals.find(
+        (row) => row.receipt_id === readString(values[0])
+      );
+      return accrual === undefined ? [] : [accrual];
+    }
+
+    const merchantId = readString(values[0]);
+    const now = readString(values[1]);
+    let result = this.accruals.filter(
+      (row) =>
+        row.merchant_id === merchantId &&
+        row.status === "available" &&
+        (row.available_at === null ||
+          Date.parse(row.available_at) <= Date.parse(now))
     );
-    return accrual === undefined ? [] : [accrual];
+    if (normalizedSql.includes("asset_mint = $3")) {
+      result = result.filter((row) => row.asset_mint === readString(values[2]));
+    }
+    return result.sort(compareAccrualRows);
+  }
+
+  allocateAccrual(values: readonly unknown[]): Pick<StoredAccrualRow, "id">[] {
+    const accrual = this.accruals.find(
+      (row) =>
+        row.id === readString(values[0]) &&
+        row.merchant_id === readString(values[1]) &&
+        row.asset_mint === readString(values[2]) &&
+        row.status === "available"
+    );
+    if (accrual === undefined) {
+      return [];
+    }
+    accrual.status = "allocated";
+    return [{ id: accrual.id }];
   }
 
   markReceiptChainVerified(values: readonly unknown[]): void {
@@ -1496,6 +1622,52 @@ class FakePostgresDatabase {
     return [row];
   }
 
+  insertPayoutBatch(values: readonly unknown[]): void {
+    this.payoutBatches.push({
+      id: readString(values[0]),
+      merchant_id: readString(values[1]),
+      payout_wallet_id: readString(values[2]),
+      network: readString(values[3]),
+      asset_mint: readString(values[4]),
+      status: readString(values[5]),
+      total_amount_atomic: readString(values[6]),
+      item_count: readNumber(values[7]),
+      accrual_count: readNumber(values[8]),
+      failure_code: readNullableString(values[9]),
+      failure_message: readNullableString(values[10]),
+      created_at: readString(values[11]),
+      updated_at: readString(values[12])
+    });
+  }
+
+  insertPayoutItem(values: readonly unknown[]): void {
+    this.payoutItems.push({
+      id: readString(values[0]),
+      payout_batch_id: readString(values[1]),
+      destination_wallet: readString(values[2]),
+      destination_token_account: readNullableString(values[3]),
+      amount_atomic: readString(values[4]),
+      status: readString(values[5]),
+      created_at: readString(values[6])
+    });
+  }
+
+  insertPayoutAllocation(values: readonly unknown[]): void {
+    const row: StoredPayoutAllocationRow = {
+      payout_item_id: readString(values[0]),
+      accrual_id: readString(values[1]),
+      amount_atomic: readString(values[2])
+    };
+    if (
+      this.payoutAllocations.some(
+        (allocation) => allocation.accrual_id === row.accrual_id
+      )
+    ) {
+      throw Object.assign(new Error("duplicate key"), { code: "23505" });
+    }
+    this.payoutAllocations.push(row);
+  }
+
   revokeMerchantKey(values: readonly unknown[]): StoredMerchantKeyRow[] {
     const merchantId = readString(values[0]);
     const kid = readString(values[1]);
@@ -1564,6 +1736,26 @@ class FakePostgresDatabase {
   selectMerchantPayoutWallets(merchantId: unknown): StoredMerchantPayoutWalletRow[] {
     return this.merchantPayoutWallets.filter(
       (row) => row.merchant_id === readString(merchantId)
+    );
+  }
+
+  selectPayoutBatch(batchId: unknown): StoredPayoutBatchRow[] {
+    const batch = this.payoutBatches.find((row) => row.id === readString(batchId));
+    return batch === undefined ? [] : [batch];
+  }
+
+  selectPayoutItems(batchId: unknown): StoredPayoutItemRow[] {
+    return this.payoutItems.filter(
+      (row) => row.payout_batch_id === readString(batchId)
+    );
+  }
+
+  selectPayoutAllocations(itemIds: unknown): StoredPayoutAllocationRow[] {
+    const ids = Array.isArray(itemIds)
+      ? itemIds.map((value) => readString(value))
+      : [readString(itemIds)];
+    return this.payoutAllocations.filter((row) =>
+      ids.includes(row.payout_item_id)
     );
   }
 
@@ -2055,6 +2247,38 @@ type StoredMerchantPayoutWalletRow = QueryResultRow & {
   created_at: string;
 };
 
+type StoredPayoutBatchRow = QueryResultRow & {
+  id: string;
+  merchant_id: string;
+  payout_wallet_id: string;
+  network: string;
+  asset_mint: string;
+  status: string;
+  total_amount_atomic: string;
+  item_count: number;
+  accrual_count: number;
+  failure_code: string | null;
+  failure_message: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type StoredPayoutItemRow = QueryResultRow & {
+  id: string;
+  payout_batch_id: string;
+  destination_wallet: string;
+  destination_token_account: string | null;
+  amount_atomic: string;
+  status: string;
+  created_at: string;
+};
+
+type StoredPayoutAllocationRow = QueryResultRow & {
+  payout_item_id: string;
+  accrual_id: string;
+  amount_atomic: string;
+};
+
 type StoredCampaignRow = QueryResultRow & {
   id: string;
   merchant_id: string;
@@ -2199,6 +2423,35 @@ function compareOutboxEvents(
     Date.parse(left.created_at) - Date.parse(right.created_at) ||
     left.id.localeCompare(right.id)
   );
+}
+
+function compareAccrualRows(
+  left: StoredAccrualRow,
+  right: StoredAccrualRow
+): number {
+  return (
+    left.asset_mint.localeCompare(right.asset_mint) ||
+    left.payout_wallet.localeCompare(right.payout_wallet) ||
+    compareNullableTimestamp(left.available_at, right.available_at) ||
+    Date.parse(left.created_at) - Date.parse(right.created_at) ||
+    left.id.localeCompare(right.id)
+  );
+}
+
+function compareNullableTimestamp(
+  left: string | null,
+  right: string | null
+): number {
+  if (left === null && right === null) {
+    return 0;
+  }
+  if (left === null) {
+    return -1;
+  }
+  if (right === null) {
+    return 1;
+  }
+  return Date.parse(left) - Date.parse(right);
 }
 
 function readString(value: unknown): string {
