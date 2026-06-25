@@ -6,7 +6,9 @@ paying, losing allocations, or hiding funding deficits.
 
 ## Current Status
 
-Status: started.
+Status: in progress. The payout engine now has preview, allocation, transaction
+planning, simulation, signer-policy checks, signed-byte persistence, broadcast
+submission, finality monitoring, status rollup, and idempotent ledger closure.
 
 ## What Changed
 
@@ -76,7 +78,7 @@ the merchant has enough funding.
 ## Remaining Milestone 4 Work
 
 - Concrete local-dev or remote signer wiring.
-- Worker wiring for payout webhook events.
+- Worker wiring for payout webhook events beyond receipt acceptance.
 - Reconciliation for unknown transaction outcomes.
 - Referrer payout history and balance views.
 

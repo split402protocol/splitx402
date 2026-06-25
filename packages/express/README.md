@@ -7,6 +7,26 @@ the HTTP method, route template, params, query, body, and optional referral-clai
 hint from an Express request so the merchant and agent can calculate the same
 request-bound digest.
 
+## Digest Boundary
+
+```mermaid
+flowchart LR
+  Request["Express request"]
+  Context["Split402 request context"]
+  Digest["Operation digest"]
+  Attribution["Referral attribution"]
+  Receipt["Signed receipt"]
+
+  Request --> Context
+  Context --> Digest
+  Attribution --> Digest
+  Digest --> Receipt
+```
+
+This package deliberately stays small. It prepares request material for the
+protocol and x402 extension layers; it does not verify payments, sign receipts,
+or write ledger state.
+
 ## Usage
 
 ```ts

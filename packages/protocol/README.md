@@ -1,9 +1,30 @@
 # @split402/protocol
 
-Protocol primitives for Split402 referral attribution and commission accounting.
+Deterministic protocol primitives for Split402 referral attribution, signed
+receipts, and commission accounting.
 
-This package is the deterministic core used by the SDK, x402 extension, demos,
-and control plane. It contains no network client and no database code.
+This package is the stable core used by the x402 extension, SDKs, demos, test
+vectors, and control plane. It contains no network client and no database code;
+its job is to make the bytes, hashes, signatures, IDs, and amount math identical
+everywhere Split402 runs.
+
+## Where It Fits
+
+```mermaid
+flowchart LR
+  Agent["Agent SDK"]
+  Merchant["Merchant SDK"]
+  Extension["x402 extension"]
+  Control["Control plane"]
+  Vectors["Test vectors"]
+  Protocol["@split402/protocol"]
+
+  Agent --> Protocol
+  Merchant --> Protocol
+  Extension --> Protocol
+  Control --> Protocol
+  Protocol --> Vectors
+```
 
 ## Responsibilities
 
@@ -31,6 +52,17 @@ flowchart LR
   Digest --> Receipt
   Receipt --> Verify
 ```
+
+## Money Model
+
+The protocol package does not move funds. It defines the signed evidence that
+lets the rest of Split402 prove:
+
+- which x402 paid operation happened;
+- which merchant campaign applied;
+- which referral claim was attached;
+- how much commission should be recorded in atomic units;
+- which payout wallet should later receive the merchant-funded commission.
 
 ## Commands
 

@@ -4,6 +4,20 @@ This roadmap follows the Split402 protocol architecture v0.1 spec. The
 `splitx402/ffff` repository is the implementation reference for the first slices of
 that spec; this repository is the v2 implementation line.
 
+## Current Snapshot
+
+Split402 currently implements the USDC accrual-and-payout architecture up through
+the first Phase 6 payout-engine boundaries. The protocol core, test vectors, x402
+extension, demo merchant, demo agent, agent SDK, merchant SDK primitives,
+control-plane ingestion, PostgreSQL adapters, outbox workers, Solana chain
+verification, payout preview/allocation, payout transaction persistence,
+broadcast/finality boundaries, rollup, and idempotent payout ledger closure are
+present.
+
+The MVP still uses normal x402 settlement to the merchant and records a
+commission liability for later merchant-funded payout. Atomic split settlement and
+`$SPLIT` bonding remain later research.
+
 ## Phase 0: Repository Setup
 
 Status: complete.
@@ -52,7 +66,7 @@ Deliverables:
 
 ## Phase 3: Single Merchant Devnet Demo
 
-Status: started.
+Status: implemented with a recorded Devnet paid-suite proof.
 
 Goal: implement architecture Milestone 1.
 
@@ -88,7 +102,8 @@ Current slice:
 
 ## Phase 4: Control Plane And Persistent Ingestion
 
-Status: started.
+Status: implemented foundation; later hardening continues through the merchant
+SDK and payout phases.
 
 Goal: implement architecture Milestone 2.
 
@@ -173,6 +188,8 @@ Current slice:
 
 ## Phase 5: Production Merchant SDK
 
+Status: first SDK slice implemented.
+
 Goal: implement architecture Milestone 3.
 
 Deliverables:
@@ -199,7 +216,7 @@ Current slice:
 
 ## Phase 6: Payout Engine
 
-Status: started.
+Status: in progress.
 
 Goal: implement architecture Milestone 4.
 

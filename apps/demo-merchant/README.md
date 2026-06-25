@@ -7,6 +7,24 @@ The merchant advertises a signed Split402 offer in the unpaid x402 challenge,
 validates incoming referral attribution before settlement, settles the payment
 through the x402 SVM path, and returns a merchant-signed Split402 receipt.
 
+## What It Demonstrates
+
+```mermaid
+flowchart LR
+  Unpaid["Unpaid API call"]
+  Challenge["x402 402 challenge"]
+  Offer["Split402 signed offer"]
+  Paid["Paid retry with referral claim"]
+  Settlement["x402 settlement"]
+  Receipt["Split402 receipt"]
+
+  Unpaid --> Challenge
+  Challenge --> Offer
+  Offer --> Paid
+  Paid --> Settlement
+  Settlement --> Receipt
+```
+
 ## Flow
 
 ```mermaid
