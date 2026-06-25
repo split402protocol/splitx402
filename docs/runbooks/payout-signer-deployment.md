@@ -80,6 +80,25 @@ access-review record, and separation-of-duties record. Attach it to
 `key_custody_record` in the Phase 6 custody evidence bundle before any mainnet
 custody approval.
 
+You can generate the correctly shaped key custody review with:
+
+```bash
+SPLIT402_PHASE6_KEY_CUSTODY_REVIEW_ID=phase6-key-custody-001 \
+SPLIT402_PHASE6_KEY_CUSTODY_REVIEWERS="security, operations" \
+SPLIT402_KEY_CUSTODY_NETWORK=solana:devnet \
+SPLIT402_KEY_CUSTODY_FUNDING_WALLET=<funding-wallet> \
+SPLIT402_KEY_CUSTODY_SOURCE_TOKEN_ACCOUNT=<source-token-account> \
+SPLIT402_KEY_CUSTODY_KEY_SOURCE=kms:split402-devnet-payout \
+SPLIT402_KEY_CUSTODY_KEY_OWNER=operations \
+SPLIT402_KEY_CUSTODY_KEY_BACKUP_POLICY="attached: backup-policy-001.md" \
+SPLIT402_KEY_CUSTODY_KEY_RECOVERY_PROCESS="attached: recovery-process-001.md" \
+SPLIT402_KEY_CUSTODY_ACCESS_LIST="security-lead,operations-lead" \
+SPLIT402_KEY_CUSTODY_ACCESS_REVIEW_RECORD="attached: access-review-001.md" \
+SPLIT402_KEY_CUSTODY_SEPARATION_OF_DUTIES_RECORD="attached: separation-of-duties-001.md" \
+SPLIT402_KEY_CUSTODY_LAST_ROTATION_OR_GENERATION_TIME=2026-06-25T20:00:00Z \
+  corepack pnpm phase6:key-custody
+```
+
 For auth rotation, deploy a key ring with one active key and any retired keys,
 then update the control plane to send `x-split402-signer-key-id`.
 

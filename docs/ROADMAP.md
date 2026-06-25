@@ -274,6 +274,8 @@ Current slice:
 - Phase 6 image provenance record generation for immutable image digest and
   dependency audit evidence;
 - Phase 6 signer policy review generation for deployment policy evidence;
+- Phase 6 payout signer key custody review generation for ownership, backup,
+  recovery, access, and separation-of-duties evidence;
 - signed-byte payout transaction persistence and Solana broadcast submission
   boundary;
 - Solana payout transaction finality monitor with retry and outcome-unknown
