@@ -61,3 +61,6 @@ If a control-plane auth secret is suspected compromised:
 - `GET /v1/health` lists auth key IDs and statuses but never secrets.
 - `GET /v1/metrics` increments `rejectedByCode.unauthorized` for old-key
   attempts and does not expose secrets.
+- Stale or future HMAC timestamps also increment
+  `rejectedByCode.unauthorized`; check audit event messages before assuming
+  every unauthorized request is a rotation issue.

@@ -19,7 +19,8 @@ Expected fields:
 
 Alert on:
 
-- nonzero `rejectedByCode.unauthorized` after a key rotation window;
+- nonzero `rejectedByCode.unauthorized` after a key rotation window or sustained
+  unauthorized growth from stale/future request timestamps;
 - sustained growth in `rejectedByCode.forbidden`;
 - any `internal_server_error`;
 - signer availability failures from `GET /v1/health`.

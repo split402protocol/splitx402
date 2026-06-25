@@ -35,6 +35,7 @@ SPLIT402_PAYOUT_SIGNER_SERVICE_PORT=4022
 SPLIT402_PAYOUT_SIGNER_SERVICE_REF=kms:split402-devnet-payout
 SPLIT402_PAYOUT_SIGNER_SERVICE_NETWORK=solana:devnet
 SPLIT402_PAYOUT_SIGNER_SERVICE_EXPECTED_FUNDING_WALLET=<funding-wallet>
+SPLIT402_PAYOUT_SIGNER_SERVICE_SIGNATURE_TOLERANCE_SECONDS=300
 ```
 
 Set auth and signing material as secrets:
@@ -52,6 +53,10 @@ Exactly one signing key source must be configured:
 
 For auth rotation, deploy a key ring with one active key and any retired keys,
 then update the control plane to send `x-split402-signer-key-id`.
+
+The signature tolerance rejects captured HMAC requests outside the configured
+time window. Keep control-plane and signer clocks synchronized with NTP, and use
+the smallest tolerance that survives normal network latency and clock skew.
 
 ## Deploy
 

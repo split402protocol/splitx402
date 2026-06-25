@@ -28,6 +28,9 @@ Remote signer requests must use schema
 
 The signature is `v1=<hex>` where the hex value is HMAC-SHA256 over
 `timestamp.body` using `SPLIT402_PAYOUT_SIGNER_SERVICE_SHARED_SECRET`.
+Timestamps must be within
+`SPLIT402_PAYOUT_SIGNER_SERVICE_SIGNATURE_TOLERANCE_SECONDS`, which defaults to
+`300`.
 
 ## Configuration
 
@@ -38,6 +41,7 @@ SPLIT402_PAYOUT_SIGNER_SERVICE_NETWORK=solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1
 SPLIT402_PAYOUT_SIGNER_SERVICE_EXPECTED_FUNDING_WALLET=<funding-wallet>
 SPLIT402_PAYOUT_SIGNER_SERVICE_SHARED_SECRET=<shared-secret>
 SPLIT402_PAYOUT_SIGNER_SERVICE_SHARED_SECRET_KEY_ID=default
+SPLIT402_PAYOUT_SIGNER_SERVICE_SIGNATURE_TOLERANCE_SECONDS=300
 SPLIT402_PAYOUT_SIGNER_SERVICE_PRIVATE_KEY_BASE64=<32-byte-private-key>
 ```
 
@@ -114,6 +118,7 @@ docker run --rm -p 4022:4022 \
   -e SPLIT402_PAYOUT_SIGNER_SERVICE_REF=kms:split402-devnet-payout \
   -e SPLIT402_PAYOUT_SIGNER_SERVICE_NETWORK=solana:devnet \
   -e SPLIT402_PAYOUT_SIGNER_SERVICE_EXPECTED_FUNDING_WALLET=<funding-wallet> \
+  -e SPLIT402_PAYOUT_SIGNER_SERVICE_SIGNATURE_TOLERANCE_SECONDS=300 \
   -e SPLIT402_PAYOUT_SIGNER_SERVICE_AUTH_KEYS_JSON='[{"keyId":"control-plane-current","sharedSecret":"<shared-secret>","status":"active"}]' \
   -e SPLIT402_PAYOUT_SIGNER_SERVICE_PRIVATE_KEY_BASE64=<32-byte-private-key> \
   ghcr.io/split402protocol/splitx402/payout-signer:dev
