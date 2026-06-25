@@ -98,10 +98,21 @@ Exactly one key source must be set:
 ```bash
 corepack pnpm --filter @split402/payout-signer dev
 corepack pnpm --filter @split402/payout-signer start
+corepack pnpm --filter @split402/payout-signer smoke
 corepack pnpm --filter @split402/payout-signer test
 corepack pnpm --filter @split402/payout-signer typecheck
 corepack pnpm --filter @split402/payout-signer build
 ```
+
+Run the staging smoke check after deploying:
+
+```bash
+SPLIT402_PAYOUT_SIGNER_SMOKE_URL=https://signer.internal \
+  corepack pnpm signer:payout:smoke
+```
+
+The smoke check verifies `/v1/health`, `/v1/ready`, and `/v1/metrics`, and it
+fails if those responses expose configured signer secrets.
 
 ## Container Deployment
 

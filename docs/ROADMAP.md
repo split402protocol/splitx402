@@ -264,6 +264,8 @@ Current slice:
 - payout signer HMAC timestamp freshness checks to reject replayed stale or
   future signing requests;
 - deployable payout signer JSONL audit logging for sanitized custody evidence;
+- payout signer staging smoke checks for health, readiness, metrics, and
+  secret-exposure validation;
 - signed-byte payout transaction persistence and Solana broadcast submission
   boundary;
 - Solana payout transaction finality monitor with retry and outcome-unknown

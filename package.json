@@ -30,7 +30,8 @@
     "demo:agent": "corepack pnpm --filter @split402/demo-agent dev",
     "worker:chain": "corepack pnpm --filter @split402/control-plane worker:chain",
     "worker:webhook": "corepack pnpm --filter @split402/control-plane worker:webhook",
-    "signer:payout": "corepack pnpm --filter @split402/payout-signer dev"
+    "signer:payout": "corepack pnpm --filter @split402/payout-signer dev",
+    "signer:payout:smoke": "corepack pnpm --filter @split402/payout-signer smoke"
   },
   "dependencies": {
     "@x402/core": "2.16.0",

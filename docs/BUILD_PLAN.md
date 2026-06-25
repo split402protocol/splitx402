@@ -345,6 +345,8 @@ Current slice:
   future signing requests;
 - add deployable payout signer JSONL audit logging for sanitized custody
   evidence;
+- add a payout signer staging smoke check for health, readiness, metrics, and
+  secret-exposure validation;
 - add signed-byte payout transaction persistence and Solana broadcast submission
   boundary;
 - add Solana payout transaction finality monitor with retry and outcome-unknown
