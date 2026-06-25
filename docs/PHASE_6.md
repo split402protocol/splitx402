@@ -38,10 +38,15 @@ Status: started.
 - Added a Solana RPC payout simulation boundary that validates serialized
   transactions against the plan, calls `simulateTransaction`, and reports
   per-transaction succeeded, failed, or retryable outcomes.
+- Added a Solana payout signer interface and policy-enforced signing boundary
+  that checks the configured network, funding wallet, source token account, USDC
+  mint, allowed SPL Token program, destination/amount list hash, amount caps,
+  serialized transaction coverage, and successful simulation before delegating
+  to an isolated signing function.
 - Added `0010_payout_batches.sql` for payout batches, payout items, payout
   allocations, and the `allocated` accrual status.
 - Added control-plane tests for payout planning, Solana transaction planning and
-  simulation, allocation persistence, and the HTTP payout routes.
+  simulation, signer policy, allocation persistence, and the HTTP payout routes.
 
 ## Why This Comes Next
 
@@ -53,7 +58,7 @@ the merchant has enough funding.
 
 ## Remaining Milestone 4 Work
 
-- Isolated payout signer policy.
+- Signed-byte persistence and concrete local-dev or remote signer wiring.
 - Broadcast, confirmation, finality, and retry handling.
 - Reconciliation for unknown transaction outcomes.
 - Referrer payout history and balance views.
