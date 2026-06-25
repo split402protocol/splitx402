@@ -64,3 +64,5 @@ If a control-plane auth secret is suspected compromised:
 - Stale or future HMAC timestamps also increment
   `rejectedByCode.unauthorized`; check audit event messages before assuming
   every unauthorized request is a rotation issue.
+- When `SPLIT402_PAYOUT_SIGNER_SERVICE_AUDIT_LOG=stdout-jsonl` is enabled,
+  signer logs include sanitized audit events for rejected old-key attempts.

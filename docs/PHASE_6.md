@@ -68,6 +68,8 @@ plus an unknown-outcome reconciliation queue and referrer payout views.
   Kubernetes deployment starter manifest.
 - Added payout signer HMAC timestamp freshness checks to reject replayed stale
   or future signing requests.
+- Added deployable payout signer JSONL audit logging for sanitized custody and
+  incident-response evidence.
 - Added signed payout transaction records and PostgreSQL persistence for exact
   signed bytes, expected signature, sequence, attempt, blockhash metadata, and
   submitted state before broadcast.
