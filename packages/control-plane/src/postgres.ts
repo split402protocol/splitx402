@@ -117,6 +117,7 @@ import {
   createSignedPayoutTransactionRecords,
   summarizePayoutBatchFinality
 } from "./payouts.js";
+import { WEBHOOK_PAYOUT_FINALIZED_EVENT_TYPE } from "./webhooks.js";
 
 export interface PostgresQueryExecutor {
   query<Row extends QueryResultRow = QueryResultRow>(
@@ -739,6 +740,14 @@ export class PostgresReceiptIngestionStore
       for (const entry of transaction.entries) {
         await insertLedgerEntry(client, entry);
       }
+      await insertOutboxEvent(
+        client,
+        this.createPayoutFinalizedEvent(batch, transaction)
+      );
+      await insertOutboxEvent(
+        client,
+        this.createWebhookPayoutFinalizedEvent(batch, transaction)
+      );
     });
     return transaction;
   }
@@ -859,6 +868,30 @@ export class PostgresReceiptIngestionStore
     return createWebhookReceiptAcceptedOutboxEvent(
       snapshot,
       this.options.outboxEventIdFactory?.() ?? randomUUID()
+    );
+  }
+
+  private createPayoutFinalizedEvent(
+    batch: PayoutBatchRecord,
+    transaction: LedgerTransaction
+  ): OutboxEventRecord {
+    return createPayoutFinalizedOutboxEvent(
+      batch,
+      transaction,
+      this.options.outboxEventIdFactory?.() ?? randomUUID(),
+      "payout.finalized.v1"
+    );
+  }
+
+  private createWebhookPayoutFinalizedEvent(
+    batch: PayoutBatchRecord,
+    transaction: LedgerTransaction
+  ): OutboxEventRecord {
+    return createPayoutFinalizedOutboxEvent(
+      batch,
+      transaction,
+      this.options.outboxEventIdFactory?.() ?? randomUUID(),
+      WEBHOOK_PAYOUT_FINALIZED_EVENT_TYPE
     );
   }
 
@@ -2661,6 +2694,45 @@ function createReceiptOutboxEvent(
   };
 }
 
+function createPayoutFinalizedOutboxEvent(
+  batch: PayoutBatchRecord,
+  transaction: LedgerTransaction,
+  id: string,
+  eventType: "payout.finalized.v1" | typeof WEBHOOK_PAYOUT_FINALIZED_EVENT_TYPE
+): OutboxEventRecord {
+  return {
+    id,
+    eventType,
+    aggregateType: "payout_batch",
+    aggregateId: batch.id,
+    payload: {
+      payoutBatchId: batch.id,
+      merchantId: batch.merchantId,
+      payoutWalletId: batch.payoutWalletId,
+      network: batch.network,
+      asset: batch.asset,
+      status: batch.status,
+      totalAmountAtomic: batch.totalAmountAtomic,
+      itemCount: batch.itemCount,
+      accrualCount: batch.accrualCount,
+      ledgerTransactionId: transaction.id,
+      finalizedAt: transaction.createdAt,
+      items: batch.items.map((item) => ({
+        payoutItemId: item.id,
+        destinationWallet: item.destinationWallet,
+        destinationTokenAccount: item.destinationTokenAccount ?? null,
+        amountAtomic: item.amountAtomic,
+        status: item.status,
+        accrualIds: item.allocations.map((allocation) => allocation.accrualId)
+      }))
+    },
+    status: "pending",
+    attempts: 0,
+    availableAt: transaction.createdAt,
+    createdAt: transaction.createdAt
+  };
+}
+
 function normalizeOutboxEventTypes(
   eventTypes: string[] | undefined
 ): string[] | null {
@@ -2713,7 +2785,7 @@ function mapLedgerTransaction(
 
   return {
     id: row.id,
-    sourceType: "commission_accrual",
+    sourceType: row.source_type,
     sourceId: row.source_id,
     asset: row.asset_mint,
     entries,
