@@ -31,8 +31,22 @@ SPLIT402_PAYOUT_SIGNER_SERVICE_REF=kms:split402-devnet-payout
 SPLIT402_PAYOUT_SIGNER_SERVICE_NETWORK=solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1
 SPLIT402_PAYOUT_SIGNER_SERVICE_EXPECTED_FUNDING_WALLET=<funding-wallet>
 SPLIT402_PAYOUT_SIGNER_SERVICE_SHARED_SECRET=<shared-secret>
+SPLIT402_PAYOUT_SIGNER_SERVICE_SHARED_SECRET_KEY_ID=default
 SPLIT402_PAYOUT_SIGNER_SERVICE_PRIVATE_KEY_BASE64=<32-byte-private-key>
 ```
+
+For zero-downtime control-plane auth rotation, prefer a key ring:
+
+```bash
+SPLIT402_PAYOUT_SIGNER_SERVICE_AUTH_KEYS_JSON='[
+  {"keyId":"current","sharedSecret":"new-secret","status":"active"},
+  {"keyId":"previous","sharedSecret":"old-secret","status":"retired"}
+]'
+```
+
+When more than one auth key is configured, requests must include
+`x-split402-signer-key-id`. Retired keys remain documented in config but cannot
+authorize signing requests.
 
 Exactly one key source must be set:
 

@@ -23,13 +23,34 @@ export interface PayoutSignerConfig {
   signerReference: string;
   network: string;
   expectedFundingWallet: string;
-  sharedSecret: string;
+  sharedSecret?: string;
+  sharedSecretKeyId?: string;
+  authKeys?: readonly PayoutSignerAuthKeyInput[];
   port: number;
   privateKeyBytes?: Uint8Array | readonly number[];
   secretKeyBytes?: Uint8Array | readonly number[];
   privateKeyBase64?: string;
   secretKeyBase64?: string;
   secretKeyJson?: string;
+}
+
+export type PayoutSignerAuthKeyStatus = "active" | "retired";
+
+export interface PayoutSignerAuthKeyInput {
+  keyId: string;
+  sharedSecret: string;
+  status?: PayoutSignerAuthKeyStatus;
+}
+
+interface PayoutSignerAuthKey {
+  keyId: string;
+  sharedSecret: string;
+  status: PayoutSignerAuthKeyStatus;
+}
+
+interface NormalizedPayoutSignerConfig
+  extends Omit<PayoutSignerConfig, "authKeys"> {
+  authKeys: PayoutSignerAuthKey[];
 }
 
 interface RemotePayoutSignRequest {
@@ -58,14 +79,18 @@ export function createPayoutSignerApp(config: PayoutSignerConfig): express.Expre
       service: "split402-payout-signer",
       releaseStage: "public-alpha",
       signerReference: normalizedConfig.signerReference,
-      network: normalizedConfig.network
+      network: normalizedConfig.network,
+      authKeys: normalizedConfig.authKeys?.map((key) => ({
+        keyId: key.keyId,
+        status: key.status
+      }))
     });
   });
 
   app.post("/v1/solana/payouts/sign", async (req, res) => {
     try {
       const rawBody = JSON.stringify(req.body);
-      assertRequestSignature(req, rawBody, normalizedConfig.sharedSecret);
+      assertRequestSignature(req, rawBody, normalizedConfig.authKeys ?? []);
       const request = readRemotePayoutSignRequest(req.body);
       assertRemotePayoutSignRequest(request, normalizedConfig);
       const signer = await signerPromise;
@@ -105,10 +130,25 @@ export function readPayoutSignerConfigFromEnv(
       env.SPLIT402_PAYOUT_SIGNER_SERVICE_EXPECTED_FUNDING_WALLET,
       "SPLIT402_PAYOUT_SIGNER_SERVICE_EXPECTED_FUNDING_WALLET"
     ),
-    sharedSecret: readRequiredEnv(
-      env.SPLIT402_PAYOUT_SIGNER_SERVICE_SHARED_SECRET,
-      "SPLIT402_PAYOUT_SIGNER_SERVICE_SHARED_SECRET"
-    ),
+    ...(env.SPLIT402_PAYOUT_SIGNER_SERVICE_AUTH_KEYS_JSON === undefined
+      ? {}
+      : {
+          authKeys: readAuthKeysJson(
+            env.SPLIT402_PAYOUT_SIGNER_SERVICE_AUTH_KEYS_JSON
+          )
+        }),
+    ...(env.SPLIT402_PAYOUT_SIGNER_SERVICE_SHARED_SECRET === undefined
+      ? {}
+      : {
+          sharedSecret: env.SPLIT402_PAYOUT_SIGNER_SERVICE_SHARED_SECRET,
+          ...(env.SPLIT402_PAYOUT_SIGNER_SERVICE_SHARED_SECRET_KEY_ID ===
+          undefined
+            ? {}
+            : {
+                sharedSecretKeyId:
+                  env.SPLIT402_PAYOUT_SIGNER_SERVICE_SHARED_SECRET_KEY_ID
+              })
+        }),
     port: readOptionalPositiveIntegerEnv(
       env.SPLIT402_PAYOUT_SIGNER_SERVICE_PORT,
       "SPLIT402_PAYOUT_SIGNER_SERVICE_PORT"
@@ -132,7 +172,7 @@ export function readPayoutSignerConfigFromEnv(
 
 function normalizePayoutSignerConfig(
   config: PayoutSignerConfig
-): PayoutSignerConfig {
+): NormalizedPayoutSignerConfig {
   return {
     signerReference: assertNonEmptyString(
       config.signerReference,
@@ -143,7 +183,7 @@ function normalizePayoutSignerConfig(
       config.expectedFundingWallet,
       "expectedFundingWallet"
     ),
-    sharedSecret: assertNonEmptyString(config.sharedSecret, "sharedSecret"),
+    authKeys: normalizeAuthKeys(config),
     port: assertPositiveInteger(config.port, "port"),
     ...(config.privateKeyBytes === undefined
       ? {}
@@ -214,21 +254,87 @@ function readSignerKeyMaterial(
   };
 }
 
+function normalizeAuthKeys(config: PayoutSignerConfig): PayoutSignerAuthKey[] {
+  const authKeys = [
+    ...(config.authKeys ?? []),
+    ...(config.sharedSecret === undefined
+      ? []
+      : [
+          {
+            keyId: config.sharedSecretKeyId ?? "default",
+            sharedSecret: config.sharedSecret,
+            status: "active" as const
+          }
+        ])
+  ].map((key) => ({
+    keyId: assertNonEmptyString(key.keyId, "authKey.keyId"),
+    sharedSecret: assertNonEmptyString(
+      key.sharedSecret,
+      `authKey ${key.keyId} sharedSecret`
+    ),
+    status: key.status ?? "active"
+  }));
+  if (authKeys.length === 0) {
+    throw new Error("payout signer service requires at least one auth key");
+  }
+  const keyIds = new Set<string>();
+  for (const key of authKeys) {
+    if (key.status !== "active" && key.status !== "retired") {
+      throw new Error(`authKey ${key.keyId} status must be active or retired`);
+    }
+    if (keyIds.has(key.keyId)) {
+      throw new Error(`duplicate payout signer auth key id: ${key.keyId}`);
+    }
+    keyIds.add(key.keyId);
+  }
+  if (!authKeys.some((key) => key.status === "active")) {
+    throw new Error("payout signer service requires at least one active auth key");
+  }
+  return authKeys;
+}
+
 function assertRequestSignature(
   req: Request,
   body: string,
-  sharedSecret: string
+  authKeys: readonly PayoutSignerAuthKey[]
 ): void {
   const timestamp = readHeader(req, "x-split402-signature-timestamp");
   const signature = readHeader(req, "x-split402-signature");
+  const authKey = selectAuthKey(req, authKeys);
   const expected = createRequestSignature({
     timestamp,
     body,
-    sharedSecret
+    sharedSecret: authKey.sharedSecret
   });
   if (!safeEqual(signature, expected)) {
     throw new SignerHttpError(401, "unauthorized", "invalid request signature");
   }
+}
+
+function selectAuthKey(
+  req: Request,
+  authKeys: readonly PayoutSignerAuthKey[]
+): PayoutSignerAuthKey {
+  const keyId = readOptionalHeader(req, "x-split402-signer-key-id");
+  if (keyId !== undefined) {
+    const key = authKeys.find((candidate) => candidate.keyId === keyId);
+    if (key === undefined || key.status !== "active") {
+      throw new SignerHttpError(401, "unauthorized", "auth key is not active");
+    }
+    return key;
+  }
+  if (authKeys.length !== 1) {
+    throw new SignerHttpError(
+      401,
+      "unauthorized",
+      "x-split402-signer-key-id header is required"
+    );
+  }
+  const key = authKeys[0];
+  if (key === undefined || key.status !== "active") {
+    throw new SignerHttpError(401, "unauthorized", "auth key is not active");
+  }
+  return key;
 }
 
 function createRequestSignature(input: {
@@ -550,6 +656,78 @@ function readHeader(req: Request, name: string): string {
     throw new SignerHttpError(401, "unauthorized", `${name} header is required`);
   }
   return value.trim();
+}
+
+function readOptionalHeader(req: Request, name: string): string | undefined {
+  const value = req.header(name);
+  if (value === undefined || value.trim().length === 0) {
+    return undefined;
+  }
+  return value.trim();
+}
+
+function readAuthKeysJson(value: string): PayoutSignerAuthKeyInput[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new Error(
+      "SPLIT402_PAYOUT_SIGNER_SERVICE_AUTH_KEYS_JSON must be a JSON array"
+    );
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error(
+      "SPLIT402_PAYOUT_SIGNER_SERVICE_AUTH_KEYS_JSON must be a JSON array"
+    );
+  }
+  return parsed.map((item, index) => {
+    const record = readPlainConfigRecord(
+      item,
+      `SPLIT402_PAYOUT_SIGNER_SERVICE_AUTH_KEYS_JSON[${index}]`
+    );
+    return {
+      keyId: readPlainConfigString(record.keyId, `auth key ${index} keyId`),
+      sharedSecret: readPlainConfigString(
+        record.sharedSecret,
+        `auth key ${index} sharedSecret`
+      ),
+      ...(record.status === undefined
+        ? {}
+        : {
+            status: readPlainAuthKeyStatus(
+              record.status,
+              `auth key ${index} status`
+            )
+          })
+    };
+  });
+}
+
+function readPlainConfigRecord(
+  value: unknown,
+  label: string
+): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`${label} must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function readPlainConfigString(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`${label} must be a non-empty string`);
+  }
+  return value.trim();
+}
+
+function readPlainAuthKeyStatus(
+  value: unknown,
+  label: string
+): PayoutSignerAuthKeyStatus {
+  if (value === "active" || value === "retired") {
+    return value;
+  }
+  throw new Error(`${label} must be active or retired`);
 }
 
 function readRequiredEnv(value: string | undefined, label: string): string {
