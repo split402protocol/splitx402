@@ -16,7 +16,8 @@ Implemented:
 - merchant webhook delivery feed for pending, processing, delivered, and
   dead-letter webhook outbox events;
 - MCP-facing demo bundle at `@split402/mcp-demo`;
-- merchant/referrer operations dashboard at `@split402/dashboard`.
+- merchant/referrer operations dashboard at `@split402/dashboard`;
+- staging proof scaffold, status validator, template, and runbook.
 
 ## MCP Demo Bundle
 
@@ -71,13 +72,27 @@ Run it with:
 corepack pnpm dashboard
 ```
 
+## Staging Proof
+
+Phase 7 now has a machine-checkable proof record for hosted end-to-end demo
+evidence:
+
+```bash
+corepack pnpm phase7:staging-proof > phase7-staging-proof.txt
+corepack pnpm phase7:staging:status phase7-staging-proof.txt
+```
+
+The proof must attach evidence for route discovery, x402 payment, Split402
+receipt verification, referrer earnings, dashboard summary, webhook delivery,
+payout obligations, and MCP bundle output from the same staging environment.
+
 ## Remaining Phase 7 Work
 
 - Expand the dashboard from public-alpha operations UI into a production hosted
   merchant/referrer service with hardened auth, sessions, and deployment config.
-- Add a hosted end-to-end staging proof where an agent discovers a route, pays
-  through x402, receives a Split402 receipt, and sees referrer earnings without
-  manual database work.
+- Run and approve the hosted end-to-end staging proof where an agent discovers a
+  route, pays through x402, receives a Split402 receipt, and sees referrer
+  earnings without manual database work.
 - Add merchant funding and outstanding-obligation views that make payout
   readiness clear before production use.
 - Package the MCP demo into a runnable MCP gateway if the demo needs direct

@@ -351,6 +351,8 @@ Current slice:
 - merchant/referrer dashboard UI with a narrow control-plane read proxy for
   summaries, reliability profiles, webhook delivery, routes, balances, and
   payouts.
+- Phase 7 staging proof scaffold, status validator, template, and runbook for
+  hosted end-to-end evidence.
 
 ## Later: Token Bonding And Atomic Settlement
 
