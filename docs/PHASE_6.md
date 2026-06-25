@@ -72,6 +72,9 @@ plus an unknown-outcome reconciliation queue and referrer payout views.
   incident-response evidence.
 - Added a payout signer staging smoke check for health, readiness, metrics, and
   secret-exposure validation.
+- Added `corepack pnpm phase6:signer-smoke` to generate a structured signer
+  smoke and secret-exposure review record from staging smoke output and audit
+  evidence.
 - Added a Kubernetes network policy starter that restricts payout signer ingress
   to the control plane.
 - Added machine-checkable signer policy evidence fields and a signer policy
@@ -193,5 +196,6 @@ the merchant has enough funding.
 - `corepack pnpm phase6:rotation-drill`
 - `corepack pnpm phase6:rollback-drill`
 - `corepack pnpm phase6:rpc-failover`
+- `corepack pnpm phase6:signer-smoke`
 - `corepack pnpm phase6:signer-policy`
 - `corepack pnpm payout:finality:failover-drill`

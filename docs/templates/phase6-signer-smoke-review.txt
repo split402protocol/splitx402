@@ -1,0 +1,16 @@
+review_id:
+review_date:
+reviewers:
+staging_environment:
+smoke_status:
+smoke_service:
+signer_reference:
+network:
+requests_total:
+signed_total:
+rejected_total:
+health_ready_metrics_evidence:
+endpoint_secret_exposure_evidence:
+audit_log_secret_exposure_evidence:
+review_decision: no-go
+review_notes:
