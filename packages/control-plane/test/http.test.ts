@@ -517,6 +517,87 @@ describe("control-plane HTTP API", () => {
     expect(loadedResponse.body.route.id).toBe(draft.routeId);
   });
 
+  it("searches routes with query filters and status selection", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const { app } = createTestApp({
+      withCampaignRegistry: true,
+      withMerchantRegistry: true,
+      withRouteRegistry: true
+    });
+    await createActiveCampaign(app);
+
+    const firstDraftResponse = await request(app)
+      .post("/v1/routes/drafts")
+      .send({
+        campaignId: bundle.artifacts.receipt.campaignId,
+        referrerWallet: REFERRER_WALLET,
+        payoutWallet: PAYOUT_WALLET,
+        operationIds: [bundle.artifacts.receipt.operationId],
+        expiresAt: "2026-06-25T00:00:00Z",
+        nonce: "route-nonce-http-0001"
+      })
+      .expect(201);
+    const firstDraft = firstDraftResponse.body.draft as RouteDraft;
+    await request(app)
+      .post("/v1/routes")
+      .send({ claim: signRouteDraft(firstDraft) })
+      .expect(201);
+
+    const wildcardDraftResponse = await request(app)
+      .post("/v1/routes/drafts")
+      .send({
+        id: "rte_cccccccccccccccccccccccccccccccc",
+        campaignId: bundle.artifacts.receipt.campaignId,
+        referrerWallet: REFERRER_WALLET,
+        payoutWallet: PAYOUT_WALLET,
+        operationIds: ["*"],
+        expiresAt: "2026-06-25T00:00:00Z",
+        nonce: "route-nonce-http-0002"
+      })
+      .expect(201);
+    const wildcardDraft = wildcardDraftResponse.body.draft as RouteDraft;
+    await request(app)
+      .post("/v1/routes")
+      .send({ claim: signRouteDraft(wildcardDraft) })
+      .expect(201);
+
+    const activeSearchResponse = await request(app)
+      .get("/v1/routes/search")
+      .query({
+        campaignId: bundle.artifacts.receipt.campaignId,
+        operationId: bundle.artifacts.receipt.operationId
+      })
+      .expect(200);
+    expect(activeSearchResponse.body.routes.map((route: { id: string }) => route.id))
+      .toEqual([wildcardDraft.routeId, firstDraft.routeId]);
+
+    await request(app)
+      .post(`/v1/routes/${wildcardDraft.routeId}/suspend`)
+      .expect(200);
+
+    const defaultSearchResponse = await request(app)
+      .get("/v1/routes/search")
+      .query({ operationId: bundle.artifacts.receipt.operationId })
+      .expect(200);
+    const suspendedSearchResponse = await request(app)
+      .get("/v1/routes/search")
+      .query({ operationId: "unknown-operation", status: "suspended" })
+      .expect(200);
+    const limitedSearchResponse = await request(app)
+      .get("/v1/routes/search")
+      .query({ limit: "1" })
+      .expect(200);
+
+    await request(app).get("/v1/routes/search").query({ limit: "101" }).expect(400);
+
+    expect(defaultSearchResponse.body.routes.map((route: { id: string }) => route.id))
+      .toEqual([firstDraft.routeId]);
+    expect(
+      suspendedSearchResponse.body.routes.map((route: { id: string }) => route.id)
+    ).toEqual([wildcardDraft.routeId]);
+    expect(limitedSearchResponse.body.routes).toHaveLength(1);
+  });
+
   it("suspends active routes with merchant-owner authorization when required", async () => {
     const bundle = createSampleProtocolArtifacts();
     const { app } = createTestApp({

@@ -53,6 +53,7 @@ import {
 } from "./merchants.js";
 import {
   InMemoryRouteRegistry,
+  normalizeRouteSearchInput,
   RouteRegistryConflictError,
   RouteRegistryValidationError,
   type ActivateRouteInput,
@@ -62,6 +63,7 @@ import {
   type RouteOperationScope,
   type RouteRecord,
   type RouteRegistry,
+  type SearchRoutesInput,
   type RouteStatus,
   type SuspendRouteInput
 } from "./routes.js";
@@ -953,6 +955,48 @@ export class PostgresRouteRegistry implements RouteRegistry {
     );
   }
 
+  async searchRoutes(input: SearchRoutesInput = {}): Promise<RouteRecord[]> {
+    const search = normalizeRouteSearchInput(input, this.now());
+    const values: unknown[] = [];
+    const pushValue = (value: unknown): number => {
+      values.push(value);
+      return values.length;
+    };
+    const where = [`status = $${pushValue(search.status)}`];
+    if (search.status === "active") {
+      where.push(`expires_at > $${pushValue(search.now)}`);
+    }
+    if (search.campaignId !== undefined) {
+      where.push(`campaign_id = $${pushValue(search.campaignId)}`);
+    }
+    if (search.referrerWallet !== undefined) {
+      where.push(`referrer_wallet = $${pushValue(search.referrerWallet)}`);
+    }
+    if (search.resourceOrigin !== undefined) {
+      where.push(`resource_origin = $${pushValue(search.resourceOrigin)}`);
+    }
+    if (search.operationId !== undefined) {
+      const operationIdParam = pushValue(search.operationId);
+      const wildcardParam = pushValue("*");
+      where.push(
+        `(operation_ids ? $${operationIdParam} or operation_ids ? $${wildcardParam})`
+      );
+    }
+    const limitParam = pushValue(search.limit);
+    const result = await this.db.query<RouteRow>(
+      `select id, campaign_id, campaign_version_min, referrer_wallet,
+              payout_wallet, resource_origin, operation_ids, claim_hash,
+              claim_json, signing_bytes_hex, status, issued_at, expires_at,
+              nonce, metadata_hash, created_at, activated_at
+         from routes
+        where ${where.join(" and ")}
+        order by created_at desc, id desc
+        limit $${limitParam}`,
+      values
+    );
+    return result.rows.map(mapRoute);
+  }
+
   private async getRouteByClaimHash(
     claimHash: `sha256:${string}`
   ): Promise<RouteRecord | undefined> {
@@ -968,6 +1012,10 @@ export class PostgresRouteRegistry implements RouteRegistry {
     );
     const row = result.rows[0];
     return row === undefined ? undefined : mapRoute(row);
+  }
+
+  private now(): string {
+    return (this.options.now?.() ?? new Date()).toISOString();
   }
 
   private memoryRegistry(): InMemoryRouteRegistry {

@@ -98,7 +98,7 @@ Deliverables:
 - wallet authentication;
 - merchant/key/origin APIs;
 - campaign version APIs;
-- route draft/sign/activate/suspend flow;
+- route draft/sign/activate/suspend/search flow;
 - public receipt ingestion;
 - chain verification worker;
 - accrual and zero-sum ledger;
@@ -145,6 +145,8 @@ Current slice:
 - route draft/sign/activate/suspend APIs with canonical unsigned referral claims,
   referrer signature verification, active campaign scope checks, and
   merchant-owner-authorized suspension when auth is required;
+- route search API for active route discovery by campaign, referrer, origin,
+  operation id, status, and bounded result limit;
 - PostgreSQL campaign registry adapter with campaign, immutable version,
   operation, and activation persistence;
 - PostgreSQL route registry adapter with active/suspended route status, operation

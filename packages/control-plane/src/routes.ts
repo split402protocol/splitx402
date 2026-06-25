@@ -45,6 +45,25 @@ export interface SuspendRouteInput {
   routeId: string;
 }
 
+export interface SearchRoutesInput {
+  campaignId?: string;
+  referrerWallet?: string;
+  resourceOrigin?: string;
+  operationId?: string;
+  status?: RouteStatus;
+  limit?: number;
+}
+
+export interface NormalizedRouteSearchInput {
+  campaignId?: string;
+  referrerWallet?: string;
+  resourceOrigin?: string;
+  operationId?: string;
+  status: RouteStatus;
+  limit: number;
+  now: string;
+}
+
 export interface RouteRecord {
   id: string;
   campaignId: string;
@@ -70,6 +89,7 @@ export interface RouteRegistry {
   activateRoute(input: ActivateRouteInput): Promise<RouteRecord> | RouteRecord;
   getRoute(routeId: string): Promise<RouteRecord | undefined> | RouteRecord | undefined;
   suspendRoute(input: SuspendRouteInput): Promise<RouteRecord | undefined> | RouteRecord | undefined;
+  searchRoutes(input?: SearchRoutesInput): Promise<RouteRecord[]> | RouteRecord[];
 }
 
 export interface InMemoryRouteRegistryOptions {
@@ -230,9 +250,50 @@ export class InMemoryRouteRegistry implements RouteRegistry {
     return cloneRoute(suspended);
   }
 
+  searchRoutes(input: SearchRoutesInput = {}): RouteRecord[] {
+    const search = normalizeRouteSearchInput(input, this.now());
+    return Array.from(this.routesById.values())
+      .filter((route) => routeMatchesSearch(route, search))
+      .sort(compareRoutesNewestFirst)
+      .slice(0, search.limit)
+      .map(cloneRoute);
+  }
+
   private now(): string {
     return (this.options.now?.() ?? new Date()).toISOString();
   }
+}
+
+export function normalizeRouteSearchInput(
+  input: SearchRoutesInput = {},
+  now: string
+): NormalizedRouteSearchInput {
+  const limit = input.limit ?? 50;
+  if (!Number.isInteger(limit) || limit <= 0 || limit > 100) {
+    throw new RouteRegistryValidationError("limit must be an integer from 1 to 100");
+  }
+  return {
+    ...(input.campaignId === undefined
+      ? {}
+      : { campaignId: assertSplit402Id(input.campaignId, "campaignId") }),
+    ...(input.referrerWallet === undefined
+      ? {}
+      : {
+          referrerWallet: assertBase58PublicKey(
+            input.referrerWallet,
+            "referrerWallet"
+          )
+        }),
+    ...(input.resourceOrigin === undefined
+      ? {}
+      : { resourceOrigin: assertUrlOrigin(input.resourceOrigin) }),
+    ...(input.operationId === undefined
+      ? {}
+      : { operationId: assertOperationId(input.operationId) }),
+    status: assertRouteStatus(input.status ?? "active"),
+    limit,
+    now: assertUtcTimestamp(now, "now")
+  };
 }
 
 export function isRouteRegistryValidationError(
@@ -325,6 +386,26 @@ function assertOperationScope(value: RouteOperationScope): RouteOperationScope {
   return operationIds;
 }
 
+function assertOperationId(value: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new RouteRegistryValidationError(
+      "operationId must be a non-empty string"
+    );
+  }
+  return value;
+}
+
+function assertRouteStatus(value: RouteStatus): RouteStatus {
+  if (
+    !["active", "suspended", "expired", "revoked"].includes(value)
+  ) {
+    throw new RouteRegistryValidationError(
+      "status must be active, suspended, expired, or revoked"
+    );
+  }
+  return value;
+}
+
 function assertUrlOrigin(value: string): string {
   try {
     const url = new URL(value);
@@ -363,4 +444,56 @@ function cloneClaim(claim: ReferralClaimV1): ReferralClaimV1 {
 
 function cloneOperationScope(scope: RouteOperationScope): RouteOperationScope {
   return scope[0] === "*" ? ["*"] : [...scope];
+}
+
+function routeMatchesSearch(
+  route: RouteRecord,
+  search: NormalizedRouteSearchInput
+): boolean {
+  if (route.status !== search.status) {
+    return false;
+  }
+  if (
+    search.status === "active" &&
+    Date.parse(route.expiresAt) <= Date.parse(search.now)
+  ) {
+    return false;
+  }
+  if (search.campaignId !== undefined && route.campaignId !== search.campaignId) {
+    return false;
+  }
+  if (
+    search.referrerWallet !== undefined &&
+    route.referrerWallet !== search.referrerWallet
+  ) {
+    return false;
+  }
+  if (
+    search.resourceOrigin !== undefined &&
+    route.resourceOrigin !== search.resourceOrigin
+  ) {
+    return false;
+  }
+  if (
+    search.operationId !== undefined &&
+    !routeCoversOperation(route.operationIds, search.operationId)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function routeCoversOperation(
+  operationIds: RouteOperationScope,
+  operationId: string
+): boolean {
+  return operationIds[0] === "*" || operationIds.some((item) => item === operationId);
+}
+
+function compareRoutesNewestFirst(left: RouteRecord, right: RouteRecord): number {
+  const createdAtComparison = Date.parse(right.createdAt) - Date.parse(left.createdAt);
+  if (createdAtComparison !== 0) {
+    return createdAtComparison;
+  }
+  return right.id.localeCompare(left.id);
 }

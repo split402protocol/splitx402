@@ -46,7 +46,8 @@ import {
   isRouteRegistryConflictError,
   isRouteRegistryValidationError,
   type RouteOperationScope,
-  type RouteRegistry
+  type RouteRegistry,
+  type RouteStatus
 } from "./routes.js";
 import {
   PostgresCampaignRegistry,
@@ -1259,6 +1260,45 @@ export function createRouteRegistryRouter(
     }
   });
 
+  router.get("/v1/routes/search", async (req, res, next) => {
+    try {
+      const campaignId = readOptionalRouteQueryString(
+        req.query.campaignId,
+        "campaignId"
+      );
+      const referrerWallet = readOptionalRouteQueryString(
+        req.query.referrerWallet,
+        "referrerWallet"
+      );
+      const resourceOrigin = readOptionalRouteQueryString(
+        req.query.resourceOrigin,
+        "resourceOrigin"
+      );
+      const operationId = readOptionalRouteQueryString(
+        req.query.operationId,
+        "operationId"
+      );
+      const status = readOptionalRouteStatus(req.query.status);
+      const limit = readOptionalRouteSearchLimit(req.query.limit);
+      const routes = await routeRegistry.searchRoutes({
+        ...(campaignId === undefined ? {} : { campaignId }),
+        ...(referrerWallet === undefined ? {} : { referrerWallet }),
+        ...(resourceOrigin === undefined ? {} : { resourceOrigin }),
+        ...(operationId === undefined ? {} : { operationId }),
+        ...(status === undefined ? {} : { status }),
+        ...(limit === undefined ? {} : { limit })
+      });
+      res.json({ routes });
+    } catch (error) {
+      if (
+        !sendRouteRegistryError(res, error) &&
+        !sendMerchantRegistryError(res, error)
+      ) {
+        next(error);
+      }
+    }
+  });
+
   router.get("/v1/routes/:routeId", async (req, res, next) => {
     try {
       const routeId = readRouteParam(req.params.routeId, "routeId");
@@ -1514,6 +1554,48 @@ function readOptionalRouteOperationScope(
     throw new RouteRegistryValidationError("operationIds entries must be unique");
   }
   return operationIds;
+}
+
+function readOptionalRouteQueryString(
+  value: unknown,
+  label: string
+): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new RouteRegistryValidationError(`${label} must be a non-empty string`);
+  }
+  return value;
+}
+
+function readOptionalRouteStatus(value: unknown): RouteStatus | undefined {
+  const status = readOptionalRouteQueryString(value, "status");
+  if (status === undefined) {
+    return undefined;
+  }
+  if (
+    status === "active" ||
+    status === "suspended" ||
+    status === "expired" ||
+    status === "revoked"
+  ) {
+    return status;
+  }
+  throw new RouteRegistryValidationError(
+    "status must be active, suspended, expired, or revoked"
+  );
+}
+
+function readOptionalRouteSearchLimit(value: unknown): number | undefined {
+  const limit = readOptionalRouteQueryString(value, "limit");
+  if (limit === undefined) {
+    return undefined;
+  }
+  if (!/^[1-9][0-9]*$/u.test(limit)) {
+    throw new RouteRegistryValidationError("limit must be a positive integer");
+  }
+  return Number.parseInt(limit, 10);
 }
 
 function readOptionalSha256Hash(

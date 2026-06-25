@@ -24,6 +24,7 @@ import {
   ReceiptIngestionPersistenceConflictError,
   ReceiptIngestor,
   RouteRegistryConflictError,
+  RouteRegistryValidationError,
   WalletAuthRejectedError,
   WalletAuthenticator,
   type CampaignTermsInput,
@@ -534,6 +535,62 @@ describe("PostgresRouteRegistry", () => {
       registry.suspendRoute({ routeId: "rte_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" })
     ).resolves.toBeUndefined();
   });
+
+  it("searches persisted routes by filters and status", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const fakePool = new FakePostgresPool();
+    const registry = createPostgresRouteRegistry(fakePool);
+    const first = await registry.activateRoute({
+      claim: signRouteDraft(registry.createRouteDraft(createRouteDraftInput()))
+    });
+    const second = await registry.activateRoute({
+      claim: signRouteDraft(
+        registry.createRouteDraft(
+          createRouteDraftInput({
+            id: "rte_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            operationIds: ["operation-two"],
+            nonce: "route-nonce-postgres-0002"
+          })
+        )
+      )
+    });
+    const wildcard = await registry.activateRoute({
+      claim: signRouteDraft(
+        registry.createRouteDraft(
+          createRouteDraftInput({
+            id: "rte_cccccccccccccccccccccccccccccccc",
+            operationIds: ["*"],
+            nonce: "route-nonce-postgres-0003"
+          })
+        )
+      )
+    });
+
+    await registry.suspendRoute({ routeId: second.id });
+
+    await expect(registry.searchRoutes()).resolves.toEqual([
+      expect.objectContaining({ id: wildcard.id }),
+      expect.objectContaining({ id: first.id })
+    ]);
+    await expect(
+      registry.searchRoutes({
+        campaignId: bundle.artifacts.receipt.campaignId,
+        referrerWallet: REFERRER_WALLET,
+        resourceOrigin: bundle.artifacts.receipt.merchantOrigin,
+        operationId: bundle.artifacts.receipt.operationId,
+        limit: 1
+      })
+    ).resolves.toEqual([expect.objectContaining({ id: wildcard.id })]);
+    await expect(
+      registry.searchRoutes({ operationId: "operation-two" })
+    ).resolves.toEqual([expect.objectContaining({ id: wildcard.id })]);
+    await expect(registry.searchRoutes({ status: "suspended" })).resolves.toEqual([
+      expect.objectContaining({ id: second.id })
+    ]);
+    await expect(registry.searchRoutes({ limit: 101 })).rejects.toBeInstanceOf(
+      RouteRegistryValidationError
+    );
+  });
 });
 
 describe("PostgresWalletAuthStore", () => {
@@ -952,7 +1009,7 @@ class FakePostgresClient implements PostgresTransactionClient {
       );
     }
     if (normalized.includes("from routes")) {
-      return result(this.database.selectRoute(normalized, values) as unknown as Row[]);
+      return result(this.database.selectRoutes(normalized, values) as unknown as Row[]);
     }
     if (normalized.includes("from outbox_events")) {
       return result(
@@ -1490,21 +1547,64 @@ class FakePostgresDatabase {
     return version === undefined ? [] : [version];
   }
 
-  selectRoute(
+  selectRoutes(
     normalizedSql: string,
     values: readonly unknown[]
   ): StoredRouteRow[] {
     const value = readString(values[0]);
-    const route = this.routes.find((row) => {
-      if (normalizedSql.includes("where id = $1")) {
-        return row.id === value;
-      }
-      if (normalizedSql.includes("where claim_hash = $1")) {
-        return row.claim_hash === value;
-      }
-      return false;
-    });
-    return route === undefined ? [] : [route];
+    if (
+      normalizedSql.includes("where id = $1") ||
+      normalizedSql.includes("where claim_hash = $1")
+    ) {
+      const route = this.routes.find((row) => {
+        if (normalizedSql.includes("where id = $1")) {
+          return row.id === value;
+        }
+        if (normalizedSql.includes("where claim_hash = $1")) {
+          return row.claim_hash === value;
+        }
+        return false;
+      });
+      return route === undefined ? [] : [route];
+    }
+
+    let valueIndex = 0;
+    const status = readString(values[valueIndex++]);
+    let routes = this.routes.filter((row) => row.status === status);
+    if (normalizedSql.includes("expires_at >")) {
+      const now = readString(values[valueIndex++]);
+      routes = routes.filter((row) => Date.parse(row.expires_at) > Date.parse(now));
+    }
+    if (normalizedSql.includes("campaign_id =")) {
+      const campaignId = readString(values[valueIndex++]);
+      routes = routes.filter((row) => row.campaign_id === campaignId);
+    }
+    if (normalizedSql.includes("referrer_wallet =")) {
+      const referrerWallet = readString(values[valueIndex++]);
+      routes = routes.filter((row) => row.referrer_wallet === referrerWallet);
+    }
+    if (normalizedSql.includes("resource_origin =")) {
+      const resourceOrigin = readString(values[valueIndex++]);
+      routes = routes.filter((row) => row.resource_origin === resourceOrigin);
+    }
+    if (normalizedSql.includes("operation_ids ?")) {
+      const operationId = readString(values[valueIndex++]);
+      const wildcard = readString(values[valueIndex++]);
+      routes = routes.filter((row) => {
+        const operationIds = JSON.parse(row.operation_ids) as string[];
+        return operationIds.includes(operationId) || operationIds.includes(wildcard);
+      });
+    }
+    const limit = readNumber(values[valueIndex++]);
+    return routes
+      .sort((left, right) => {
+        const createdAtComparison =
+          Date.parse(right.created_at) - Date.parse(left.created_at);
+        return createdAtComparison === 0
+          ? right.id.localeCompare(left.id)
+          : createdAtComparison;
+      })
+      .slice(0, limit);
   }
 
   suspendRoute(values: readonly unknown[]): StoredRouteRow[] {

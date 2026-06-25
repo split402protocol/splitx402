@@ -105,6 +105,79 @@ describe("InMemoryRouteRegistry", () => {
       registry.suspendRoute({ routeId: "rte_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" })
     ).toBeUndefined();
   });
+
+  it("searches routes with active defaults, filters, wildcard operation matches, and limits", () => {
+    const bundle = createSampleProtocolArtifacts();
+    const registry = createRouteRegistry();
+    const first = registry.activateRoute({
+      claim: signRouteDraft(createRouteDraft())
+    });
+    const second = registry.activateRoute({
+      claim: signRouteDraft(
+        createRouteDraft({
+          id: "rte_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          operationIds: ["operation-two"],
+          nonce: "route-nonce-0002"
+        })
+      )
+    });
+    const wildcard = registry.activateRoute({
+      claim: signRouteDraft(
+        createRouteDraft({
+          id: "rte_cccccccccccccccccccccccccccccccc",
+          operationIds: ["*"],
+          nonce: "route-nonce-0003"
+        })
+      )
+    });
+
+    registry.suspendRoute({ routeId: second.id });
+
+    expect(registry.searchRoutes().map((route) => route.id)).toEqual([
+      wildcard.id,
+      first.id
+    ]);
+    expect(
+      registry
+        .searchRoutes({ operationId: bundle.artifacts.receipt.operationId })
+        .map((route) => route.id)
+    ).toEqual([wildcard.id, first.id]);
+    expect(
+      registry.searchRoutes({ operationId: "operation-two" }).map((route) => route.id)
+    ).toEqual([wildcard.id]);
+    expect(
+      registry.searchRoutes({ status: "suspended" }).map((route) => route.id)
+    ).toEqual([second.id]);
+    expect(
+      registry
+        .searchRoutes({
+          campaignId: first.campaignId,
+          referrerWallet: REFERRER_WALLET,
+          resourceOrigin: first.resourceOrigin,
+          limit: 1
+        })
+        .map((route) => route.id)
+    ).toEqual([wildcard.id]);
+    expect(() => registry.searchRoutes({ limit: 101 })).toThrow(
+      RouteRegistryValidationError
+    );
+  });
+
+  it("excludes expired active routes from default search", () => {
+    let now = new Date("2026-06-24T00:00:00Z");
+    const registry = new InMemoryRouteRegistry({
+      now: () => now,
+      routeIdFactory: () => "rte_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      nonceFactory: () => "route-nonce-0001"
+    });
+    const route = registry.activateRoute({ claim: signRouteDraft(createRouteDraft()) });
+
+    expect(registry.searchRoutes().map((record) => record.id)).toEqual([route.id]);
+
+    now = new Date("2026-06-26T00:00:00Z");
+
+    expect(registry.searchRoutes()).toEqual([]);
+  });
 });
 
 function createRouteRegistry(): InMemoryRouteRegistry {
