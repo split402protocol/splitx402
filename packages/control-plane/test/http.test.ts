@@ -1046,6 +1046,9 @@ describe("control-plane HTTP API", () => {
     const loadedResponse = await request(app)
       .get(`/v1/routes/${draft.routeId}`)
       .expect(200);
+    const bazaarResponse = await request(app)
+      .get(`/v1/routes/${draft.routeId}/bazaar-resources`)
+      .expect(200);
 
     expect(draft.claim).toEqual(
       expect.objectContaining({
@@ -1058,6 +1061,36 @@ describe("control-plane HTTP API", () => {
     expect(routeResponse.body.route.status).toBe("active");
     expect(routeResponse.body.route.claimHash).toMatch(/^sha256:[0-9a-f]{64}$/u);
     expect(loadedResponse.body.route.id).toBe(draft.routeId);
+    expect(bazaarResponse.body.resources).toEqual([
+      expect.objectContaining({
+        schema: "split402.bazaar_resource.v1",
+        resource: `${bundle.artifacts.receipt.merchantOrigin}/v1/risk`,
+        type: "http",
+        x402Version: 2,
+        accepts: [
+          {
+            scheme: "exact",
+            network: bundle.artifacts.receipt.network,
+            amount: bundle.artifacts.receipt.requiredAmountAtomic,
+            asset: bundle.artifacts.receipt.asset,
+            payTo: bundle.artifacts.receipt.payToWallet
+          }
+        ],
+        metadata: expect.objectContaining({
+          method: "POST",
+          operationId: bundle.artifacts.receipt.operationId,
+          split402: expect.objectContaining({
+            routeId: draft.routeId,
+            campaignId: bundle.artifacts.receipt.campaignId,
+            campaignVersion: 1,
+            referrerWallet: REFERRER_WALLET,
+            payoutWallet: PAYOUT_WALLET,
+            commissionBps: bundle.artifacts.receipt.commissionBps,
+            settlementMode: "accrual"
+          })
+        })
+      })
+    ]);
   });
 
   it("rotates route payout wallets and exposes immutable route versions", async () => {
