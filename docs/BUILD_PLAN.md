@@ -377,6 +377,8 @@ Current slice:
   and summarizes custody-bundle blockers;
 - add a Phase 6 custody evidence bundle scaffold command that emits validator
   fields in canonical order with safe defaults;
+- add a Phase 6 custody evidence assembler that derives bundle fields from
+  generated records, attachment paths, and explicit overrides;
 - add a Phase 6 RPC failover review generator that validates the finality
   failover drill passed and observed status from the secondary RPC;
 - add signed-byte payout transaction persistence and Solana broadcast submission

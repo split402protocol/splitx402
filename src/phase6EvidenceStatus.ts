@@ -10,6 +10,11 @@ export const PHASE6_EVIDENCE_COMMANDS = [
     evidenceField: "review_id",
   },
   {
+    gate: "custody_bundle_assembly",
+    command: "corepack pnpm phase6:evidence:assemble",
+    evidenceField: "review_id",
+  },
+  {
     gate: "signer_image_provenance",
     command: "corepack pnpm phase6:image-provenance",
     evidenceField: "signer_image_dependency_audit_output",

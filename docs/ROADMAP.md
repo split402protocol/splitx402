@@ -293,6 +293,8 @@ Current slice:
 - Phase 6 evidence status reporting for required evidence commands and
   custody-bundle blockers;
 - Phase 6 custody evidence bundle scaffolding in canonical validator order;
+- Phase 6 custody evidence bundle assembly from generated records, attachment
+  paths, and explicit overrides;
 - Phase 6 RPC failover review generation that validates the finality drill
   passed and observed status from the secondary RPC;
 - signed-byte payout transaction persistence and Solana broadcast submission
