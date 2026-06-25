@@ -66,7 +66,7 @@ flowchart LR
 | Idempotent receipt ingestion | Implemented in the control plane with receipt, payment, settlement, and hash conflict checks. |
 | Commission ledger | Implemented as zero-sum accounting rows for merchant liability, referrer payable, and protocol fee payable. |
 | Chain verification | Implemented as an outbox-driven Solana JSON-RPC worker for settlement signature and transfer checks. |
-| Webhooks | Implemented for accepted-receipt events with signed delivery envelopes and retry/dead-letter handling. |
+| Webhooks | Implemented for accepted-receipt and finalized-payout events with signed delivery envelopes and retry/dead-letter handling. |
 | Merchant SDK reliability boundary | Implemented with cached campaign lookup, service-key rotation helpers, payment identifiers, operation digests, and merchant-local receipt outbox primitives. |
 | Payout engine | In progress: preview, allocation, Solana transfer planning, simulation, signer policy, signed-byte persistence, broadcast boundary, finality monitor, rollup, and idempotent ledger closure are implemented. |
 | Atomic split settlement | Later research. The MVP does not split the original x402 transaction onchain. |
@@ -134,7 +134,7 @@ sequenceDiagram
   C->>C: Allocate available accruals into payout batch
   W->>S: Broadcast merchant-funded payout transaction
   S-->>W: Finalized payout
-  W->>C: Close payout ledger exactly once
+  W->>C: Close payout ledger exactly once and enqueue payout finalized events
   W->>R: Referrer receives USDC
 ```
 
@@ -389,7 +389,7 @@ payout-engine boundaries.
 Active hardening is focused on Phase 6:
 
 - concrete signer runtime wiring;
-- payout webhooks beyond receipt acceptance;
+- payout webhooks for submitted, failed, and outcome-unknown states;
 - reconciliation for unknown payout outcomes;
 - referrer payout history and balance views;
 - production security review before any mainnet use.

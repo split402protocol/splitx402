@@ -545,6 +545,62 @@ describe("PostgresReceiptIngestionStore", () => {
       })
     );
     expect(repeatedLedgerClose?.id).toBe(ledgerClose?.id);
+    expect(repeatedLedgerClose?.sourceType).toBe("payout_batch");
+    expect(fakePool.database.outboxEvents).toHaveLength(4);
+    const payoutFinalizedEvent = findOutboxEvent(
+      fakePool.database.outboxEvents,
+      "payout.finalized.v1"
+    );
+    const payoutFinalizedWebhookEvent = findOutboxEvent(
+      fakePool.database.outboxEvents,
+      "webhook.payout.finalized.v1"
+    );
+    expect(payoutFinalizedEvent).toEqual(
+      expect.objectContaining({
+        event_type: "payout.finalized.v1",
+        aggregate_type: "payout_batch",
+        aggregate_id: batch.id,
+        status: "pending",
+        attempts: 0,
+        available_at: "2026-06-24T00:09:00.000Z",
+        created_at: "2026-06-24T00:09:00.000Z"
+      })
+    );
+    expect(readJsonPayload(payoutFinalizedEvent?.payload)).toEqual(
+      expect.objectContaining({
+        payoutBatchId: batch.id,
+        merchantId: bundle.artifacts.receipt.merchantId,
+        payoutWalletId: "mpw_ffffffffffffffffffffffffffffffff",
+        network: bundle.artifacts.receipt.network,
+        asset: bundle.artifacts.receipt.asset,
+        status: "finalized",
+        totalAmountAtomic: "2000",
+        itemCount: 1,
+        accrualCount: 1,
+        ledgerTransactionId: ledgerClose?.id,
+        finalizedAt: "2026-06-24T00:09:00.000Z",
+        items: [
+          expect.objectContaining({
+            payoutItemId: batch.items[0]?.id,
+            destinationWallet: bundle.artifacts.receipt.payoutWallet,
+            amountAtomic: "2000",
+            status: "finalized",
+            accrualIds: [verified.accrual.id]
+          })
+        ]
+      })
+    );
+    expect(payoutFinalizedWebhookEvent).toEqual(
+      expect.objectContaining({
+        event_type: "webhook.payout.finalized.v1",
+        aggregate_type: "payout_batch",
+        aggregate_id: batch.id,
+        status: "pending"
+      })
+    );
+    expect(readJsonPayload(payoutFinalizedWebhookEvent?.payload)).toEqual(
+      readJsonPayload(payoutFinalizedEvent?.payload)
+    );
     expect(fakePool.database.ledgerTransactions).toHaveLength(2);
     expect(fakePool.database.ledgerEntries).toHaveLength(5);
     expect(fakePool.database.payoutTransactions).toHaveLength(1);
