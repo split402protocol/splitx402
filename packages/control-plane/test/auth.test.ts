@@ -37,7 +37,36 @@ describe("wallet authentication", () => {
 
     expect(challenge.message.startsWith("split402:auth:v1\n")).toBe(true);
     expect(session.tokenType).toBe("Bearer");
+    expect(session.refreshToken).toMatch(/^test-refresh-token-/u);
+    expect(session.refreshTokenExpiresAt).toBe("2026-06-24T00:20:00.000Z");
     expect(authenticated?.wallet).toBe(OWNER_WALLET);
+  });
+
+  it("rotates refresh tokens into new bearer sessions", async () => {
+    const authenticator = createAuthenticator();
+    const challenge = await authenticator.createChallenge({
+      wallet: OWNER_WALLET,
+      network: NETWORK
+    });
+    const session = await authenticator.createSession({
+      challengeId: challenge.challengeId,
+      signature: signChallenge(challenge.message)
+    });
+
+    const refreshed = await authenticator.refreshSession({
+      refreshToken: session.refreshToken
+    });
+
+    expect(refreshed.sessionId).not.toBe(session.sessionId);
+    expect(refreshed.accessToken).toMatch(/^test-token-/u);
+    expect(refreshed.refreshToken).toMatch(/^test-refresh-token-/u);
+    expect(refreshed.refreshToken).not.toBe(session.refreshToken);
+    await expect(
+      authenticator.refreshSession({ refreshToken: session.refreshToken })
+    ).rejects.toBeInstanceOf(WalletAuthRejectedError);
+    await expect(
+      authenticator.authenticateAccessToken(refreshed.accessToken)
+    ).resolves.toEqual(expect.objectContaining({ wallet: OWNER_WALLET }));
   });
 
   it("rejects replayed challenges", async () => {
@@ -85,6 +114,11 @@ describe("wallet authentication", () => {
     await expect(
       authenticator.authenticateAccessToken(session.accessToken)
     ).resolves.toBeUndefined();
+
+    now = new Date("2026-06-24T00:21:00Z");
+    await expect(
+      authenticator.refreshSession({ refreshToken: session.refreshToken })
+    ).rejects.toBeInstanceOf(WalletAuthRejectedError);
   });
 });
 
@@ -96,14 +130,17 @@ function createAuthenticator(
     now,
     challengeTtlMs: 60_000,
     sessionTtlMs: 10 * 60_000,
+    refreshTokenTtlMs: 20 * 60_000,
     challengeIdFactory: () => nextAuthId("chl", ++idSequence),
     sessionIdFactory: () => nextAuthId("ses", ++idSequence),
+    refreshTokenIdFactory: () => nextAuthId("rft", ++idSequence),
     nonceFactory: () => `nonce-${idSequence}`,
-    accessTokenFactory: () => `test-token-${idSequence}`
+    accessTokenFactory: () => `test-token-${idSequence}`,
+    refreshTokenFactory: () => `test-refresh-token-${idSequence}`
   });
 }
 
-function nextAuthId(prefix: "chl" | "ses", sequence: number): string {
+function nextAuthId(prefix: "chl" | "ses" | "rft", sequence: number): string {
   return `${prefix}_${sequence.toString(16).padStart(32, "0")}`;
 }
 

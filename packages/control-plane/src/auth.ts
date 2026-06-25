@@ -34,8 +34,23 @@ export interface AuthenticatedWalletSession {
   expiresAt: string;
 }
 
+export interface WalletAuthRefreshTokenRecord {
+  refreshTokenId: string;
+  sessionId: string;
+  wallet: string;
+  network: string;
+  purpose: WalletAuthPurpose;
+  challengeId: string;
+  issuedAt: string;
+  expiresAt: string;
+  revokedAt?: string;
+  replacedBySessionId?: string;
+}
+
 export interface WalletAuthSessionResult extends AuthenticatedWalletSession {
   accessToken: string;
+  refreshToken: string;
+  refreshTokenExpiresAt: string;
   tokenType: "Bearer";
 }
 
@@ -49,6 +64,10 @@ export interface CreateWalletAuthSessionInput {
   challengeId: string;
   signature: string;
   publicKey?: string;
+}
+
+export interface RefreshWalletAuthSessionInput {
+  refreshToken: string;
 }
 
 export interface WalletAuthStore {
@@ -67,16 +86,31 @@ export interface WalletAuthStore {
   getSession(
     tokenHash: string
   ): Promise<AuthenticatedWalletSession | undefined> | AuthenticatedWalletSession | undefined;
+  saveRefreshToken(
+    tokenHash: string,
+    refreshToken: WalletAuthRefreshTokenRecord
+  ): Promise<void> | void;
+  getRefreshToken(
+    tokenHash: string
+  ): Promise<WalletAuthRefreshTokenRecord | undefined> | WalletAuthRefreshTokenRecord | undefined;
+  revokeRefreshToken(
+    tokenHash: string,
+    revokedAt: string,
+    replacedBySessionId?: string
+  ): Promise<boolean> | boolean;
 }
 
 export interface WalletAuthenticatorOptions {
   now?: () => Date;
   challengeTtlMs?: number;
   sessionTtlMs?: number;
+  refreshTokenTtlMs?: number;
   challengeIdFactory?: () => string;
   sessionIdFactory?: () => string;
+  refreshTokenIdFactory?: () => string;
   nonceFactory?: () => string;
   accessTokenFactory?: () => string;
+  refreshTokenFactory?: () => string;
 }
 
 export class WalletAuthValidationError extends Error {
@@ -100,6 +134,7 @@ export class WalletAuthRejectedError extends Error {
 export class InMemoryWalletAuthStore implements WalletAuthStore {
   private readonly challengesById = new Map<string, WalletAuthChallengeRecord>();
   private readonly sessionsByTokenHash = new Map<string, AuthenticatedWalletSession>();
+  private readonly refreshTokensByHash = new Map<string, WalletAuthRefreshTokenRecord>();
 
   saveChallenge(challenge: WalletAuthChallengeRecord): void {
     this.challengesById.set(challenge.challengeId, cloneChallenge(challenge));
@@ -126,6 +161,37 @@ export class InMemoryWalletAuthStore implements WalletAuthStore {
   getSession(tokenHash: string): AuthenticatedWalletSession | undefined {
     const session = this.sessionsByTokenHash.get(tokenHash);
     return session === undefined ? undefined : cloneSession(session);
+  }
+
+  saveRefreshToken(
+    tokenHash: string,
+    refreshToken: WalletAuthRefreshTokenRecord
+  ): void {
+    this.refreshTokensByHash.set(tokenHash, cloneRefreshToken(refreshToken));
+  }
+
+  getRefreshToken(
+    tokenHash: string
+  ): WalletAuthRefreshTokenRecord | undefined {
+    const refreshToken = this.refreshTokensByHash.get(tokenHash);
+    return refreshToken === undefined ? undefined : cloneRefreshToken(refreshToken);
+  }
+
+  revokeRefreshToken(
+    tokenHash: string,
+    revokedAt: string,
+    replacedBySessionId?: string
+  ): boolean {
+    const refreshToken = this.refreshTokensByHash.get(tokenHash);
+    if (refreshToken === undefined || refreshToken.revokedAt !== undefined) {
+      return false;
+    }
+    this.refreshTokensByHash.set(tokenHash, {
+      ...refreshToken,
+      revokedAt,
+      ...(replacedBySessionId === undefined ? {} : { replacedBySessionId })
+    });
+    return true;
   }
 }
 
@@ -196,28 +262,56 @@ export class WalletAuthenticator {
       throw new WalletAuthRejectedError("auth challenge already used");
     }
 
-    const accessToken = assertNonEmptyString(
-      this.options.accessTokenFactory?.() ?? randomBytes(32).toString("base64url"),
-      "accessToken"
-    );
-    const session: AuthenticatedWalletSession = {
-      sessionId: assertAuthId(inputSessionId(this.options.sessionIdFactory), "sessionId"),
+    return this.issueSession({
       wallet: challenge.wallet,
       network: challenge.network,
       purpose: challenge.purpose,
       challengeId: challenge.challengeId,
-      issuedAt: now,
-      expiresAt: new Date(
-        Date.parse(now) + (this.options.sessionTtlMs ?? 15 * 60 * 1000)
-      ).toISOString()
-    };
-    await this.store.saveSession(hashAccessToken(accessToken), session);
+      issuedAt: now
+    });
+  }
 
-    return {
-      ...cloneSession(session),
-      accessToken,
-      tokenType: "Bearer"
-    };
+  async refreshSession(
+    input: RefreshWalletAuthSessionInput
+  ): Promise<WalletAuthSessionResult> {
+    const now = this.now();
+    const refreshToken = assertNonEmptyString(
+      input.refreshToken,
+      "refreshToken"
+    );
+    const refreshTokenHash = hashToken(refreshToken);
+    const record = await this.store.getRefreshToken(refreshTokenHash);
+    if (record === undefined) {
+      throw new WalletAuthRejectedError("unknown refresh token");
+    }
+    if (record.revokedAt !== undefined) {
+      throw new WalletAuthRejectedError("refresh token already used");
+    }
+    if (Date.parse(record.expiresAt) <= Date.parse(now)) {
+      throw new WalletAuthRejectedError("refresh token expired");
+    }
+
+    const nextSessionId = assertAuthId(
+      inputSessionId(this.options.sessionIdFactory),
+      "sessionId"
+    );
+    const revoked = await this.store.revokeRefreshToken(
+      refreshTokenHash,
+      now,
+      nextSessionId
+    );
+    if (!revoked) {
+      throw new WalletAuthRejectedError("refresh token already used");
+    }
+
+    return this.issueSession({
+      sessionId: nextSessionId,
+      wallet: record.wallet,
+      network: record.network,
+      purpose: record.purpose,
+      challengeId: record.challengeId,
+      issuedAt: now
+    });
   }
 
   async authenticateAccessToken(
@@ -226,7 +320,7 @@ export class WalletAuthenticator {
     if (accessToken.trim().length === 0) {
       return undefined;
     }
-    const session = await this.store.getSession(hashAccessToken(accessToken));
+    const session = await this.store.getSession(hashToken(accessToken));
     if (session === undefined) {
       return undefined;
     }
@@ -238,6 +332,66 @@ export class WalletAuthenticator {
 
   private now(): string {
     return (this.options.now?.() ?? new Date()).toISOString();
+  }
+
+  private async issueSession(input: {
+    sessionId?: string;
+    wallet: string;
+    network: string;
+    purpose: WalletAuthPurpose;
+    challengeId: string;
+    issuedAt: string;
+  }): Promise<WalletAuthSessionResult> {
+    const accessToken = assertNonEmptyString(
+      this.options.accessTokenFactory?.() ?? randomBytes(32).toString("base64url"),
+      "accessToken"
+    );
+    const refreshToken = assertNonEmptyString(
+      this.options.refreshTokenFactory?.() ?? randomBytes(32).toString("base64url"),
+      "refreshToken"
+    );
+    const session: AuthenticatedWalletSession = {
+      sessionId:
+        input.sessionId ??
+        assertAuthId(inputSessionId(this.options.sessionIdFactory), "sessionId"),
+      wallet: input.wallet,
+      network: input.network,
+      purpose: input.purpose,
+      challengeId: input.challengeId,
+      issuedAt: input.issuedAt,
+      expiresAt: new Date(
+        Date.parse(input.issuedAt) + (this.options.sessionTtlMs ?? 15 * 60 * 1000)
+      ).toISOString()
+    };
+    const refreshTokenRecord: WalletAuthRefreshTokenRecord = {
+      refreshTokenId: assertAuthId(
+        inputRefreshTokenId(this.options.refreshTokenIdFactory),
+        "refreshTokenId"
+      ),
+      sessionId: session.sessionId,
+      wallet: session.wallet,
+      network: session.network,
+      purpose: session.purpose,
+      challengeId: session.challengeId,
+      issuedAt: input.issuedAt,
+      expiresAt: new Date(
+        Date.parse(input.issuedAt) +
+          (this.options.refreshTokenTtlMs ?? 30 * 24 * 60 * 60 * 1000)
+      ).toISOString()
+    };
+    await this.store.saveSession(hashToken(accessToken), session);
+    await this.store.saveRefreshToken(
+      hashToken(refreshToken),
+      refreshTokenRecord
+    );
+
+    return {
+      ...cloneSession(session),
+      accessToken,
+      refreshToken,
+      refreshTokenExpiresAt: refreshTokenRecord.expiresAt,
+      tokenType: "Bearer"
+    };
   }
 }
 
@@ -289,7 +443,11 @@ function inputSessionId(factory: (() => string) | undefined): string {
   return factory?.() ?? createAuthId("ses");
 }
 
-function createAuthId(prefix: "chl" | "ses"): string {
+function inputRefreshTokenId(factory: (() => string) | undefined): string {
+  return factory?.() ?? createAuthId("rft");
+}
+
+function createAuthId(prefix: "chl" | "ses" | "rft"): string {
   return `${prefix}_${randomBytes(16).toString("hex")}`;
 }
 
@@ -327,8 +485,8 @@ function assertNonEmptyString(value: string, label: string): string {
   return value;
 }
 
-function hashAccessToken(accessToken: string): string {
-  return `sha256:${createHash("sha256").update(accessToken).digest("hex")}`;
+function hashToken(token: string): string {
+  return `sha256:${createHash("sha256").update(token).digest("hex")}`;
 }
 
 function cloneChallenge(
@@ -339,4 +497,10 @@ function cloneChallenge(
 
 function cloneSession(session: AuthenticatedWalletSession): AuthenticatedWalletSession {
   return { ...session };
+}
+
+function cloneRefreshToken(
+  refreshToken: WalletAuthRefreshTokenRecord
+): WalletAuthRefreshTokenRecord {
+  return { ...refreshToken };
 }

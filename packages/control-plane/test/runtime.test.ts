@@ -110,6 +110,17 @@ describe("control-plane runtime", () => {
         poolFactory: () => new ThrowingPostgresPool()
       })
     ).toThrow("SPLIT402_DATABASE_POOL_MAX must be a positive integer");
+    expect(() =>
+      createControlPlaneRuntimeFromEnv({
+        env: {
+          SPLIT402_DATABASE_URL: "postgresql://split402.example/db",
+          SPLIT402_WALLET_AUTH_REFRESH_TOKEN_TTL_MS: "0"
+        },
+        poolFactory: () => new ThrowingPostgresPool()
+      })
+    ).toThrow(
+      "SPLIT402_WALLET_AUTH_REFRESH_TOKEN_TTL_MS must be a positive integer"
+    );
   });
 });
 

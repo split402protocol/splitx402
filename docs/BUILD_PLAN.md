@@ -173,8 +173,9 @@ Current slice:
 
 - add `@split402/control-plane`;
 - verify submitted Split402 receipts with merchant service public keys;
-- add wallet authentication challenge/session flow;
-- add PostgreSQL wallet-auth persistence for challenges and hashed sessions;
+- add wallet authentication challenge/session/refresh flow;
+- add PostgreSQL wallet-auth persistence for challenges, hashed sessions, and
+  hashed rotating refresh tokens;
 - expose a control-plane app and `POST /v1/receipts` route for public receipt
   submission;
 - define the receipt ingestion store interface for durable receipt persistence;
