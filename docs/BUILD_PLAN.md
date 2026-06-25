@@ -22,8 +22,8 @@ control-plane ingestion, PostgreSQL persistence, outbox workers, Solana chain
 verification, and the first payout-engine execution boundaries, including payout
 lifecycle outbox/webhook events, an unknown-outcome reconciliation queue, and
 referrer payout views, payout reconciliation decision tooling, remote signer
-client wiring, and a signer appliance scaffold. Phase 6 remains active for
-production signer deployment and custody review.
+client wiring, and a production-packaged signer appliance scaffold. Phase 6
+remains active for staging deployment validation and payout custody review.
 
 ## Architecture Rule
 
@@ -339,6 +339,8 @@ Current slice:
   Solana transaction signing;
 - add payout signer auth key-ring rotation support;
 - add payout signer metrics and safe audit events for signed/rejected attempts;
+- add payout signer readiness checks, container packaging, and Kubernetes
+  deployment starter artifacts;
 - add signed-byte payout transaction persistence and Solana broadcast submission
   boundary;
 - add Solana payout transaction finality monitor with retry and outcome-unknown

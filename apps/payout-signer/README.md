@@ -1,6 +1,6 @@
 # @split402/payout-signer
 
-Isolated payout signer appliance scaffold for Split402 Phase 6.
+Isolated payout signer appliance for Split402 Phase 6.
 
 The service accepts policy-checked signing requests from the control plane,
 verifies the HMAC request envelope, rechecks the visible payout policy surface,
@@ -11,9 +11,14 @@ returns signed bytes plus the expected signature.
 
 ```text
 GET  /v1/health
+GET  /v1/ready
 GET  /v1/metrics
 POST /v1/solana/payouts/sign
 ```
+
+Use `/v1/health` for liveness checks and `/v1/ready` for readiness checks.
+Readiness waits for signer key material to initialize and returns HTTP 503 when
+the signer cannot sign.
 
 Remote signer requests must use schema
 `split402.solana.remote_payout_sign_request.v1` and include:
@@ -85,10 +90,39 @@ Exactly one key source must be set:
 
 ```bash
 corepack pnpm --filter @split402/payout-signer dev
+corepack pnpm --filter @split402/payout-signer start
 corepack pnpm --filter @split402/payout-signer test
 corepack pnpm --filter @split402/payout-signer typecheck
 corepack pnpm --filter @split402/payout-signer build
 ```
+
+## Container Deployment
+
+Build the signer image from the repository root:
+
+```bash
+docker build \
+  -f apps/payout-signer/Dockerfile \
+  -t ghcr.io/split402protocol/splitx402/payout-signer:dev \
+  .
+```
+
+Run the image with non-secret policy config and secret auth/key material:
+
+```bash
+docker run --rm -p 4022:4022 \
+  -e SPLIT402_PAYOUT_SIGNER_SERVICE_REF=kms:split402-devnet-payout \
+  -e SPLIT402_PAYOUT_SIGNER_SERVICE_NETWORK=solana:devnet \
+  -e SPLIT402_PAYOUT_SIGNER_SERVICE_EXPECTED_FUNDING_WALLET=<funding-wallet> \
+  -e SPLIT402_PAYOUT_SIGNER_SERVICE_AUTH_KEYS_JSON='[{"keyId":"control-plane-current","sharedSecret":"<shared-secret>","status":"active"}]' \
+  -e SPLIT402_PAYOUT_SIGNER_SERVICE_PRIVATE_KEY_BASE64=<32-byte-private-key> \
+  ghcr.io/split402protocol/splitx402/payout-signer:dev
+```
+
+The Kubernetes starter manifest lives at
+[`deploy/payout-signer/kubernetes.yaml`](../../deploy/payout-signer/kubernetes.yaml).
+Replace the placeholder image tag, signer reference, network, funding wallet,
+auth key ring, and key material before applying it.
 
 ## Status
 

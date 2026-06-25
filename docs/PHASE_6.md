@@ -9,9 +9,9 @@ paying, losing allocations, or hiding funding deficits.
 Status: in progress. The payout engine now has preview, allocation, transaction
 planning, simulation, signer-policy checks, signed-byte persistence, broadcast
 submission, local-dev signer wiring, remote signer client wiring, signer
-appliance scaffold, finality monitoring, status rollup, idempotent ledger
-closure, and payout lifecycle outbox/webhook events, plus an unknown-outcome
-reconciliation queue and referrer payout views.
+appliance scaffold, signer deployment artifacts, finality monitoring, status
+rollup, idempotent ledger closure, and payout lifecycle outbox/webhook events,
+plus an unknown-outcome reconciliation queue and referrer payout views.
 
 ## What Changed
 
@@ -64,6 +64,8 @@ reconciliation queue and referrer payout views.
   active/retired control-plane authentication keys during rotation.
 - Added payout signer metrics and safe audit events for signed/rejected signing
   attempts without logging private keys, shared secrets, or transaction bytes.
+- Added payout signer readiness checks, a production container build path, and a
+  Kubernetes deployment starter manifest.
 - Added signed payout transaction records and PostgreSQL persistence for exact
   signed bytes, expected signature, sequence, attempt, blockhash metadata, and
   submitted state before broadcast.
@@ -113,7 +115,7 @@ the merchant has enough funding.
 
 ## Remaining Milestone 4 Work
 
-- Production signer appliance deployment.
+- Staging deployment validation for the packaged signer appliance.
 - Production payout custody and incident-response review.
 
 ## Acceptance Checks
