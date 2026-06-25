@@ -89,6 +89,8 @@ GET  /v1/routes/:routeId
 POST /v1/merchants/:merchantId/payouts/preview
 GET  /v1/merchants/:merchantId/payouts/reconciliation
 POST /v1/merchants/:merchantId/payout-batches
+GET  /v1/referrers/:referrerWallet/balances
+GET  /v1/referrers/:referrerWallet/payouts
 ```
 
 ## Stores And Workers
@@ -102,6 +104,7 @@ POST /v1/merchants/:merchantId/payout-batches
 - payout preview and batch allocation stores that select available accruals and
   mark them `allocated` exactly once;
 - unknown-outcome reconciliation queue for merchant/operator review before retry;
+- referrer payout balance and history views from accruals and payout allocations;
 - PostgreSQL payout batch creation with `FOR UPDATE SKIP LOCKED` eligible-accrual
   selection for concurrent workers;
 - deterministic Solana payout transfer planning for allocated batches;

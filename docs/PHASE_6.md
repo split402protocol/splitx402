@@ -10,7 +10,7 @@ Status: in progress. The payout engine now has preview, allocation, transaction
 planning, simulation, signer-policy checks, signed-byte persistence, broadcast
 submission, finality monitoring, status rollup, idempotent ledger closure, and
 payout lifecycle outbox/webhook events, plus an unknown-outcome reconciliation
-queue.
+queue and referrer payout views.
 
 ## What Changed
 
@@ -69,6 +69,9 @@ queue.
 - Added an unknown-outcome reconciliation queue and
   `GET /v1/merchants/:merchantId/payouts/reconciliation` so merchants/operators
   can list payout batches that must be rechecked onchain before any retry.
+- Added referrer-facing balance and payout history views with
+  `GET /v1/referrers/:referrerWallet/balances` and
+  `GET /v1/referrers/:referrerWallet/payouts`.
 - Added `0010_payout_batches.sql` for payout batches, payout items, payout
   allocations, and the `allocated` accrual status.
 - Added `0011_payout_transactions.sql` for signed payout transaction
@@ -76,7 +79,7 @@ queue.
 - Added control-plane tests for payout planning, Solana transaction planning and
   simulation, signer policy, signed-byte persistence, broadcast submission,
   finality monitoring, batch/item rollup, payout ledger closure, allocation
-  persistence, and the HTTP payout routes.
+  persistence, referrer payout views, and the HTTP payout routes.
 
 ## Why This Comes Next
 
@@ -91,7 +94,6 @@ the merchant has enough funding.
 - Concrete local-dev or remote signer wiring.
 - Reconciliation runbooks and retry decision tooling for unknown transaction
   outcomes.
-- Referrer payout history and balance views.
 
 ## Acceptance Checks
 
