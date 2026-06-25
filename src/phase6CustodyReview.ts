@@ -4,6 +4,8 @@ export const PHASE6_CUSTODY_REQUIRED_FIELDS = [
   "reviewers",
   "source_commit",
   "signer_image_digest",
+  "signer_image_build_command",
+  "signer_image_dependency_audit_output",
   "control_plane_image_digest",
   "staging_environment",
   "funding_wallet",
@@ -18,7 +20,10 @@ export const PHASE6_CUSTODY_REQUIRED_FIELDS = [
   "signer_policy_max_transaction_amount_atomic",
   "smoke_check_output",
   "rotation_drill_record",
+  "emergency_revocation_drill_record",
+  "key_custody_record",
   "incident_drill_record",
+  "rollback_drill_record",
   "rpc_failover_record",
   "approval_decision",
   "approval_notes",
@@ -70,12 +75,36 @@ export function validatePhase6CustodyEvidence(
   }
 
   const signerPolicyNetwork = fields.get("signer_policy_network")?.trim();
+  const network = fields.get("network")?.trim();
   if (
     signerPolicyNetwork !== undefined &&
     signerPolicyNetwork.length > 0 &&
     !signerPolicyNetwork.startsWith("solana:")
   ) {
     invalidFields.push("signer_policy_network must start with solana:");
+  }
+  if (
+    signerPolicyNetwork !== undefined &&
+    network !== undefined &&
+    signerPolicyNetwork.length > 0 &&
+    network.length > 0 &&
+    signerPolicyNetwork !== network
+  ) {
+    invalidFields.push("signer_policy_network must match network");
+  }
+
+  const signerPolicyFundingWallet = fields
+    .get("signer_policy_funding_wallet")
+    ?.trim();
+  const fundingWallet = fields.get("funding_wallet")?.trim();
+  if (
+    signerPolicyFundingWallet !== undefined &&
+    fundingWallet !== undefined &&
+    signerPolicyFundingWallet.length > 0 &&
+    fundingWallet.length > 0 &&
+    signerPolicyFundingWallet !== fundingWallet
+  ) {
+    invalidFields.push("signer_policy_funding_wallet must match funding_wallet");
   }
 
   const signerPolicyAllowedTokenProgramIds = fields
