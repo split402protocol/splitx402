@@ -3,12 +3,20 @@ import { describe, expect, it } from "vitest";
 
 import {
   createSolanaPayoutTransactionPlan,
+  hashSolanaPayoutDestinationAmountList,
   SOLANA_TOKEN_PROGRAM_ID,
+  SOLANA_TOKEN_2022_PROGRAM_ID,
+  SolanaPolicyEnforcedPayoutSigner,
   SolanaRpcPayoutTransactionSimulator,
   SolanaRpcReceiptVerifier,
   type SolanaRpcFetch
 } from "../src/index.js";
-import type { PayoutBatchRecord } from "../src/index.js";
+import type {
+  PayoutBatchRecord,
+  SolanaPayoutSignerPolicy,
+  SolanaPayoutSimulationReport,
+  SolanaPayoutTransactionPlan
+} from "../src/index.js";
 
 describe("createSolanaPayoutTransactionPlan", () => {
   it("derives token accounts and plans idempotent ATA creation plus transfer instructions", async () => {
@@ -308,6 +316,157 @@ describe("SolanaRpcPayoutTransactionSimulator", () => {
         ]
       })
     ).rejects.toThrow("duplicate serialized transaction");
+  });
+});
+
+describe("SolanaPolicyEnforcedPayoutSigner", () => {
+  it("signs serialized transactions after policy and simulation checks pass", async () => {
+    const receipt = createSampleProtocolArtifacts().artifacts.receipt;
+    const plan = await createSolanaPayoutTransactionPlan({
+      batch: payoutBatch(receipt),
+      fundingWallet: receipt.payToWallet,
+      tokenDecimals: 6,
+      maxItemsPerTransaction: 1
+    });
+    const requests: unknown[] = [];
+    const signer = new SolanaPolicyEnforcedPayoutSigner({
+      policy: signingPolicy(plan, {
+        maxTransactionAmountAtomic: "2500",
+        maxBatchAmountAtomic: "5000"
+      }),
+      signTransaction: (input) => {
+        requests.push(input);
+        return {
+          signedTransactionBase64:
+            input.plannedTransaction.index === 0 ? "CQkJ" : "CAgI",
+          expectedSignature: `sig_${input.plannedTransaction.index}`
+        };
+      }
+    });
+
+    const report = await signer.sign({
+      plan,
+      simulationReport: successfulSimulationReport(plan),
+      transactions: [
+        { index: 0, transactionBase64: "AQID" },
+        { index: 1, transactionBase64: "BAUG" }
+      ]
+    });
+
+    expect(report).toEqual({
+      batchId: plan.batchId,
+      network: plan.network,
+      signerReference: "local-dev:payout-signer",
+      destinationAmountListHash: hashSolanaPayoutDestinationAmountList(plan),
+      signedTransactions: [
+        {
+          index: 0,
+          signedTransactionBase64: "CQkJ",
+          expectedSignature: "sig_0"
+        },
+        {
+          index: 1,
+          signedTransactionBase64: "CAgI",
+          expectedSignature: "sig_1"
+        }
+      ]
+    });
+    expect(requests).toEqual([
+      expect.objectContaining({
+        batchId: plan.batchId,
+        network: plan.network,
+        signerReference: "local-dev:payout-signer",
+        destinationAmountListHash: hashSolanaPayoutDestinationAmountList(plan),
+        transactionBase64: "AQID",
+        amountAtomic: "1000"
+      }),
+      expect.objectContaining({
+        transactionBase64: "BAUG",
+        amountAtomic: "2000"
+      })
+    ]);
+  });
+
+  it("rejects signing without a successful simulation report", async () => {
+    const receipt = createSampleProtocolArtifacts().artifacts.receipt;
+    const plan = await createSolanaPayoutTransactionPlan({
+      batch: payoutBatch(receipt, { destinationTokenAccount: receipt.payerWallet }),
+      fundingWallet: receipt.payToWallet,
+      sourceTokenAccount: receipt.payerWallet,
+      tokenDecimals: 6
+    });
+    let called = false;
+    const signer = new SolanaPolicyEnforcedPayoutSigner({
+      policy: signingPolicy(plan),
+      signTransaction: () => {
+        called = true;
+        return { signedTransactionBase64: "CQkJ" };
+      }
+    });
+
+    await expect(
+      signer.sign({
+        plan,
+        transactions: [{ index: 0, transactionBase64: "AQID" }]
+      })
+    ).rejects.toThrow("successful payout simulation is required before signing");
+    await expect(
+      signer.sign({
+        plan,
+        simulationReport: {
+          ...successfulSimulationReport(plan),
+          status: "failed",
+          transactionResults: [
+            {
+              index: 0,
+              status: "failed",
+              error: "insufficient funds"
+            }
+          ]
+        },
+        transactions: [{ index: 0, transactionBase64: "AQID" }]
+      })
+    ).rejects.toThrow("successful payout simulation is required before signing");
+    expect(called).toBe(false);
+  });
+
+  it("rejects signer policy mismatches and capped transaction amounts", async () => {
+    const receipt = createSampleProtocolArtifacts().artifacts.receipt;
+    const plan = await createSolanaPayoutTransactionPlan({
+      batch: payoutBatch(receipt),
+      fundingWallet: receipt.payToWallet,
+      tokenDecimals: 6,
+      maxItemsPerTransaction: 1
+    });
+    const sign = async (policy: SolanaPayoutSignerPolicy) =>
+      new SolanaPolicyEnforcedPayoutSigner({
+        policy,
+        signTransaction: () => ({ signedTransactionBase64: "CQkJ" })
+      }).sign({
+        plan,
+        simulationReport: successfulSimulationReport(plan),
+        transactions: [
+          { index: 0, transactionBase64: "AQID" },
+          { index: 1, transactionBase64: "BAUG" }
+        ]
+      });
+
+    await expect(
+      sign(signingPolicy(plan, { network: "solana:mainnet" }))
+    ).rejects.toThrow("does not match signer policy network");
+    await expect(
+      sign(signingPolicy(plan, { allowedTokenProgramIds: [SOLANA_TOKEN_2022_PROGRAM_ID] }))
+    ).rejects.toThrow("does not allow plan token program");
+    await expect(
+      sign(signingPolicy(plan, { maxTransactionAmountAtomic: "1500" }))
+    ).rejects.toThrow(
+      "payout transaction 1 amount exceeds signer maxTransactionAmountAtomic"
+    );
+    await expect(
+      sign(signingPolicy(plan, {
+        expectedDestinationAmountListHash: `sha256:${"f".repeat(64)}`
+      }))
+    ).rejects.toThrow("destination amount list hash mismatch");
   });
 });
 
@@ -729,6 +888,36 @@ function simulationBody(input: {
           : { unitsConsumed: input.unitsConsumed })
       }
     }
+  };
+}
+
+function successfulSimulationReport(
+  plan: SolanaPayoutTransactionPlan
+): SolanaPayoutSimulationReport {
+  return {
+    batchId: plan.batchId,
+    network: plan.network,
+    status: "succeeded",
+    transactionResults: plan.transactions.map((transaction) => ({
+      index: transaction.index,
+      status: "succeeded"
+    }))
+  };
+}
+
+function signingPolicy(
+  plan: SolanaPayoutTransactionPlan,
+  overrides: Partial<SolanaPayoutSignerPolicy> = {}
+): SolanaPayoutSignerPolicy {
+  return {
+    network: plan.network,
+    signerReference: "local-dev:payout-signer",
+    fundingWallet: plan.fundingWallet,
+    sourceTokenAccount: plan.sourceTokenAccount,
+    mint: plan.asset,
+    allowedTokenProgramIds: [plan.tokenProgramId],
+    expectedDestinationAmountListHash: hashSolanaPayoutDestinationAmountList(plan),
+    ...overrides
   };
 }
 
