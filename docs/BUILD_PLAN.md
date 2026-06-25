@@ -318,6 +318,8 @@ Current slice:
 - add Solana payout signer interface and policy gate before isolated signing;
 - add signed-byte payout transaction persistence and Solana broadcast submission
   boundary;
+- add Solana payout transaction finality monitor with retry and outcome-unknown
+  classification;
 - expose `POST /v1/merchants/:merchantId/payout-wallets`;
 - expose `POST /v1/merchants/:merchantId/payouts/preview`;
 - expose `POST /v1/merchants/:merchantId/payout-batches`.

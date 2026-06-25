@@ -105,7 +105,8 @@ import type {
   PayoutTransactionStatus,
   PayoutTransactionStore,
   SaveSignedPayoutTransactionsInput,
-  MarkPayoutTransactionSubmittedInput
+  MarkPayoutTransactionSubmittedInput,
+  MarkPayoutTransactionFinalityInput
 } from "./payouts.js";
 import {
   PayoutBatchConflictError,
@@ -631,6 +632,47 @@ export class PostgresReceiptIngestionStore
                   expected_signature, status, submitted_at, confirmed_at,
                   finalized_at, error_json, created_at`,
       [input.id, submittedAt, expectedSignature]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapPayoutTransaction(row);
+  }
+
+  async markPayoutTransactionFinality(
+    input: MarkPayoutTransactionFinalityInput
+  ): Promise<PayoutTransactionRecord | undefined> {
+    const existing = await this.getPayoutTransaction(input.id);
+    if (existing === undefined) {
+      return undefined;
+    }
+    const observedAt = normalizeDateInput(input.observedAt, "observedAt");
+    const confirmedAt =
+      input.status === "confirmed"
+        ? observedAt
+        : input.status === "finalized"
+          ? existing.confirmedAt ?? observedAt
+          : existing.confirmedAt ?? null;
+    const finalizedAt =
+      input.status === "finalized"
+        ? observedAt
+        : existing.finalizedAt ?? null;
+    const errorJson =
+      input.error === undefined
+        ? existing.error === undefined
+          ? null
+          : JSON.stringify(existing.error)
+        : JSON.stringify(input.error);
+    const result = await this.db.query<PayoutTransactionRow>(
+      `update payout_transactions
+          set status = $2,
+              confirmed_at = $3,
+              finalized_at = $4,
+              error_json = $5
+        where id = $1
+        returning id, payout_batch_id, sequence, attempt, recent_blockhash,
+                  last_valid_block_height, signed_transaction_base64,
+                  expected_signature, status, submitted_at, confirmed_at,
+                  finalized_at, error_json, created_at`,
+      [input.id, input.status, confirmedAt, finalizedAt, errorJson]
     );
     const row = result.rows[0];
     return row === undefined ? undefined : mapPayoutTransaction(row);

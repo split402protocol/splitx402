@@ -48,13 +48,16 @@ Status: started.
   submitted state before broadcast.
 - Added a Solana RPC broadcaster boundary that sends persisted signed bytes via
   `sendTransaction` and retries the same bytes across configured RPC URLs.
+- Added payout transaction finality persistence and a Solana RPC finality monitor
+  that reads `getSignatureStatuses`, reports confirmed, finalized, failed,
+  retryable, or outcome-unknown results, and schedules retry timestamps.
 - Added `0010_payout_batches.sql` for payout batches, payout items, payout
   allocations, and the `allocated` accrual status.
 - Added `0011_payout_transactions.sql` for signed payout transaction
   persistence.
 - Added control-plane tests for payout planning, Solana transaction planning and
   simulation, signer policy, signed-byte persistence, broadcast submission,
-  allocation persistence, and the HTTP payout routes.
+  finality monitoring, allocation persistence, and the HTTP payout routes.
 
 ## Why This Comes Next
 
@@ -67,7 +70,8 @@ the merchant has enough funding.
 ## Remaining Milestone 4 Work
 
 - Concrete local-dev or remote signer wiring.
-- Confirmation, finality, and retry scheduling.
+- Worker wiring that applies transaction finality to payout batches, payout
+  items, ledger closure, and webhook events.
 - Reconciliation for unknown transaction outcomes.
 - Referrer payout history and balance views.
 

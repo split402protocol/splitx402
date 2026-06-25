@@ -7,6 +7,7 @@ import {
   SOLANA_TOKEN_PROGRAM_ID,
   SOLANA_TOKEN_2022_PROGRAM_ID,
   SolanaPolicyEnforcedPayoutSigner,
+  SolanaRpcPayoutTransactionFinalityMonitor,
   SolanaRpcPayoutTransactionBroadcaster,
   SolanaRpcPayoutTransactionSimulator,
   SolanaRpcReceiptVerifier,
@@ -578,6 +579,151 @@ describe("SolanaRpcPayoutTransactionBroadcaster", () => {
         transaction: unsigned
       })
     ).rejects.toThrow("must be signed before broadcast");
+  });
+});
+
+describe("SolanaRpcPayoutTransactionFinalityMonitor", () => {
+  it("reports confirmed and finalized submitted payout transactions", async () => {
+    const requests: unknown[] = [];
+    const confirmedMonitor = new SolanaRpcPayoutTransactionFinalityMonitor({
+      rpcUrl: "https://api.devnet.solana.com",
+      network: "solana:devnet",
+      fetch: createFetch(
+        signatureStatusesBody({
+          err: null,
+          confirmationStatus: "confirmed",
+          confirmations: 2
+        }),
+        requests
+      )
+    });
+    const finalizedMonitor = new SolanaRpcPayoutTransactionFinalityMonitor({
+      rpcUrl: "https://api.devnet.solana.com",
+      network: "solana:devnet",
+      fetch: createFetch(
+        signatureStatusesBody({
+          err: null,
+          confirmationStatus: "finalized",
+          confirmations: null
+        })
+      )
+    });
+
+    await expect(
+      confirmedMonitor.monitor({
+        transaction: payoutTransaction({ status: "submitted" })
+      })
+    ).resolves.toEqual({
+      transactionId: "ptx_ffffffffffffffffffffffffffffffff",
+      status: "confirmed",
+      signature: "sig_0",
+      rpcUrl: "https://api.devnet.solana.com",
+      confirmationStatus: "confirmed",
+      confirmations: 2
+    });
+    await expect(
+      finalizedMonitor.monitor({
+        transaction: payoutTransaction({ status: "confirmed" })
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        status: "finalized",
+        confirmationStatus: "finalized",
+        confirmations: null
+      })
+    );
+    expect(requests).toEqual([
+      expect.objectContaining({
+        method: "getSignatureStatuses",
+        params: [["sig_0"], { searchTransactionHistory: true }]
+      })
+    ]);
+  });
+
+  it("reports failed payout signatures without retrying", async () => {
+    const monitor = new SolanaRpcPayoutTransactionFinalityMonitor({
+      rpcUrls: ["https://primary-rpc.example", "https://secondary-rpc.example"],
+      network: "solana:devnet",
+      fetch: createFetch(
+        signatureStatusesBody({
+          err: { InstructionError: [0, "InsufficientFunds"] },
+          confirmationStatus: "finalized",
+          confirmations: null
+        })
+      )
+    });
+
+    await expect(
+      monitor.monitor({ transaction: payoutTransaction({ status: "submitted" }) })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        status: "failed",
+        rpcUrl: "https://primary-rpc.example",
+        error: expect.stringContaining("InsufficientFunds")
+      })
+    );
+  });
+
+  it("schedules retry before the unknown-outcome threshold", async () => {
+    const monitor = new SolanaRpcPayoutTransactionFinalityMonitor({
+      rpcUrl: "https://api.devnet.solana.com",
+      network: "solana:devnet",
+      retryDelayMs: 10_000,
+      unknownOutcomeAfterMs: 60_000,
+      now: () => new Date("2026-06-24T00:00:30Z"),
+      fetch: createFetch(signatureStatusesBody(null))
+    });
+
+    await expect(
+      monitor.monitor({
+        transaction: payoutTransaction({
+          status: "submitted",
+          submittedAt: "2026-06-24T00:00:00Z"
+        })
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        status: "retry",
+        error: expect.stringContaining("signature not found"),
+        retryAt: "2026-06-24T00:00:40.000Z"
+      })
+    );
+  });
+
+  it("marks missing old submissions as outcome unknown", async () => {
+    const monitor = new SolanaRpcPayoutTransactionFinalityMonitor({
+      rpcUrl: "https://api.devnet.solana.com",
+      network: "solana:devnet",
+      unknownOutcomeAfterMs: 60_000,
+      now: () => new Date("2026-06-24T00:02:00Z"),
+      fetch: createFetch(signatureStatusesBody(null))
+    });
+
+    await expect(
+      monitor.monitor({
+        transaction: payoutTransaction({
+          status: "submitted",
+          submittedAt: "2026-06-24T00:00:00Z"
+        })
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        status: "outcome_unknown",
+        error: expect.stringContaining("unknown-outcome threshold")
+      })
+    );
+  });
+
+  it("rejects transactions that are not submitted for monitoring", async () => {
+    const monitor = new SolanaRpcPayoutTransactionFinalityMonitor({
+      rpcUrl: "https://api.devnet.solana.com",
+      network: "solana:devnet",
+      fetch: createFetch(signatureStatusesBody(null))
+    });
+
+    await expect(
+      monitor.monitor({ transaction: payoutTransaction({ status: "signed" }) })
+    ).rejects.toThrow("must be submitted before finality monitoring");
   });
 });
 
