@@ -76,6 +76,8 @@ plus an unknown-outcome reconciliation queue and referrer payout views.
   to the control plane.
 - Added machine-checkable signer policy evidence fields and a signer policy
   review template for custody approval.
+- Added machine-checkable image provenance, emergency auth revocation, payout
+  key custody, and rollback drill evidence gates with reusable review templates.
 - Added signed payout transaction records and PostgreSQL persistence for exact
   signed bytes, expected signature, sequence, attempt, blockhash metadata, and
   submitted state before broadcast.
@@ -132,8 +134,9 @@ the merchant has enough funding.
 
 - Complete staging deployment validation evidence for the packaged signer
   appliance.
-- Complete every pending gate in
-  `docs/checklists/phase6-custody-review.md`.
+- Complete every pending gate in `docs/checklists/phase6-custody-review.md`,
+  including image provenance, emergency revocation, payout key custody, signer
+  policy, rollback, incident, smoke, network, and RPC failover evidence.
 - Validate the completed custody evidence bundle with
   `corepack pnpm phase6:custody:check <evidence-bundle.txt>`.
 

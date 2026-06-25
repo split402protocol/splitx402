@@ -69,3 +69,10 @@ If a control-plane auth secret is suspected compromised:
 
 Attach planned and emergency rotation evidence to
 [`docs/checklists/phase6-custody-review.md`](../checklists/phase6-custody-review.md).
+
+For emergency revocation, copy
+[`docs/templates/phase6-emergency-revocation-drill.txt`](../templates/phase6-emergency-revocation-drill.txt),
+record the retired key ID, replacement key ID, deploy timing, old-key rejection
+evidence, new-key success evidence, metrics evidence, audit-log evidence, and
+affected payout-batch reconciliation records. Attach the completed drill to
+`emergency_revocation_drill_record` in the Phase 6 custody evidence bundle.

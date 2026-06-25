@@ -1,0 +1,16 @@
+drill_id:
+drill_date:
+owners:
+staging_environment:
+retired_key_id:
+replacement_key_id:
+revocation_start_time:
+signer_deploy_time:
+control_plane_rotation_time:
+old_key_rejection_evidence:
+new_key_success_evidence:
+metrics_evidence:
+audit_log_evidence:
+affected_payout_batches_reconciled:
+drill_decision: no-go
+drill_notes:
