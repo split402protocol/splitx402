@@ -478,6 +478,11 @@ describe("PostgresReceiptIngestionStore", () => {
       submittedAt: "2026-06-24T00:07:00Z",
       expectedSignature: "expected_sig_0"
     });
+    const finalized = await store.markPayoutTransactionFinality({
+      id: saved[0]?.id ?? "",
+      status: "finalized",
+      observedAt: "2026-06-24T00:08:00Z"
+    });
 
     expect(saved).toHaveLength(1);
     expect(listed).toEqual(saved);
@@ -488,6 +493,14 @@ describe("PostgresReceiptIngestionStore", () => {
         submittedAt: "2026-06-24T00:07:00.000Z",
         signedTransactionBase64: "AQID",
         expectedSignature: "expected_sig_0"
+      })
+    );
+    expect(finalized).toEqual(
+      expect.objectContaining({
+        id: "ptx_ffffffffffffffffffffffffffffffff",
+        status: "finalized",
+        confirmedAt: "2026-06-24T00:08:00.000Z",
+        finalizedAt: "2026-06-24T00:08:00.000Z"
       })
     );
     expect(fakePool.database.payoutTransactions).toHaveLength(1);
@@ -1261,9 +1274,17 @@ class FakePostgresClient implements PostgresTransactionClient {
     ) {
       return result(this.database.allocateAccrual(values) as unknown as Row[]);
     }
-    if (normalized.startsWith("update payout_transactions")) {
+    if (
+      normalized.startsWith("update payout_transactions") &&
+      normalized.includes("status = 'submitted'")
+    ) {
       return result(
         this.database.markPayoutTransactionSubmitted(values) as unknown as Row[]
+      );
+    }
+    if (normalized.startsWith("update payout_transactions")) {
+      return result(
+        this.database.markPayoutTransactionFinality(values) as unknown as Row[]
       );
     }
     if (normalized.startsWith("update commission_accruals")) {
@@ -1857,6 +1878,25 @@ class FakePostgresDatabase {
     transaction.status = "submitted";
     transaction.submitted_at = submittedAt;
     transaction.expected_signature = expectedSignature;
+    return [transaction];
+  }
+
+  markPayoutTransactionFinality(
+    values: readonly unknown[]
+  ): StoredPayoutTransactionRow[] {
+    const id = readString(values[0]);
+    const status = readString(values[1]);
+    const confirmedAt = readNullableString(values[2]);
+    const finalizedAt = readNullableString(values[3]);
+    const errorJson = readNullableString(values[4]);
+    const transaction = this.payoutTransactions.find((row) => row.id === id);
+    if (transaction === undefined) {
+      return [];
+    }
+    transaction.status = status;
+    transaction.confirmed_at = confirmedAt;
+    transaction.finalized_at = finalizedAt;
+    transaction.error_json = errorJson;
     return [transaction];
   }
 

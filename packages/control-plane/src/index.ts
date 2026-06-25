@@ -77,6 +77,7 @@ import {
   type PayoutTransactionRecord,
   type PayoutTransactionStore,
   type MarkPayoutTransactionSubmittedInput,
+  type MarkPayoutTransactionFinalityInput,
   type SaveSignedPayoutTransactionsInput
 } from "./payouts.js";
 
@@ -476,6 +477,32 @@ export class InMemoryReceiptIngestionStore
     };
     this.payoutTransactionsById.set(submitted.id, submitted);
     return submitted;
+  }
+
+  markPayoutTransactionFinality(
+    input: MarkPayoutTransactionFinalityInput
+  ): PayoutTransactionRecord | undefined {
+    const existing = this.payoutTransactionsById.get(input.id);
+    if (existing === undefined) {
+      return undefined;
+    }
+    const observedAt = normalizeOptionalTimestamp(input.observedAt);
+    const updated: PayoutTransactionRecord = {
+      ...existing,
+      status: input.status,
+      ...(input.status === "confirmed"
+        ? { confirmedAt: observedAt }
+        : {}),
+      ...(input.status === "finalized"
+        ? {
+            confirmedAt: existing.confirmedAt ?? observedAt,
+            finalizedAt: observedAt
+          }
+        : {}),
+      ...(input.error === undefined ? {} : { error: input.error })
+    };
+    this.payoutTransactionsById.set(updated.id, updated);
+    return updated;
   }
 }
 
@@ -2300,6 +2327,14 @@ function comparePayoutTransactions(
     left.createdAt.localeCompare(right.createdAt) ||
     left.id.localeCompare(right.id)
   );
+}
+
+function normalizeOptionalTimestamp(value: string | undefined): string {
+  const date = value === undefined ? new Date() : new Date(value);
+  if (!Number.isFinite(date.getTime())) {
+    throw new Error("timestamp must be an ISO timestamp");
+  }
+  return date.toISOString();
 }
 
 function createRuntimePool(
