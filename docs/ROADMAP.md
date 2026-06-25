@@ -188,6 +188,7 @@ Current slice:
 
 - `@split402/merchant-sdk` package;
 - cached control-plane campaign resolver for active campaign terms;
+- required x402 `payment-identifier` helpers;
 - operation digest helpers for production GET and JSON POST requests;
 - durable receipt outbox interfaces;
 - in-memory receipt outbox store for tests and examples;
