@@ -254,6 +254,111 @@ describe("control-plane HTTP API", () => {
     ).toHaveLength(0);
   });
 
+  it("lists payout batches that need reconciliation", async () => {
+    const { app, store, receipt, merchantRegistry } = createTestApp({
+      withMerchantRegistry: true,
+      withPayouts: true
+    });
+    if (merchantRegistry === undefined) {
+      throw new Error("expected merchant registry");
+    }
+    await request(app)
+      .post("/v1/merchants")
+      .send({
+        id: receipt.merchantId,
+        slug: "reconciliation-merchant",
+        displayName: "Reconciliation Merchant",
+        ownerWallet: receipt.payerWallet,
+        status: "active"
+      })
+      .expect(201);
+    await request(app)
+      .post(`/v1/merchants/${receipt.merchantId}/payout-wallets`)
+      .send({
+        id: "mpw_ffffffffffffffffffffffffffffffff",
+        network: receipt.network,
+        wallet: receipt.payToWallet,
+        asset: receipt.asset,
+        signerReference: "kms:split402-devnet-payout"
+      })
+      .expect(201);
+    await request(app).post("/v1/receipts").send({ receipt }).expect(201);
+    const snapshot = store.getByReceiptId(receipt.receiptId);
+    if (snapshot?.accrual === undefined) {
+      throw new Error("expected receipt accrual");
+    }
+    store.save({
+      ...snapshot,
+      receipt: {
+        ...snapshot.receipt,
+        verificationState: "signature_verified"
+      },
+      accrual: {
+        ...snapshot.accrual,
+        status: "available",
+        availableAt: "2026-06-24T00:04:00.000Z"
+      }
+    });
+    const availableAccrual = store.getByReceiptId(receipt.receiptId)?.accrual;
+    if (availableAccrual === undefined) {
+      throw new Error("expected available accrual");
+    }
+    const batch = store.createPayoutBatch({
+      merchantId: receipt.merchantId,
+      payoutWalletId: "mpw_ffffffffffffffffffffffffffffffff",
+      network: receipt.network,
+      asset: receipt.asset,
+      accruals: [availableAccrual],
+      now: "2026-06-24T00:05:00Z"
+    });
+    const [transaction] = store.saveSignedPayoutTransactions({
+      payoutBatchId: batch.id,
+      now: "2026-06-24T00:06:00Z",
+      transactions: [
+        {
+          sequence: 0,
+          signedTransactionBase64: "AQID",
+          expectedSignature: "expected_sig_0"
+        }
+      ]
+    });
+    if (transaction === undefined) {
+      throw new Error("expected payout transaction");
+    }
+    store.markPayoutTransactionSubmitted({
+      id: transaction.id,
+      submittedAt: "2026-06-24T00:07:00Z",
+      expectedSignature: "expected_sig_0"
+    });
+    store.markPayoutTransactionFinality({
+      id: transaction.id,
+      status: "outcome_unknown",
+      observedAt: "2026-06-24T00:08:00Z"
+    });
+
+    const response = await request(app)
+      .get(`/v1/merchants/${receipt.merchantId}/payouts/reconciliation`)
+      .query({ limit: "5", asset: receipt.asset })
+      .expect(200);
+
+    expect(response.body.items).toEqual([
+      expect.objectContaining({
+        reason: "outcome_unknown",
+        recommendedAction: "requery_chain_before_retry",
+        batch: expect.objectContaining({
+          id: batch.id,
+          status: "outcome_unknown"
+        }),
+        transactions: [
+          expect.objectContaining({
+            id: transaction.id,
+            status: "outcome_unknown"
+          })
+        ]
+      })
+    ]);
+  });
+
   it("rejects malformed receipt submission envelopes", async () => {
     const { app } = createTestApp();
 
@@ -933,7 +1038,11 @@ function createTestApp(
           }
         : {}),
       ...(options.withPayouts === true
-        ? { payoutAccrualStore: store, payoutBatchStore: store }
+        ? {
+            payoutAccrualStore: store,
+            payoutBatchStore: store,
+            payoutReconciliationStore: store
+          }
         : {}),
       ...(options.withAuth === true
         ? { auth: { authenticator: createAuthenticator() } }

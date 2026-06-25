@@ -108,12 +108,16 @@ import type {
   MarkPayoutTransactionSubmittedInput,
   MarkPayoutTransactionFinalityInput,
   ClosePayoutBatchLedgerInput,
-  PayoutLedgerClosureStore
+  PayoutLedgerClosureStore,
+  PayoutReconciliationItem,
+  PayoutReconciliationStore,
+  ListPayoutReconciliationItemsInput
 } from "./payouts.js";
 import {
   PayoutBatchConflictError,
   createPayoutFinalizationLedgerTransaction,
   createPayoutBatchPlan,
+  createPayoutReconciliationItem,
   createSignedPayoutTransactionRecords,
   summarizePayoutBatchFinality
 } from "./payouts.js";
@@ -424,7 +428,8 @@ export class PostgresReceiptIngestionStore
     PayoutAccrualStore,
     PayoutBatchStore,
     PayoutTransactionStore,
-    PayoutLedgerClosureStore {
+    PayoutLedgerClosureStore,
+    PayoutReconciliationStore {
   constructor(
     private readonly db: PostgresPool | PostgresQueryExecutor,
     private readonly options: PostgresReceiptIngestionStoreOptions = {}
@@ -587,6 +592,41 @@ export class PostgresReceiptIngestionStore
       [payoutBatchId]
     );
     return result.rows.map(mapPayoutTransaction);
+  }
+
+  async listPayoutReconciliationItems(
+    input: ListPayoutReconciliationItemsInput
+  ): Promise<PayoutReconciliationItem[]> {
+    const limit = normalizePayoutReconciliationLimit(input.limit);
+    const values: unknown[] = [input.merchantId, limit];
+    const assetClause =
+      input.asset === undefined ? "" : ` and asset_mint = $${values.push(input.asset)}`;
+    const result = await this.db.query<PayoutBatchRow>(
+      `select id, merchant_id, payout_wallet_id, network, asset_mint, status,
+              total_amount_atomic, item_count, accrual_count, failure_code,
+              failure_message, created_at, updated_at
+         from payout_batches
+        where merchant_id = $1
+          and status = 'outcome_unknown'${assetClause}
+        order by updated_at asc, id asc
+        limit $2`,
+      values
+    );
+    const items: PayoutReconciliationItem[] = [];
+    for (const row of result.rows) {
+      const batch = await loadPayoutBatch(this.db, row.id);
+      if (batch === undefined) {
+        continue;
+      }
+      const item = createPayoutReconciliationItem(
+        batch,
+        await this.listPayoutTransactions(batch.id)
+      );
+      if (item !== undefined) {
+        items.push(item);
+      }
+    }
+    return items;
   }
 
   async markPayoutTransactionSubmitted(
@@ -2922,6 +2962,18 @@ function normalizeOutboxEventTypes(
     throw new Error("eventTypes must not be empty");
   }
   return eventTypes;
+}
+
+function normalizePayoutReconciliationLimit(limit: number | undefined): number {
+  if (limit === undefined) {
+    return 50;
+  }
+  if (!Number.isInteger(limit) || limit <= 0 || limit > 500) {
+    throw new PayoutBatchConflictError(
+      "payout reconciliation limit must be between 1 and 500"
+    );
+  }
+  return limit;
 }
 
 function mapReceiptRecord(row: PaymentReceiptRow): ReceiptRecord {

@@ -258,6 +258,27 @@ export interface PayoutTransactionRecord {
   createdAt: string;
 }
 
+export interface ListPayoutReconciliationItemsInput {
+  merchantId: string;
+  asset?: string;
+  limit?: number;
+}
+
+export interface PayoutReconciliationItem {
+  batch: PayoutBatchRecord;
+  transactions: PayoutTransactionRecord[];
+  reason: "outcome_unknown";
+  recommendedAction: "requery_chain_before_retry";
+}
+
+export interface PayoutReconciliationStore {
+  listPayoutReconciliationItems(
+    input: ListPayoutReconciliationItemsInput
+  ):
+    | Promise<PayoutReconciliationItem[]>
+    | PayoutReconciliationItem[];
+}
+
 export interface PayoutBatchFinalityRollup {
   batchStatus: PayoutBatchStatus;
   itemStatus?: PayoutItemStatus;
@@ -758,6 +779,36 @@ export function createPayoutFinalizationLedgerTransaction(
     entries,
     createdAt
   };
+}
+
+export function createPayoutReconciliationItem(
+  batch: PayoutBatchRecord,
+  transactions: readonly PayoutTransactionRecord[]
+): PayoutReconciliationItem | undefined {
+  if (batch.status !== "outcome_unknown") {
+    return undefined;
+  }
+  const reconciliationTransactions = transactions.filter(
+    isPayoutTransactionOutcomeUnknown
+  );
+  if (reconciliationTransactions.length === 0) {
+    return undefined;
+  }
+  return {
+    batch,
+    transactions: reconciliationTransactions,
+    reason: "outcome_unknown",
+    recommendedAction: "requery_chain_before_retry"
+  };
+}
+
+export function isPayoutTransactionOutcomeUnknown(
+  transaction: PayoutTransactionRecord
+): boolean {
+  return (
+    transaction.status === "outcome_unknown" ||
+    transaction.status === "expired"
+  );
 }
 
 function readPositiveAtomicAmount(value: string, label: string): bigint {

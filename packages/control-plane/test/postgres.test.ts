@@ -758,6 +758,34 @@ describe("PostgresReceiptIngestionStore", () => {
         occurredAt: "2026-06-24T00:08:00.000Z"
       })
     );
+    await expect(
+      unknown.store.listPayoutReconciliationItems({
+        merchantId: unknown.bundle.artifacts.receipt.merchantId,
+        asset: unknown.bundle.artifacts.receipt.asset,
+        limit: 10
+      })
+    ).resolves.toEqual([
+      expect.objectContaining({
+        reason: "outcome_unknown",
+        recommendedAction: "requery_chain_before_retry",
+        batch: expect.objectContaining({
+          id: unknown.batch.id,
+          status: "outcome_unknown"
+        }),
+        transactions: [
+          expect.objectContaining({
+            id: unknown.transaction.id,
+            status: "outcome_unknown"
+          })
+        ]
+      })
+    ]);
+    await expect(
+      unknown.store.listPayoutReconciliationItems({
+        merchantId: unknown.bundle.artifacts.receipt.merchantId,
+        asset: "other_asset"
+      })
+    ).resolves.toEqual([]);
   });
 });
 
@@ -1682,7 +1710,9 @@ class FakePostgresClient implements PostgresTransactionClient {
       );
     }
     if (normalized.includes("from payout_batches")) {
-      return result(this.database.selectPayoutBatch(values[0]) as unknown as Row[]);
+      return result(
+        this.database.selectPayoutBatch(normalized, values) as unknown as Row[]
+      );
     }
     if (normalized.includes("from payout_items")) {
       return result(this.database.selectPayoutItems(values[0]) as unknown as Row[]);
@@ -2339,8 +2369,28 @@ class FakePostgresDatabase {
     );
   }
 
-  selectPayoutBatch(batchId: unknown): StoredPayoutBatchRow[] {
-    const batch = this.payoutBatches.find((row) => row.id === readString(batchId));
+  selectPayoutBatch(
+    normalizedSql: string,
+    values: readonly unknown[]
+  ): StoredPayoutBatchRow[] {
+    if (normalizedSql.includes("where merchant_id = $1")) {
+      const merchantId = readString(values[0]);
+      const limit = readNumber(values[1]);
+      const asset = normalizedSql.includes("asset_mint =")
+        ? readString(values[2])
+        : undefined;
+      return this.payoutBatches
+        .filter((row) => row.merchant_id === merchantId)
+        .filter((row) => row.status === "outcome_unknown")
+        .filter((row) => asset === undefined || row.asset_mint === asset)
+        .sort(
+          (left, right) =>
+            left.updated_at.localeCompare(right.updated_at) ||
+            left.id.localeCompare(right.id)
+        )
+        .slice(0, limit);
+    }
+    const batch = this.payoutBatches.find((row) => row.id === readString(values[0]));
     return batch === undefined ? [] : [batch];
   }
 
