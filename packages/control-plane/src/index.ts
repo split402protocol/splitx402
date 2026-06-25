@@ -29,7 +29,10 @@ import {
   type CampaignTermsInput
 } from "./campaigns.js";
 import { isReceiptIngestionPersistenceConflict } from "./errors.js";
-import { createMerchantReliabilityProfile } from "./discovery.js";
+import {
+  createMerchantReliabilityProfile,
+  createSplit402BazaarResources
+} from "./discovery.js";
 import {
   createMerchantReceiptKeyResolver,
   MerchantRegistryValidationError,
@@ -2104,6 +2107,41 @@ export function createRouteRegistryRouter(
     } catch (error) {
       if (
         !sendRouteRegistryError(res, error) &&
+        !sendMerchantRegistryError(res, error)
+      ) {
+        next(error);
+      }
+    }
+  });
+
+  router.get("/v1/routes/:routeId/bazaar-resources", async (req, res, next) => {
+    try {
+      const campaignRegistry = requireRouteCampaignRegistry(options);
+      const routeId = readRouteParam(req.params.routeId, "routeId");
+      const route = await routeRegistry.getRoute(routeId);
+      if (route === undefined) {
+        res.status(404).json({ error: "route_not_found" });
+        return;
+      }
+      if (route.status !== "active") {
+        res.status(409).json({ error: "route_not_active" });
+        return;
+      }
+      const campaignVersion = await campaignRegistry.getCampaignVersion(
+        route.campaignId,
+        route.campaignVersionMin
+      );
+      if (campaignVersion === undefined) {
+        res.status(404).json({ error: "campaign_version_not_found" });
+        return;
+      }
+      res.json({
+        resources: createSplit402BazaarResources(route, campaignVersion)
+      });
+    } catch (error) {
+      if (
+        !sendRouteRegistryError(res, error) &&
+        !sendCampaignRegistryError(res, error) &&
         !sendMerchantRegistryError(res, error)
       ) {
         next(error);

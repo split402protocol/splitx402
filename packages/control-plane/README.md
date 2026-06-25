@@ -86,6 +86,7 @@ POST /v1/routes
 POST /v1/routes/:routeId/suspend
 POST /v1/routes/:routeId/rotate-payout
 GET  /v1/routes/search
+GET  /v1/routes/:routeId/bazaar-resources
 GET  /v1/routes/:routeId/versions
 GET  /v1/routes/:routeId
 POST /v1/merchants/:merchantId/payouts/preview
