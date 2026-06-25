@@ -103,6 +103,17 @@ logs contain one JSON audit event per signed or rejected request. Audit lines
 must not contain private keys, shared secrets, unsigned transaction bytes, or
 signed transaction bytes.
 
+Run the packaged smoke check:
+
+```bash
+SPLIT402_PAYOUT_SIGNER_SMOKE_URL="$SIGNER_URL" \
+  corepack pnpm signer:payout:smoke
+```
+
+The smoke check verifies health, readiness, metrics shape, signer reference and
+network consistency, and that endpoint responses do not expose configured signer
+secrets present in the local environment.
+
 ## Rollback
 
 If signing fails after a deploy:
