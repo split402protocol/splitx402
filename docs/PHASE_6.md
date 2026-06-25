@@ -96,6 +96,9 @@ plus an unknown-outcome reconciliation queue and referrer payout views.
 - Added `corepack pnpm phase6:rollback-drill` to generate a structured payout
   signer rollback drill record with immutable image digests, secret-set
   rollback, readiness, metrics, reconciliation, and safe batch-resume evidence.
+- Added `corepack pnpm phase6:rpc-failover` to generate a structured RPC
+  failover review record that validates the finality drill passed and observed
+  status from the secondary RPC.
 - Added `corepack pnpm phase6:evidence:status` to list required Phase 6 evidence
   commands and summarize custody-bundle blockers before production approval.
 - Added `corepack pnpm phase6:evidence:bundle` to scaffold the canonical Phase 6
@@ -131,7 +134,8 @@ plus an unknown-outcome reconciliation queue and referrer payout views.
   `docs/checklists/phase6-custody-review.md`.
 - Added a payout custody incident drill at
   `docs/runbooks/payout-custody-incident-drill.md`.
-- Added a payout finality RPC failover drill command for custody evidence.
+- Added a payout finality RPC failover drill command and structured review
+  record for custody evidence.
 - Added referrer-facing balance and payout history views with
   `GET /v1/referrers/:referrerWallet/balances` and
   `GET /v1/referrers/:referrerWallet/payouts`.
@@ -180,5 +184,6 @@ the merchant has enough funding.
 - `corepack pnpm phase6:key-custody`
 - `corepack pnpm phase6:rotation-drill`
 - `corepack pnpm phase6:rollback-drill`
+- `corepack pnpm phase6:rpc-failover`
 - `corepack pnpm phase6:signer-policy`
 - `corepack pnpm payout:finality:failover-drill`

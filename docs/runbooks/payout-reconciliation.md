@@ -26,8 +26,21 @@ Before production payout custody, record RPC failover evidence:
 corepack pnpm payout:finality:failover-drill
 ```
 
-Attach the JSON output to `rpc_failover_record` in the Phase 6 custody evidence
-bundle.
+Then copy [`docs/templates/phase6-rpc-failover-review.txt`](../templates/phase6-rpc-failover-review.txt)
+or generate the correctly shaped review record:
+
+```bash
+SPLIT402_PHASE6_RPC_FAILOVER_REVIEW_ID=phase6-rpc-failover-001 \
+SPLIT402_PHASE6_RPC_FAILOVER_OWNERS="security, operations" \
+SPLIT402_PHASE6_RPC_FAILOVER_STAGING_ENVIRONMENT=split402-staging \
+SPLIT402_PHASE6_RPC_FAILOVER_DRILL_REPORT_JSON='<json-output-from-payout-finality-failover-drill>' \
+SPLIT402_PHASE6_RPC_FAILOVER_PRIMARY_UNAVAILABLE_EVIDENCE="attached: primary-rpc-503.log" \
+SPLIT402_PHASE6_RPC_FAILOVER_SECONDARY_STATUS_EVIDENCE="attached: secondary-rpc-confirmed.json" \
+  corepack pnpm phase6:rpc-failover
+```
+
+Attach the review output to `rpc_failover_record` in the Phase 6 custody
+evidence bundle.
 
 1. List batches that need review:
 

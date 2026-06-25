@@ -27,6 +27,7 @@
     "phase6:key-custody": "tsx src/phase6-key-custody.ts",
     "phase6:rotation-drill": "tsx src/phase6-rotation-drill.ts",
     "phase6:rollback-drill": "tsx src/phase6-rollback-drill.ts",
+    "phase6:rpc-failover": "tsx src/phase6-rpc-failover.ts",
     "phase6:signer-policy": "tsx src/phase6-signer-policy.ts",
     "audit": "corepack pnpm audit --audit-level high",
     "demo:merchant": "corepack pnpm --filter @split402/demo-merchant dev",
