@@ -353,6 +353,8 @@ Current slice:
   review template;
 - add machine-checkable image provenance, emergency signer-auth revocation,
   payout key custody, and rollback drill evidence fields and templates;
+- add a Phase 6 image provenance record generator for immutable image digest and
+  dependency audit evidence;
 - add signed-byte payout transaction persistence and Solana broadcast submission
   boundary;
 - add Solana payout transaction finality monitor with retry and outcome-unknown
