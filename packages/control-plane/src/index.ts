@@ -50,6 +50,7 @@ import {
   type RouteRegistry,
   type RouteStatus
 } from "./routes.js";
+import { SolanaRpcPayoutTransactionFinalityMonitor } from "./solana.js";
 import {
   PostgresCampaignRegistry,
   PostgresMerchantRegistry,
@@ -69,6 +70,7 @@ import {
   createSignedPayoutTransactionRecords,
   createPayoutPreview,
   filterPayoutEligibleAccruals,
+  isPayoutTransactionOutcomeUnknown,
   summarizePayoutBatchFinality,
   isPayoutBatchConflictError,
   isPayoutBatchValidationError,
@@ -81,6 +83,7 @@ import {
   type PayoutFundingBalance,
   type PayoutTransactionRecord,
   type PayoutTransactionStore,
+  type PayoutTransactionFinalityStatus,
   type MarkPayoutTransactionSubmittedInput,
   type MarkPayoutTransactionFinalityInput,
   type ClosePayoutBatchLedgerInput,
@@ -835,10 +838,50 @@ export interface ControlPlaneAppOptions {
   routeRegistry?: RouteRegistry;
   payoutAccrualStore?: PayoutAccrualStore;
   payoutBatchStore?: PayoutBatchStore;
+  payoutTransactionStore?: PayoutTransactionStore;
   payoutReconciliationStore?: PayoutReconciliationStore;
   referrerPayoutViewStore?: ReferrerPayoutViewStore;
+  payoutFinalityMonitor?: PayoutFinalityMonitor;
   auth?: ControlPlaneAuthOptions;
   jsonLimit?: string;
+}
+
+export type PayoutReconciliationFinalityStatus =
+  | PayoutTransactionFinalityStatus
+  | "retry";
+
+export type PayoutReconciliationRecommendedAction =
+  | "close_ledger_if_finalized"
+  | "wait_for_finality"
+  | "manual_review_before_retry"
+  | "requery_chain_before_retry";
+
+export interface PayoutReconciliationFinalityResult {
+  transactionId: string;
+  status: PayoutReconciliationFinalityStatus;
+  signature?: string;
+  rpcUrl?: string;
+  confirmationStatus?: string;
+  confirmations?: number | null;
+  retryAt?: string;
+  error?: string;
+}
+
+export interface PayoutFinalityMonitor {
+  monitor(input: {
+    transaction: PayoutTransactionRecord;
+  }):
+    | Promise<PayoutReconciliationFinalityResult>
+    | PayoutReconciliationFinalityResult;
+}
+
+export interface PayoutBatchReconciliationReport {
+  batchBefore: PayoutBatchRecord;
+  batchAfter: PayoutBatchRecord;
+  observedTransactions: PayoutReconciliationFinalityResult[];
+  updatedTransactions: PayoutTransactionRecord[];
+  recommendedAction: PayoutReconciliationRecommendedAction;
+  retryPaymentAllowed: boolean;
 }
 
 export interface ControlPlaneAuthOptions {
@@ -853,6 +896,7 @@ export interface CreateControlPlaneRuntimeOptions {
   authPolicy?: ControlPlaneRuntimeAuthPolicy;
   close?: () => Promise<void> | void;
   jsonLimit?: string;
+  payoutFinalityMonitor?: PayoutFinalityMonitor;
   walletAuth?: WalletAuthenticatorOptions;
 }
 
@@ -902,8 +946,12 @@ export function createControlPlaneRuntime(
     routeRegistry,
     payoutAccrualStore: receiptStore,
     payoutBatchStore: receiptStore,
+    payoutTransactionStore: receiptStore,
     payoutReconciliationStore: receiptStore,
     referrerPayoutViewStore: receiptStore,
+    ...(options.payoutFinalityMonitor === undefined
+      ? {}
+      : { payoutFinalityMonitor: options.payoutFinalityMonitor }),
     ...(options.jsonLimit === undefined ? {} : { jsonLimit: options.jsonLimit }),
     ...(authenticator === undefined
       ? {}
@@ -945,6 +993,7 @@ export function createControlPlaneRuntimeFromEnv(
     ...(env.SPLIT402_CONTROL_PLANE_JSON_LIMIT === undefined
       ? {}
       : { jsonLimit: env.SPLIT402_CONTROL_PLANE_JSON_LIMIT }),
+    payoutFinalityMonitor: createRuntimePayoutFinalityMonitor(env),
     walletAuth: {
       ...readWalletAuthEnvOptions(env),
       ...options.walletAuth
@@ -1119,8 +1168,10 @@ export function createPayoutRouter(
     | "jsonLimit"
     | "merchantRegistry"
     | "payoutBatchStore"
+    | "payoutTransactionStore"
     | "payoutReconciliationStore"
     | "referrerPayoutViewStore"
+    | "payoutFinalityMonitor"
   > = {}
 ): Router {
   const router = express.Router();
@@ -1317,6 +1368,64 @@ export function createPayoutRouter(
       }
     }
   );
+
+  router.post("/v1/payout-batches/:batchId/reconcile", async (req, res, next) => {
+    try {
+      if (options.payoutBatchStore === undefined) {
+        res.status(500).json({
+          error: "internal_server_error",
+          message: "payout batch store is required"
+        });
+        return;
+      }
+      if (options.payoutTransactionStore === undefined) {
+        res.status(500).json({
+          error: "internal_server_error",
+          message: "payout transaction store is required"
+        });
+        return;
+      }
+      if (options.payoutFinalityMonitor === undefined) {
+        res.status(500).json({
+          error: "internal_server_error",
+          message: "payout finality monitor is required"
+        });
+        return;
+      }
+      const batchId = readRouteParam(req.params.batchId, "batchId");
+      const batch = await options.payoutBatchStore.getPayoutBatch(batchId);
+      if (batch === undefined) {
+        res.status(404).json({
+          error: "not_found",
+          message: "payout batch was not found"
+        });
+        return;
+      }
+      const session = await requireMerchantOwnerForMerchantId(
+        req,
+        res,
+        options,
+        batch.merchantId
+      );
+      if (session === undefined && isMerchantAuthRequired(options)) {
+        return;
+      }
+      const body = readJsonObject(req.body) ?? {};
+      const observedAt = readOptionalString(body.observedAt, "observedAt");
+      const report = await reconcilePayoutBatch({
+        batch,
+        payoutBatchStore: options.payoutBatchStore,
+        payoutTransactionStore: options.payoutTransactionStore,
+        monitor: options.payoutFinalityMonitor,
+        ...(observedAt === undefined ? {} : { observedAt })
+      });
+      res.json({ report });
+    } catch (error) {
+      if (!sendPayoutBatchError(res, error) && !sendMerchantRegistryError(res, error)) {
+        next(error);
+      }
+    }
+  });
 
   router.get("/v1/referrers/:referrerWallet/balances", async (req, res, next) => {
     try {
@@ -2577,12 +2686,173 @@ function comparePayoutBatchesForReconciliation(
   );
 }
 
+async function reconcilePayoutBatch(input: {
+  batch: PayoutBatchRecord;
+  payoutBatchStore: PayoutBatchStore;
+  payoutTransactionStore: PayoutTransactionStore;
+  monitor: PayoutFinalityMonitor;
+  observedAt?: string;
+}): Promise<PayoutBatchReconciliationReport> {
+  if (input.batch.status !== "outcome_unknown") {
+    throw new PayoutBatchConflictError(
+      "payout batch does not require reconciliation"
+    );
+  }
+  const transactions = await input.payoutTransactionStore.listPayoutTransactions(
+    input.batch.id
+  );
+  const candidates = transactions.filter(isPayoutTransactionOutcomeUnknown);
+  if (candidates.length === 0) {
+    throw new PayoutBatchConflictError(
+      "payout batch has no outcome-unknown transactions to reconcile"
+    );
+  }
+
+  const observedAt = normalizeOptionalTimestamp(input.observedAt);
+  const observedTransactions: PayoutReconciliationFinalityResult[] = [];
+  const updatedTransactions: PayoutTransactionRecord[] = [];
+  for (const transaction of candidates) {
+    const result = await input.monitor.monitor({ transaction });
+    observedTransactions.push(result);
+    if (isPersistablePayoutFinalityStatus(result.status)) {
+      const updated =
+        await input.payoutTransactionStore.markPayoutTransactionFinality({
+          id: transaction.id,
+          status: result.status,
+          observedAt,
+          ...(result.error === undefined
+            ? {}
+            : { error: createPayoutReconciliationError(result) })
+        });
+      if (updated !== undefined) {
+        updatedTransactions.push(updated);
+      }
+    }
+  }
+
+  const batchAfter =
+    (await input.payoutBatchStore.getPayoutBatch(input.batch.id)) ?? input.batch;
+  return {
+    batchBefore: input.batch,
+    batchAfter,
+    observedTransactions,
+    updatedTransactions,
+    recommendedAction: recommendPayoutReconciliationAction(
+      batchAfter,
+      observedTransactions
+    ),
+    retryPaymentAllowed: batchAfter.status === "failed"
+  };
+}
+
+function isPersistablePayoutFinalityStatus(
+  status: PayoutReconciliationFinalityStatus
+): status is PayoutTransactionFinalityStatus {
+  return status !== "retry";
+}
+
+function createPayoutReconciliationError(
+  result: PayoutReconciliationFinalityResult
+): Record<string, unknown> {
+  return {
+    message: result.error,
+    status: result.status,
+    ...(result.signature === undefined ? {} : { signature: result.signature }),
+    ...(result.rpcUrl === undefined ? {} : { rpcUrl: result.rpcUrl })
+  };
+}
+
+function recommendPayoutReconciliationAction(
+  batch: PayoutBatchRecord,
+  results: readonly PayoutReconciliationFinalityResult[]
+): PayoutReconciliationRecommendedAction {
+  if (batch.status === "finalized") {
+    return "close_ledger_if_finalized";
+  }
+  if (batch.status === "failed") {
+    return "manual_review_before_retry";
+  }
+  if (batch.status === "confirmed" || batch.status === "submitted") {
+    return "wait_for_finality";
+  }
+  if (results.some((result) => result.status === "confirmed")) {
+    return "wait_for_finality";
+  }
+  return "requery_chain_before_retry";
+}
+
 function normalizeOptionalTimestamp(value: string | undefined): string {
   const date = value === undefined ? new Date() : new Date(value);
   if (!Number.isFinite(date.getTime())) {
     throw new Error("timestamp must be an ISO timestamp");
   }
   return date.toISOString();
+}
+
+function createRuntimePayoutFinalityMonitor(
+  env: NodeJS.ProcessEnv
+): PayoutFinalityMonitor {
+  const rpcUrls = readOptionalRpcUrlList(
+    env.SPLIT402_PAYOUT_FINALITY_SOLANA_RPC_URLS ??
+      env.SPLIT402_CHAIN_WORKER_SOLANA_RPC_URLS
+  );
+  const rpcUrl =
+    readOptionalNonEmptyEnv(
+      env.SPLIT402_PAYOUT_FINALITY_SOLANA_RPC_URL
+    ) ??
+    readOptionalNonEmptyEnv(env.SPLIT402_CHAIN_WORKER_SOLANA_RPC_URL) ??
+    rpcUrls[0] ??
+    "https://api.devnet.solana.com";
+  const retryDelayMs = readOptionalPositiveInteger(
+    env.SPLIT402_PAYOUT_FINALITY_RETRY_DELAY_MS,
+    "SPLIT402_PAYOUT_FINALITY_RETRY_DELAY_MS"
+  );
+  const unknownOutcomeAfterMs =
+    readOptionalPositiveInteger(
+      env.SPLIT402_PAYOUT_FINALITY_UNKNOWN_OUTCOME_AFTER_MS,
+      "SPLIT402_PAYOUT_FINALITY_UNKNOWN_OUTCOME_AFTER_MS"
+    ) ?? 300_000;
+  const network = readRuntimeSolanaNetwork(
+    readOptionalNonEmptyEnv(env.SPLIT402_PAYOUT_FINALITY_NETWORK) ??
+      readOptionalNonEmptyEnv(env.SPLIT402_CHAIN_WORKER_NETWORK) ??
+      "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+    "SPLIT402_PAYOUT_FINALITY_NETWORK"
+  );
+  return new SolanaRpcPayoutTransactionFinalityMonitor({
+    rpcUrl,
+    network,
+    ...(rpcUrls.length === 0 ? {} : { rpcUrls }),
+    ...(retryDelayMs === undefined ? {} : { retryDelayMs }),
+    unknownOutcomeAfterMs
+  });
+}
+
+function readOptionalNonEmptyEnv(value: string | undefined): string | undefined {
+  if (value === undefined || value.trim().length === 0) {
+    return undefined;
+  }
+  return value.trim();
+}
+
+function readOptionalRpcUrlList(value: string | undefined): string[] {
+  if (value === undefined || value.trim().length === 0) {
+    return [];
+  }
+  return Array.from(
+    new Set(
+      value
+        .split(",")
+        .map((part) => part.trim())
+        .filter((part) => part.length > 0)
+    )
+  );
+}
+
+function readRuntimeSolanaNetwork(value: string, label: string): string {
+  if (!value.startsWith("solana:")) {
+    throw new Error(`${label} must start with solana:`);
+  }
+  return value;
 }
 
 function createRuntimePool(

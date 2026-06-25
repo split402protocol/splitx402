@@ -22,6 +22,8 @@ import {
   createControlPlaneApp,
   type CampaignVersionRecord,
   type CampaignTermsInput,
+  type PayoutFinalityMonitor,
+  type PayoutReconciliationFinalityResult,
   type RouteDraft,
   type UnsignedReferralClaim
 } from "../src/index.js";
@@ -358,6 +360,116 @@ describe("control-plane HTTP API", () => {
         ]
       })
     ]);
+  });
+
+  it("reconciles outcome-unknown payout batches by requerying finality", async () => {
+    const monitor = new FakePayoutFinalityMonitor([
+      {
+        transactionId: "ignored-by-fake",
+        status: "finalized",
+        signature: "expected_sig_0",
+        rpcUrl: "https://rpc.example"
+      }
+    ]);
+    const { app, store, receipt, merchantRegistry } = createTestApp({
+      withMerchantRegistry: true,
+      withPayouts: true,
+      payoutFinalityMonitor: monitor
+    });
+    if (merchantRegistry === undefined) {
+      throw new Error("expected merchant registry");
+    }
+    await request(app)
+      .post("/v1/merchants")
+      .send({
+        id: receipt.merchantId,
+        slug: "reconciliation-action-merchant",
+        displayName: "Reconciliation Action Merchant",
+        ownerWallet: receipt.payerWallet,
+        status: "active"
+      })
+      .expect(201);
+    await request(app).post("/v1/receipts").send({ receipt }).expect(201);
+    const snapshot = store.getByReceiptId(receipt.receiptId);
+    if (snapshot?.accrual === undefined) {
+      throw new Error("expected receipt accrual");
+    }
+    store.save({
+      ...snapshot,
+      receipt: {
+        ...snapshot.receipt,
+        verificationState: "signature_verified"
+      },
+      accrual: {
+        ...snapshot.accrual,
+        status: "available",
+        availableAt: "2026-06-24T00:04:00.000Z"
+      }
+    });
+    const availableAccrual = store.getByReceiptId(receipt.receiptId)?.accrual;
+    if (availableAccrual === undefined) {
+      throw new Error("expected available accrual");
+    }
+    const batch = store.createPayoutBatch({
+      merchantId: receipt.merchantId,
+      payoutWalletId: "mpw_ffffffffffffffffffffffffffffffff",
+      network: receipt.network,
+      asset: receipt.asset,
+      accruals: [availableAccrual],
+      now: "2026-06-24T00:05:00Z"
+    });
+    const [transaction] = store.saveSignedPayoutTransactions({
+      payoutBatchId: batch.id,
+      now: "2026-06-24T00:06:00Z",
+      transactions: [
+        {
+          sequence: 0,
+          signedTransactionBase64: "AQID",
+          expectedSignature: "expected_sig_0"
+        }
+      ]
+    });
+    if (transaction === undefined) {
+      throw new Error("expected payout transaction");
+    }
+    store.markPayoutTransactionSubmitted({
+      id: transaction.id,
+      submittedAt: "2026-06-24T00:07:00Z",
+      expectedSignature: "expected_sig_0"
+    });
+    store.markPayoutTransactionFinality({
+      id: transaction.id,
+      status: "outcome_unknown",
+      observedAt: "2026-06-24T00:08:00Z"
+    });
+
+    const response = await request(app)
+      .post(`/v1/payout-batches/${batch.id}/reconcile`)
+      .send({ observedAt: "2026-06-24T00:09:00Z" })
+      .expect(200);
+
+    expect(response.body.report).toEqual(
+      expect.objectContaining({
+        recommendedAction: "close_ledger_if_finalized",
+        retryPaymentAllowed: false,
+        batchBefore: expect.objectContaining({ status: "outcome_unknown" }),
+        batchAfter: expect.objectContaining({ status: "finalized" }),
+        observedTransactions: [
+          expect.objectContaining({
+            transactionId: transaction.id,
+            status: "finalized",
+            signature: "expected_sig_0"
+          })
+        ],
+        updatedTransactions: [
+          expect.objectContaining({
+            id: transaction.id,
+            status: "finalized"
+          })
+        ]
+      })
+    );
+    expect(monitor.transactions).toEqual([transaction.id]);
   });
 
   it("shows referrer balances and payout history", async () => {
@@ -1117,6 +1229,7 @@ function createTestApp(
     withAuth?: boolean;
     withCampaignRegistry?: boolean;
     withMerchantRegistry?: boolean;
+    payoutFinalityMonitor?: PayoutFinalityMonitor;
     withPayouts?: boolean;
     withRouteRegistry?: boolean;
   } = {}
@@ -1158,8 +1271,12 @@ function createTestApp(
         ? {
             payoutAccrualStore: store,
             payoutBatchStore: store,
+            payoutTransactionStore: store,
             payoutReconciliationStore: store,
-            referrerPayoutViewStore: store
+            referrerPayoutViewStore: store,
+            ...(options.payoutFinalityMonitor === undefined
+              ? {}
+              : { payoutFinalityMonitor: options.payoutFinalityMonitor })
           }
         : {}),
       ...(options.withAuth === true
@@ -1170,6 +1287,28 @@ function createTestApp(
     store,
     receipt: bundle.artifacts.receipt
   };
+}
+
+class FakePayoutFinalityMonitor implements PayoutFinalityMonitor {
+  readonly transactions: string[] = [];
+
+  constructor(
+    private readonly results: readonly PayoutReconciliationFinalityResult[]
+  ) {}
+
+  monitor(input: {
+    transaction: { id: string };
+  }): PayoutReconciliationFinalityResult {
+    this.transactions.push(input.transaction.id);
+    const result = this.results[this.transactions.length - 1];
+    if (result === undefined) {
+      throw new Error("missing fake payout finality result");
+    }
+    return {
+      ...result,
+      transactionId: input.transaction.id
+    };
+  }
 }
 
 async function createActiveCampaign(app: Express, ownerToken?: string): Promise<void> {

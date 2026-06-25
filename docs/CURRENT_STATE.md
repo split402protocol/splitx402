@@ -43,8 +43,8 @@ flowchart LR
 - The original x402 payment is not atomically split onchain in the MVP.
 - `$SPLIT` route bonding is not in the critical path yet.
 - Mainnet production operation is not approved.
-- Phase 6 still needs remote/isolated production signer wiring and
-  reconciliation runbooks for unknown payout outcomes.
+- Phase 6 still needs remote/isolated production signer wiring before any
+  production payout custody.
 
 ## Current Direction
 
