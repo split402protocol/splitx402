@@ -61,6 +61,8 @@ import {
 } from "./postgres.js";
 import {
   PayoutBatchConflictError,
+  createReferrerBalanceSummary,
+  createReferrerPayoutHistoryItems,
   createPayoutBatchPlan,
   createPayoutFinalizationLedgerTransaction,
   createPayoutReconciliationItem,
@@ -84,6 +86,7 @@ import {
   type ClosePayoutBatchLedgerInput,
   type PayoutLedgerClosureStore,
   type PayoutReconciliationStore,
+  type ReferrerPayoutViewStore,
   type SaveSignedPayoutTransactionsInput
 } from "./payouts.js";
 
@@ -274,7 +277,8 @@ export class InMemoryReceiptIngestionStore
     PayoutBatchStore,
     PayoutTransactionStore,
     PayoutLedgerClosureStore,
-    PayoutReconciliationStore {
+    PayoutReconciliationStore,
+    ReferrerPayoutViewStore {
   private readonly receiptsById = new Map<string, ReceiptIngestionSnapshot>();
   private readonly receiptIdByHash = new Map<`sha256:${string}`, string>();
   private readonly receiptIdByPaymentId = new Map<string, string>();
@@ -477,6 +481,27 @@ export class InMemoryReceiptIngestionStore
       .filter(
         (item): item is NonNullable<typeof item> => item !== undefined
       );
+  }
+
+  getReferrerBalanceSummary(
+    input: Parameters<ReferrerPayoutViewStore["getReferrerBalanceSummary"]>[0]
+  ) {
+    return createReferrerBalanceSummary({
+      ...input,
+      accruals: this.listAccruals(),
+      payoutBatches: Array.from(this.payoutBatchesById.values())
+    });
+  }
+
+  listReferrerPayoutHistory(
+    input: Parameters<ReferrerPayoutViewStore["listReferrerPayoutHistory"]>[0]
+  ) {
+    return createReferrerPayoutHistoryItems({
+      ...input,
+      limit: input.limit ?? 50,
+      accruals: this.listAccruals(),
+      payoutBatches: Array.from(this.payoutBatchesById.values())
+    });
   }
 
   markPayoutTransactionSubmitted(
@@ -811,6 +836,7 @@ export interface ControlPlaneAppOptions {
   payoutAccrualStore?: PayoutAccrualStore;
   payoutBatchStore?: PayoutBatchStore;
   payoutReconciliationStore?: PayoutReconciliationStore;
+  referrerPayoutViewStore?: ReferrerPayoutViewStore;
   auth?: ControlPlaneAuthOptions;
   jsonLimit?: string;
 }
@@ -877,6 +903,7 @@ export function createControlPlaneRuntime(
     payoutAccrualStore: receiptStore,
     payoutBatchStore: receiptStore,
     payoutReconciliationStore: receiptStore,
+    referrerPayoutViewStore: receiptStore,
     ...(options.jsonLimit === undefined ? {} : { jsonLimit: options.jsonLimit }),
     ...(authenticator === undefined
       ? {}
@@ -1092,6 +1119,7 @@ export function createPayoutRouter(
     | "merchantRegistry"
     | "payoutBatchStore"
     | "payoutReconciliationStore"
+    | "referrerPayoutViewStore"
   > = {}
 ): Router {
   const router = express.Router();
@@ -1288,6 +1316,62 @@ export function createPayoutRouter(
       }
     }
   );
+
+  router.get("/v1/referrers/:referrerWallet/balances", async (req, res, next) => {
+    try {
+      if (options.referrerPayoutViewStore === undefined) {
+        res.status(500).json({
+          error: "internal_server_error",
+          message: "referrer payout view store is required"
+        });
+        return;
+      }
+      const referrerWallet = readRouteParam(
+        req.params.referrerWallet,
+        "referrerWallet"
+      );
+      const asset = readOptionalString(req.query.asset, "asset");
+      const summary =
+        await options.referrerPayoutViewStore.getReferrerBalanceSummary({
+          referrerWallet,
+          ...(asset === undefined ? {} : { asset })
+        });
+      res.json({ summary });
+    } catch (error) {
+      if (!sendPayoutBatchError(res, error)) {
+        next(error);
+      }
+    }
+  });
+
+  router.get("/v1/referrers/:referrerWallet/payouts", async (req, res, next) => {
+    try {
+      if (options.referrerPayoutViewStore === undefined) {
+        res.status(500).json({
+          error: "internal_server_error",
+          message: "referrer payout view store is required"
+        });
+        return;
+      }
+      const referrerWallet = readRouteParam(
+        req.params.referrerWallet,
+        "referrerWallet"
+      );
+      const asset = readOptionalString(req.query.asset, "asset");
+      const limit = readOptionalPositiveIntegerQuery(req.query.limit, "limit");
+      const items =
+        await options.referrerPayoutViewStore.listReferrerPayoutHistory({
+          referrerWallet,
+          ...(asset === undefined ? {} : { asset }),
+          ...(limit === undefined ? {} : { limit })
+        });
+      res.json({ items });
+    } catch (error) {
+      if (!sendPayoutBatchError(res, error)) {
+        next(error);
+      }
+    }
+  });
 
   router.use(jsonErrorHandler);
 

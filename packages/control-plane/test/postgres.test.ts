@@ -787,6 +787,49 @@ describe("PostgresReceiptIngestionStore", () => {
       })
     ).resolves.toEqual([]);
   });
+
+  it("loads referrer balances and payout history from payout allocations", async () => {
+    const fixture = await createPostgresPayoutTransactionFixture();
+    const accrual = fixture.verified.accrual;
+    if (accrual === undefined) {
+      throw new Error("expected verified accrual");
+    }
+    await fixture.store.markPayoutTransactionFinality({
+      id: fixture.transaction.id,
+      status: "finalized",
+      observedAt: "2026-06-24T00:08:00Z"
+    });
+
+    const summary = await fixture.store.getReferrerBalanceSummary({
+      referrerWallet: fixture.bundle.artifacts.receipt.referrerWallet ?? "",
+      asset: fixture.bundle.artifacts.receipt.asset
+    });
+    const history = await fixture.store.listReferrerPayoutHistory({
+      referrerWallet: fixture.bundle.artifacts.receipt.referrerWallet ?? "",
+      limit: 10
+    });
+
+    expect(summary.assets).toEqual([
+      {
+        asset: fixture.bundle.artifacts.receipt.asset,
+        pendingAmountAtomic: "0",
+        availableAmountAtomic: "0",
+        heldAmountAtomic: "0",
+        inFlightAmountAtomic: "0",
+        paidAmountAtomic: "2000",
+        totalEarnedAmountAtomic: "2000"
+      }
+    ]);
+    expect(history).toEqual([
+      expect.objectContaining({
+        accrualId: accrual.id,
+        receiptId: fixture.bundle.artifacts.receipt.receiptId,
+        status: "paid",
+        payoutBatchId: fixture.batch.id,
+        payoutStatus: "finalized"
+      })
+    ]);
+  });
 });
 
 describe("PostgresMerchantRegistry", () => {
@@ -1978,6 +2021,21 @@ class FakePostgresDatabase {
       return accrual === undefined ? [] : [accrual];
     }
 
+    if (normalizedSql.includes("where referrer_wallet = $1")) {
+      const referrerWallet = readString(values[0]);
+      const asset = normalizedSql.includes("asset_mint =")
+        ? readString(values[1])
+        : undefined;
+      return this.accruals
+        .filter((row) => row.referrer_wallet === referrerWallet)
+        .filter((row) => asset === undefined || row.asset_mint === asset)
+        .sort(
+          (left, right) =>
+            right.created_at.localeCompare(left.created_at) ||
+            left.id.localeCompare(right.id)
+        );
+    }
+
     const merchantId = readString(values[0]);
     const now = readString(values[1]);
     let result = this.accruals.filter(
@@ -2373,6 +2431,27 @@ class FakePostgresDatabase {
     normalizedSql: string,
     values: readonly unknown[]
   ): StoredPayoutBatchRow[] {
+    if (normalizedSql.includes("join payout_allocations")) {
+      const accrualIds = readStringArray(values[0]);
+      const batchIds = new Set(
+        this.payoutAllocations
+          .filter((allocation) => accrualIds.includes(allocation.accrual_id))
+          .map((allocation) =>
+            this.payoutItems.find(
+              (item) => item.id === allocation.payout_item_id
+            )?.payout_batch_id
+          )
+          .filter((id): id is string => id !== undefined)
+      );
+      return this.payoutBatches
+        .filter((row) => batchIds.has(row.id))
+        .sort(
+          (left, right) =>
+            right.updated_at.localeCompare(left.updated_at) ||
+            left.id.localeCompare(right.id)
+        )
+        .map((row) => ({ id: row.id }) as StoredPayoutBatchRow);
+    }
     if (normalizedSql.includes("where merchant_id = $1")) {
       const merchantId = readString(values[0]);
       const limit = readNumber(values[1]);
@@ -3160,6 +3239,13 @@ function readNullableNumber(value: unknown): number | null {
     return null;
   }
   return readNumber(value);
+}
+
+function readStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    throw new Error("expected string array query value");
+  }
+  return value.map(readString);
 }
 
 function readNullableString(value: unknown): string | null {

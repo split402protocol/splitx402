@@ -359,6 +359,122 @@ describe("control-plane HTTP API", () => {
     ]);
   });
 
+  it("shows referrer balances and payout history", async () => {
+    const { app, store, receipt, merchantRegistry } = createTestApp({
+      withMerchantRegistry: true,
+      withPayouts: true
+    });
+    if (merchantRegistry === undefined) {
+      throw new Error("expected merchant registry");
+    }
+    await request(app)
+      .post("/v1/merchants")
+      .send({
+        id: receipt.merchantId,
+        slug: "referrer-view-merchant",
+        displayName: "Referrer View Merchant",
+        ownerWallet: receipt.payerWallet,
+        status: "active"
+      })
+      .expect(201);
+    await request(app)
+      .post(`/v1/merchants/${receipt.merchantId}/payout-wallets`)
+      .send({
+        id: "mpw_ffffffffffffffffffffffffffffffff",
+        network: receipt.network,
+        wallet: receipt.payToWallet,
+        asset: receipt.asset,
+        signerReference: "kms:split402-devnet-payout"
+      })
+      .expect(201);
+    await request(app).post("/v1/receipts").send({ receipt }).expect(201);
+    const snapshot = store.getByReceiptId(receipt.receiptId);
+    if (snapshot?.accrual === undefined) {
+      throw new Error("expected receipt accrual");
+    }
+    store.save({
+      ...snapshot,
+      receipt: {
+        ...snapshot.receipt,
+        verificationState: "signature_verified"
+      },
+      accrual: {
+        ...snapshot.accrual,
+        status: "available",
+        availableAt: "2026-06-24T00:04:00.000Z"
+      }
+    });
+    const availableAccrual = store.getByReceiptId(receipt.receiptId)?.accrual;
+    if (availableAccrual === undefined) {
+      throw new Error("expected available accrual");
+    }
+    const batch = store.createPayoutBatch({
+      merchantId: receipt.merchantId,
+      payoutWalletId: "mpw_ffffffffffffffffffffffffffffffff",
+      network: receipt.network,
+      asset: receipt.asset,
+      accruals: [availableAccrual],
+      now: "2026-06-24T00:05:00Z"
+    });
+    const [transaction] = store.saveSignedPayoutTransactions({
+      payoutBatchId: batch.id,
+      now: "2026-06-24T00:06:00Z",
+      transactions: [
+        {
+          sequence: 0,
+          signedTransactionBase64: "AQID",
+          expectedSignature: "expected_sig_1"
+        }
+      ]
+    });
+    if (transaction === undefined) {
+      throw new Error("expected payout transaction");
+    }
+    store.markPayoutTransactionFinality({
+      id: transaction.id,
+      status: "finalized",
+      observedAt: "2026-06-24T00:08:00Z"
+    });
+
+    const balances = await request(app)
+      .get(`/v1/referrers/${receipt.referrerWallet}/balances`)
+      .query({ asset: receipt.asset })
+      .expect(200);
+    const history = await request(app)
+      .get(`/v1/referrers/${receipt.referrerWallet}/payouts`)
+      .query({ limit: "5" })
+      .expect(200);
+
+    expect(balances.body.summary).toEqual(
+      expect.objectContaining({
+        referrerWallet: receipt.referrerWallet,
+        assets: [
+          {
+            asset: receipt.asset,
+            pendingAmountAtomic: "0",
+            availableAmountAtomic: "0",
+            heldAmountAtomic: "0",
+            inFlightAmountAtomic: "0",
+            paidAmountAtomic: "2000",
+            totalEarnedAmountAtomic: "2000"
+          }
+        ]
+      })
+    );
+    expect(history.body.items).toEqual([
+      expect.objectContaining({
+        accrualId: availableAccrual.id,
+        receiptId: receipt.receiptId,
+        referrerWallet: receipt.referrerWallet,
+        payoutWallet: receipt.payoutWallet,
+        amountAtomic: "2000",
+        status: "paid",
+        payoutBatchId: batch.id,
+        payoutStatus: "finalized"
+      })
+    ]);
+  });
+
   it("rejects malformed receipt submission envelopes", async () => {
     const { app } = createTestApp();
 
@@ -1041,7 +1157,8 @@ function createTestApp(
         ? {
             payoutAccrualStore: store,
             payoutBatchStore: store,
-            payoutReconciliationStore: store
+            payoutReconciliationStore: store,
+            referrerPayoutViewStore: store
           }
         : {}),
       ...(options.withAuth === true

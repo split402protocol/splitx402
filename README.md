@@ -226,6 +226,8 @@ GET  /v1/routes/:routeId
 POST /v1/merchants/:merchantId/payouts/preview
 GET  /v1/merchants/:merchantId/payouts/reconciliation
 POST /v1/merchants/:merchantId/payout-batches
+GET  /v1/referrers/:referrerWallet/balances
+GET  /v1/referrers/:referrerWallet/payouts
 ```
 
 ## Persistence Layout
@@ -390,9 +392,7 @@ payout-engine boundaries.
 Active hardening is focused on Phase 6:
 
 - concrete signer runtime wiring;
-- signer runtime wiring;
 - reconciliation runbooks for unknown payout outcomes;
-- referrer payout history and balance views;
 - production security review before any mainnet use.
 
 The latest Devnet proof is recorded in

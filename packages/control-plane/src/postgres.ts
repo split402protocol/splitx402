@@ -111,13 +111,20 @@ import type {
   PayoutLedgerClosureStore,
   PayoutReconciliationItem,
   PayoutReconciliationStore,
-  ListPayoutReconciliationItemsInput
+  ListPayoutReconciliationItemsInput,
+  ReferrerBalanceSummary,
+  ReferrerPayoutHistoryItem,
+  ReferrerPayoutViewInput,
+  ReferrerPayoutViewStore,
+  ListReferrerPayoutHistoryInput
 } from "./payouts.js";
 import {
   PayoutBatchConflictError,
   createPayoutFinalizationLedgerTransaction,
   createPayoutBatchPlan,
   createPayoutReconciliationItem,
+  createReferrerBalanceSummary,
+  createReferrerPayoutHistoryItems,
   createSignedPayoutTransactionRecords,
   summarizePayoutBatchFinality
 } from "./payouts.js";
@@ -429,7 +436,8 @@ export class PostgresReceiptIngestionStore
     PayoutBatchStore,
     PayoutTransactionStore,
     PayoutLedgerClosureStore,
-    PayoutReconciliationStore {
+    PayoutReconciliationStore,
+    ReferrerPayoutViewStore {
   constructor(
     private readonly db: PostgresPool | PostgresQueryExecutor,
     private readonly options: PostgresReceiptIngestionStoreOptions = {}
@@ -627,6 +635,78 @@ export class PostgresReceiptIngestionStore
       }
     }
     return items;
+  }
+
+  async getReferrerBalanceSummary(
+    input: ReferrerPayoutViewInput
+  ): Promise<ReferrerBalanceSummary> {
+    const accruals = await this.listReferrerAccruals(input);
+    const payoutBatches = await this.listPayoutBatchesForAccruals(accruals);
+    return createReferrerBalanceSummary({
+      ...input,
+      accruals,
+      payoutBatches
+    });
+  }
+
+  async listReferrerPayoutHistory(
+    input: ListReferrerPayoutHistoryInput
+  ): Promise<ReferrerPayoutHistoryItem[]> {
+    const limit = input.limit ?? 50;
+    normalizePayoutReconciliationLimit(limit);
+    const accruals = await this.listReferrerAccruals(input);
+    const payoutBatches = await this.listPayoutBatchesForAccruals(accruals);
+    return createReferrerPayoutHistoryItems({
+      ...input,
+      limit,
+      accruals,
+      payoutBatches
+    });
+  }
+
+  private async listReferrerAccruals(
+    input: ReferrerPayoutViewInput
+  ): Promise<CommissionAccrual[]> {
+    const values: unknown[] = [input.referrerWallet];
+    const assetClause =
+      input.asset === undefined ? "" : ` and asset_mint = $${values.push(input.asset)}`;
+    const result = await this.db.query<CommissionAccrualRow>(
+      `select id, receipt_id, merchant_id, campaign_id, route_id, referrer_wallet,
+              payout_wallet, asset_mint, amount_atomic, status, available_at,
+              created_at
+         from commission_accruals
+        where referrer_wallet = $1${assetClause}
+        order by created_at desc, id asc`,
+      values
+    );
+    return result.rows.map(mapAccrual);
+  }
+
+  private async listPayoutBatchesForAccruals(
+    accruals: readonly CommissionAccrual[]
+  ): Promise<PayoutBatchRecord[]> {
+    if (accruals.length === 0) {
+      return [];
+    }
+    const accrualIds = accruals.map((accrual) => accrual.id);
+    const result = await this.db.query<Pick<PayoutBatchRow, "id">>(
+      `select pb.id
+         from payout_batches pb
+         join payout_items pi on pi.payout_batch_id = pb.id
+         join payout_allocations pa on pa.payout_item_id = pi.id
+        where pa.accrual_id = any($1)
+        group by pb.id, pb.updated_at
+        order by pb.updated_at desc, pb.id asc`,
+      [accrualIds]
+    );
+    const batches: PayoutBatchRecord[] = [];
+    for (const row of result.rows) {
+      const batch = await loadPayoutBatch(this.db, row.id);
+      if (batch !== undefined) {
+        batches.push(batch);
+      }
+    }
+    return batches;
   }
 
   async markPayoutTransactionSubmitted(

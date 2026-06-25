@@ -279,6 +279,66 @@ export interface PayoutReconciliationStore {
     | PayoutReconciliationItem[];
 }
 
+export interface ReferrerPayoutViewInput {
+  referrerWallet: string;
+  asset?: string;
+}
+
+export interface ListReferrerPayoutHistoryInput extends ReferrerPayoutViewInput {
+  limit?: number;
+}
+
+export interface ReferrerBalanceSummary {
+  referrerWallet: string;
+  generatedAt: string;
+  assets: ReferrerBalanceAsset[];
+}
+
+export interface ReferrerBalanceAsset {
+  asset: string;
+  pendingAmountAtomic: string;
+  availableAmountAtomic: string;
+  heldAmountAtomic: string;
+  inFlightAmountAtomic: string;
+  paidAmountAtomic: string;
+  totalEarnedAmountAtomic: string;
+}
+
+export type ReferrerPayoutHistoryStatus =
+  | "pending"
+  | "available"
+  | "held"
+  | "in_flight"
+  | "paid";
+
+export interface ReferrerPayoutHistoryItem {
+  accrualId: string;
+  receiptId: string;
+  merchantId: string;
+  campaignId: string;
+  routeId: string;
+  referrerWallet: string;
+  payoutWallet: string;
+  asset: string;
+  amountAtomic: string;
+  status: ReferrerPayoutHistoryStatus;
+  accrualStatus: CommissionAccrual["status"];
+  createdAt: string;
+  availableAt?: string;
+  payoutBatchId?: string;
+  payoutItemId?: string;
+  payoutStatus?: PayoutItemStatus;
+}
+
+export interface ReferrerPayoutViewStore {
+  getReferrerBalanceSummary(
+    input: ReferrerPayoutViewInput
+  ): Promise<ReferrerBalanceSummary> | ReferrerBalanceSummary;
+  listReferrerPayoutHistory(
+    input: ListReferrerPayoutHistoryInput
+  ): Promise<ReferrerPayoutHistoryItem[]> | ReferrerPayoutHistoryItem[];
+}
+
 export interface PayoutBatchFinalityRollup {
   batchStatus: PayoutBatchStatus;
   itemStatus?: PayoutItemStatus;
@@ -811,6 +871,131 @@ export function isPayoutTransactionOutcomeUnknown(
   );
 }
 
+export function createReferrerBalanceSummary(input: {
+  referrerWallet: string;
+  accruals: readonly CommissionAccrual[];
+  payoutBatches: readonly PayoutBatchRecord[];
+  asset?: string;
+  now?: string;
+}): ReferrerBalanceSummary {
+  const referrerWallet = assertNonEmptyString(
+    input.referrerWallet,
+    "referrerWallet"
+  );
+  const generatedAt = normalizeTimestamp(
+    input.now ?? new Date().toISOString(),
+    "now"
+  );
+  const assetsByMint = new Map<
+    string,
+    {
+      pending: bigint;
+      available: bigint;
+      held: bigint;
+      inFlight: bigint;
+      paid: bigint;
+      total: bigint;
+    }
+  >();
+
+  for (const item of createReferrerPayoutHistoryItems({
+    referrerWallet,
+    accruals: input.accruals,
+    payoutBatches: input.payoutBatches,
+    ...(input.asset === undefined ? {} : { asset: input.asset })
+  })) {
+    const amount = readAtomicAmount(item.amountAtomic, "amountAtomic");
+    const bucket = assetsByMint.get(item.asset) ?? {
+      pending: 0n,
+      available: 0n,
+      held: 0n,
+      inFlight: 0n,
+      paid: 0n,
+      total: 0n
+    };
+    bucket.total += amount;
+    if (item.status === "pending") {
+      bucket.pending += amount;
+    } else if (item.status === "available") {
+      bucket.available += amount;
+    } else if (item.status === "held") {
+      bucket.held += amount;
+    } else if (item.status === "in_flight") {
+      bucket.inFlight += amount;
+    } else {
+      bucket.paid += amount;
+    }
+    assetsByMint.set(item.asset, bucket);
+  }
+
+  return {
+    referrerWallet,
+    generatedAt,
+    assets: Array.from(assetsByMint.entries())
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([asset, totals]) => ({
+        asset,
+        pendingAmountAtomic: serializeAtomicAmount(totals.pending),
+        availableAmountAtomic: serializeAtomicAmount(totals.available),
+        heldAmountAtomic: serializeAtomicAmount(totals.held),
+        inFlightAmountAtomic: serializeAtomicAmount(totals.inFlight),
+        paidAmountAtomic: serializeAtomicAmount(totals.paid),
+        totalEarnedAmountAtomic: serializeAtomicAmount(totals.total)
+      }))
+  };
+}
+
+export function createReferrerPayoutHistoryItems(input: {
+  referrerWallet: string;
+  accruals: readonly CommissionAccrual[];
+  payoutBatches: readonly PayoutBatchRecord[];
+  asset?: string;
+  limit?: number;
+}): ReferrerPayoutHistoryItem[] {
+  const referrerWallet = assertNonEmptyString(
+    input.referrerWallet,
+    "referrerWallet"
+  );
+  const limit =
+    input.limit === undefined
+      ? undefined
+      : normalizeReferrerPayoutHistoryLimit(input.limit);
+  const payoutIndex = buildPayoutAllocationIndex(input.payoutBatches);
+  const items = input.accruals
+    .filter((accrual) => accrual.referrerWallet === referrerWallet)
+    .filter((accrual) => input.asset === undefined || accrual.asset === input.asset)
+    .map((accrual) => {
+      const payout = payoutIndex.get(accrual.id);
+      const status = readReferrerPayoutHistoryStatus(accrual, payout);
+      return {
+        accrualId: accrual.id,
+        receiptId: accrual.receiptId,
+        merchantId: accrual.merchantId,
+        campaignId: accrual.campaignId,
+        routeId: accrual.routeId,
+        referrerWallet: accrual.referrerWallet,
+        payoutWallet: accrual.payoutWallet,
+        asset: accrual.asset,
+        amountAtomic: accrual.amountAtomic,
+        status,
+        accrualStatus: accrual.status,
+        createdAt: normalizeTimestamp(accrual.createdAt, "createdAt"),
+        ...(accrual.availableAt === undefined
+          ? {}
+          : { availableAt: normalizeTimestamp(accrual.availableAt, "availableAt") }),
+        ...(payout === undefined
+          ? {}
+          : {
+              payoutBatchId: payout.batch.id,
+              payoutItemId: payout.item.id,
+              payoutStatus: payout.item.status
+            })
+      };
+    })
+    .sort(compareReferrerPayoutHistoryItems);
+  return limit === undefined ? items : items.slice(0, limit);
+}
+
 function readPositiveAtomicAmount(value: string, label: string): bigint {
   const amount = readAtomicAmount(value, label);
   if (amount <= 0n) {
@@ -844,6 +1029,67 @@ function readPayoutTransactionFailureMessage(
   return typeof message === "string" && message.length > 0
     ? message
     : `payout transaction failed: ${transaction.id}`;
+}
+
+function normalizeReferrerPayoutHistoryLimit(limit: number | undefined): number {
+  if (limit === undefined) {
+    return 50;
+  }
+  if (!Number.isInteger(limit) || limit <= 0 || limit > 500) {
+    throw new PayoutBatchValidationError(
+      "referrer payout history limit must be between 1 and 500"
+    );
+  }
+  return limit;
+}
+
+function readReferrerPayoutHistoryStatus(
+  accrual: CommissionAccrual,
+  payout:
+    | {
+        item: PayoutItemRecord;
+      }
+    | undefined
+): ReferrerPayoutHistoryStatus {
+  if (payout?.item.status === "finalized") {
+    return "paid";
+  }
+  if (accrual.status === "pending_chain_verification") {
+    return "pending";
+  }
+  if (accrual.status === "available") {
+    return "available";
+  }
+  if (accrual.status === "held") {
+    return "held";
+  }
+  return "in_flight";
+}
+
+function buildPayoutAllocationIndex(
+  batches: readonly PayoutBatchRecord[]
+): Map<string, { batch: PayoutBatchRecord; item: PayoutItemRecord }> {
+  const byAccrualId = new Map<
+    string,
+    { batch: PayoutBatchRecord; item: PayoutItemRecord }
+  >();
+  for (const batch of batches) {
+    for (const item of batch.items) {
+      for (const allocation of item.allocations) {
+        byAccrualId.set(allocation.accrualId, { batch, item });
+      }
+    }
+  }
+  return byAccrualId;
+}
+
+function compareReferrerPayoutHistoryItems(
+  left: ReferrerPayoutHistoryItem,
+  right: ReferrerPayoutHistoryItem
+): number {
+  const created =
+    Date.parse(right.createdAt) - Date.parse(left.createdAt);
+  return created || left.accrualId.localeCompare(right.accrualId);
 }
 
 function createPreviewBatch(input: {
