@@ -263,6 +263,7 @@ Current slice:
   deployment starter artifacts;
 - payout signer HMAC timestamp freshness checks to reject replayed stale or
   future signing requests;
+- deployable payout signer JSONL audit logging for sanitized custody evidence;
 - signed-byte payout transaction persistence and Solana broadcast submission
   boundary;
 - Solana payout transaction finality monitor with retry and outcome-unknown

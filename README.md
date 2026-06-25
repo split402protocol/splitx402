@@ -178,7 +178,7 @@ flowchart TB
 | `@split402/demo-merchant` | Solana Devnet merchant API used to prove the x402 plus Split402 flow. |
 | `@split402/demo-agent` | Runnable buyer/agent harness for setup, preflight, offer inspection, and paid-suite proof runs. |
 | `@split402/control-plane` | Receipt ingestion, auth, merchant/campaign/route registries, outbox workers, chain verification, accrual ledger, payout preview, allocation, transaction persistence, broadcast/finality boundaries, and payout ledger closure. |
-| `@split402/payout-signer` | Isolated payout signer appliance with HMAC request authentication, policy checks, Solana transaction signing, readiness/metrics endpoints, and container deployment artifacts. |
+| `@split402/payout-signer` | Isolated payout signer appliance with HMAC request authentication, policy checks, Solana transaction signing, readiness/metrics endpoints, JSONL audit logging, and container deployment artifacts. |
 
 ## Control-Plane Lifecycle
 

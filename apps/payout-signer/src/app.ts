@@ -87,6 +87,10 @@ export type PayoutSignerAuditSink = (
   event: PayoutSignerAuditEvent
 ) => void | Promise<void>;
 
+export interface PayoutSignerEnvOptions {
+  auditLogWriter?: (line: string) => void;
+}
+
 export interface PayoutSignerMetricsSnapshot {
   service: "split402-payout-signer";
   signerReference: string;
@@ -211,8 +215,13 @@ export function createPayoutSignerApp(config: PayoutSignerConfig): express.Expre
 }
 
 export function readPayoutSignerConfigFromEnv(
-  env: NodeJS.ProcessEnv = process.env
+  env: NodeJS.ProcessEnv = process.env,
+  options: PayoutSignerEnvOptions = {}
 ): PayoutSignerConfig {
+  const auditSink = readAuditSinkFromEnv(
+    env.SPLIT402_PAYOUT_SIGNER_SERVICE_AUDIT_LOG,
+    options.auditLogWriter ?? console.log
+  );
   return normalizePayoutSignerConfig({
     signerReference: readRequiredEnv(
       env.SPLIT402_PAYOUT_SIGNER_SERVICE_REF,
@@ -267,8 +276,17 @@ export function readPayoutSignerConfigFromEnv(
         }),
     ...(env.SPLIT402_PAYOUT_SIGNER_SERVICE_SECRET_KEY_JSON === undefined
       ? {}
-      : { secretKeyJson: env.SPLIT402_PAYOUT_SIGNER_SERVICE_SECRET_KEY_JSON })
+      : { secretKeyJson: env.SPLIT402_PAYOUT_SIGNER_SERVICE_SECRET_KEY_JSON }),
+    ...(auditSink === undefined ? {} : { auditSink })
   });
+}
+
+export function createPayoutSignerJsonlAuditSink(
+  writeLine: (line: string) => void = console.log
+): PayoutSignerAuditSink {
+  return (event) => {
+    writeLine(JSON.stringify(event));
+  };
 }
 
 function normalizePayoutSignerConfig(
@@ -924,6 +942,22 @@ function readAuthKeysJson(value: string): PayoutSignerAuthKeyInput[] {
           })
     };
   });
+}
+
+function readAuditSinkFromEnv(
+  value: string | undefined,
+  writeLine: (line: string) => void
+): PayoutSignerAuditSink | undefined {
+  const mode = value?.trim() ?? "off";
+  if (mode.length === 0 || mode === "off") {
+    return undefined;
+  }
+  if (mode === "stdout-jsonl") {
+    return createPayoutSignerJsonlAuditSink(writeLine);
+  }
+  throw new Error(
+    "SPLIT402_PAYOUT_SIGNER_SERVICE_AUDIT_LOG must be off or stdout-jsonl"
+  );
 }
 
 function readPlainConfigRecord(

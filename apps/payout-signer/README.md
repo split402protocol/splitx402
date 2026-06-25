@@ -42,6 +42,7 @@ SPLIT402_PAYOUT_SIGNER_SERVICE_EXPECTED_FUNDING_WALLET=<funding-wallet>
 SPLIT402_PAYOUT_SIGNER_SERVICE_SHARED_SECRET=<shared-secret>
 SPLIT402_PAYOUT_SIGNER_SERVICE_SHARED_SECRET_KEY_ID=default
 SPLIT402_PAYOUT_SIGNER_SERVICE_SIGNATURE_TOLERANCE_SECONDS=300
+SPLIT402_PAYOUT_SIGNER_SERVICE_AUDIT_LOG=stdout-jsonl
 SPLIT402_PAYOUT_SIGNER_SERVICE_PRIVATE_KEY_BASE64=<32-byte-private-key>
 ```
 
@@ -83,6 +84,8 @@ schema `split402.payout_signer.audit_event.v1` and include safe signing
 metadata: outcome, status code, auth key ID, batch ID, transaction index,
 amount, destination hash, and expected signature. They do not include private
 keys, shared secrets, unsigned transaction bytes, or signed transaction bytes.
+Set `SPLIT402_PAYOUT_SIGNER_SERVICE_AUDIT_LOG=stdout-jsonl` to emit one
+sanitized JSON event per line to container stdout. The default is `off`.
 
 Exactly one key source must be set:
 
@@ -119,6 +122,7 @@ docker run --rm -p 4022:4022 \
   -e SPLIT402_PAYOUT_SIGNER_SERVICE_NETWORK=solana:devnet \
   -e SPLIT402_PAYOUT_SIGNER_SERVICE_EXPECTED_FUNDING_WALLET=<funding-wallet> \
   -e SPLIT402_PAYOUT_SIGNER_SERVICE_SIGNATURE_TOLERANCE_SECONDS=300 \
+  -e SPLIT402_PAYOUT_SIGNER_SERVICE_AUDIT_LOG=stdout-jsonl \
   -e SPLIT402_PAYOUT_SIGNER_SERVICE_AUTH_KEYS_JSON='[{"keyId":"control-plane-current","sharedSecret":"<shared-secret>","status":"active"}]' \
   -e SPLIT402_PAYOUT_SIGNER_SERVICE_PRIVATE_KEY_BASE64=<32-byte-private-key> \
   ghcr.io/split402protocol/splitx402/payout-signer:dev

@@ -36,6 +36,7 @@ SPLIT402_PAYOUT_SIGNER_SERVICE_REF=kms:split402-devnet-payout
 SPLIT402_PAYOUT_SIGNER_SERVICE_NETWORK=solana:devnet
 SPLIT402_PAYOUT_SIGNER_SERVICE_EXPECTED_FUNDING_WALLET=<funding-wallet>
 SPLIT402_PAYOUT_SIGNER_SERVICE_SIGNATURE_TOLERANCE_SECONDS=300
+SPLIT402_PAYOUT_SIGNER_SERVICE_AUDIT_LOG=stdout-jsonl
 ```
 
 Set auth and signing material as secrets:
@@ -96,6 +97,11 @@ curl -fsS "$SIGNER_URL/v1/metrics"
 
 Counters must not include private keys, shared secrets, unsigned transaction
 bytes, or signed transaction bytes.
+
+When `SPLIT402_PAYOUT_SIGNER_SERVICE_AUDIT_LOG=stdout-jsonl`, verify container
+logs contain one JSON audit event per signed or rejected request. Audit lines
+must not contain private keys, shared secrets, unsigned transaction bytes, or
+signed transaction bytes.
 
 ## Rollback
 
