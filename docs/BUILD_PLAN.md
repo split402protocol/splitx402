@@ -206,10 +206,13 @@ Current slice:
   merchant-owner-authorized suspension when auth is required;
 - add route search for active route discovery by campaign, referrer, origin,
   operation id, status, and bounded result limit;
+- add payout-wallet rotation for routes by requiring a new referrer-signed claim
+  and appending immutable route versions;
 - add the PostgreSQL campaign registry adapter and migration for durable campaign,
   immutable version, operation, and activation state;
 - add the PostgreSQL route registry adapter and migration for durable active and
   suspended routes, signed referral claims, and duplicate-claim idempotency;
+- add the PostgreSQL route-version migration for immutable signed-claim history;
 - add the PostgreSQL outbox migration and transaction insert for durable
   `receipt.accepted.v1` and `webhook.receipt.accepted.v1` worker events;
 - add the PostgreSQL outbox worker store for claiming ready events by event type,

@@ -56,17 +56,23 @@ Status: started.
   referral claims, signing bytes, signature verification, active route records,
   and idempotent route suspension.
 - Added `POST /v1/routes/drafts`, `POST /v1/routes`,
-  `POST /v1/routes/:routeId/suspend`, `GET /v1/routes/search`, and
-  `GET /v1/routes/:routeId`.
+  `POST /v1/routes/:routeId/suspend`,
+  `POST /v1/routes/:routeId/rotate-payout`, `GET /v1/routes/search`,
+  `GET /v1/routes/:routeId/versions`, and `GET /v1/routes/:routeId`.
 - Added active campaign, resource origin, campaign version, and operation-scope
   checks around route draft creation and activation.
 - Added in-memory and PostgreSQL route search by campaign, referrer, resource
   origin, operation id, route status, and bounded result limit, with active
   searches excluding expired routes.
+- Added payout-wallet rotation by requiring a new referrer-signed claim for the
+  same route scope, updating the discoverable route pointer, and preserving each
+  signed claim in immutable route versions.
 - Added `PostgresRouteRegistry` for durable active route and signed referral-claim
   persistence.
 - Added `0005_routes.sql` for route records, claim hashes, operation scopes, and
   campaign/referrer lookup indexes.
+- Added `0008_route_versions.sql` for immutable route version history and
+  existing-route backfill.
 - Added `0006_outbox_events.sql` for durable pending worker/webhook events.
 - Added outbox insertion to `PostgresReceiptIngestionStore` so accepted receipts
   commit `receipt.accepted.v1` and `webhook.receipt.accepted.v1` events in the
@@ -143,13 +149,14 @@ Status: started.
   signature activation.
 - Added route registry and HTTP tests for unsigned draft creation, signed route
   activation, duplicate activation idempotency, invalid signatures, conflicting
-  route claims, merchant-owner-authorized route suspension, idempotent suspension,
-  and route search.
+  route claims, payout-wallet rotation, immutable version listing,
+  merchant-owner-authorized route suspension, idempotent suspension, and route
+  search.
 - Added PostgreSQL campaign registry tests for draft persistence, immutable
   version persistence, operation rows, activation state, and conflict mapping.
 - Added PostgreSQL route registry tests for route persistence, duplicate claim
-  idempotency, same-route/different-claim conflicts, idempotent suspension, and
-  route search.
+  idempotency, same-route/different-claim conflicts, payout-wallet rotation,
+  immutable version persistence, idempotent suspension, and route search.
 - Extended the live PostgreSQL integration harness to apply the route migration
   and persist one activated route row.
 - Added PostgreSQL receipt-ingestion tests for committed outbox payloads and
@@ -190,7 +197,8 @@ a zero-sum ledger transaction.
 
 ## Remaining Milestone 2 Work
 
-- Payout-wallet rotation and immutable route/search history.
+The remaining work now moves beyond Milestone 2 registry/ingestion into the
+production merchant SDK and payout engine phases.
 
 ## Acceptance Checks
 

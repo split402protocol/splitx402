@@ -156,6 +156,7 @@ mainnet payment flows exist yet.
 | PostgreSQL campaign persistence | Started |
 | Route draft/sign/activate/suspend APIs | Started |
 | Route search API | Started |
+| Route payout rotation and immutable route versions | Started |
 | PostgreSQL route persistence | Started |
 | Outbox event persistence | Started |
 | Outbox claim/retry/dead-letter APIs | Started |
@@ -272,7 +273,9 @@ POST /v1/campaigns/:campaignId/versions
 POST /v1/routes/drafts
 POST /v1/routes
 POST /v1/routes/:routeId/suspend
+POST /v1/routes/:routeId/rotate-payout
 GET  /v1/routes/search
+GET  /v1/routes/:routeId/versions
 GET  /v1/routes/:routeId
 ```
 
@@ -291,6 +294,7 @@ flowchart LR
   CampaignVersions[("campaign_versions")]
   CampaignOps[("campaign_operations")]
   Routes[("routes")]
+  RouteVersions[("route_versions")]
   Challenges[("wallet_auth_challenges")]
   Sessions[("wallet_auth_sessions")]
   RefreshTokens[("wallet_auth_refresh_tokens")]
@@ -310,6 +314,7 @@ flowchart LR
   CampaignRows --> CampaignVersions
   CampaignVersions --> CampaignOps
   RouteRegistry --> Routes
+  Routes --> RouteVersions
   Routes --> CampaignRows
   API --> Challenges
   API --> Sessions
@@ -331,6 +336,10 @@ suspension records are also durable in PostgreSQL and searchable by campaign,
 referrer, origin, operation, status, and limit. Routes are keyed by route id and
 canonical referral-claim hash so exact duplicate activation is idempotent while
 conflicting claims are rejected.
+Payout-wallet rotation creates a new referrer-signed claim for the same route and
+appends it to immutable `route_versions`, while the `routes` row points at the
+latest current version for discovery. Historical receipts keep their original
+claim hash and payout wallet evidence.
 When merchant auth is required, route suspension is limited to the owner wallet
 of the route campaign's merchant. Accepted receipts also create pending
 chain-verification and webhook outbox events in the same PostgreSQL transaction,

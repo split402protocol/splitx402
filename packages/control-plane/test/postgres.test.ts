@@ -48,9 +48,13 @@ const REFERRER_SEED = hexToBytes(
 const PAYOUT_SEED = hexToBytes(
   "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f"
 );
+const ROTATED_PAYOUT_SEED = hexToBytes(
+  "606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f"
+);
 const OWNER_WALLET = deriveEd25519PublicKey(OWNER_SEED);
 const REFERRER_WALLET = deriveEd25519PublicKey(REFERRER_SEED);
 const PAYOUT_WALLET = deriveEd25519PublicKey(PAYOUT_SEED);
+const ROTATED_PAYOUT_WALLET = deriveEd25519PublicKey(ROTATED_PAYOUT_SEED);
 const NETWORK = "solana:devnet";
 
 describe("PostgresReceiptIngestionStore", () => {
@@ -537,6 +541,48 @@ describe("PostgresRouteRegistry", () => {
     expect(duplicate.claimHash).toBe(route.claimHash);
     expect(loaded?.claim).toEqual(claim);
     expect(fakePool.database.routes).toHaveLength(1);
+    expect(fakePool.database.routeVersions).toHaveLength(1);
+    expect(fakePool.database.routeVersions[0]?.version).toBe(1);
+  });
+
+  it("persists payout rotations as immutable route versions", async () => {
+    const fakePool = new FakePostgresPool();
+    const registry = createPostgresRouteRegistry(fakePool);
+    const route = await registry.activateRoute({
+      claim: signRouteDraft(registry.createRouteDraft(createRouteDraftInput()))
+    });
+    const rotatedClaim = signRouteDraft(
+      registry.createRouteDraft(
+        createRouteDraftInput({
+          payoutWallet: ROTATED_PAYOUT_WALLET,
+          nonce: "route-nonce-postgres-0002",
+          issuedAt: "2026-06-24T00:01:00Z"
+        })
+      )
+    );
+
+    const rotated = await registry.rotateRoutePayout({
+      routeId: route.id,
+      claim: rotatedClaim
+    });
+    const duplicate = await registry.rotateRoutePayout({
+      routeId: route.id,
+      claim: rotatedClaim
+    });
+    const loaded = await registry.getRoute(route.id);
+    const versions = await registry.listRouteVersions(route.id);
+
+    expect(rotated.currentVersion).toBe(2);
+    expect(rotated.payoutWallet).toBe(ROTATED_PAYOUT_WALLET);
+    expect(duplicate.currentVersion).toBe(2);
+    expect(loaded?.claim).toEqual(rotatedClaim);
+    expect(versions.map((version) => version.version)).toEqual([1, 2]);
+    expect(versions.map((version) => version.payoutWallet)).toEqual([
+      PAYOUT_WALLET,
+      ROTATED_PAYOUT_WALLET
+    ]);
+    expect(fakePool.database.routes).toHaveLength(1);
+    expect(fakePool.database.routeVersions).toHaveLength(2);
   });
 
   it("maps same-route different-claim writes to route conflicts", async () => {
@@ -950,6 +996,10 @@ class FakePostgresClient implements PostgresTransactionClient {
       this.database.insertRoute(values);
       return result([]);
     }
+    if (normalized.startsWith("insert into route_versions")) {
+      this.database.insertRouteVersion(values);
+      return result([]);
+    }
     if (normalized.startsWith("insert into wallet_auth_challenges")) {
       this.database.insertWalletAuthChallenge(values);
       return result([]);
@@ -967,6 +1017,14 @@ class FakePostgresClient implements PostgresTransactionClient {
     }
     if (normalized.startsWith("update campaign_versions")) {
       return commandResult(this.database.activateCampaignVersion(values));
+    }
+    if (
+      normalized.startsWith("update routes") &&
+      normalized.includes("set current_version")
+    ) {
+      return result(
+        this.database.updateRouteCurrentVersion(values) as unknown as Row[]
+      );
     }
     if (normalized.startsWith("update routes")) {
       return result(this.database.suspendRoute(values) as unknown as Row[]);
@@ -1050,6 +1108,11 @@ class FakePostgresClient implements PostgresTransactionClient {
         this.database.selectCampaignVersion(values) as unknown as Row[]
       );
     }
+    if (normalized.includes("from route_versions")) {
+      return result(
+        this.database.selectRouteVersions(normalized, values) as unknown as Row[]
+      );
+    }
     if (normalized.includes("from routes")) {
       return result(this.database.selectRoutes(normalized, values) as unknown as Row[]);
     }
@@ -1091,6 +1154,7 @@ class FakePostgresDatabase {
   campaignVersions: StoredCampaignVersionRow[] = [];
   campaignOperations: StoredCampaignOperationRow[] = [];
   routes: StoredRouteRow[] = [];
+  routeVersions: StoredRouteVersionRow[] = [];
   walletAuthChallenges: StoredWalletAuthChallengeRow[] = [];
   walletAuthSessions: StoredWalletAuthSessionRow[] = [];
   walletAuthRefreshTokens: StoredWalletAuthRefreshTokenRow[] = [];
@@ -1548,22 +1612,23 @@ class FakePostgresDatabase {
   insertRoute(values: readonly unknown[]): void {
     const row: StoredRouteRow = {
       id: readString(values[0]),
-      campaign_id: readString(values[1]),
-      campaign_version_min: readNumber(values[2]),
-      referrer_wallet: readString(values[3]),
-      payout_wallet: readString(values[4]),
-      resource_origin: readString(values[5]),
-      operation_ids: readString(values[6]),
-      claim_hash: readString(values[7]) as `sha256:${string}`,
-      claim_json: readString(values[8]),
-      signing_bytes_hex: readString(values[9]),
-      status: readString(values[10]),
-      issued_at: readString(values[11]),
-      expires_at: readString(values[12]),
-      nonce: readString(values[13]),
-      metadata_hash: readNullableString(values[14]) as `sha256:${string}` | null,
-      created_at: readString(values[15]),
-      activated_at: readString(values[16])
+      current_version: readNumber(values[1]),
+      campaign_id: readString(values[2]),
+      campaign_version_min: readNumber(values[3]),
+      referrer_wallet: readString(values[4]),
+      payout_wallet: readString(values[5]),
+      resource_origin: readString(values[6]),
+      operation_ids: readString(values[7]),
+      claim_hash: readString(values[8]) as `sha256:${string}`,
+      claim_json: readString(values[9]),
+      signing_bytes_hex: readString(values[10]),
+      status: readString(values[11]),
+      issued_at: readString(values[12]),
+      expires_at: readString(values[13]),
+      nonce: readString(values[14]),
+      metadata_hash: readNullableString(values[15]) as `sha256:${string}` | null,
+      created_at: readString(values[16]),
+      activated_at: readString(values[17])
     };
     if (
       this.routes.some(
@@ -1573,6 +1638,33 @@ class FakePostgresDatabase {
       throw Object.assign(new Error("duplicate key"), { code: "23505" });
     }
     this.routes.push(row);
+  }
+
+  insertRouteVersion(values: readonly unknown[]): void {
+    const row: StoredRouteVersionRow = {
+      route_id: readString(values[0]),
+      version: readNumber(values[1]),
+      campaign_version_min: readNumber(values[2]),
+      payout_wallet: readString(values[3]),
+      claim_hash: readString(values[4]) as `sha256:${string}`,
+      claim_json: readString(values[5]),
+      signing_bytes_hex: readString(values[6]),
+      issued_at: readString(values[7]),
+      expires_at: readString(values[8]),
+      nonce: readString(values[9]),
+      metadata_hash: readNullableString(values[10]) as `sha256:${string}` | null,
+      created_at: readString(values[11])
+    };
+    if (
+      this.routeVersions.some(
+        (version) =>
+          (version.route_id === row.route_id && version.version === row.version) ||
+          version.claim_hash === row.claim_hash
+      )
+    ) {
+      throw Object.assign(new Error("duplicate key"), { code: "23505" });
+    }
+    this.routeVersions.push(row);
   }
 
   selectCampaign(campaignId: unknown): StoredCampaignRow[] {
@@ -1649,6 +1741,39 @@ class FakePostgresDatabase {
           : createdAtComparison;
       })
       .slice(0, limit);
+  }
+
+  selectRouteVersions(
+    normalizedSql: string,
+    values: readonly unknown[]
+  ): StoredRouteVersionRow[] {
+    if (normalizedSql.includes("where claim_hash = $1")) {
+      const claimHash = readString(values[0]);
+      const version = this.routeVersions.find((row) => row.claim_hash === claimHash);
+      return version === undefined ? [] : [version];
+    }
+    const routeId = readString(values[0]);
+    return this.routeVersions
+      .filter((row) => row.route_id === routeId)
+      .sort((left, right) => left.version - right.version);
+  }
+
+  updateRouteCurrentVersion(values: readonly unknown[]): StoredRouteRow[] {
+    const route = this.routes.find((row) => row.id === readString(values[0]));
+    if (route === undefined || route.current_version !== readNumber(values[11])) {
+      return [];
+    }
+    route.current_version = readNumber(values[1]);
+    route.campaign_version_min = readNumber(values[2]);
+    route.payout_wallet = readString(values[3]);
+    route.claim_hash = readString(values[4]) as `sha256:${string}`;
+    route.claim_json = readString(values[5]);
+    route.signing_bytes_hex = readString(values[6]);
+    route.issued_at = readString(values[7]);
+    route.expires_at = readString(values[8]);
+    route.nonce = readString(values[9]);
+    route.metadata_hash = readNullableString(values[10]) as `sha256:${string}` | null;
+    return [route];
   }
 
   suspendRoute(values: readonly unknown[]): StoredRouteRow[] {
@@ -1893,6 +2018,7 @@ type StoredCampaignOperationRow = QueryResultRow & {
 
 type StoredRouteRow = QueryResultRow & {
   id: string;
+  current_version: number;
   campaign_id: string;
   campaign_version_min: number;
   referrer_wallet: string;
@@ -1909,6 +2035,21 @@ type StoredRouteRow = QueryResultRow & {
   metadata_hash: `sha256:${string}` | null;
   created_at: string;
   activated_at: string;
+};
+
+type StoredRouteVersionRow = QueryResultRow & {
+  route_id: string;
+  version: number;
+  campaign_version_min: number;
+  payout_wallet: string;
+  claim_hash: `sha256:${string}`;
+  claim_json: string;
+  signing_bytes_hex: string;
+  issued_at: string;
+  expires_at: string;
+  nonce: string;
+  metadata_hash: `sha256:${string}` | null;
+  created_at: string;
 };
 
 type StoredWalletAuthChallengeRow = QueryResultRow & {

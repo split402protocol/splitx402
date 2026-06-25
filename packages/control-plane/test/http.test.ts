@@ -41,10 +41,14 @@ const REFERRER_SEED = hexToBytes(
 const PAYOUT_SEED = hexToBytes(
   "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f"
 );
+const ROTATED_PAYOUT_SEED = hexToBytes(
+  "606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f"
+);
 const OWNER_WALLET = deriveEd25519PublicKey(OWNER_SEED);
 const OTHER_OWNER_WALLET = deriveEd25519PublicKey(OTHER_OWNER_SEED);
 const REFERRER_WALLET = deriveEd25519PublicKey(REFERRER_SEED);
 const PAYOUT_WALLET = deriveEd25519PublicKey(PAYOUT_SEED);
+const ROTATED_PAYOUT_WALLET = deriveEd25519PublicKey(ROTATED_PAYOUT_SEED);
 const NETWORK = "solana:devnet";
 
 describe("control-plane HTTP API", () => {
@@ -515,6 +519,72 @@ describe("control-plane HTTP API", () => {
     expect(routeResponse.body.route.status).toBe("active");
     expect(routeResponse.body.route.claimHash).toMatch(/^sha256:[0-9a-f]{64}$/u);
     expect(loadedResponse.body.route.id).toBe(draft.routeId);
+  });
+
+  it("rotates route payout wallets and exposes immutable route versions", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const { app } = createTestApp({
+      withCampaignRegistry: true,
+      withMerchantRegistry: true,
+      withRouteRegistry: true
+    });
+    await createActiveCampaign(app);
+
+    const draftResponse = await request(app)
+      .post("/v1/routes/drafts")
+      .send({
+        campaignId: bundle.artifacts.receipt.campaignId,
+        referrerWallet: REFERRER_WALLET,
+        payoutWallet: PAYOUT_WALLET,
+        operationIds: [bundle.artifacts.receipt.operationId],
+        expiresAt: "2026-06-25T00:00:00Z",
+        nonce: "route-nonce-http-0001"
+      })
+      .expect(201);
+    const draft = draftResponse.body.draft as RouteDraft;
+    await request(app)
+      .post("/v1/routes")
+      .send({ claim: signRouteDraft(draft) })
+      .expect(201);
+
+    const rotationDraftResponse = await request(app)
+      .post("/v1/routes/drafts")
+      .send({
+        id: draft.routeId,
+        campaignId: bundle.artifacts.receipt.campaignId,
+        referrerWallet: REFERRER_WALLET,
+        payoutWallet: ROTATED_PAYOUT_WALLET,
+        operationIds: [bundle.artifacts.receipt.operationId],
+        issuedAt: "2026-06-24T00:01:00Z",
+        expiresAt: "2026-06-25T00:00:00Z",
+        nonce: "route-nonce-http-0002"
+      })
+      .expect(201);
+    const rotationClaim = signRouteDraft(
+      rotationDraftResponse.body.draft as RouteDraft
+    );
+
+    const rotationResponse = await request(app)
+      .post(`/v1/routes/${draft.routeId}/rotate-payout`)
+      .send({ claim: rotationClaim })
+      .expect(201);
+    const versionsResponse = await request(app)
+      .get(`/v1/routes/${draft.routeId}/versions`)
+      .expect(200);
+
+    expect(rotationResponse.body.route.currentVersion).toBe(2);
+    expect(rotationResponse.body.route.payoutWallet).toBe(ROTATED_PAYOUT_WALLET);
+    expect(
+      versionsResponse.body.versions.map(
+        (version: { version: number; payoutWallet: string }) => ({
+          version: version.version,
+          payoutWallet: version.payoutWallet
+        })
+      )
+    ).toEqual([
+      { version: 1, payoutWallet: PAYOUT_WALLET },
+      { version: 2, payoutWallet: ROTATED_PAYOUT_WALLET }
+    ]);
   });
 
   it("searches routes with query filters and status selection", async () => {

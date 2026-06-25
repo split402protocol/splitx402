@@ -1261,6 +1261,40 @@ export function createRouteRegistryRouter(
     }
   });
 
+  router.post("/v1/routes/:routeId/rotate-payout", async (req, res, next) => {
+    try {
+      const routeId = readRouteParam(req.params.routeId, "routeId");
+      const campaignRegistry = requireRouteCampaignRegistry(options);
+      const body = requireJsonObject(req.body);
+      const claim = readReferralClaim(body.claim);
+      const campaign = await loadActiveCampaignForRoute(
+        campaignRegistry,
+        claim.campaignId
+      );
+      assertRouteScopeMatchesCampaign(
+        campaign,
+        claim.resourceOrigin,
+        claim.operationIds
+      );
+      if (claim.campaignVersionMin > campaign.currentVersion) {
+        throw new RouteRegistryValidationError(
+          "route claim requires a newer campaign version"
+        );
+      }
+
+      const route = await routeRegistry.rotateRoutePayout({ routeId, claim });
+      res.status(201).json({ route });
+    } catch (error) {
+      if (
+        !sendRouteRegistryError(res, error) &&
+        !sendCampaignRegistryError(res, error) &&
+        !sendMerchantRegistryError(res, error)
+      ) {
+        next(error);
+      }
+    }
+  });
+
   router.get("/v1/routes/search", async (req, res, next) => {
     try {
       const campaignId = readOptionalRouteQueryString(
@@ -1295,6 +1329,25 @@ export function createRouteRegistryRouter(
         !sendRouteRegistryError(res, error) &&
         !sendMerchantRegistryError(res, error)
       ) {
+        next(error);
+      }
+    }
+  });
+
+  router.get("/v1/routes/:routeId/versions", async (req, res, next) => {
+    try {
+      const routeId = readRouteParam(req.params.routeId, "routeId");
+      const versions = await routeRegistry.listRouteVersions(routeId);
+      if (versions.length === 0) {
+        const route = await routeRegistry.getRoute(routeId);
+        if (route === undefined) {
+          res.status(404).json({ error: "route_not_found" });
+          return;
+        }
+      }
+      res.json({ versions });
+    } catch (error) {
+      if (!sendRouteRegistryError(res, error) && !sendMerchantRegistryError(res, error)) {
         next(error);
       }
     }
