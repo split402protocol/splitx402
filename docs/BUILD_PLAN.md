@@ -369,6 +369,8 @@ Current slice:
   and summarizes custody-bundle blockers;
 - add a Phase 6 custody evidence bundle scaffold command that emits validator
   fields in canonical order with safe defaults;
+- add a Phase 6 RPC failover review generator that validates the finality
+  failover drill passed and observed status from the secondary RPC;
 - add signed-byte payout transaction persistence and Solana broadcast submission
   boundary;
 - add Solana payout transaction finality monitor with retry and outcome-unknown
@@ -381,7 +383,8 @@ Current slice:
 - add a payout reconciliation action endpoint and unknown-outcome runbook;
 - add a Phase 6 custody review checklist and payout custody incident drill;
 - add a Phase 6 custody evidence validator for production go/no-go bundles;
-- add a payout finality RPC failover drill for custody evidence;
+- add a payout finality RPC failover drill and structured review record for
+  custody evidence;
 - expose `POST /v1/merchants/:merchantId/payout-wallets`;
 - expose `POST /v1/merchants/:merchantId/payouts/preview`;
 - expose `GET /v1/merchants/:merchantId/payouts/reconciliation`;

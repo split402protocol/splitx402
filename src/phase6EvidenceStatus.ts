@@ -41,7 +41,8 @@ export const PHASE6_EVIDENCE_COMMANDS = [
   },
   {
     gate: "rpc_failover",
-    command: "corepack pnpm payout:finality:failover-drill",
+    command:
+      "corepack pnpm payout:finality:failover-drill && corepack pnpm phase6:rpc-failover",
     evidenceField: "rpc_failover_record",
   },
   {
