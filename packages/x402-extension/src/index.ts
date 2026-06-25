@@ -45,11 +45,22 @@ export interface Split402CampaignConfig {
   allowSelfReferral: boolean;
 }
 
+export interface Split402ServiceSigningKey {
+  kid: string;
+  privateSeed: Uint8Array;
+}
+
+export interface Split402ServiceKeyProvider {
+  current(): Split402ServiceSigningKey;
+  resolvePublicKey(kid: string): string | undefined;
+}
+
 export interface Split402ServerExtensionOptions {
   merchantId: string;
   merchantOrigin: string;
-  servicePrivateSeed: Uint8Array;
-  serviceKid: string;
+  servicePrivateSeed?: Uint8Array;
+  serviceKid?: string;
+  serviceKeyProvider?: Split402ServiceKeyProvider;
   resolveCampaign: (declaration: Split402RouteDeclaration) => Split402CampaignConfig;
   receiptSink?: (receipt: Split402ReceiptV1) => void | Promise<void>;
   now?: () => Date;
@@ -136,7 +147,7 @@ export function createSplit402ResourceServerExtension(
   options: Split402ServerExtensionOptions
 ): ResourceServerExtension {
   const validatedByPaymentId = new Map<string, ValidatedSplit402Attribution>();
-  const merchantPublicKey = deriveEd25519PublicKey(options.servicePrivateSeed);
+  const serviceKeyProvider = createServiceKeyProvider(options);
 
   return {
     key: SPLIT402_EXTENSION_KEY,
@@ -145,6 +156,7 @@ export function createSplit402ResourceServerExtension(
       const route = parseDeclaration(declaration);
       const requirement = firstRequirement(context.requirements);
       const campaign = options.resolveCampaign(route);
+      const serviceKey = serviceKeyProvider.current();
       const offer = signOffer(
         buildOffer({
           campaign,
@@ -152,10 +164,10 @@ export function createSplit402ResourceServerExtension(
           merchantOrigin: options.merchantOrigin,
           operationId: route.operationId,
           requirement,
-          kid: options.serviceKid,
+          kid: serviceKey.kid,
           now: options.now?.() ?? new Date()
         }),
-        options.servicePrivateSeed
+        serviceKey.privateSeed
       );
 
       return Promise.resolve({ info: offer });
@@ -166,6 +178,7 @@ export function createSplit402ResourceServerExtension(
         return {};
       }
       const route = parseDeclarationOrOffer(declaration, attribution.offer);
+      const serviceKey = serviceKeyProvider.current();
 
       const receipt = signReceipt(
         buildReceipt({
@@ -175,10 +188,10 @@ export function createSplit402ResourceServerExtension(
           merchantOrigin: options.merchantOrigin,
           requirement: context.requirements,
           settlement: context.result,
-          kid: options.serviceKid,
+          kid: serviceKey.kid,
           now: options.now?.() ?? new Date()
         }),
-        options.servicePrivateSeed
+        serviceKey.privateSeed
       );
       await options.receiptSink?.(receipt);
 
@@ -189,7 +202,7 @@ export function createSplit402ResourceServerExtension(
         const validation = validateAttributionPayload(
           context,
           options.merchantOrigin,
-          merchantPublicKey,
+          serviceKeyProvider,
           options.now?.() ?? new Date()
         );
         if (!validation.ok) {
@@ -216,6 +229,16 @@ export function createSplit402ResourceServerExtension(
         return Promise.resolve();
       }
     }
+  };
+}
+
+export function createStaticSplit402ServiceKeyProvider(
+  key: Split402ServiceSigningKey
+): Split402ServiceKeyProvider {
+  const publicKey = deriveEd25519PublicKey(key.privateSeed);
+  return {
+    current: () => key,
+    resolvePublicKey: (kid) => (kid === key.kid ? publicKey : undefined)
   };
 }
 
@@ -335,10 +358,27 @@ function signReceipt(
   return { ...receipt, signature: signature.signature };
 }
 
+function createServiceKeyProvider(
+  options: Split402ServerExtensionOptions
+): Split402ServiceKeyProvider {
+  if (options.serviceKeyProvider !== undefined) {
+    return options.serviceKeyProvider;
+  }
+  if (options.servicePrivateSeed === undefined || options.serviceKid === undefined) {
+    throw new Error(
+      "Split402 resource server extension requires serviceKeyProvider or servicePrivateSeed with serviceKid"
+    );
+  }
+  return createStaticSplit402ServiceKeyProvider({
+    kid: options.serviceKid,
+    privateSeed: options.servicePrivateSeed
+  });
+}
+
 function validateAttributionPayload(
   context: VerifyContext,
   merchantOrigin: string,
-  merchantPublicKey: string,
+  serviceKeyProvider: Split402ServiceKeyProvider,
   now: Date
 ):
   | { ok: true; attribution: ValidatedSplit402Attribution }
@@ -354,8 +394,13 @@ function validateAttributionPayload(
   }
 
   const offer = offerParse.data;
-  const signatureCheck = verifySplit402OfferObject(offer, merchantPublicKey);
-  errors.push(...signatureCheck.errors);
+  const merchantPublicKey = serviceKeyProvider.resolvePublicKey(offer.kid);
+  if (merchantPublicKey === undefined) {
+    errors.push(`unknown merchant service key kid: ${offer.kid}`);
+  } else {
+    const signatureCheck = verifySplit402OfferObject(offer, merchantPublicKey);
+    errors.push(...signatureCheck.errors);
+  }
   errors.push(...validateOfferAgainstRequirements(offer, context.requirements));
   errors.push(...validateOfferTiming(offer, now));
   if (offer.resourceOrigin !== merchantOrigin) {
