@@ -65,6 +65,7 @@ import {
   createSignedPayoutTransactionRecords,
   createPayoutPreview,
   filterPayoutEligibleAccruals,
+  summarizePayoutBatchFinality,
   isPayoutBatchConflictError,
   isPayoutBatchValidationError,
   isPayoutPreviewValidationError,
@@ -502,7 +503,40 @@ export class InMemoryReceiptIngestionStore
       ...(input.error === undefined ? {} : { error: input.error })
     };
     this.payoutTransactionsById.set(updated.id, updated);
+    this.rollUpPayoutBatchFinality(updated.payoutBatchId, observedAt);
     return updated;
+  }
+
+  private rollUpPayoutBatchFinality(payoutBatchId: string, updatedAt: string): void {
+    const batch = this.payoutBatchesById.get(payoutBatchId);
+    if (batch === undefined) {
+      return;
+    }
+    const rollup = summarizePayoutBatchFinality(
+      this.listPayoutTransactions(payoutBatchId)
+    );
+    if (rollup === undefined) {
+      return;
+    }
+    const itemStatus = rollup.itemStatus;
+    this.payoutBatchesById.set(payoutBatchId, {
+      ...batch,
+      status: rollup.batchStatus,
+      ...(rollup.failureCode === undefined
+        ? {}
+        : { failureCode: rollup.failureCode }),
+      ...(rollup.failureMessage === undefined
+        ? {}
+        : { failureMessage: rollup.failureMessage }),
+      updatedAt,
+      items:
+        itemStatus === undefined
+          ? batch.items
+          : batch.items.map((item) => ({
+              ...item,
+              status: itemStatus
+            }))
+    });
   }
 }
 

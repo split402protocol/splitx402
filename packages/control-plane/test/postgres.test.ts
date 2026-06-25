@@ -483,6 +483,7 @@ describe("PostgresReceiptIngestionStore", () => {
       status: "finalized",
       observedAt: "2026-06-24T00:08:00Z"
     });
+    const rolledUpBatch = await store.getPayoutBatch(batch.id);
 
     expect(saved).toHaveLength(1);
     expect(listed).toEqual(saved);
@@ -503,6 +504,13 @@ describe("PostgresReceiptIngestionStore", () => {
         finalizedAt: "2026-06-24T00:08:00.000Z"
       })
     );
+    expect(rolledUpBatch).toEqual(
+      expect.objectContaining({
+        status: "finalized",
+        updatedAt: "2026-06-24T00:08:00.000Z"
+      })
+    );
+    expect(rolledUpBatch?.items[0]?.status).toBe("finalized");
     expect(fakePool.database.payoutTransactions).toHaveLength(1);
     await expect(
       store.saveSignedPayoutTransactions({
@@ -1287,6 +1295,14 @@ class FakePostgresClient implements PostgresTransactionClient {
         this.database.markPayoutTransactionFinality(values) as unknown as Row[]
       );
     }
+    if (normalized.startsWith("update payout_batches")) {
+      this.database.updatePayoutBatchRollup(values);
+      return result([]);
+    }
+    if (normalized.startsWith("update payout_items")) {
+      this.database.updatePayoutItemsStatus(values);
+      return result([]);
+    }
     if (normalized.startsWith("update commission_accruals")) {
       this.database.markAccrualChainVerified(values);
       return result([]);
@@ -1898,6 +1914,32 @@ class FakePostgresDatabase {
     transaction.finalized_at = finalizedAt;
     transaction.error_json = errorJson;
     return [transaction];
+  }
+
+  updatePayoutBatchRollup(values: readonly unknown[]): void {
+    const id = readString(values[0]);
+    const status = readString(values[1]);
+    const failureCode = readNullableString(values[2]);
+    const failureMessage = readNullableString(values[3]);
+    const updatedAt = readString(values[4]);
+    const batch = this.payoutBatches.find((row) => row.id === id);
+    if (batch === undefined) {
+      return;
+    }
+    batch.status = status;
+    batch.failure_code = failureCode;
+    batch.failure_message = failureMessage;
+    batch.updated_at = updatedAt;
+  }
+
+  updatePayoutItemsStatus(values: readonly unknown[]): void {
+    const payoutBatchId = readString(values[0]);
+    const status = readString(values[1]);
+    for (const item of this.payoutItems) {
+      if (item.payout_batch_id === payoutBatchId) {
+        item.status = status;
+      }
+    }
   }
 
   revokeMerchantKey(values: readonly unknown[]): StoredMerchantKeyRow[] {

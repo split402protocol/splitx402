@@ -78,7 +78,8 @@ POST /v1/merchants/:merchantId/payout-batches
 - policy-enforced Solana payout signing boundary;
 - signed-byte payout transaction persistence before broadcast;
 - Solana RPC broadcast submission boundary for persisted signed bytes;
-- Solana RPC finality monitoring with retry and outcome-unknown classification.
+- Solana RPC finality monitoring with retry and outcome-unknown classification;
+- payout batch and item status rollup from transaction finality.
 
 ## Commands
 

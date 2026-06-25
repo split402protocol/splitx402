@@ -245,6 +245,13 @@ export interface PayoutTransactionRecord {
   createdAt: string;
 }
 
+export interface PayoutBatchFinalityRollup {
+  batchStatus: PayoutBatchStatus;
+  itemStatus?: PayoutItemStatus;
+  failureCode?: string;
+  failureMessage?: string;
+}
+
 interface MutablePayoutItem {
   destinationWallet: string;
   referrerWallets: Set<string>;
@@ -594,6 +601,91 @@ export function createSignedPayoutTransactionRecords(
         createdAt
       };
     });
+}
+
+export function summarizePayoutBatchFinality(
+  transactions: readonly PayoutTransactionRecord[]
+): PayoutBatchFinalityRollup | undefined {
+  if (transactions.length === 0) {
+    return undefined;
+  }
+  const failed = transactions.find((transaction) => transaction.status === "failed");
+  if (failed !== undefined) {
+    return {
+      batchStatus: "failed",
+      itemStatus: "failed",
+      failureCode: "payout_transaction_failed",
+      failureMessage: readPayoutTransactionFailureMessage(failed)
+    };
+  }
+  const expired = transactions.find((transaction) => transaction.status === "expired");
+  if (expired !== undefined) {
+    return {
+      batchStatus: "outcome_unknown",
+      failureCode: "payout_transaction_expired",
+      failureMessage: `payout transaction expired before safe finality: ${expired.id}`
+    };
+  }
+  const unknown = transactions.find(
+    (transaction) => transaction.status === "outcome_unknown"
+  );
+  if (unknown !== undefined) {
+    return {
+      batchStatus: "outcome_unknown",
+      failureCode: "payout_transaction_outcome_unknown",
+      failureMessage: `payout transaction outcome is unknown: ${unknown.id}`
+    };
+  }
+  if (transactions.every((transaction) => transaction.status === "finalized")) {
+    return {
+      batchStatus: "finalized",
+      itemStatus: "finalized"
+    };
+  }
+  if (
+    transactions.every(
+      (transaction) =>
+        transaction.status === "confirmed" || transaction.status === "finalized"
+    )
+  ) {
+    return {
+      batchStatus: "confirmed",
+      itemStatus: "confirmed"
+    };
+  }
+  if (
+    transactions.some(
+      (transaction) =>
+        transaction.status === "submitted" ||
+        transaction.status === "confirmed" ||
+        transaction.status === "finalized"
+    )
+  ) {
+    return {
+      batchStatus: "submitted",
+      itemStatus: "submitted"
+    };
+  }
+  if (
+    transactions.some(
+      (transaction) =>
+        transaction.status === "signed" || transaction.status === "planned"
+    )
+  ) {
+    return {
+      batchStatus: "signing"
+    };
+  }
+  return undefined;
+}
+
+function readPayoutTransactionFailureMessage(
+  transaction: PayoutTransactionRecord
+): string {
+  const message = transaction.error?.message;
+  return typeof message === "string" && message.length > 0
+    ? message
+    : `payout transaction failed: ${transaction.id}`;
 }
 
 function createPreviewBatch(input: {

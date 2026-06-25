@@ -111,7 +111,8 @@ import type {
 import {
   PayoutBatchConflictError,
   createPayoutBatchPlan,
-  createSignedPayoutTransactionRecords
+  createSignedPayoutTransactionRecords,
+  summarizePayoutBatchFinality
 } from "./payouts.js";
 
 export interface PostgresQueryExecutor {
@@ -634,7 +635,12 @@ export class PostgresReceiptIngestionStore
       [input.id, submittedAt, expectedSignature]
     );
     const row = result.rows[0];
-    return row === undefined ? undefined : mapPayoutTransaction(row);
+    if (row === undefined) {
+      return undefined;
+    }
+    const transaction = mapPayoutTransaction(row);
+    await rollUpPayoutBatchFinality(this.db, transaction.payoutBatchId, submittedAt);
+    return transaction;
   }
 
   async markPayoutTransactionFinality(
@@ -675,7 +681,12 @@ export class PostgresReceiptIngestionStore
       [input.id, input.status, confirmedAt, finalizedAt, errorJson]
     );
     const row = result.rows[0];
-    return row === undefined ? undefined : mapPayoutTransaction(row);
+    if (row === undefined) {
+      return undefined;
+    }
+    const transaction = mapPayoutTransaction(row);
+    await rollUpPayoutBatchFinality(this.db, transaction.payoutBatchId, observedAt);
+    return transaction;
   }
 
   private async getPayoutTransaction(
@@ -2484,6 +2495,52 @@ function insertPayoutTransaction(
       transaction.createdAt
     ]
   );
+}
+
+async function rollUpPayoutBatchFinality(
+  db: PostgresQueryExecutor,
+  payoutBatchId: string,
+  updatedAt: string
+): Promise<void> {
+  const result = await db.query<PayoutTransactionRow>(
+    `select id, payout_batch_id, sequence, attempt, recent_blockhash,
+            last_valid_block_height, signed_transaction_base64,
+            expected_signature, status, submitted_at, confirmed_at,
+            finalized_at, error_json, created_at
+       from payout_transactions
+      where payout_batch_id = $1
+      order by sequence, attempt, created_at, id`,
+    [payoutBatchId]
+  );
+  const rollup = summarizePayoutBatchFinality(
+    result.rows.map(mapPayoutTransaction)
+  );
+  if (rollup === undefined) {
+    return;
+  }
+  await db.query(
+    `update payout_batches
+        set status = $2,
+            failure_code = $3,
+            failure_message = $4,
+            updated_at = $5
+      where id = $1`,
+    [
+      payoutBatchId,
+      rollup.batchStatus,
+      rollup.failureCode ?? null,
+      rollup.failureMessage ?? null,
+      updatedAt
+    ]
+  );
+  if (rollup.itemStatus !== undefined) {
+    await db.query(
+      `update payout_items
+          set status = $2
+        where payout_batch_id = $1`,
+      [payoutBatchId, rollup.itemStatus]
+    );
+  }
 }
 
 function insertOutboxEvent(

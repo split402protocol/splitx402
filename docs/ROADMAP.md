@@ -236,6 +236,7 @@ Current slice:
   boundary;
 - Solana payout transaction finality monitor with retry and outcome-unknown
   classification;
+- payout batch and item status rollup from transaction finality;
 - `POST /v1/merchants/:merchantId/payout-wallets`;
 - `POST /v1/merchants/:merchantId/payouts/preview`;
 - `POST /v1/merchants/:merchantId/payout-batches`.

@@ -5,7 +5,9 @@ import {
   createPayoutPreview,
   createSignedPayoutTransactionRecords,
   filterPayoutEligibleAccruals,
-  type CommissionAccrual
+  summarizePayoutBatchFinality,
+  type CommissionAccrual,
+  type PayoutTransactionRecord
 } from "../src/index.js";
 
 const NOW = "2026-06-24T00:10:00.000Z";
@@ -279,6 +281,54 @@ describe("signed payout transaction records", () => {
   });
 });
 
+describe("payout batch finality rollup", () => {
+  it("finalizes a batch only when all payout transactions are finalized", () => {
+    expect(
+      summarizePayoutBatchFinality([
+        payoutTransaction({ id: "ptx_1", status: "finalized" }),
+        payoutTransaction({ id: "ptx_2", sequence: 1, status: "finalized" })
+      ])
+    ).toEqual({
+      batchStatus: "finalized",
+      itemStatus: "finalized"
+    });
+    expect(
+      summarizePayoutBatchFinality([
+        payoutTransaction({ id: "ptx_1", status: "confirmed" }),
+        payoutTransaction({ id: "ptx_2", sequence: 1, status: "finalized" })
+      ])
+    ).toEqual({
+      batchStatus: "confirmed",
+      itemStatus: "confirmed"
+    });
+  });
+
+  it("keeps unknown outcomes allocated and marks failed transactions failed", () => {
+    expect(
+      summarizePayoutBatchFinality([
+        payoutTransaction({ status: "outcome_unknown" })
+      ])
+    ).toEqual({
+      batchStatus: "outcome_unknown",
+      failureCode: "payout_transaction_outcome_unknown",
+      failureMessage: "payout transaction outcome is unknown: ptx_1"
+    });
+    expect(
+      summarizePayoutBatchFinality([
+        payoutTransaction({
+          status: "failed",
+          error: { message: "insufficient funds" }
+        })
+      ])
+    ).toEqual({
+      batchStatus: "failed",
+      itemStatus: "failed",
+      failureCode: "payout_transaction_failed",
+      failureMessage: "insufficient funds"
+    });
+  });
+});
+
 function accrual(overrides: Partial<CommissionAccrual> = {}): CommissionAccrual {
   return {
     id: "acr_0",
@@ -293,6 +343,20 @@ function accrual(overrides: Partial<CommissionAccrual> = {}): CommissionAccrual 
     status: "available",
     availableAt: "2026-06-24T00:00:00.000Z",
     createdAt: "2026-06-24T00:00:00.000Z",
+    ...overrides
+  };
+}
+
+function payoutTransaction(
+  overrides: Partial<PayoutTransactionRecord> = {}
+): PayoutTransactionRecord {
+  return {
+    id: "ptx_1",
+    payoutBatchId: "pbt_ffffffffffffffffffffffffffffffff",
+    sequence: 0,
+    attempt: 1,
+    status: "submitted",
+    createdAt: NOW,
     ...overrides
   };
 }

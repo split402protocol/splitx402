@@ -392,8 +392,10 @@ sequence, attempt, blockhash metadata, and submitted state before broadcast.
 The Solana broadcaster boundary sends those identical signed bytes through
 `sendTransaction` and can retry across RPC URLs. The finality monitor reads
 `getSignatureStatuses`, reports confirmed, finalized, failed, retryable, or
-outcome-unknown results, and returns explicit retry timestamps. Concrete signer
-wiring, batch/item ledger closure, and reconciliation are still remaining
+outcome-unknown results, and returns explicit retry timestamps. Transaction
+status now rolls up conservatively to payout batches and items, including
+finalized, failed, and outcome-unknown states. Concrete signer wiring, ledger
+accounting closure, webhook events, and reconciliation are still remaining
 hardening steps.
 
 ## MVP Rules
