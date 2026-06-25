@@ -30,6 +30,15 @@ Alert on:
 Deployments can attach an audit sink to `createPayoutSignerApp`. Events use
 schema `split402.payout_signer.audit_event.v1`.
 
+For the packaged signer service, set:
+
+```bash
+SPLIT402_PAYOUT_SIGNER_SERVICE_AUDIT_LOG=stdout-jsonl
+```
+
+This emits one sanitized JSON event per line to container stdout. The default is
+`off`.
+
 Safe fields include:
 
 - outcome;

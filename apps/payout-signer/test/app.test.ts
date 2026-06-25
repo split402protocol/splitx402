@@ -20,6 +20,7 @@ import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
 import {
+  createPayoutSignerJsonlAuditSink,
   createPayoutSignerApp,
   readPayoutSignerConfigFromEnv,
   type PayoutSignerAuditEvent
@@ -277,6 +278,94 @@ describe("payout signer app", () => {
     expect(serializedEvents).not.toContain(body.transactionBase64);
     expect(serializedEvents).not.toContain(SHARED_SECRET);
     expect(serializedEvents).not.toContain(NEXT_SHARED_SECRET);
+  });
+
+  it("writes safe JSONL audit events when enabled from environment", async () => {
+    const auditLines: string[] = [];
+    const config = readPayoutSignerConfigFromEnv(
+      {
+        SPLIT402_PAYOUT_SIGNER_SERVICE_REF: "kms:env-payout",
+        SPLIT402_PAYOUT_SIGNER_SERVICE_NETWORK: "solana:devnet",
+        SPLIT402_PAYOUT_SIGNER_SERVICE_EXPECTED_FUNDING_WALLET: "wallet",
+        SPLIT402_PAYOUT_SIGNER_SERVICE_SHARED_SECRET: SHARED_SECRET,
+        SPLIT402_PAYOUT_SIGNER_SERVICE_AUDIT_LOG: "stdout-jsonl",
+        SPLIT402_PAYOUT_SIGNER_SERVICE_PRIVATE_KEY_BASE64:
+          Buffer.from(PRIVATE_KEY_BYTES).toString("base64")
+      },
+      {
+        auditLogWriter: (line) => {
+          auditLines.push(line);
+        }
+      }
+    );
+
+    expect(config.auditSink).toBeDefined();
+    await config.auditSink?.({
+      schema: "split402.payout_signer.audit_event.v1",
+      observedAt: TIMESTAMP,
+      outcome: "rejected",
+      statusCode: 401,
+      code: "unauthorized",
+      signerReference: "kms:env-payout",
+      network: "solana:devnet",
+      message: "invalid request signature"
+    });
+
+    expect(auditLines).toHaveLength(1);
+    expect(JSON.parse(auditLines[0] ?? "{}")).toEqual({
+      schema: "split402.payout_signer.audit_event.v1",
+      observedAt: TIMESTAMP,
+      outcome: "rejected",
+      statusCode: 401,
+      code: "unauthorized",
+      signerReference: "kms:env-payout",
+      network: "solana:devnet",
+      message: "invalid request signature"
+    });
+    expect(auditLines[0]).not.toContain(SHARED_SECRET);
+  });
+
+  it("rejects unknown audit log modes", () => {
+    expect(() =>
+      readPayoutSignerConfigFromEnv({
+        SPLIT402_PAYOUT_SIGNER_SERVICE_REF: "kms:env-payout",
+        SPLIT402_PAYOUT_SIGNER_SERVICE_NETWORK: "solana:devnet",
+        SPLIT402_PAYOUT_SIGNER_SERVICE_EXPECTED_FUNDING_WALLET: "wallet",
+        SPLIT402_PAYOUT_SIGNER_SERVICE_SHARED_SECRET: SHARED_SECRET,
+        SPLIT402_PAYOUT_SIGNER_SERVICE_AUDIT_LOG: "file",
+        SPLIT402_PAYOUT_SIGNER_SERVICE_PRIVATE_KEY_BASE64:
+          Buffer.from(PRIVATE_KEY_BYTES).toString("base64")
+      })
+    ).toThrow(
+      "SPLIT402_PAYOUT_SIGNER_SERVICE_AUDIT_LOG must be off or stdout-jsonl"
+    );
+  });
+
+  it("creates JSONL audit sinks", async () => {
+    const auditLines: string[] = [];
+    const sink = createPayoutSignerJsonlAuditSink((line) => {
+      auditLines.push(line);
+    });
+
+    await sink({
+      schema: "split402.payout_signer.audit_event.v1",
+      observedAt: TIMESTAMP,
+      outcome: "signed",
+      statusCode: 200,
+      code: "signed",
+      signerReference: "kms:test-payout",
+      network: "solana:devnet",
+      batchId: "pbt_ffffffffffffffffffffffffffffffff"
+    });
+
+    expect(JSON.parse(auditLines[0] ?? "{}")).toEqual(
+      expect.objectContaining({
+        schema: "split402.payout_signer.audit_event.v1",
+        outcome: "signed",
+        code: "signed",
+        batchId: "pbt_ffffffffffffffffffffffffffffffff"
+      })
+    );
   });
 
   it("loads configuration from environment variables", () => {
