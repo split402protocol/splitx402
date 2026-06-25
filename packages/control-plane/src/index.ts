@@ -29,6 +29,7 @@ import {
   type CampaignTermsInput
 } from "./campaigns.js";
 import { isReceiptIngestionPersistenceConflict } from "./errors.js";
+import { createMerchantReliabilityProfile } from "./discovery.js";
 import {
   createMerchantReceiptKeyResolver,
   MerchantRegistryValidationError,
@@ -1546,6 +1547,26 @@ export function createMerchantRegistryRouter(
     }
   });
 
+  router.get(
+    "/v1/merchants/:merchantId/reliability-profile",
+    async (req, res, next) => {
+      try {
+        const merchant = await merchantRegistry.getMerchantProfile(
+          req.params.merchantId
+        );
+        if (merchant === undefined) {
+          res.status(404).json({ error: "merchant_not_found" });
+          return;
+        }
+        res.json({
+          profile: createMerchantReliabilityProfile(merchant)
+        });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
   router.post("/v1/merchants/:merchantId/origins", async (req, res, next) => {
     try {
       const session = await requireMerchantOwnerSession(
@@ -2951,6 +2972,7 @@ function readOptionalRuntimeBoolean(
 export * from "./errors.js";
 export * from "./auth.js";
 export * from "./campaigns.js";
+export * from "./discovery.js";
 export * from "./merchants.js";
 export * from "./migrations.js";
 export * from "./payouts.js";

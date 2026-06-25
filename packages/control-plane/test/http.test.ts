@@ -629,14 +629,17 @@ describe("control-plane HTTP API", () => {
         id: bundle.artifacts.receipt.merchantId,
         slug: "demo-merchant",
         displayName: "Demo Merchant",
-        ownerWallet: bundle.keys.payerWallet
+        ownerWallet: bundle.keys.payerWallet,
+        status: "active"
       })
       .expect(201);
     const originResponse = await request(app)
       .post(`/v1/merchants/${bundle.artifacts.receipt.merchantId}/origins`)
       .send({
         origin: bundle.artifacts.receipt.merchantOrigin,
-        verificationMethod: "well_known"
+        verificationMethod: "well_known",
+        status: "verified",
+        verifiedAt: "2026-06-24T00:00:30Z"
       })
       .expect(201);
     const keyResponse = await request(app)
@@ -644,6 +647,15 @@ describe("control-plane HTTP API", () => {
       .send({
         kid: bundle.artifacts.receipt.kid,
         publicKey: bundle.keys.merchantPublicKey,
+        validFrom: "2026-06-24T00:00:00Z"
+      })
+      .expect(201);
+    await request(app)
+      .post(`/v1/merchants/${bundle.artifacts.receipt.merchantId}/keys`)
+      .send({
+        kid: "webhook-key",
+        publicKey: OTHER_OWNER_WALLET,
+        purpose: "webhook",
         validFrom: "2026-06-24T00:00:00Z"
       })
       .expect(201);
@@ -659,6 +671,11 @@ describe("control-plane HTTP API", () => {
       .expect(201);
     const profileResponse = await request(app)
       .get(`/v1/merchants/${bundle.artifacts.receipt.merchantId}`)
+      .expect(200);
+    const reliabilityResponse = await request(app)
+      .get(
+        `/v1/merchants/${bundle.artifacts.receipt.merchantId}/reliability-profile`
+      )
       .expect(200);
     const revokeResponse = await request(app)
       .post(
@@ -688,8 +705,31 @@ describe("control-plane HTTP API", () => {
       })
     );
     expect(profileResponse.body.merchant.origins).toHaveLength(1);
-    expect(profileResponse.body.merchant.keys).toHaveLength(1);
+    expect(profileResponse.body.merchant.keys).toHaveLength(2);
     expect(profileResponse.body.merchant.payoutWallets).toHaveLength(1);
+    expect(reliabilityResponse.body.profile).toEqual(
+      expect.objectContaining({
+        schema: "split402.merchant_reliability_profile.v1",
+        merchant: expect.objectContaining({
+          id: bundle.artifacts.receipt.merchantId,
+          slug: "demo-merchant",
+          displayName: "Demo Merchant",
+          status: "active"
+        }),
+        signals: {
+          verifiedOrigins: 1,
+          activeOfferReceiptKeys: 1,
+          activeWebhookKeys: 1,
+          activePayoutWallets: 1
+        },
+        readiness: {
+          acceptsReceipts: true,
+          payoutReady: true,
+          webhookReady: true,
+          discoveryReady: true
+        }
+      })
+    );
     expect(revokeResponse.body.key.revocationReason).toBe("rotation complete");
   });
 
