@@ -321,6 +321,13 @@ Generate the Phase 6 private signer network policy review record:
 corepack pnpm phase6:network-policy
 ```
 
+Generate the Phase 6 signer smoke and secret-exposure review record:
+
+```bash
+corepack pnpm signer:payout:smoke
+corepack pnpm phase6:signer-smoke
+```
+
 Generate the Phase 6 emergency signer-auth revocation drill record:
 
 ```bash
@@ -476,6 +483,7 @@ The latest Devnet proof is recorded in
 - [Phase 6 custody evidence template](docs/templates/phase6-custody-evidence.txt)
 - [Phase 6 image provenance template](docs/templates/phase6-image-provenance.txt)
 - [Phase 6 signer policy review template](docs/templates/phase6-signer-policy-review.txt)
+- [Phase 6 signer smoke review template](docs/templates/phase6-signer-smoke-review.txt)
 - [Phase 6 emergency revocation drill template](docs/templates/phase6-emergency-revocation-drill.txt)
 - [Phase 6 key custody review template](docs/templates/phase6-key-custody-review.txt)
 - [Phase 6 network policy review template](docs/templates/phase6-network-policy-review.txt)

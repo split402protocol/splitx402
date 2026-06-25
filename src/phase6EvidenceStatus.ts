@@ -57,7 +57,8 @@ export const PHASE6_EVIDENCE_COMMANDS = [
   },
   {
     gate: "signer_readiness_and_secret_exposure",
-    command: "corepack pnpm signer:payout:smoke",
+    command:
+      "corepack pnpm signer:payout:smoke && corepack pnpm phase6:signer-smoke",
     evidenceField: "smoke_check_output",
   },
   {

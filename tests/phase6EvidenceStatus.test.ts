@@ -25,6 +25,9 @@ describe("Phase 6 evidence status", () => {
       "corepack pnpm phase6:incident-drill",
     );
     expect(report.commands.map((item) => item.command)).toContain(
+      "corepack pnpm signer:payout:smoke && corepack pnpm phase6:signer-smoke",
+    );
+    expect(report.commands.map((item) => item.command)).toContain(
       "corepack pnpm payout:finality:failover-drill && corepack pnpm phase6:rpc-failover",
     );
     expect(report.nextActions).toContain(

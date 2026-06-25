@@ -10,8 +10,8 @@ all required gates are approved.
 | --- | --- | --- |
 | Signer image provenance | `corepack pnpm phase6:image-provenance` output with `source_commit`, immutable image digests, `signer_image_build_command`, `signer_image_dependency_audit_output`, and attached image provenance review. | Pending |
 | Private signer networking | `corepack pnpm phase6:network-policy` output proving only the control plane can reach the signer, the service is private, and public ingress is denied or blocked. | Pending |
-| Signer readiness | `corepack pnpm signer:payout:smoke` output from staging. | Pending |
-| Secret exposure check | Smoke-check output plus log sample proving health, readiness, metrics, and audit logs do not expose shared secrets, private keys, or transaction bytes. | Pending |
+| Signer readiness | `corepack pnpm signer:payout:smoke` output plus `corepack pnpm phase6:signer-smoke` review proving health, readiness, metrics, signer reference, and network consistency. | Pending |
+| Secret exposure check | `corepack pnpm phase6:signer-smoke` output proving endpoint responses and audit logs do not expose shared secrets, private keys, or transaction bytes. | Pending |
 | HMAC key rotation | `corepack pnpm phase6:rotation-drill` output proving dual-active deploy, control-plane rotation, previous-key retirement, health, metrics, and audit-log evidence. | Pending |
 | Emergency auth revocation | `corepack pnpm phase6:emergency-revocation` output proving old-key rejection, new-key success, metrics, audit-log evidence, and payout-batch reconciliation. | Pending |
 | Payout signer key custody | `corepack pnpm phase6:key-custody` output proving key source, owner, backup policy, access list, recovery process, and separation of duties. | Pending |

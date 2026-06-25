@@ -187,7 +187,22 @@ The smoke check verifies health, readiness, metrics shape, signer reference and
 network consistency, and that endpoint responses do not expose configured signer
 secrets present in the local environment.
 
-Attach the smoke-check output to
+Then copy
+[`docs/templates/phase6-signer-smoke-review.txt`](../templates/phase6-signer-smoke-review.txt)
+or generate the correctly shaped smoke and secret-exposure review:
+
+```bash
+SPLIT402_PHASE6_SIGNER_SMOKE_REVIEW_ID=phase6-signer-smoke-001 \
+SPLIT402_PHASE6_SIGNER_SMOKE_REVIEWERS="security, operations" \
+SPLIT402_PHASE6_SIGNER_SMOKE_STAGING_ENVIRONMENT=split402-staging \
+SPLIT402_PHASE6_SIGNER_SMOKE_OUTPUT_JSON='<json-output-from-signer-payout-smoke>' \
+SPLIT402_PHASE6_SIGNER_SMOKE_HEALTH_READY_METRICS_EVIDENCE="attached: signer-smoke-output.json" \
+SPLIT402_PHASE6_SIGNER_SMOKE_ENDPOINT_SECRET_EXPOSURE_EVIDENCE="attached: endpoint scan showed no secrets and no transaction bytes" \
+SPLIT402_PHASE6_SIGNER_SMOKE_AUDIT_LOG_SECRET_EXPOSURE_EVIDENCE="attached: sanitized audit sample has no private key and no shared secret" \
+  corepack pnpm phase6:signer-smoke
+```
+
+Attach the review output to `smoke_check_output` in
 [`docs/checklists/phase6-custody-review.md`](../checklists/phase6-custody-review.md)
 before approving production payout custody.
 
