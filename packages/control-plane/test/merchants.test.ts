@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   InMemoryMerchantRegistry,
   InMemoryReceiptIngestionStore,
+  MerchantRegistryConflictError,
   ReceiptIngestor,
   createMerchantReceiptKeyResolver
 } from "../src/index.js";
@@ -11,7 +12,7 @@ import {
 const FIXED_NOW = new Date("2026-06-24T00:00:00Z");
 
 describe("merchant registry", () => {
-  it("registers merchants, origins, and offer/receipt service keys", () => {
+  it("registers merchants, origins, service keys, and payout wallets", () => {
     const bundle = createSampleProtocolArtifacts();
     const registry = createRegistry();
 
@@ -31,13 +32,46 @@ describe("merchant registry", () => {
       publicKey: bundle.keys.merchantPublicKey,
       validFrom: "2026-06-24T00:00:00Z"
     });
+    const payoutWallet = registry.addPayoutWallet({
+      merchantId: merchant.id,
+      network: bundle.artifacts.receipt.network,
+      wallet: bundle.keys.payToWallet,
+      asset: bundle.artifacts.receipt.asset,
+      signerReference: "kms:split402-devnet-payout"
+    });
     const profile = registry.getMerchantProfile(merchant.id);
 
     expect(merchant.status).toBe("pending");
     expect(origin.status).toBe("pending");
     expect(key.purpose).toBe("offer_receipt");
+    expect(payoutWallet.status).toBe("active");
     expect(profile?.origins).toHaveLength(1);
     expect(profile?.keys).toHaveLength(1);
+    expect(profile?.payoutWallets).toEqual([payoutWallet]);
+  });
+
+  it("rejects duplicate merchant payout wallets for the same asset and network", () => {
+    const bundle = createSampleProtocolArtifacts();
+    const registry = createRegistry();
+    const merchant = registry.createMerchant({
+      id: bundle.artifacts.receipt.merchantId,
+      slug: "demo-merchant",
+      displayName: "Demo Merchant",
+      ownerWallet: bundle.keys.payerWallet
+    });
+    const input = {
+      merchantId: merchant.id,
+      network: bundle.artifacts.receipt.network,
+      wallet: bundle.keys.payToWallet,
+      asset: bundle.artifacts.receipt.asset,
+      signerReference: "kms:split402-devnet-payout"
+    };
+
+    registry.addPayoutWallet(input);
+
+    expect(() => registry.addPayoutWallet(input)).toThrow(
+      MerchantRegistryConflictError
+    );
   });
 
   it("resolves a receipt verification key by merchant id, kid, purpose, and receipt time", async () => {
@@ -133,6 +167,7 @@ describe("merchant registry", () => {
 function createRegistry(): InMemoryMerchantRegistry {
   return new InMemoryMerchantRegistry({
     now: () => FIXED_NOW,
-    merchantIdFactory: () => "mrc_ffffffffffffffffffffffffffffffff"
+    merchantIdFactory: () => "mrc_ffffffffffffffffffffffffffffffff",
+    merchantPayoutWalletIdFactory: () => "mpw_ffffffffffffffffffffffffffffffff"
   });
 }

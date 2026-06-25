@@ -170,7 +170,7 @@ mainnet payment flows exist yet.
 | Solana RPC signature-status verifier | Started |
 | Solana transaction transfer verifier | Started |
 | Live PostgreSQL migration/integration harness | Started |
-| Payout engine preview and eligible-accrual selector | Started |
+| Payout engine preview, eligible-accrual selector, and funding-wallet registry | Started |
 | `$SPLIT` bonding and atomic split settlement | Later research |
 
 The latest Devnet proof is recorded in
@@ -213,7 +213,7 @@ flowchart TB
 | `@split402/merchant-sdk` | Merchant-side cached campaign resolver, service-key rotation helpers, x402 payment-identifier helpers, operation digest helpers, durable receipt outbox, control-plane ingestion retry helpers, and compile-checked examples. |
 | `@split402/demo-merchant` | x402-protected merchant API for the Devnet demo. |
 | `@split402/demo-agent` | Runnable buyer/agent harness for setup, preflight, and paid-suite proof. |
-| `@split402/control-plane` | Receipt ingestion, merchant/key registry, accruals, ledger model, payout preview planning, and PostgreSQL adapters. |
+| `@split402/control-plane` | Receipt ingestion, merchant/key registry, merchant payout-wallet registry, accruals, ledger model, payout preview planning, and PostgreSQL adapters. |
 
 ## Control-Plane Process
 
@@ -270,6 +270,7 @@ GET  /v1/merchants/:merchantId
 POST /v1/merchants/:merchantId/origins
 POST /v1/merchants/:merchantId/keys
 POST /v1/merchants/:merchantId/keys/:kid/revoke
+POST /v1/merchants/:merchantId/payout-wallets
 POST /v1/campaigns
 GET  /v1/campaigns/:campaignId
 POST /v1/campaigns/:campaignId/activate
@@ -296,6 +297,7 @@ flowchart LR
   Merchants[("merchants")]
   Origins[("merchant_origins")]
   Keys[("merchant_keys")]
+  PayoutWallets[("merchant_payout_wallets")]
   CampaignRows[("campaigns")]
   CampaignVersions[("campaign_versions")]
   CampaignOps[("campaign_operations")]
@@ -316,6 +318,7 @@ flowchart LR
   Registry --> Merchants
   Registry --> Origins
   Registry --> Keys
+  Registry --> PayoutWallets
   Registry --> CampaignRows
   CampaignRows --> CampaignVersions
   CampaignVersions --> CampaignOps
@@ -332,16 +335,16 @@ flowchart LR
   Ingestion --> Outbox
 ```
 
-Merchant profiles, origins, service keys, and campaign versions can run in memory
-for tests or through PostgreSQL adapters for durable control-plane state. Receipt
-ingestion uses the same boundary: in-memory stores for deterministic behavior
-tests, PostgreSQL stores for durable receipt, accrual, and ledger rows. Wallet auth
-also uses the same store boundary, with PostgreSQL persisting single-use challenges,
-hashed bearer sessions, and hashed rotating refresh tokens. Route activation and
-suspension records are also durable in PostgreSQL and searchable by campaign,
-referrer, origin, operation, status, and limit. Routes are keyed by route id and
-canonical referral-claim hash so exact duplicate activation is idempotent while
-conflicting claims are rejected.
+Merchant profiles, origins, service keys, payout funding wallets, and campaign
+versions can run in memory for tests or through PostgreSQL adapters for durable
+control-plane state. Receipt ingestion uses the same boundary: in-memory stores
+for deterministic behavior tests, PostgreSQL stores for durable receipt, accrual,
+and ledger rows. Wallet auth also uses the same store boundary, with PostgreSQL
+persisting single-use challenges, hashed bearer sessions, and hashed rotating
+refresh tokens. Route activation and suspension records are also durable in
+PostgreSQL and searchable by campaign, referrer, origin, operation, status, and
+limit. Routes are keyed by route id and canonical referral-claim hash so exact
+duplicate activation is idempotent while conflicting claims are rejected.
 Payout-wallet rotation creates a new referrer-signed claim for the same route and
 appends it to immutable `route_versions`, while the `routes` row points at the
 latest current version for discovery. Historical receipts keep their original
@@ -360,9 +363,10 @@ envelopes to a configured endpoint. The first Solana verifier checks settlement
 signature status through one or more JSON-RPC providers and parses confirmed
 transaction data to reject receipts whose token mint, payer authority, pay-to
 wallet or associated token account, or amount do not match the receipt. The first
-payout-engine slice can query eligible available accruals, group them by asset and
-destination wallet, apply recipient thresholds and limits, and report funding
-coverage or deficit through `POST /v1/merchants/:merchantId/payouts/preview`.
+payout-engine slice can register merchant-controlled payout funding wallets,
+query eligible available accruals, group them by asset and destination wallet,
+apply recipient thresholds and limits, and report funding coverage or deficit
+through `POST /v1/merchants/:merchantId/payouts/preview`.
 Payout allocation persistence, transaction signing, broadcasting, and
 reconciliation are still remaining hardening steps.
 
