@@ -1,0 +1,15 @@
+review_id:
+review_date:
+reviewers:
+network:
+funding_wallet:
+source_token_account:
+mint:
+allowed_token_program_ids:
+max_transaction_amount_atomic:
+max_batch_amount_atomic:
+expected_destination_amount_list_hash:
+require_successful_simulation:
+signer_reference:
+review_decision: no-go
+review_notes:
