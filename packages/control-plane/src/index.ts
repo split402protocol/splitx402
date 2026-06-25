@@ -58,6 +58,14 @@ import {
   PostgresWalletAuthStore,
   type PostgresPool
 } from "./postgres.js";
+import {
+  createPayoutPreview,
+  filterPayoutEligibleAccruals,
+  isPayoutPreviewValidationError,
+  type ListPayoutEligibleAccrualsInput,
+  type PayoutAccrualStore,
+  type PayoutFundingBalance
+} from "./payouts.js";
 
 export type ReceiptIngestSource = "buyer" | "merchant" | "relay" | "unknown";
 export type ReceiptVerificationState =
@@ -235,7 +243,8 @@ export interface ReceiptIngestionStore {
 
 const RECEIPT_INGEST_SOURCES = ["buyer", "merchant", "relay", "unknown"] as const;
 
-export class InMemoryReceiptIngestionStore implements ReceiptIngestionStore {
+export class InMemoryReceiptIngestionStore
+  implements ReceiptIngestionStore, PayoutAccrualStore {
   private readonly receiptsById = new Map<string, ReceiptIngestionSnapshot>();
   private readonly receiptIdByHash = new Map<`sha256:${string}`, string>();
   private readonly receiptIdByPaymentId = new Map<string, string>();
@@ -277,6 +286,12 @@ export class InMemoryReceiptIngestionStore implements ReceiptIngestionStore {
     return Array.from(this.receiptsById.values())
       .map((snapshot) => snapshot.accrual)
       .filter((accrual): accrual is CommissionAccrual => accrual !== undefined);
+  }
+
+  listPayoutEligibleAccruals(
+    input: ListPayoutEligibleAccrualsInput
+  ): CommissionAccrual[] {
+    return filterPayoutEligibleAccruals(this.listAccruals(), input);
   }
 }
 
@@ -492,6 +507,7 @@ export interface ControlPlaneAppOptions {
   merchantRegistry?: MerchantRegistry;
   campaignRegistry?: CampaignRegistry;
   routeRegistry?: RouteRegistry;
+  payoutAccrualStore?: PayoutAccrualStore;
   auth?: ControlPlaneAuthOptions;
   jsonLimit?: string;
 }
@@ -555,6 +571,7 @@ export function createControlPlaneRuntime(
     merchantRegistry,
     campaignRegistry,
     routeRegistry,
+    payoutAccrualStore: receiptStore,
     ...(options.jsonLimit === undefined ? {} : { jsonLimit: options.jsonLimit }),
     ...(authenticator === undefined
       ? {}
@@ -632,6 +649,9 @@ export function createControlPlaneApp(
   }
   if (options.routeRegistry !== undefined) {
     app.use(createRouteRegistryRouter(options.routeRegistry, options));
+  }
+  if (options.payoutAccrualStore !== undefined) {
+    app.use(createPayoutRouter(options.payoutAccrualStore, options));
   }
 
   app.use((_req, res) => {
@@ -750,6 +770,81 @@ export function createReceiptIngestionRouter(
       res.status(result.statusCode).json(result);
     } catch (error) {
       next(error);
+    }
+  });
+
+  router.use(jsonErrorHandler);
+
+  return router;
+}
+
+export function createPayoutRouter(
+  payoutAccrualStore: PayoutAccrualStore,
+  options: Pick<
+    ControlPlaneAppOptions,
+    "auth" | "jsonLimit" | "merchantRegistry"
+  > = {}
+): Router {
+  const router = express.Router();
+  router.use(express.json({ limit: options.jsonLimit ?? "128kb" }));
+
+  router.post("/v1/merchants/:merchantId/payouts/preview", async (req, res, next) => {
+    try {
+      const merchantId = readRouteParam(req.params.merchantId, "merchantId");
+      const session = await requireMerchantOwnerForMerchantId(
+        req,
+        res,
+        options,
+        merchantId
+      );
+      if (session === undefined && isMerchantAuthRequired(options)) {
+        return;
+      }
+
+      const body = readJsonObject(req.body) ?? {};
+      const asset = readOptionalString(body.asset, "asset");
+      const campaignId = readOptionalString(body.campaignId, "campaignId");
+      const routeId = readOptionalString(body.routeId, "routeId");
+      const now = readOptionalString(body.now, "now") ?? new Date().toISOString();
+      const maxAccruals = readOptionalPositiveInteger(
+        body.maxAccruals,
+        "maxAccruals"
+      );
+      const maxRecipients = readOptionalPositiveInteger(
+        body.maxRecipients,
+        "maxRecipients"
+      );
+      const minimumPayoutAmountAtomic = readOptionalString(
+        body.minimumPayoutAmountAtomic,
+        "minimumPayoutAmountAtomic"
+      );
+      const fundingBalances = readPayoutFundingBalances(body.fundingBalances);
+      const accruals = await payoutAccrualStore.listPayoutEligibleAccruals({
+        merchantId,
+        now,
+        ...(asset === undefined ? {} : { asset }),
+        ...(campaignId === undefined ? {} : { campaignId }),
+        ...(routeId === undefined ? {} : { routeId }),
+        ...(maxAccruals === undefined ? {} : { limit: maxAccruals })
+      });
+      const preview = createPayoutPreview({
+        merchantId,
+        accruals,
+        now,
+        ...(minimumPayoutAmountAtomic === undefined
+          ? {}
+          : { minimumPayoutAmountAtomic }),
+        ...(maxRecipients === undefined ? {} : { maxRecipients }),
+        ...(fundingBalances === undefined ? {} : { fundingBalances })
+      });
+      res.json({ preview });
+    } catch (error) {
+      if (
+        !sendPayoutPreviewError(res, error) &&
+        !sendMerchantRegistryError(res, error)
+      ) {
+        next(error);
+      }
     }
   });
 
@@ -1819,6 +1914,26 @@ function readReceiptSource(value: unknown): ReceiptIngestSource | undefined {
   return isReceiptIngestSource(value) ? value : undefined;
 }
 
+function readPayoutFundingBalances(
+  value: unknown
+): PayoutFundingBalance[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(value)) {
+    throw new MerchantRegistryValidationError("fundingBalances must be an array");
+  }
+  return value.map((item) => {
+    const record = requireJsonObject(item);
+    const fundingWallet = readOptionalString(record.fundingWallet, "fundingWallet");
+    return {
+      asset: readRequiredString(record.asset, "asset"),
+      amountAtomic: readRequiredString(record.amountAtomic, "amountAtomic"),
+      ...(fundingWallet === undefined ? {} : { fundingWallet })
+    };
+  });
+}
+
 function jsonErrorHandler(
   error: unknown,
   _req: Request,
@@ -1945,6 +2060,7 @@ export * from "./auth.js";
 export * from "./campaigns.js";
 export * from "./merchants.js";
 export * from "./migrations.js";
+export * from "./payouts.js";
 export * from "./postgres.js";
 export * from "./routes.js";
 export * from "./solana.js";
@@ -2107,6 +2223,14 @@ function sendRouteRegistryError(res: Response, error: unknown): boolean {
   }
   if (isRouteRegistryConflictError(error)) {
     res.status(409).json({ error: "conflict", message: error.message });
+    return true;
+  }
+  return false;
+}
+
+function sendPayoutPreviewError(res: Response, error: unknown): boolean {
+  if (isPayoutPreviewValidationError(error)) {
+    res.status(400).json({ error: "invalid_request", message: error.message });
     return true;
   }
   return false;

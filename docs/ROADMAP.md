@@ -199,6 +199,8 @@ Current slice:
 
 ## Phase 6: Payout Engine
 
+Status: started.
+
 Goal: implement architecture Milestone 4.
 
 Deliverables:
@@ -210,6 +212,17 @@ Deliverables:
 - isolated signer interface;
 - broadcaster and finality monitor;
 - payout reconciliation.
+
+Current slice:
+
+- payout preview planner for available accruals;
+- deterministic eligible-accrual filtering by merchant, asset, campaign, route,
+  timestamp, and limit;
+- recipient grouping by asset and payout wallet;
+- minimum-threshold and max-recipient controls;
+- funding coverage and deficit reporting;
+- PostgreSQL eligible-accrual selector;
+- `POST /v1/merchants/:merchantId/payouts/preview`.
 
 ## Phase 7: Dashboard And Discovery
 

@@ -110,6 +110,59 @@ describe("control-plane HTTP API", () => {
     expect(store.listAccruals()).toHaveLength(1);
   });
 
+  it("previews available merchant payout accruals", async () => {
+    const { app, store, receipt } = createTestApp({ withPayouts: true });
+
+    await request(app).post("/v1/receipts").send({ receipt }).expect(201);
+    const snapshot = store.getByReceiptId(receipt.receiptId);
+    if (snapshot?.accrual === undefined) {
+      throw new Error("expected receipt accrual");
+    }
+    store.save({
+      ...snapshot,
+      receipt: {
+        ...snapshot.receipt,
+        verificationState: "signature_verified"
+      },
+      accrual: {
+        ...snapshot.accrual,
+        status: "available",
+        availableAt: "2026-06-24T00:04:00.000Z"
+      }
+    });
+
+    const response = await request(app)
+      .post(`/v1/merchants/${receipt.merchantId}/payouts/preview`)
+      .send({
+        now: "2026-06-24T00:05:00Z",
+        fundingBalances: [{ asset: receipt.asset, amountAtomic: "1000" }]
+      })
+      .expect(200);
+
+    expect(response.body.preview).toEqual(
+      expect.objectContaining({
+        merchantId: receipt.merchantId,
+        eligibleAccrualCount: 1,
+        totalAmountAtomicByAsset: { [receipt.asset]: "2000" }
+      })
+    );
+    expect(response.body.preview.batches).toEqual([
+      expect.objectContaining({
+        asset: receipt.asset,
+        totalAmountAtomic: "2000",
+        fundingStatus: "deficit",
+        fundingDeficitAtomic: "1000",
+        items: [
+          expect.objectContaining({
+            destinationWallet: receipt.payoutWallet,
+            amountAtomic: "2000",
+            accrualIds: [snapshot.accrual.id]
+          })
+        ]
+      })
+    ]);
+  });
+
   it("rejects malformed receipt submission envelopes", async () => {
     const { app } = createTestApp();
 
@@ -730,6 +783,7 @@ function createTestApp(
     withAuth?: boolean;
     withCampaignRegistry?: boolean;
     withMerchantRegistry?: boolean;
+    withPayouts?: boolean;
     withRouteRegistry?: boolean;
   } = {}
 ) {
@@ -766,6 +820,7 @@ function createTestApp(
             })
           }
         : {}),
+      ...(options.withPayouts === true ? { payoutAccrualStore: store } : {}),
       ...(options.withAuth === true
         ? { auth: { authenticator: createAuthenticator() } }
         : {})

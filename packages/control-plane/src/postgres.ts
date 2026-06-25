@@ -87,6 +87,10 @@ import type {
   ReceiptRecord,
   ReceiptVerificationState
 } from "./index.js";
+import type {
+  ListPayoutEligibleAccrualsInput,
+  PayoutAccrualStore
+} from "./payouts.js";
 
 export interface PostgresQueryExecutor {
   query<Row extends QueryResultRow = QueryResultRow>(
@@ -314,7 +318,7 @@ export interface PostgresOutboxEventStoreOptions {
 export type PostgresRouteRegistryOptions = InMemoryRouteRegistryOptions;
 
 export class PostgresReceiptIngestionStore
-  implements ReceiptIngestionStore, ReceiptChainVerificationStore {
+  implements ReceiptIngestionStore, ReceiptChainVerificationStore, PayoutAccrualStore {
   constructor(
     private readonly db: PostgresPool | PostgresQueryExecutor,
     private readonly options: PostgresReceiptIngestionStoreOptions = {}
@@ -371,6 +375,58 @@ export class PostgresReceiptIngestionStore
       );
     });
     return this.getByReceiptId(input.receiptId);
+  }
+
+  async listPayoutEligibleAccruals(
+    input: ListPayoutEligibleAccrualsInput
+  ): Promise<CommissionAccrual[]> {
+    const now = input.now ?? new Date().toISOString();
+    if (!Number.isFinite(Date.parse(now))) {
+      throw new MerchantRegistryValidationError("now must be an ISO timestamp");
+    }
+    if (
+      input.limit !== undefined &&
+      (!Number.isInteger(input.limit) || input.limit <= 0)
+    ) {
+      throw new MerchantRegistryValidationError("limit must be a positive integer");
+    }
+
+    const values: unknown[] = [input.merchantId, now];
+    const conditions = [
+      "merchant_id = $1",
+      "status = 'available'",
+      "(available_at is null or available_at <= $2)"
+    ];
+    if (input.asset !== undefined) {
+      values.push(input.asset);
+      conditions.push(`asset_mint = $${values.length}`);
+    }
+    if (input.campaignId !== undefined) {
+      values.push(input.campaignId);
+      conditions.push(`campaign_id = $${values.length}`);
+    }
+    if (input.routeId !== undefined) {
+      values.push(input.routeId);
+      conditions.push(`route_id = $${values.length}`);
+    }
+
+    let limitClause = "";
+    if (input.limit !== undefined) {
+      values.push(input.limit);
+      limitClause = `limit $${values.length}`;
+    }
+
+    const result = await this.db.query<CommissionAccrualRow>(
+      `select id, receipt_id, merchant_id, campaign_id, route_id, referrer_wallet,
+              payout_wallet, asset_mint, amount_atomic, status, available_at,
+              created_at
+         from commission_accruals
+        where ${conditions.join("\n          and ")}
+        order by asset_mint, payout_wallet, available_at nulls first, created_at, id
+        ${limitClause}`,
+      values
+    );
+    return result.rows.map(mapAccrual);
   }
 
   async save(snapshot: ReceiptIngestionSnapshot): Promise<void> {
