@@ -433,6 +433,8 @@ Current slice:
   route status rollups.
 - merchant webhook delivery feed for pending, processing, delivered, and
   dead-letter webhook outbox events.
+- MCP-facing paid-tool demo bundle with tool metadata, x402 payment details,
+  Split402 campaign metadata, expected referral economics, and proof commands.
 
 Exit criteria:
 
