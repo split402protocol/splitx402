@@ -20,6 +20,7 @@
     "vectors": "corepack pnpm --filter @split402/protocol vectors",
     "vectors:check": "corepack pnpm --filter @split402/protocol vectors:check",
     "phase6:custody:check": "tsx src/phase6-custody-check.ts",
+    "phase6:evidence:status": "tsx src/phase6-evidence-status.ts",
     "phase6:emergency-revocation": "tsx src/phase6-emergency-revocation.ts",
     "phase6:image-provenance": "tsx src/phase6-image-provenance.ts",
     "phase6:key-custody": "tsx src/phase6-key-custody.ts",
