@@ -66,6 +66,8 @@ plus an unknown-outcome reconciliation queue and referrer payout views.
   attempts without logging private keys, shared secrets, or transaction bytes.
 - Added payout signer readiness checks, a production container build path, and a
   Kubernetes deployment starter manifest.
+- Added payout signer HMAC timestamp freshness checks to reject replayed stale
+  or future signing requests.
 - Added signed payout transaction records and PostgreSQL persistence for exact
   signed bytes, expected signature, sequence, attempt, blockhash metadata, and
   submitted state before broadcast.

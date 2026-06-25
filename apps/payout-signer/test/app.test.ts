@@ -69,6 +69,32 @@ describe("payout signer app", () => {
       .expect(403);
   });
 
+  it("rejects stale and future HMAC timestamps", async () => {
+    const signer = await createKeyPairSignerFromPrivateKeyBytes(PRIVATE_KEY_BYTES);
+    const { app, body } = await createFixture({
+      fundingWallet: signer.address,
+      signatureToleranceSeconds: 60
+    });
+
+    await request(app)
+      .post("/v1/solana/payouts/sign")
+      .set(signHeaders(body, { timestamp: "2026-06-23T23:58:59.000Z" }))
+      .send(body)
+      .expect(401);
+
+    await request(app)
+      .post("/v1/solana/payouts/sign")
+      .set(signHeaders(body, { timestamp: "2026-06-24T00:01:01.000Z" }))
+      .send(body)
+      .expect(401);
+
+    await request(app)
+      .post("/v1/solana/payouts/sign")
+      .set(signHeaders(body, { timestamp: "not-a-timestamp" }))
+      .send(body)
+      .expect(401);
+  });
+
   it("rejects destination amount list tampering", async () => {
     const signer = await createKeyPairSignerFromPrivateKeyBytes(PRIVATE_KEY_BYTES);
     const { app, body } = await createFixture({ fundingWallet: signer.address });
@@ -272,6 +298,7 @@ describe("payout signer app", () => {
           }
         ]),
         SPLIT402_PAYOUT_SIGNER_SERVICE_PORT: "4999",
+        SPLIT402_PAYOUT_SIGNER_SERVICE_SIGNATURE_TOLERANCE_SECONDS: "120",
         SPLIT402_PAYOUT_SIGNER_SERVICE_PRIVATE_KEY_BASE64:
           Buffer.from(PRIVATE_KEY_BYTES).toString("base64")
       })
@@ -280,6 +307,7 @@ describe("payout signer app", () => {
         signerReference: "kms:env-payout",
         network: "solana:devnet",
         port: 4999,
+        signatureToleranceSeconds: 120,
         authKeys: [
           {
             keyId: "current",
@@ -300,6 +328,7 @@ describe("payout signer app", () => {
 async function createFixture(input: {
   fundingWallet: string;
   authKeys?: Parameters<typeof createPayoutSignerApp>[0]["authKeys"];
+  signatureToleranceSeconds?: number;
   auditSink?: Parameters<typeof createPayoutSignerApp>[0]["auditSink"];
 }) {
   const receipt = createSampleProtocolArtifacts().artifacts.receipt;
@@ -377,6 +406,9 @@ async function createFixture(input: {
       ? { sharedSecret: SHARED_SECRET }
       : { authKeys: input.authKeys }),
     ...(input.auditSink === undefined ? {} : { auditSink: input.auditSink }),
+    ...(input.signatureToleranceSeconds === undefined
+      ? {}
+      : { signatureToleranceSeconds: input.signatureToleranceSeconds }),
     now: () => new Date(TIMESTAMP),
     port: 4022,
     privateKeyBytes: PRIVATE_KEY_BYTES
@@ -386,14 +418,15 @@ async function createFixture(input: {
 
 function signHeaders(
   body: unknown,
-  options: { keyId?: string; sharedSecret?: string } = {}
+  options: { keyId?: string; sharedSecret?: string; timestamp?: string } = {}
 ) {
   const rawBody = JSON.stringify(body);
+  const timestamp = options.timestamp ?? TIMESTAMP;
   const digest = createHmac("sha256", options.sharedSecret ?? SHARED_SECRET)
-    .update(`${TIMESTAMP}.${rawBody}`)
+    .update(`${timestamp}.${rawBody}`)
     .digest("hex");
   return {
-    "x-split402-signature-timestamp": TIMESTAMP,
+    "x-split402-signature-timestamp": timestamp,
     "x-split402-signature": `v1=${digest}`,
     ...(options.keyId === undefined
       ? {}
