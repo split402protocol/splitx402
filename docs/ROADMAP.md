@@ -335,6 +335,11 @@ Deliverables:
 - MCP demo bundle;
 - webhook management.
 
+Current slice:
+
+- public merchant reliability profile endpoint that reports verified origins,
+  active receipt/webhook keys, active payout wallets, and discovery readiness.
+
 ## Later: Token Bonding And Atomic Settlement
 
 Architecture Milestones 6 and 7 remain intentionally later:

@@ -423,6 +423,11 @@ Deliverables:
 - MCP demo bundle;
 - webhook management.
 
+Current slice:
+
+- public merchant reliability profile endpoint with verified-origin,
+  receipt-key, webhook-key, payout-wallet, and discovery-readiness signals.
+
 Exit criteria:
 
 - an agent can discover a route, pay an API, and verify earnings without manual
