@@ -18,6 +18,9 @@ describe("Phase 6 evidence status", () => {
     expect(report.commands[0]?.command).toBe(
       "corepack pnpm phase6:evidence:bundle",
     );
+    expect(report.commands.map((item) => item.command)).toContain(
+      "corepack pnpm payout:finality:failover-drill && corepack pnpm phase6:rpc-failover",
+    );
     expect(report.nextActions).toContain(
       "Generate a bundle scaffold with corepack pnpm phase6:evidence:bundle.",
     );

@@ -1,0 +1,15 @@
+review_id:
+review_date:
+owners:
+staging_environment:
+drill_report_schema:
+drill_passed:
+primary_rpc_url:
+secondary_rpc_url:
+requested_rpc_urls:
+finality_status:
+finality_rpc_url:
+primary_rpc_unavailable_evidence:
+secondary_rpc_status_evidence:
+review_decision: no-go
+review_notes:

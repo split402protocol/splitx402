@@ -333,6 +333,14 @@ Generate the Phase 6 payout signer rollback drill record:
 corepack pnpm phase6:rollback-drill
 ```
 
+Generate the Phase 6 RPC failover review record after running the finality
+failover drill:
+
+```bash
+corepack pnpm payout:finality:failover-drill
+corepack pnpm phase6:rpc-failover
+```
+
 List the Phase 6 evidence commands and check the current custody bundle:
 
 ```bash
@@ -460,6 +468,7 @@ The latest Devnet proof is recorded in
 - [Phase 6 key custody review template](docs/templates/phase6-key-custody-review.txt)
 - [Phase 6 rotation drill template](docs/templates/phase6-rotation-drill.txt)
 - [Phase 6 rollback drill template](docs/templates/phase6-rollback-drill.txt)
+- [Phase 6 RPC failover review template](docs/templates/phase6-rpc-failover-review.txt)
 - [Payout custody incident drill](docs/runbooks/payout-custody-incident-drill.md)
 - [Payout reconciliation runbook](docs/runbooks/payout-reconciliation.md)
 - [Payout signer deployment runbook](docs/runbooks/payout-signer-deployment.md)
