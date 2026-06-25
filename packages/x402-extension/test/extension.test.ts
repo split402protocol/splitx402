@@ -29,11 +29,15 @@ import {
   createSplit402ClientExtension,
   createSplit402ResourceServerExtension,
   type Split402CampaignConfig,
+  type Split402ServiceKeyProvider,
   type ValidatedSplit402Attribution
 } from "../src/index.js";
 
 const MERCHANT_SEED = hexToBytes(
   "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+);
+const NEXT_MERCHANT_SEED = hexToBytes(
+  "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf"
 );
 const REFERRER_SEED = hexToBytes(
   "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
@@ -193,6 +197,59 @@ describe("Split402 x402 extension", () => {
     expect(receipt.referrerCreditAtomic).toBe("2000");
     expect(receipt.routeId).toBe(ROUTE_ID);
     expect(verifySplit402Receipt(receipt, deriveEd25519PublicKey(MERCHANT_SEED))).toEqual({
+      ok: true,
+      errors: []
+    });
+  });
+
+  it("accepts offers signed before service-key rotation and signs receipts with the current key", async () => {
+    const receipts: Split402ReceiptV1[] = [];
+    let currentKey = {
+      kid: "kid_old",
+      privateSeed: MERCHANT_SEED
+    };
+    const publicKeys = new Map([
+      ["kid_old", deriveEd25519PublicKey(MERCHANT_SEED)],
+      ["kid_new", deriveEd25519PublicKey(NEXT_MERCHANT_SEED)]
+    ]);
+    const serviceKeyProvider: Split402ServiceKeyProvider = {
+      current: () => currentKey,
+      resolvePublicKey: (kid) => publicKeys.get(kid)
+    };
+    const extension = createSplit402ResourceServerExtension({
+      merchantId: MERCHANT_ID,
+      merchantOrigin: "http://localhost:4021",
+      serviceKeyProvider,
+      resolveCampaign: () => campaign(),
+      receiptSink: (receipt) => {
+        receipts.push(receipt);
+      },
+      now: () => new Date("2026-06-24T00:00:00Z")
+    });
+    const offer = await advertiseOffer(extension);
+    const paymentPayload = await createClientPaymentPayload(offer, createClaim());
+
+    currentKey = {
+      kid: "kid_new",
+      privateSeed: NEXT_MERCHANT_SEED
+    };
+
+    const verifyResult = await extension.hooks?.onBeforeVerify?.(
+      routeDeclaration(),
+      verifyContext(paymentPayload)
+    );
+    expect(verifyResult).toBeUndefined();
+
+    const settlementExtension = await extension.enrichSettlementResponse?.(
+      routeDeclaration(),
+      settleContext(paymentPayload)
+    );
+    const receipt = extractReceipt(settlementExtension);
+
+    expect(offer.kid).toBe("kid_old");
+    expect(receipt.kid).toBe("kid_new");
+    expect(receipts).toHaveLength(1);
+    expect(verifySplit402Receipt(receipt, deriveEd25519PublicKey(NEXT_MERCHANT_SEED))).toEqual({
       ok: true,
       errors: []
     });
