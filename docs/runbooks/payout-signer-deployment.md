@@ -114,6 +114,10 @@ The smoke check verifies health, readiness, metrics shape, signer reference and
 network consistency, and that endpoint responses do not expose configured signer
 secrets present in the local environment.
 
+Attach the smoke-check output to
+[`docs/checklists/phase6-custody-review.md`](../checklists/phase6-custody-review.md)
+before approving production payout custody.
+
 ## Rollback
 
 If signing fails after a deploy:
@@ -125,3 +129,6 @@ If signing fails after a deploy:
    transaction that might already have been broadcast.
 5. Confirm `/v1/metrics` rejection counts stop increasing before resuming batch
    creation.
+
+Use [`payout-custody-incident-drill.md`](payout-custody-incident-drill.md) to
+record rollback and revocation evidence.

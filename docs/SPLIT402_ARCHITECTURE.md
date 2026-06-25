@@ -39,6 +39,7 @@ vectors. The current repository has since ported and evolved the x402 extension,
 demo merchant, demo agent, agent SDK, control plane, merchant SDK, ledger, outbox
 workers, chain verification, and the first payout-engine boundaries, including
 payout lifecycle outbox/webhook events, local-dev signer wiring, remote signer
-client wiring, signer deployment artifacts, an unknown-outcome reconciliation
-queue, and referrer payout views. Dashboard and discovery, `$SPLIT` route
-bonding, and `split-exact` atomic settlement remain later milestones.
+client wiring, signer deployment artifacts, a custody review checklist, an
+unknown-outcome reconciliation queue, and referrer payout views. Dashboard and
+discovery, `$SPLIT` route bonding, and `split-exact` atomic settlement remain
+later milestones.
