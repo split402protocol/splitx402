@@ -339,6 +339,8 @@ Current slice:
 
 - public merchant reliability profile endpoint that reports verified origins,
   active receipt/webhook keys, active payout wallets, and discovery readiness.
+- referrer route listing endpoint that reuses route-search filters for
+  dashboard and discovery views.
 
 ## Later: Token Bonding And Atomic Settlement
 

@@ -94,6 +94,7 @@ POST /v1/payout-batches/:batchId/reconcile
 POST /v1/merchants/:merchantId/payout-batches
 GET  /v1/referrers/:referrerWallet/balances
 GET  /v1/referrers/:referrerWallet/payouts
+GET  /v1/referrers/:referrerWallet/routes
 ```
 
 ## Stores And Workers

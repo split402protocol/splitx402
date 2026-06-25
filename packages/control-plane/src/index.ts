@@ -2082,31 +2082,23 @@ export function createRouteRegistryRouter(
 
   router.get("/v1/routes/search", async (req, res, next) => {
     try {
-      const campaignId = readOptionalRouteQueryString(
-        req.query.campaignId,
-        "campaignId"
-      );
-      const referrerWallet = readOptionalRouteQueryString(
-        req.query.referrerWallet,
-        "referrerWallet"
-      );
-      const resourceOrigin = readOptionalRouteQueryString(
-        req.query.resourceOrigin,
-        "resourceOrigin"
-      );
-      const operationId = readOptionalRouteQueryString(
-        req.query.operationId,
-        "operationId"
-      );
-      const status = readOptionalRouteStatus(req.query.status);
-      const limit = readOptionalRouteSearchLimit(req.query.limit);
+      const routes = await routeRegistry.searchRoutes(readRouteSearchQuery(req));
+      res.json({ routes });
+    } catch (error) {
+      if (
+        !sendRouteRegistryError(res, error) &&
+        !sendMerchantRegistryError(res, error)
+      ) {
+        next(error);
+      }
+    }
+  });
+
+  router.get("/v1/referrers/:referrerWallet/routes", async (req, res, next) => {
+    try {
       const routes = await routeRegistry.searchRoutes({
-        ...(campaignId === undefined ? {} : { campaignId }),
-        ...(referrerWallet === undefined ? {} : { referrerWallet }),
-        ...(resourceOrigin === undefined ? {} : { resourceOrigin }),
-        ...(operationId === undefined ? {} : { operationId }),
-        ...(status === undefined ? {} : { status }),
-        ...(limit === undefined ? {} : { limit })
+        ...readRouteSearchQuery(req),
+        referrerWallet: readRouteParam(req.params.referrerWallet, "referrerWallet")
       });
       res.json({ routes });
     } catch (error) {
@@ -2157,6 +2149,42 @@ export function createRouteRegistryRouter(
   router.use(jsonErrorHandler);
 
   return router;
+}
+
+function readRouteSearchQuery(req: Request): {
+  campaignId?: string;
+  referrerWallet?: string;
+  resourceOrigin?: string;
+  operationId?: string;
+  status?: RouteStatus;
+  limit?: number;
+} {
+  const campaignId = readOptionalRouteQueryString(
+    req.query.campaignId,
+    "campaignId"
+  );
+  const referrerWallet = readOptionalRouteQueryString(
+    req.query.referrerWallet,
+    "referrerWallet"
+  );
+  const resourceOrigin = readOptionalRouteQueryString(
+    req.query.resourceOrigin,
+    "resourceOrigin"
+  );
+  const operationId = readOptionalRouteQueryString(
+    req.query.operationId,
+    "operationId"
+  );
+  const status = readOptionalRouteStatus(req.query.status);
+  const limit = readOptionalRouteSearchLimit(req.query.limit);
+  return {
+    ...(campaignId === undefined ? {} : { campaignId }),
+    ...(referrerWallet === undefined ? {} : { referrerWallet }),
+    ...(resourceOrigin === undefined ? {} : { resourceOrigin }),
+    ...(operationId === undefined ? {} : { operationId }),
+    ...(status === undefined ? {} : { status }),
+    ...(limit === undefined ? {} : { limit })
+  };
 }
 
 export function isReceiptIngestSource(value: unknown): value is ReceiptIngestSource {

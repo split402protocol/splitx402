@@ -427,6 +427,7 @@ Current slice:
 
 - public merchant reliability profile endpoint with verified-origin,
   receipt-key, webhook-key, payout-wallet, and discovery-readiness signals.
+- referrer route listing endpoint for dashboard and discovery views.
 
 Exit criteria:
 
