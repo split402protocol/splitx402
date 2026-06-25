@@ -129,6 +129,23 @@ TCP/4022 ingress from pods labeled
 mesh or cloud firewall instead, attach equivalent policy evidence to
 `network_policy_record` in the Phase 6 custody evidence bundle.
 
+You can generate the correctly shaped network policy review with:
+
+```bash
+SPLIT402_PHASE6_NETWORK_POLICY_REVIEW_ID=phase6-network-policy-001 \
+SPLIT402_PHASE6_NETWORK_POLICY_REVIEWERS="security, operations" \
+SPLIT402_PHASE6_NETWORK_POLICY_STAGING_ENVIRONMENT=split402-staging \
+SPLIT402_PHASE6_NETWORK_POLICY_NAME=split402-payout-signer-private-ingress \
+SPLIT402_PHASE6_NETWORK_POLICY_SIGNER_POD_SELECTOR="app.kubernetes.io/name=split402-payout-signer" \
+SPLIT402_PHASE6_NETWORK_POLICY_ALLOWED_INGRESS_SELECTOR="app.kubernetes.io/name=split402-control-plane" \
+SPLIT402_PHASE6_NETWORK_POLICY_ALLOWED_PORT=4022 \
+SPLIT402_PHASE6_NETWORK_POLICY_SERVICE_TYPE=ClusterIP \
+SPLIT402_PHASE6_NETWORK_POLICY_APPLIED_EVIDENCE="attached: kubectl-get-networkpolicy.yaml" \
+SPLIT402_PHASE6_NETWORK_POLICY_DENIED_PUBLIC_INGRESS_EVIDENCE="attached: public ingress denied from test pod" \
+SPLIT402_PHASE6_NETWORK_POLICY_CLUSTER_OR_MESH_EVIDENCE="attached: cluster-network-policy-enforcement.md" \
+  corepack pnpm phase6:network-policy
+```
+
 ## Verify
 
 Check liveness:

@@ -267,6 +267,9 @@ Current slice:
 - payout signer staging smoke checks for health, readiness, metrics, and
   secret-exposure validation;
 - private signer ingress network policy starter for custody evidence;
+- Phase 6 private signer networking review generation for signer selector,
+  control-plane ingress, private service type, and denied public-ingress
+  evidence;
 - machine-checkable signer policy evidence fields and signer policy review
   template;
 - machine-checkable image provenance, emergency signer-auth revocation, payout

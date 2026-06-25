@@ -9,7 +9,7 @@ all required gates are approved.
 | Gate | Required evidence | Status |
 | --- | --- | --- |
 | Signer image provenance | `corepack pnpm phase6:image-provenance` output with `source_commit`, immutable image digests, `signer_image_build_command`, `signer_image_dependency_audit_output`, and attached image provenance review. | Pending |
-| Private signer networking | `network_policy_record` proving only the control plane can reach the signer, such as `deploy/payout-signer/kubernetes.yaml` plus applied-cluster evidence. | Pending |
+| Private signer networking | `corepack pnpm phase6:network-policy` output proving only the control plane can reach the signer, the service is private, and public ingress is denied or blocked. | Pending |
 | Signer readiness | `corepack pnpm signer:payout:smoke` output from staging. | Pending |
 | Secret exposure check | Smoke-check output plus log sample proving health, readiness, metrics, and audit logs do not expose shared secrets, private keys, or transaction bytes. | Pending |
 | HMAC key rotation | `corepack pnpm phase6:rotation-drill` output proving dual-active deploy, control-plane rotation, previous-key retirement, health, metrics, and audit-log evidence. | Pending |
