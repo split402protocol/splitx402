@@ -253,6 +253,46 @@ describe("control-plane HTTP API", () => {
     );
   });
 
+  it("refreshes wallet-auth sessions and rotates refresh tokens", async () => {
+    const { app } = createTestApp({ withAuth: true });
+    const challengeResponse = await request(app)
+      .post("/v1/auth/challenges")
+      .send({
+        wallet: OWNER_WALLET,
+        network: NETWORK,
+        purpose: "merchant-session"
+      })
+      .expect(201);
+    const signature = signEd25519Message(
+      new TextEncoder().encode(challengeResponse.body.challenge.message as string),
+      OWNER_SEED
+    ).signature;
+    const sessionResponse = await request(app)
+      .post("/v1/auth/sessions")
+      .send({
+        challengeId: challengeResponse.body.challenge.challengeId,
+        signature,
+        publicKey: OWNER_WALLET
+      })
+      .expect(201);
+
+    const refreshToken = sessionResponse.body.session.refreshToken as string;
+    const refreshedResponse = await request(app)
+      .post("/v1/auth/sessions/refresh")
+      .send({ refreshToken })
+      .expect(201);
+
+    expect(refreshedResponse.body.session.accessToken).toMatch(/^http-token-/u);
+    expect(refreshedResponse.body.session.refreshToken).toMatch(
+      /^http-refresh-token-/u
+    );
+    expect(refreshedResponse.body.session.refreshToken).not.toBe(refreshToken);
+    await request(app)
+      .post("/v1/auth/sessions/refresh")
+      .send({ refreshToken })
+      .expect(401);
+  });
+
   it("rejects merchant mutations from a non-owner wallet session", async () => {
     const bundle = createSampleProtocolArtifacts();
     const { app } = createTestApp({
@@ -645,8 +685,10 @@ function createAuthenticator(): WalletAuthenticator {
     now: () => new Date("2026-06-24T00:02:00Z"),
     challengeIdFactory: () => nextAuthId("chl", ++idSequence),
     sessionIdFactory: () => nextAuthId("ses", ++idSequence),
+    refreshTokenIdFactory: () => nextAuthId("rft", ++idSequence),
     nonceFactory: () => `nonce-${idSequence}`,
-    accessTokenFactory: () => `http-token-${idSequence}`
+    accessTokenFactory: () => `http-token-${idSequence}`,
+    refreshTokenFactory: () => `http-refresh-token-${idSequence}`
   });
 }
 
@@ -679,7 +721,7 @@ async function createAccessToken(
   return sessionResponse.body.session.accessToken as string;
 }
 
-function nextAuthId(prefix: "chl" | "ses", sequence: number): string {
+function nextAuthId(prefix: "chl" | "ses" | "rft", sequence: number): string {
   return `${prefix}_${sequence.toString(16).padStart(32, "0")}`;
 }
 

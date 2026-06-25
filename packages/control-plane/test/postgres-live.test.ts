@@ -213,6 +213,7 @@ describeLive("live PostgreSQL control-plane persistence", () => {
       "routes",
       "wallet_auth_challenges",
       "wallet_auth_sessions",
+      "wallet_auth_refresh_tokens",
       "payment_receipts",
       "commission_accruals",
       "ledger_transactions",
@@ -246,6 +247,7 @@ describeLive("live PostgreSQL control-plane persistence", () => {
       routes: 1,
       wallet_auth_challenges: 1,
       wallet_auth_sessions: 1,
+      wallet_auth_refresh_tokens: 1,
       payment_receipts: 1,
       commission_accruals: 1,
       ledger_transactions: 1,
@@ -261,8 +263,10 @@ function createAuthenticator(pool: Pool): WalletAuthenticator {
     now: () => new Date("2026-06-24T00:00:00Z"),
     challengeIdFactory: () => nextAuthId("chl", ++sequence),
     sessionIdFactory: () => nextAuthId("ses", ++sequence),
+    refreshTokenIdFactory: () => nextAuthId("rft", ++sequence),
     nonceFactory: () => `live-nonce-${sequence}`,
-    accessTokenFactory: () => `live-postgres-token-${sequence}`
+    accessTokenFactory: () => `live-postgres-token-${sequence}`,
+    refreshTokenFactory: () => `live-postgres-refresh-token-${sequence}`
   });
 }
 
@@ -313,7 +317,7 @@ function signUnsignedClaim(claim: UnsignedReferralClaim): ReferralClaimV1 {
   };
 }
 
-function nextAuthId(prefix: "chl" | "ses", sequence: number): string {
+function nextAuthId(prefix: "chl" | "ses" | "rft", sequence: number): string {
   return `${prefix}_${sequence.toString(16).padStart(32, "0")}`;
 }
 
