@@ -8,10 +8,10 @@ paying, losing allocations, or hiding funding deficits.
 
 Status: in progress. The payout engine now has preview, allocation, transaction
 planning, simulation, signer-policy checks, signed-byte persistence, broadcast
-submission, local-dev signer wiring, remote signer client wiring, finality
-monitoring, status rollup, idempotent ledger closure, and payout lifecycle
-outbox/webhook events, plus an unknown-outcome reconciliation queue and referrer
-payout views.
+submission, local-dev signer wiring, remote signer client wiring, signer
+appliance scaffold, finality monitoring, status rollup, idempotent ledger
+closure, and payout lifecycle outbox/webhook events, plus an unknown-outcome
+reconciliation queue and referrer payout views.
 
 ## What Changed
 
@@ -56,6 +56,10 @@ payout views.
   `SPLIT402_REMOTE_PAYOUT_SIGNER_*` environment variables, posts policy-checked
   signing requests to an isolated signer, and optionally authenticates requests
   with HMAC-SHA256 over `timestamp.body`.
+- Added `@split402/payout-signer`, an isolated signer appliance scaffold that
+  verifies HMAC requests, rechecks the visible payout policy surface, signs
+  Solana transactions with configured key material, and exposes
+  `/v1/solana/payouts/sign`.
 - Added signed payout transaction records and PostgreSQL persistence for exact
   signed bytes, expected signature, sequence, attempt, blockhash metadata, and
   submitted state before broadcast.
@@ -105,7 +109,7 @@ the merchant has enough funding.
 
 ## Remaining Milestone 4 Work
 
-- Production signer appliance integration.
+- Production signer appliance deployment.
 - Production payout custody and incident-response review.
 
 ## Acceptance Checks

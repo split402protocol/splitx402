@@ -1,0 +1,55 @@
+# @split402/payout-signer
+
+Isolated payout signer appliance scaffold for Split402 Phase 6.
+
+The service accepts policy-checked signing requests from the control plane,
+verifies the HMAC request envelope, rechecks the visible payout policy surface,
+signs the serialized Solana transaction with configured key material, and
+returns signed bytes plus the expected signature.
+
+## API
+
+```text
+GET  /v1/health
+POST /v1/solana/payouts/sign
+```
+
+Remote signer requests must use schema
+`split402.solana.remote_payout_sign_request.v1` and include:
+
+- `x-split402-signature-timestamp`
+- `x-split402-signature`
+
+The signature is `v1=<hex>` where the hex value is HMAC-SHA256 over
+`timestamp.body` using `SPLIT402_PAYOUT_SIGNER_SERVICE_SHARED_SECRET`.
+
+## Configuration
+
+```bash
+SPLIT402_PAYOUT_SIGNER_SERVICE_PORT=4022
+SPLIT402_PAYOUT_SIGNER_SERVICE_REF=kms:split402-devnet-payout
+SPLIT402_PAYOUT_SIGNER_SERVICE_NETWORK=solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1
+SPLIT402_PAYOUT_SIGNER_SERVICE_EXPECTED_FUNDING_WALLET=<funding-wallet>
+SPLIT402_PAYOUT_SIGNER_SERVICE_SHARED_SECRET=<shared-secret>
+SPLIT402_PAYOUT_SIGNER_SERVICE_PRIVATE_KEY_BASE64=<32-byte-private-key>
+```
+
+Exactly one key source must be set:
+
+- `SPLIT402_PAYOUT_SIGNER_SERVICE_PRIVATE_KEY_BASE64`
+- `SPLIT402_PAYOUT_SIGNER_SERVICE_SECRET_KEY_BASE64`
+- `SPLIT402_PAYOUT_SIGNER_SERVICE_SECRET_KEY_JSON`
+
+## Commands
+
+```bash
+corepack pnpm --filter @split402/payout-signer dev
+corepack pnpm --filter @split402/payout-signer test
+corepack pnpm --filter @split402/payout-signer typecheck
+corepack pnpm --filter @split402/payout-signer build
+```
+
+## Status
+
+Public-alpha scaffold. Do not use for mainnet custody without production key
+management, deployment hardening, monitoring, and an incident-response drill.
