@@ -1,17 +1,21 @@
 import {
+  ReferralClaimV1Schema,
   Split402ReceiptV1Schema,
   hashProtocolObject,
   verifySplit402ReceiptObject,
+  type ReferralClaimV1,
   type Split402ReceiptV1
 } from "@split402/protocol";
 import express from "express";
 import type { NextFunction, Request, Response, Router } from "express";
+import { Pool, type PoolConfig } from "pg";
 
 import {
+  WalletAuthenticator,
   isWalletAuthRejectedError,
   isWalletAuthValidationError,
   type AuthenticatedWalletSession,
-  type WalletAuthenticator,
+  type WalletAuthenticatorOptions,
   type WalletAuthPurpose
 } from "./auth.js";
 import {
@@ -20,11 +24,13 @@ import {
   isCampaignRegistryValidationError,
   type CampaignCommissionBase,
   type CampaignOperation,
+  type CampaignProfile,
   type CampaignRegistry,
   type CampaignTermsInput
 } from "./campaigns.js";
 import { isReceiptIngestionPersistenceConflict } from "./errors.js";
 import {
+  createMerchantReceiptKeyResolver,
   MerchantRegistryValidationError,
   isMerchantRegistryConflict,
   isMerchantRegistryValidationError,
@@ -32,19 +38,60 @@ import {
   type MerchantKeyPurpose,
   type MerchantOriginStatus,
   type MerchantOriginVerificationMethod,
+  type MerchantPayoutWalletStatus,
   type MerchantRegistry,
   type MerchantStatus
 } from "./merchants.js";
+import {
+  RouteRegistryValidationError,
+  isRouteRegistryConflictError,
+  isRouteRegistryValidationError,
+  type RouteOperationScope,
+  type RouteRegistry,
+  type RouteStatus
+} from "./routes.js";
+import {
+  PostgresCampaignRegistry,
+  PostgresMerchantRegistry,
+  PostgresOutboxEventStore,
+  PostgresReceiptIngestionStore,
+  PostgresRouteRegistry,
+  PostgresWalletAuthStore,
+  type PostgresPool
+} from "./postgres.js";
+import {
+  PayoutBatchConflictError,
+  createPayoutBatchPlan,
+  createPayoutPreview,
+  filterPayoutEligibleAccruals,
+  isPayoutBatchConflictError,
+  isPayoutBatchValidationError,
+  isPayoutPreviewValidationError,
+  type ListPayoutEligibleAccrualsInput,
+  type PayoutAccrualStore,
+  type PayoutBatchRecord,
+  type PayoutBatchStore,
+  type PayoutFundingBalance
+} from "./payouts.js";
 
 export type ReceiptIngestSource = "buyer" | "merchant" | "relay" | "unknown";
 export type ReceiptVerificationState =
   | "signature_verified"
   | "pending_chain_verification";
-export type AccrualStatus = "pending_chain_verification" | "available" | "held";
+export type AccrualStatus =
+  | "pending_chain_verification"
+  | "available"
+  | "held"
+  | "allocated";
 export type LedgerAccountType =
   | "merchant_commission_liability"
   | "referrer_payable"
   | "protocol_fee_payable";
+export type OutboxEventStatus =
+  | "pending"
+  | "processing"
+  | "delivered"
+  | "dead_letter";
 
 export interface ReceiptRecord {
   id: string;
@@ -67,6 +114,7 @@ export interface CommissionAccrual {
   asset: string;
   amountAtomic: string;
   status: AccrualStatus;
+  availableAt?: string;
   createdAt: string;
 }
 
@@ -86,6 +134,65 @@ export interface LedgerEntry {
   accountReference: string;
   asset: string;
   amountAtomic: string;
+}
+
+export interface OutboxEventRecord {
+  id: string;
+  eventType: string;
+  aggregateType: string;
+  aggregateId: string;
+  payload: Record<string, unknown>;
+  status: OutboxEventStatus;
+  attempts: number;
+  availableAt: string;
+  lockedAt?: string;
+  lastError?: string;
+  createdAt: string;
+}
+
+export interface ClaimNextOutboxEventInput {
+  eventTypes?: string[];
+  now?: string;
+}
+
+export interface MarkOutboxEventDeliveredInput {
+  eventId: string;
+}
+
+export interface MarkOutboxEventFailedInput {
+  eventId: string;
+  lastError: string;
+  availableAt: string;
+  deadLetter?: boolean;
+}
+
+export interface OutboxEventStore {
+  getEvent(
+    eventId: string
+  ): Promise<OutboxEventRecord | undefined> | OutboxEventRecord | undefined;
+  claimNext(
+    input?: ClaimNextOutboxEventInput
+  ): Promise<OutboxEventRecord | undefined> | OutboxEventRecord | undefined;
+  markDelivered(
+    input: MarkOutboxEventDeliveredInput
+  ): Promise<OutboxEventRecord | undefined> | OutboxEventRecord | undefined;
+  markFailed(
+    input: MarkOutboxEventFailedInput
+  ): Promise<OutboxEventRecord | undefined> | OutboxEventRecord | undefined;
+}
+
+export interface MarkReceiptChainVerifiedInput {
+  receiptId: string;
+  verifiedAt: string;
+}
+
+export interface ReceiptChainVerificationStore {
+  getReceiptForChainVerification(
+    receiptId: string
+  ): Promise<ReceiptIngestionSnapshot | undefined> | ReceiptIngestionSnapshot | undefined;
+  markReceiptChainVerified(
+    input: MarkReceiptChainVerifiedInput
+  ): Promise<ReceiptIngestionSnapshot | undefined> | ReceiptIngestionSnapshot | undefined;
 }
 
 export interface ReceiptIngestionSnapshot {
@@ -147,11 +254,13 @@ export interface ReceiptIngestionStore {
 
 const RECEIPT_INGEST_SOURCES = ["buyer", "merchant", "relay", "unknown"] as const;
 
-export class InMemoryReceiptIngestionStore implements ReceiptIngestionStore {
+export class InMemoryReceiptIngestionStore
+  implements ReceiptIngestionStore, PayoutAccrualStore, PayoutBatchStore {
   private readonly receiptsById = new Map<string, ReceiptIngestionSnapshot>();
   private readonly receiptIdByHash = new Map<`sha256:${string}`, string>();
   private readonly receiptIdByPaymentId = new Map<string, string>();
   private readonly receiptIdBySettlementTx = new Map<string, string>();
+  private readonly payoutBatchesById = new Map<string, PayoutBatchRecord>();
 
   getByReceiptId(receiptId: string): ReceiptIngestionSnapshot | undefined {
     return this.receiptsById.get(receiptId);
@@ -189,6 +298,59 @@ export class InMemoryReceiptIngestionStore implements ReceiptIngestionStore {
     return Array.from(this.receiptsById.values())
       .map((snapshot) => snapshot.accrual)
       .filter((accrual): accrual is CommissionAccrual => accrual !== undefined);
+  }
+
+  listPayoutEligibleAccruals(
+    input: ListPayoutEligibleAccrualsInput
+  ): CommissionAccrual[] {
+    return filterPayoutEligibleAccruals(this.listAccruals(), input);
+  }
+
+  createPayoutBatch(
+    input: Parameters<PayoutBatchStore["createPayoutBatch"]>[0]
+  ): PayoutBatchRecord {
+    const batch = createPayoutBatchPlan(input);
+    const selectedAccrualIds = new Set(
+      batch.items.flatMap((item) =>
+        item.allocations.map((allocation) => allocation.accrualId)
+      )
+    );
+    const snapshotsToAllocate: ReceiptIngestionSnapshot[] = [];
+    for (const snapshot of this.receiptsById.values()) {
+      if (
+        snapshot.accrual !== undefined &&
+        selectedAccrualIds.has(snapshot.accrual.id)
+      ) {
+        if (snapshot.accrual.status !== "available") {
+          throw new PayoutBatchConflictError(
+            `accrual is not available for payout: ${snapshot.accrual.id}`
+          );
+        }
+        snapshotsToAllocate.push(snapshot);
+      }
+    }
+    if (snapshotsToAllocate.length !== selectedAccrualIds.size) {
+      throw new PayoutBatchConflictError("one or more selected accruals were not found");
+    }
+
+    for (const snapshot of snapshotsToAllocate) {
+      if (snapshot.accrual === undefined) {
+        continue;
+      }
+      this.save({
+        ...snapshot,
+        accrual: {
+          ...snapshot.accrual,
+          status: "allocated"
+        }
+      });
+    }
+    this.payoutBatchesById.set(batch.id, batch);
+    return batch;
+  }
+
+  getPayoutBatch(batchId: string): PayoutBatchRecord | undefined {
+    return this.payoutBatchesById.get(batchId);
   }
 }
 
@@ -403,6 +565,9 @@ export interface ControlPlaneAppOptions {
   ingestor: ReceiptIngestor;
   merchantRegistry?: MerchantRegistry;
   campaignRegistry?: CampaignRegistry;
+  routeRegistry?: RouteRegistry;
+  payoutAccrualStore?: PayoutAccrualStore;
+  payoutBatchStore?: PayoutBatchStore;
   auth?: ControlPlaneAuthOptions;
   jsonLimit?: string;
 }
@@ -410,6 +575,113 @@ export interface ControlPlaneAppOptions {
 export interface ControlPlaneAuthOptions {
   authenticator: WalletAuthenticator;
   requireMerchantAuth?: boolean;
+}
+
+export type ControlPlaneRuntimeAuthPolicy = "disabled" | "optional" | "required";
+
+export interface CreateControlPlaneRuntimeOptions {
+  db: PostgresPool;
+  authPolicy?: ControlPlaneRuntimeAuthPolicy;
+  close?: () => Promise<void> | void;
+  jsonLimit?: string;
+  walletAuth?: WalletAuthenticatorOptions;
+}
+
+export interface CreateControlPlaneRuntimeFromEnvOptions {
+  env?: NodeJS.ProcessEnv;
+  poolFactory?: (config: PoolConfig) => PostgresPool;
+  walletAuth?: WalletAuthenticatorOptions;
+}
+
+export interface ControlPlaneRuntime {
+  app: express.Express;
+  authPolicy: ControlPlaneRuntimeAuthPolicy;
+  campaignRegistry: PostgresCampaignRegistry;
+  close(): Promise<void>;
+  db: PostgresPool;
+  ingestor: ReceiptIngestor;
+  merchantRegistry: PostgresMerchantRegistry;
+  outboxStore: PostgresOutboxEventStore;
+  receiptStore: PostgresReceiptIngestionStore;
+  routeRegistry: PostgresRouteRegistry;
+  authenticator?: WalletAuthenticator;
+}
+
+export function createControlPlaneRuntime(
+  options: CreateControlPlaneRuntimeOptions
+): ControlPlaneRuntime {
+  const authPolicy = readRuntimeAuthPolicy(options.authPolicy ?? "required");
+  const merchantRegistry = new PostgresMerchantRegistry(options.db);
+  const campaignRegistry = new PostgresCampaignRegistry(options.db);
+  const routeRegistry = new PostgresRouteRegistry(options.db);
+  const receiptStore = new PostgresReceiptIngestionStore(options.db);
+  const outboxStore = new PostgresOutboxEventStore(options.db);
+  const ingestor = new ReceiptIngestor(receiptStore, {
+    resolveMerchantPublicKey: createMerchantReceiptKeyResolver(merchantRegistry)
+  });
+  const authenticator =
+    authPolicy === "disabled"
+      ? undefined
+      : new WalletAuthenticator(
+          new PostgresWalletAuthStore(options.db),
+          options.walletAuth
+        );
+  const app = createControlPlaneApp({
+    ingestor,
+    merchantRegistry,
+    campaignRegistry,
+    routeRegistry,
+    payoutAccrualStore: receiptStore,
+    payoutBatchStore: receiptStore,
+    ...(options.jsonLimit === undefined ? {} : { jsonLimit: options.jsonLimit }),
+    ...(authenticator === undefined
+      ? {}
+      : {
+          auth: {
+            authenticator,
+            requireMerchantAuth: authPolicy === "required"
+          }
+        })
+  });
+
+  return {
+    app,
+    authPolicy,
+    db: options.db,
+    ingestor,
+    merchantRegistry,
+    campaignRegistry,
+    routeRegistry,
+    receiptStore,
+    outboxStore,
+    ...(authenticator === undefined ? {} : { authenticator }),
+    close: async () => {
+      await options.close?.();
+    }
+  };
+}
+
+export function createControlPlaneRuntimeFromEnv(
+  options: CreateControlPlaneRuntimeFromEnvOptions = {}
+): ControlPlaneRuntime {
+  const env = options.env ?? process.env;
+  const pool = createRuntimePool(env, options.poolFactory);
+  return createControlPlaneRuntime({
+    db: pool,
+    authPolicy: readRuntimeAuthPolicy(
+      env.SPLIT402_CONTROL_PLANE_AUTH_POLICY ?? "required"
+    ),
+    ...(env.SPLIT402_CONTROL_PLANE_JSON_LIMIT === undefined
+      ? {}
+      : { jsonLimit: env.SPLIT402_CONTROL_PLANE_JSON_LIMIT }),
+    walletAuth: {
+      ...readWalletAuthEnvOptions(env),
+      ...options.walletAuth
+    },
+    close: async () => {
+      await closeRuntimePool(pool);
+    }
+  });
 }
 
 export function createControlPlaneApp(
@@ -435,6 +707,12 @@ export function createControlPlaneApp(
   }
   if (options.campaignRegistry !== undefined) {
     app.use(createCampaignRegistryRouter(options.campaignRegistry, options));
+  }
+  if (options.routeRegistry !== undefined) {
+    app.use(createRouteRegistryRouter(options.routeRegistry, options));
+  }
+  if (options.payoutAccrualStore !== undefined) {
+    app.use(createPayoutRouter(options.payoutAccrualStore, options));
   }
 
   app.use((_req, res) => {
@@ -499,6 +777,20 @@ export function createWalletAuthRouter(
     }
   });
 
+  router.post("/v1/auth/sessions/refresh", async (req, res, next) => {
+    try {
+      const body = requireJsonObject(req.body);
+      const session = await authenticator.refreshSession({
+        refreshToken: readRequiredString(body.refreshToken, "refreshToken")
+      });
+      res.status(201).json({ session });
+    } catch (error) {
+      if (!sendWalletAuthError(res, error) && !sendMerchantRegistryError(res, error)) {
+        next(error);
+      }
+    }
+  });
+
   router.use(jsonErrorHandler);
 
   return router;
@@ -539,6 +831,180 @@ export function createReceiptIngestionRouter(
       res.status(result.statusCode).json(result);
     } catch (error) {
       next(error);
+    }
+  });
+
+  router.use(jsonErrorHandler);
+
+  return router;
+}
+
+export function createPayoutRouter(
+  payoutAccrualStore: PayoutAccrualStore,
+  options: Pick<
+    ControlPlaneAppOptions,
+    "auth" | "jsonLimit" | "merchantRegistry" | "payoutBatchStore"
+  > = {}
+): Router {
+  const router = express.Router();
+  router.use(express.json({ limit: options.jsonLimit ?? "128kb" }));
+
+  router.post("/v1/merchants/:merchantId/payouts/preview", async (req, res, next) => {
+    try {
+      const merchantId = readRouteParam(req.params.merchantId, "merchantId");
+      const session = await requireMerchantOwnerForMerchantId(
+        req,
+        res,
+        options,
+        merchantId
+      );
+      if (session === undefined && isMerchantAuthRequired(options)) {
+        return;
+      }
+
+      const body = readJsonObject(req.body) ?? {};
+      const asset = readOptionalString(body.asset, "asset");
+      const campaignId = readOptionalString(body.campaignId, "campaignId");
+      const routeId = readOptionalString(body.routeId, "routeId");
+      const now = readOptionalString(body.now, "now") ?? new Date().toISOString();
+      const maxAccruals = readOptionalPositiveInteger(
+        body.maxAccruals,
+        "maxAccruals"
+      );
+      const maxRecipients = readOptionalPositiveInteger(
+        body.maxRecipients,
+        "maxRecipients"
+      );
+      const minimumPayoutAmountAtomic = readOptionalString(
+        body.minimumPayoutAmountAtomic,
+        "minimumPayoutAmountAtomic"
+      );
+      const fundingBalances = readPayoutFundingBalances(body.fundingBalances);
+      const accruals = await payoutAccrualStore.listPayoutEligibleAccruals({
+        merchantId,
+        now,
+        ...(asset === undefined ? {} : { asset }),
+        ...(campaignId === undefined ? {} : { campaignId }),
+        ...(routeId === undefined ? {} : { routeId }),
+        ...(maxAccruals === undefined ? {} : { limit: maxAccruals })
+      });
+      const preview = createPayoutPreview({
+        merchantId,
+        accruals,
+        now,
+        ...(minimumPayoutAmountAtomic === undefined
+          ? {}
+          : { minimumPayoutAmountAtomic }),
+        ...(maxRecipients === undefined ? {} : { maxRecipients }),
+        ...(fundingBalances === undefined ? {} : { fundingBalances })
+      });
+      res.json({ preview });
+    } catch (error) {
+      if (
+        !sendPayoutPreviewError(res, error) &&
+        !sendMerchantRegistryError(res, error)
+      ) {
+        next(error);
+      }
+    }
+  });
+
+  router.post("/v1/merchants/:merchantId/payout-batches", async (req, res, next) => {
+    try {
+      const merchantId = readRouteParam(req.params.merchantId, "merchantId");
+      const session = await requireMerchantOwnerForMerchantId(
+        req,
+        res,
+        options,
+        merchantId
+      );
+      if (session === undefined && isMerchantAuthRequired(options)) {
+        return;
+      }
+      if (options.merchantRegistry === undefined) {
+        res.status(500).json({
+          error: "internal_server_error",
+          message: "merchant registry is required for payout batch creation"
+        });
+        return;
+      }
+      if (options.payoutBatchStore === undefined) {
+        res.status(500).json({
+          error: "internal_server_error",
+          message: "payout batch store is required for payout batch creation"
+        });
+        return;
+      }
+
+      const body = readJsonObject(req.body) ?? {};
+      const payoutWalletId = readRequiredString(
+        body.payoutWalletId,
+        "payoutWalletId"
+      );
+      const profile = await options.merchantRegistry.getMerchantProfile(merchantId);
+      if (profile === undefined) {
+        res.status(404).json({ error: "merchant_not_found" });
+        return;
+      }
+      const payoutWallet = profile.payoutWallets.find(
+        (wallet) => wallet.id === payoutWalletId
+      );
+      if (payoutWallet === undefined) {
+        res.status(404).json({ error: "merchant_payout_wallet_not_found" });
+        return;
+      }
+      if (payoutWallet.status !== "active") {
+        res.status(409).json({
+          error: "payout_wallet_not_active",
+          message: `merchant payout wallet is ${payoutWallet.status}`
+        });
+        return;
+      }
+
+      const campaignId = readOptionalString(body.campaignId, "campaignId");
+      const routeId = readOptionalString(body.routeId, "routeId");
+      const now = readOptionalString(body.now, "now") ?? new Date().toISOString();
+      const maxAccruals = readOptionalPositiveInteger(
+        body.maxAccruals,
+        "maxAccruals"
+      );
+      const maxRecipients = readOptionalPositiveInteger(
+        body.maxRecipients,
+        "maxRecipients"
+      );
+      const minimumPayoutAmountAtomic = readOptionalString(
+        body.minimumPayoutAmountAtomic,
+        "minimumPayoutAmountAtomic"
+      );
+      const accruals = await payoutAccrualStore.listPayoutEligibleAccruals({
+        merchantId,
+        asset: payoutWallet.asset,
+        now,
+        ...(campaignId === undefined ? {} : { campaignId }),
+        ...(routeId === undefined ? {} : { routeId }),
+        ...(maxAccruals === undefined ? {} : { limit: maxAccruals })
+      });
+      const batch = await options.payoutBatchStore.createPayoutBatch({
+        merchantId,
+        payoutWalletId,
+        network: payoutWallet.network,
+        asset: payoutWallet.asset,
+        accruals,
+        now,
+        ...(minimumPayoutAmountAtomic === undefined
+          ? {}
+          : { minimumPayoutAmountAtomic }),
+        ...(maxRecipients === undefined ? {} : { maxRecipients })
+      });
+      res.status(201).json({ batch });
+    } catch (error) {
+      if (
+        !sendPayoutBatchError(res, error) &&
+        !sendPayoutPreviewError(res, error) &&
+        !sendMerchantRegistryError(res, error)
+      ) {
+        next(error);
+      }
     }
   });
 
@@ -695,6 +1161,40 @@ export function createMerchantRegistryRouter(
         return;
       }
       res.json({ key });
+    } catch (error) {
+      if (!sendMerchantRegistryError(res, error)) {
+        next(error);
+      }
+    }
+  });
+
+  router.post("/v1/merchants/:merchantId/payout-wallets", async (req, res, next) => {
+    try {
+      const session = await requireMerchantOwnerSession(
+        req,
+        res,
+        options,
+        merchantRegistry
+      );
+      if (session === undefined && isMerchantAuthRequired(options)) {
+        return;
+      }
+      const body = requireJsonObject(req.body);
+      const id = readOptionalString(body.id, "id");
+      const status = readOptionalMerchantPayoutWalletStatus(body.status);
+      const payoutWallet = await merchantRegistry.addPayoutWallet({
+        merchantId: readRouteParam(req.params.merchantId, "merchantId"),
+        network: readRequiredString(body.network, "network"),
+        wallet: readRequiredString(body.wallet, "wallet"),
+        asset: readRequiredString(body.asset, "asset"),
+        signerReference: readRequiredString(
+          body.signerReference,
+          "signerReference"
+        ),
+        ...(id === undefined ? {} : { id }),
+        ...(status === undefined ? {} : { status })
+      });
+      res.status(201).json({ payoutWallet });
     } catch (error) {
       if (!sendMerchantRegistryError(res, error)) {
         next(error);
@@ -909,6 +1409,260 @@ export function createCampaignRegistryRouter(
   return router;
 }
 
+export function createRouteRegistryRouter(
+  routeRegistry: RouteRegistry,
+  options: Pick<
+    ControlPlaneAppOptions,
+    "auth" | "campaignRegistry" | "jsonLimit" | "merchantRegistry"
+  > = {}
+): Router {
+  const router = express.Router();
+  router.use(express.json({ limit: options.jsonLimit ?? "128kb" }));
+
+  router.post("/v1/routes/drafts", async (req, res, next) => {
+    try {
+      const campaignRegistry = requireRouteCampaignRegistry(options);
+      const body = requireJsonObject(req.body);
+      const campaign = await loadActiveCampaignForRoute(
+        campaignRegistry,
+        readRequiredString(body.campaignId, "campaignId")
+      );
+      const resourceOrigin =
+        readOptionalString(body.resourceOrigin, "resourceOrigin") ??
+        campaign.current.terms.resourceOrigin;
+      const operationIds =
+        readOptionalRouteOperationScope(body.operationIds) ?? ["*"];
+      assertRouteScopeMatchesCampaign(campaign, resourceOrigin, operationIds);
+
+      const id = readOptionalString(body.id, "id");
+      const issuedAt = readOptionalString(body.issuedAt, "issuedAt");
+      const nonce = readOptionalString(body.nonce, "nonce");
+      const metadataHash = readOptionalSha256Hash(body.metadataHash, "metadataHash");
+      const campaignVersionMin =
+        readOptionalPositiveInteger(
+          body.campaignVersionMin,
+          "campaignVersionMin"
+        ) ?? campaign.currentVersion;
+      if (campaignVersionMin > campaign.currentVersion) {
+        throw new RouteRegistryValidationError(
+          "route draft requires a newer campaign version"
+        );
+      }
+      const draft = await routeRegistry.createRouteDraft({
+        ...(id === undefined ? {} : { id }),
+        campaignId: campaign.id,
+        campaignVersionMin,
+        referrerWallet: readRequiredString(body.referrerWallet, "referrerWallet"),
+        payoutWallet: readRequiredString(body.payoutWallet, "payoutWallet"),
+        resourceOrigin,
+        operationIds,
+        ...(issuedAt === undefined ? {} : { issuedAt }),
+        expiresAt: readRequiredString(body.expiresAt, "expiresAt"),
+        ...(nonce === undefined ? {} : { nonce }),
+        ...(metadataHash === undefined ? {} : { metadataHash })
+      });
+      res.status(201).json({ draft });
+    } catch (error) {
+      if (
+        !sendRouteRegistryError(res, error) &&
+        !sendCampaignRegistryError(res, error) &&
+        !sendMerchantRegistryError(res, error)
+      ) {
+        next(error);
+      }
+    }
+  });
+
+  router.post("/v1/routes", async (req, res, next) => {
+    try {
+      const campaignRegistry = requireRouteCampaignRegistry(options);
+      const body = requireJsonObject(req.body);
+      const claim = readReferralClaim(body.claim);
+      const campaign = await loadActiveCampaignForRoute(
+        campaignRegistry,
+        claim.campaignId
+      );
+      assertRouteScopeMatchesCampaign(
+        campaign,
+        claim.resourceOrigin,
+        claim.operationIds
+      );
+      if (claim.campaignVersionMin > campaign.currentVersion) {
+        throw new RouteRegistryValidationError(
+          "route claim requires a newer campaign version"
+        );
+      }
+
+      const route = await routeRegistry.activateRoute({ claim });
+      res.status(201).json({ route });
+    } catch (error) {
+      if (
+        !sendRouteRegistryError(res, error) &&
+        !sendCampaignRegistryError(res, error) &&
+        !sendMerchantRegistryError(res, error)
+      ) {
+        next(error);
+      }
+    }
+  });
+
+  router.post("/v1/routes/:routeId/suspend", async (req, res, next) => {
+    try {
+      const routeId = readRouteParam(req.params.routeId, "routeId");
+      const route = await routeRegistry.getRoute(routeId);
+      if (route === undefined) {
+        res.status(404).json({ error: "route_not_found" });
+        return;
+      }
+
+      if (isMerchantAuthRequired(options)) {
+        const campaignRegistry = requireRouteCampaignRegistry(options);
+        const campaign = await campaignRegistry.getCampaign(route.campaignId);
+        if (campaign === undefined) {
+          res.status(404).json({ error: "campaign_not_found" });
+          return;
+        }
+        const session = await requireMerchantOwnerForMerchantId(
+          req,
+          res,
+          options,
+          campaign.merchantId
+        );
+        if (session === undefined) {
+          return;
+        }
+      }
+
+      const suspended = await routeRegistry.suspendRoute({ routeId });
+      if (suspended === undefined) {
+        res.status(404).json({ error: "route_not_found" });
+        return;
+      }
+      res.json({ route: suspended });
+    } catch (error) {
+      if (
+        !sendRouteRegistryError(res, error) &&
+        !sendCampaignRegistryError(res, error) &&
+        !sendMerchantRegistryError(res, error)
+      ) {
+        next(error);
+      }
+    }
+  });
+
+  router.post("/v1/routes/:routeId/rotate-payout", async (req, res, next) => {
+    try {
+      const routeId = readRouteParam(req.params.routeId, "routeId");
+      const campaignRegistry = requireRouteCampaignRegistry(options);
+      const body = requireJsonObject(req.body);
+      const claim = readReferralClaim(body.claim);
+      const campaign = await loadActiveCampaignForRoute(
+        campaignRegistry,
+        claim.campaignId
+      );
+      assertRouteScopeMatchesCampaign(
+        campaign,
+        claim.resourceOrigin,
+        claim.operationIds
+      );
+      if (claim.campaignVersionMin > campaign.currentVersion) {
+        throw new RouteRegistryValidationError(
+          "route claim requires a newer campaign version"
+        );
+      }
+
+      const route = await routeRegistry.rotateRoutePayout({ routeId, claim });
+      res.status(201).json({ route });
+    } catch (error) {
+      if (
+        !sendRouteRegistryError(res, error) &&
+        !sendCampaignRegistryError(res, error) &&
+        !sendMerchantRegistryError(res, error)
+      ) {
+        next(error);
+      }
+    }
+  });
+
+  router.get("/v1/routes/search", async (req, res, next) => {
+    try {
+      const campaignId = readOptionalRouteQueryString(
+        req.query.campaignId,
+        "campaignId"
+      );
+      const referrerWallet = readOptionalRouteQueryString(
+        req.query.referrerWallet,
+        "referrerWallet"
+      );
+      const resourceOrigin = readOptionalRouteQueryString(
+        req.query.resourceOrigin,
+        "resourceOrigin"
+      );
+      const operationId = readOptionalRouteQueryString(
+        req.query.operationId,
+        "operationId"
+      );
+      const status = readOptionalRouteStatus(req.query.status);
+      const limit = readOptionalRouteSearchLimit(req.query.limit);
+      const routes = await routeRegistry.searchRoutes({
+        ...(campaignId === undefined ? {} : { campaignId }),
+        ...(referrerWallet === undefined ? {} : { referrerWallet }),
+        ...(resourceOrigin === undefined ? {} : { resourceOrigin }),
+        ...(operationId === undefined ? {} : { operationId }),
+        ...(status === undefined ? {} : { status }),
+        ...(limit === undefined ? {} : { limit })
+      });
+      res.json({ routes });
+    } catch (error) {
+      if (
+        !sendRouteRegistryError(res, error) &&
+        !sendMerchantRegistryError(res, error)
+      ) {
+        next(error);
+      }
+    }
+  });
+
+  router.get("/v1/routes/:routeId/versions", async (req, res, next) => {
+    try {
+      const routeId = readRouteParam(req.params.routeId, "routeId");
+      const versions = await routeRegistry.listRouteVersions(routeId);
+      if (versions.length === 0) {
+        const route = await routeRegistry.getRoute(routeId);
+        if (route === undefined) {
+          res.status(404).json({ error: "route_not_found" });
+          return;
+        }
+      }
+      res.json({ versions });
+    } catch (error) {
+      if (!sendRouteRegistryError(res, error) && !sendMerchantRegistryError(res, error)) {
+        next(error);
+      }
+    }
+  });
+
+  router.get("/v1/routes/:routeId", async (req, res, next) => {
+    try {
+      const routeId = readRouteParam(req.params.routeId, "routeId");
+      const route = await routeRegistry.getRoute(routeId);
+      if (route === undefined) {
+        res.status(404).json({ error: "route_not_found" });
+        return;
+      }
+      res.json({ route });
+    } catch (error) {
+      if (!sendRouteRegistryError(res, error) && !sendMerchantRegistryError(res, error)) {
+        next(error);
+      }
+    }
+  });
+
+  router.use(jsonErrorHandler);
+
+  return router;
+}
+
 export function isReceiptIngestSource(value: unknown): value is ReceiptIngestSource {
   return (
     typeof value === "string" &&
@@ -1050,6 +1804,20 @@ function readOptionalMerchantKeyPurpose(
   );
 }
 
+function readOptionalMerchantPayoutWalletStatus(
+  value: unknown
+): MerchantPayoutWalletStatus | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === "active" || value === "paused" || value === "retired") {
+    return value;
+  }
+  throw new MerchantRegistryValidationError(
+    "status must be a valid merchant payout wallet status"
+  );
+}
+
 function readOptionalWalletAuthPurpose(value: unknown): WalletAuthPurpose | undefined {
   if (value === undefined) {
     return undefined;
@@ -1058,6 +1826,156 @@ function readOptionalWalletAuthPurpose(value: unknown): WalletAuthPurpose | unde
     return value;
   }
   throw new MerchantRegistryValidationError("purpose must be merchant-session");
+}
+
+function requireRouteCampaignRegistry(
+  options: Pick<ControlPlaneAppOptions, "campaignRegistry">
+): CampaignRegistry {
+  if (options.campaignRegistry === undefined) {
+    throw new RouteRegistryValidationError(
+      "campaign registry is required for route registration"
+    );
+  }
+  return options.campaignRegistry;
+}
+
+async function loadActiveCampaignForRoute(
+  campaignRegistry: CampaignRegistry,
+  campaignId: string
+): Promise<CampaignProfile> {
+  const campaign = await campaignRegistry.getCampaign(campaignId);
+  if (campaign === undefined) {
+    throw new RouteRegistryValidationError(`unknown campaign: ${campaignId}`);
+  }
+  if (campaign.status !== "active") {
+    throw new RouteRegistryValidationError("campaign must be active");
+  }
+  return campaign;
+}
+
+function assertRouteScopeMatchesCampaign(
+  campaign: CampaignProfile,
+  resourceOrigin: string,
+  operationIds: RouteOperationScope
+): void {
+  if (resourceOrigin !== campaign.current.terms.resourceOrigin) {
+    throw new RouteRegistryValidationError(
+      "route resourceOrigin must match the active campaign version"
+    );
+  }
+  if (operationIds[0] === "*") {
+    return;
+  }
+
+  const campaignOperationIds = new Set(
+    campaign.current.terms.operations.map((operation) => operation.operationId)
+  );
+  const missingOperationIds = operationIds.filter(
+    (operationId) => !campaignOperationIds.has(operationId)
+  );
+  if (missingOperationIds.length > 0) {
+    throw new RouteRegistryValidationError(
+      `route operationIds are not in the active campaign version: ${missingOperationIds.join(", ")}`
+    );
+  }
+}
+
+function readOptionalRouteOperationScope(
+  value: unknown
+): RouteOperationScope | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new RouteRegistryValidationError(
+      "operationIds must be a non-empty array"
+    );
+  }
+  if (value.includes("*")) {
+    if (value.length !== 1 || value[0] !== "*") {
+      throw new RouteRegistryValidationError(
+        "operationIds wildcard must be the only scope entry"
+      );
+    }
+    return ["*"];
+  }
+  const operationIds = value.map((operationId) => {
+    if (typeof operationId !== "string" || operationId.trim().length === 0) {
+      throw new RouteRegistryValidationError(
+        "operationIds entries must be non-empty strings"
+      );
+    }
+    return operationId;
+  });
+  if (new Set(operationIds).size !== operationIds.length) {
+    throw new RouteRegistryValidationError("operationIds entries must be unique");
+  }
+  return operationIds;
+}
+
+function readOptionalRouteQueryString(
+  value: unknown,
+  label: string
+): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new RouteRegistryValidationError(`${label} must be a non-empty string`);
+  }
+  return value;
+}
+
+function readOptionalRouteStatus(value: unknown): RouteStatus | undefined {
+  const status = readOptionalRouteQueryString(value, "status");
+  if (status === undefined) {
+    return undefined;
+  }
+  if (
+    status === "active" ||
+    status === "suspended" ||
+    status === "expired" ||
+    status === "revoked"
+  ) {
+    return status;
+  }
+  throw new RouteRegistryValidationError(
+    "status must be active, suspended, expired, or revoked"
+  );
+}
+
+function readOptionalRouteSearchLimit(value: unknown): number | undefined {
+  const limit = readOptionalRouteQueryString(value, "limit");
+  if (limit === undefined) {
+    return undefined;
+  }
+  if (!/^[1-9][0-9]*$/u.test(limit)) {
+    throw new RouteRegistryValidationError("limit must be a positive integer");
+  }
+  return Number.parseInt(limit, 10);
+}
+
+function readOptionalSha256Hash(
+  value: unknown,
+  label: string
+): `sha256:${string}` | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "string" || !/^sha256:[0-9a-f]{64}$/u.test(value)) {
+    throw new RouteRegistryValidationError(`${label} must be a sha256 hash`);
+  }
+  return value as `sha256:${string}`;
+}
+
+function readReferralClaim(value: unknown): ReferralClaimV1 {
+  const parsed = ReferralClaimV1Schema.safeParse(value);
+  if (!parsed.success) {
+    throw new RouteRegistryValidationError(
+      parsed.error.issues.map((issue) => issue.message).join("; ")
+    );
+  }
+  return parsed.data;
 }
 
 function readCampaignTermsInput(body: Record<string, unknown>): CampaignTermsInput {
@@ -1204,6 +2122,26 @@ function readReceiptSource(value: unknown): ReceiptIngestSource | undefined {
   return isReceiptIngestSource(value) ? value : undefined;
 }
 
+function readPayoutFundingBalances(
+  value: unknown
+): PayoutFundingBalance[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(value)) {
+    throw new MerchantRegistryValidationError("fundingBalances must be an array");
+  }
+  return value.map((item) => {
+    const record = requireJsonObject(item);
+    const fundingWallet = readOptionalString(record.fundingWallet, "fundingWallet");
+    return {
+      asset: readRequiredString(record.asset, "asset"),
+      amountAtomic: readRequiredString(record.amountAtomic, "amountAtomic"),
+      ...(fundingWallet === undefined ? {} : { fundingWallet })
+    };
+  });
+}
+
 function jsonErrorHandler(
   error: unknown,
   _req: Request,
@@ -1232,11 +2170,110 @@ function readHttpErrorStatus(error: unknown): number | undefined {
     : undefined;
 }
 
+function createRuntimePool(
+  env: NodeJS.ProcessEnv,
+  poolFactory: ((config: PoolConfig) => PostgresPool) | undefined
+): PostgresPool {
+  const connectionString = env.SPLIT402_DATABASE_URL ?? env.DATABASE_URL;
+  if (connectionString === undefined || connectionString.trim().length === 0) {
+    throw new Error("SPLIT402_DATABASE_URL or DATABASE_URL is required");
+  }
+
+  const poolConfig: PoolConfig = { connectionString };
+  const max = readOptionalRuntimePositiveInteger(
+    env.SPLIT402_DATABASE_POOL_MAX,
+    "SPLIT402_DATABASE_POOL_MAX"
+  );
+  if (max !== undefined) {
+    poolConfig.max = max;
+  }
+
+  if (readOptionalRuntimeBoolean(env.SPLIT402_DATABASE_SSL, "SPLIT402_DATABASE_SSL") === true) {
+    poolConfig.ssl = {
+      rejectUnauthorized:
+        env.SPLIT402_DATABASE_SSL_REJECT_UNAUTHORIZED !== "false"
+    };
+  }
+
+  return poolFactory?.(poolConfig) ?? new Pool(poolConfig);
+}
+
+async function closeRuntimePool(pool: PostgresPool): Promise<void> {
+  const closable = pool as PostgresPool & { end?: () => Promise<void> | void };
+  await closable.end?.();
+}
+
+function readRuntimeAuthPolicy(value: string): ControlPlaneRuntimeAuthPolicy {
+  if (value === "disabled" || value === "optional" || value === "required") {
+    return value;
+  }
+  throw new Error(
+    "SPLIT402_CONTROL_PLANE_AUTH_POLICY must be disabled, optional, or required"
+  );
+}
+
+function readWalletAuthEnvOptions(
+  env: NodeJS.ProcessEnv
+): WalletAuthenticatorOptions {
+  const challengeTtlMs = readOptionalRuntimePositiveInteger(
+    env.SPLIT402_WALLET_AUTH_CHALLENGE_TTL_MS,
+    "SPLIT402_WALLET_AUTH_CHALLENGE_TTL_MS"
+  );
+  const sessionTtlMs = readOptionalRuntimePositiveInteger(
+    env.SPLIT402_WALLET_AUTH_SESSION_TTL_MS,
+    "SPLIT402_WALLET_AUTH_SESSION_TTL_MS"
+  );
+  const refreshTokenTtlMs = readOptionalRuntimePositiveInteger(
+    env.SPLIT402_WALLET_AUTH_REFRESH_TOKEN_TTL_MS,
+    "SPLIT402_WALLET_AUTH_REFRESH_TOKEN_TTL_MS"
+  );
+  return {
+    ...(challengeTtlMs === undefined ? {} : { challengeTtlMs }),
+    ...(sessionTtlMs === undefined ? {} : { sessionTtlMs }),
+    ...(refreshTokenTtlMs === undefined ? {} : { refreshTokenTtlMs })
+  };
+}
+
+function readOptionalRuntimePositiveInteger(
+  value: string | undefined,
+  label: string
+): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!/^[1-9][0-9]*$/u.test(value)) {
+    throw new Error(`${label} must be a positive integer`);
+  }
+  return Number.parseInt(value, 10);
+}
+
+function readOptionalRuntimeBoolean(
+  value: string | undefined,
+  label: string
+): boolean | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === "true") {
+    return true;
+  }
+  if (value === "false") {
+    return false;
+  }
+  throw new Error(`${label} must be true or false`);
+}
+
 export * from "./errors.js";
 export * from "./auth.js";
 export * from "./campaigns.js";
 export * from "./merchants.js";
+export * from "./migrations.js";
+export * from "./payouts.js";
 export * from "./postgres.js";
+export * from "./routes.js";
+export * from "./solana.js";
+export * from "./webhooks.js";
+export * from "./workers.js";
 
 function isMerchantAuthRequired(
   options: Pick<ControlPlaneAppOptions, "auth">
@@ -1381,6 +2418,38 @@ function sendCampaignRegistryError(res: Response, error: unknown): boolean {
     return true;
   }
   if (isCampaignRegistryConflictError(error)) {
+    res.status(409).json({ error: "conflict", message: error.message });
+    return true;
+  }
+  return false;
+}
+
+function sendRouteRegistryError(res: Response, error: unknown): boolean {
+  if (isRouteRegistryValidationError(error)) {
+    res.status(400).json({ error: "invalid_request", message: error.message });
+    return true;
+  }
+  if (isRouteRegistryConflictError(error)) {
+    res.status(409).json({ error: "conflict", message: error.message });
+    return true;
+  }
+  return false;
+}
+
+function sendPayoutPreviewError(res: Response, error: unknown): boolean {
+  if (isPayoutPreviewValidationError(error)) {
+    res.status(400).json({ error: "invalid_request", message: error.message });
+    return true;
+  }
+  return false;
+}
+
+function sendPayoutBatchError(res: Response, error: unknown): boolean {
+  if (isPayoutBatchValidationError(error)) {
+    res.status(400).json({ error: "invalid_request", message: error.message });
+    return true;
+  }
+  if (isPayoutBatchConflictError(error)) {
     res.status(409).json({ error: "conflict", message: error.message });
     return true;
   }

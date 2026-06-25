@@ -151,21 +151,13 @@ Exit criteria:
 
 Status: started.
 
-Main branch status: receipt ingestion, merchant/key/origin registry,
-wallet-authenticated merchant mutations, PostgreSQL receipt/merchant/auth
-persistence, and campaign draft/version/activation APIs are present on `main`.
-Wallet-auth refresh-token rotation, route draft/activation/suspension, durable
-campaign and route persistence, outbox workers, chain verification, Solana
-verifier hardening, and deployable runtime wiring are staged in the active
-implementation PR stack.
-
 Deliverables:
 
 - PostgreSQL migrations;
 - wallet authentication;
 - merchant, key, and origin APIs;
 - campaign version APIs;
-- route draft/sign/activate flow;
+- route draft/sign/activate/suspend/search flow;
 - public receipt ingestion;
 - chain verification worker;
 - accrual and zero-sum ledger;
@@ -181,8 +173,9 @@ Current slice:
 
 - add `@split402/control-plane`;
 - verify submitted Split402 receipts with merchant service public keys;
-- add wallet authentication challenge/session flow;
-- add PostgreSQL wallet-auth persistence for challenges and hashed sessions;
+- add wallet authentication challenge/session/refresh flow;
+- add PostgreSQL wallet-auth persistence for challenges, hashed sessions, and
+  hashed rotating refresh tokens;
 - expose a control-plane app and `POST /v1/receipts` route for public receipt
   submission;
 - define the receipt ingestion store interface for durable receipt persistence;
@@ -208,23 +201,46 @@ Current slice:
   signing bytes;
 - add owner-authorized campaign activation for the current version with registered
   merchant service-key signature verification;
+- add route draft/sign/activate/suspend APIs with canonical unsigned referral
+  claims, referrer signature verification, active campaign scope checks, and
+  merchant-owner-authorized suspension when auth is required;
+- add route search for active route discovery by campaign, referrer, origin,
+  operation id, status, and bounded result limit;
+- add payout-wallet rotation for routes by requiring a new referrer-signed claim
+  and appending immutable route versions;
+- add the PostgreSQL campaign registry adapter and migration for durable campaign,
+  immutable version, operation, and activation state;
+- add the PostgreSQL route registry adapter and migration for durable active and
+  suspended routes, signed referral claims, and duplicate-claim idempotency;
+- add the PostgreSQL route-version migration for immutable signed-claim history;
+- add the PostgreSQL outbox migration and transaction insert for durable
+  `receipt.accepted.v1` and `webhook.receipt.accepted.v1` worker events;
+- add the PostgreSQL outbox worker store for claiming ready events by event type,
+  retrying failures, marking delivery, and dead-lettering exhausted work;
+- add the receipt chain-verification worker framework and PostgreSQL state update
+  that makes confirmed accruals payout-eligible;
+- add a bounded/abortable chain-verification polling loop around the worker
+  framework for deployable runtime wiring;
+- add a deployable chain-verification worker process entrypoint and package script
+  that compose PostgreSQL stores, the Solana verifier, and polling loop from
+  environment configuration;
+- add a signed HTTP webhook dispatch worker loop and process entrypoint that
+  deliver `webhook.receipt.accepted.v1` events from the durable outbox;
+- add a durable control-plane runtime factory that wires PostgreSQL stores,
+  receipt key resolution, wallet auth, and required-by-default merchant auth
+  policy from runtime configuration;
+- add a Solana JSON-RPC verifier for settlement signatures and parsed
+  transaction transfer checks covering mint, payer authority, pay-to owner
+  evidence, and amount;
+- harden the Solana verifier with explicit pay-to associated token account
+  derivation and comma-separated multi-provider RPC failover;
+- add the packaged PostgreSQL migration runner and opt-in live integration harness
+  for real database validation;
 - resolve receipt verification keys through registered merchant service keys by
   `merchantId` and `kid`;
 - add the PostgreSQL merchant registry adapter for durable merchant, origin, and
   service-key rows;
 - add the first merchant/key/origin PostgreSQL migration.
-
-Active PR stack after `main`:
-
-- PostgreSQL campaign registry adapter and migration;
-- route draft/sign/activate/suspend APIs and PostgreSQL route persistence;
-- durable receipt outbox event persistence;
-- outbox worker claim, retry, delivery, and dead-letter store;
-- receipt chain-verification worker framework and bounded polling loop;
-- Solana RPC signature-status and transfer verifier slices;
-- durable control-plane runtime factory and required-by-default auth policy wiring;
-- deployable chain-worker process entrypoint;
-- wallet-auth refresh-token rotation with durable refresh-token persistence.
 
 ## Architecture Milestone 3: Production Merchant SDK
 
@@ -237,6 +253,27 @@ Deliverables:
 - service-key rotation support;
 - compile-ready integration example;
 - package documentation and version compatibility matrix.
+
+Current slice:
+
+- add `@split402/merchant-sdk`;
+- add a cached control-plane campaign resolver that refreshes active campaign
+  terms remotely and serves the x402 extension synchronously from cache;
+- add service-key provider support and an in-memory merchant key ring for
+  current-key rotation with old-`kid` public-key lookup;
+- add required x402 `payment-identifier` helpers for route declarations,
+  Split402-compatible id generation, and fail-closed settled payload validation;
+- add merchant operation digest helpers for production GET and JSON POST request
+  shapes with JSON-compatibility validation;
+- add a compile-checked Express/x402 merchant integration example and package
+  compatibility matrix;
+- add durable merchant receipt outbox store interfaces;
+- add an in-memory outbox implementation for deterministic tests and examples;
+- add a receipt outbox dispatcher with retry scheduling, max-attempt dead-lettering,
+  and permanent conflict handling;
+- add a control-plane receipt submitter that treats created and duplicate
+  ingestion responses as accepted;
+- document the outbox flow and production storage boundary.
 
 Exit criteria:
 
@@ -257,6 +294,25 @@ Deliverables:
 - confirmation/finality monitor;
 - reconciliation and unknown-outcome runbook;
 - referrer payout history.
+
+Current slice:
+
+- add merchant payout-wallet registration for merchant-controlled payout funding
+  wallets;
+- add PostgreSQL persistence for merchant payout wallets;
+- add a payout preview planner over `available` commission accruals;
+- add an eligible-accrual selection interface with in-memory and PostgreSQL
+  implementations;
+- group preview items by merchant, asset, and destination payout wallet;
+- apply recipient thresholds and max-recipient limits without mutating accrual
+  state;
+- report merchant funding coverage or deficit by asset;
+- add durable payout batch, item, and allocation rows;
+- mark selected accruals `allocated` with compare-and-set updates before
+  inserting payout allocations;
+- expose `POST /v1/merchants/:merchantId/payout-wallets`;
+- expose `POST /v1/merchants/:merchantId/payouts/preview`;
+- expose `POST /v1/merchants/:merchantId/payout-batches`.
 
 Exit criteria:
 

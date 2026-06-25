@@ -1,7 +1,7 @@
 {
   "name": "split402",
   "version": "0.1.0",
-  "description": "x402-compatible referral attribution and commission accounting infrastructure.",
+  "description": "Referral and commission protocol infrastructure for x402-paid APIs and agent tools.",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.30.2",
@@ -15,6 +15,7 @@
     "typecheck": "corepack pnpm -r --if-present build && tsc --noEmit -p tsconfig.json && corepack pnpm -r --if-present typecheck",
     "lint": "eslint .",
     "test": "vitest run && corepack pnpm -r --if-present test",
+    "test:postgres": "corepack pnpm --filter @split402/control-plane test:postgres",
     "test:watch": "vitest",
     "vectors": "corepack pnpm --filter @split402/protocol vectors",
     "vectors:check": "corepack pnpm --filter @split402/protocol vectors:check",
@@ -26,7 +27,9 @@
     "demo:setup-existing-token": "corepack pnpm --filter @split402/demo-agent setup-existing-token",
     "demo:preflight": "corepack pnpm --filter @split402/demo-agent preflight",
     "demo:paid-suite": "corepack pnpm build && corepack pnpm --filter @split402/demo-agent paid-suite",
-    "demo:agent": "corepack pnpm --filter @split402/demo-agent dev"
+    "demo:agent": "corepack pnpm --filter @split402/demo-agent dev",
+    "worker:chain": "corepack pnpm --filter @split402/control-plane worker:chain",
+    "worker:webhook": "corepack pnpm --filter @split402/control-plane worker:webhook"
   },
   "dependencies": {
     "@x402/core": "2.16.0",
