@@ -35,6 +35,7 @@ import { ReceiptIngestionPersistenceConflictError } from "./errors.js";
 import {
   MerchantRegistryConflictError,
   MerchantRegistryValidationError,
+  type AddMerchantPayoutWalletInput,
   type AddMerchantKeyInput,
   type AddMerchantOriginInput,
   type CreateMerchantInput,
@@ -44,6 +45,8 @@ import {
   type MerchantOriginRecord,
   type MerchantOriginStatus,
   type MerchantOriginVerificationMethod,
+  type MerchantPayoutWalletRecord,
+  type MerchantPayoutWalletStatus,
   type MerchantProfile,
   type MerchantRecord,
   type MerchantRegistry,
@@ -195,6 +198,17 @@ interface MerchantKeyRow extends QueryResultRow {
   created_at: Date | string;
 }
 
+interface MerchantPayoutWalletRow extends QueryResultRow {
+  id: string;
+  merchant_id: string;
+  network: string;
+  wallet: string;
+  asset_mint: string;
+  signer_reference: string;
+  status: string;
+  created_at: Date | string;
+}
+
 interface WalletAuthChallengeRow extends QueryResultRow {
   id: string;
   wallet: string;
@@ -300,6 +314,7 @@ interface RouteVersionRow extends QueryResultRow {
 export interface PostgresMerchantRegistryOptions {
   now?: () => Date;
   merchantIdFactory?: () => string;
+  merchantPayoutWalletIdFactory?: () => string;
 }
 
 export interface PostgresCampaignRegistryOptions {
@@ -1305,11 +1320,20 @@ export class PostgresMerchantRegistry implements MerchantRegistry {
         order by created_at, kid`,
       [merchantId]
     );
+    const payoutWalletsResult = await this.db.query<MerchantPayoutWalletRow>(
+      `select id, merchant_id, network, wallet, asset_mint, signer_reference,
+              status, created_at
+         from merchant_payout_wallets
+        where merchant_id = $1
+        order by created_at, id`,
+      [merchantId]
+    );
 
     return {
       ...mapMerchant(merchantRow),
       origins: originsResult.rows.map(mapMerchantOrigin),
-      keys: keysResult.rows.map(mapMerchantKey)
+      keys: keysResult.rows.map(mapMerchantKey),
+      payoutWallets: payoutWalletsResult.rows.map(mapMerchantPayoutWallet)
     };
   }
 
@@ -1395,6 +1419,54 @@ export class PostgresMerchantRegistry implements MerchantRegistry {
         ]
       );
       return mapMerchantKey(requiredRow(result));
+    } catch (error) {
+      throw mapMerchantWriteError(error);
+    }
+  }
+
+  async addPayoutWallet(
+    input: AddMerchantPayoutWalletInput
+  ): Promise<MerchantPayoutWalletRecord> {
+    await this.assertMerchantExists(input.merchantId);
+    const wallet: MerchantPayoutWalletRecord = {
+      id: assertSplit402Id(
+        input.id ??
+          this.options.merchantPayoutWalletIdFactory?.() ??
+          createMerchantPayoutWalletId(),
+        "merchant payout wallet id"
+      ),
+      merchantId: input.merchantId,
+      network: assertNonEmptyString(input.network, "network"),
+      wallet: assertBase58PublicKey(input.wallet, "wallet"),
+      asset: assertBase58PublicKey(input.asset, "asset"),
+      signerReference: assertNonEmptyString(input.signerReference, "signerReference"),
+      status: input.status ?? "active",
+      createdAt: this.now()
+    };
+    assertMerchantPayoutWalletStatus(wallet.status);
+
+    try {
+      const result = await this.db.query<MerchantPayoutWalletRow>(
+        `insert into merchant_payout_wallets (
+           id, merchant_id, network, wallet, asset_mint, signer_reference,
+           status, created_at
+         ) values (
+           $1, $2, $3, $4, $5, $6, $7, $8
+         )
+         returning id, merchant_id, network, wallet, asset_mint,
+                   signer_reference, status, created_at`,
+        [
+          wallet.id,
+          wallet.merchantId,
+          wallet.network,
+          wallet.wallet,
+          wallet.asset,
+          wallet.signerReference,
+          wallet.status,
+          wallet.createdAt
+        ]
+      );
+      return mapMerchantPayoutWallet(requiredRow(result));
     } catch (error) {
       throw mapMerchantWriteError(error);
     }
@@ -2275,6 +2347,21 @@ function mapMerchantKey(row: MerchantKeyRow): MerchantKeyRecord {
   };
 }
 
+function mapMerchantPayoutWallet(
+  row: MerchantPayoutWalletRow
+): MerchantPayoutWalletRecord {
+  return {
+    id: row.id,
+    merchantId: row.merchant_id,
+    network: row.network,
+    wallet: row.wallet,
+    asset: row.asset_mint,
+    signerReference: row.signer_reference,
+    status: readMerchantPayoutWalletStatus(row.status),
+    createdAt: toIsoString(row.created_at)
+  };
+}
+
 function mapWalletAuthChallenge(
   row: WalletAuthChallengeRow
 ): WalletAuthChallengeRecord {
@@ -2665,6 +2752,12 @@ function assertMerchantKeyPurpose(value: MerchantKeyPurpose): void {
   readMerchantKeyPurpose(value);
 }
 
+function assertMerchantPayoutWalletStatus(
+  value: MerchantPayoutWalletStatus
+): void {
+  readMerchantPayoutWalletStatus(value);
+}
+
 function readMerchantStatus(value: string): MerchantStatus {
   if (
     value === "pending" ||
@@ -2708,6 +2801,17 @@ function readMerchantKeyPurpose(value: string): MerchantKeyPurpose {
     return value;
   }
   throw new Error(`unsupported merchant key purpose: ${value}`);
+}
+
+function readMerchantPayoutWalletStatus(value: string): MerchantPayoutWalletStatus {
+  if (value === "active" || value === "paused" || value === "retired") {
+    return value;
+  }
+  throw new Error(`unsupported merchant payout wallet status: ${value}`);
+}
+
+function createMerchantPayoutWalletId(): string {
+  return `mpw_${randomUUID().replaceAll("-", "")}`;
 }
 
 function readWalletAuthPurpose(value: string): "merchant-session" {

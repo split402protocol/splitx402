@@ -297,6 +297,9 @@ Deliverables:
 
 Current slice:
 
+- add merchant payout-wallet registration for merchant-controlled payout funding
+  wallets;
+- add PostgreSQL persistence for merchant payout wallets;
 - add a payout preview planner over `available` commission accruals;
 - add an eligible-accrual selection interface with in-memory and PostgreSQL
   implementations;
@@ -304,6 +307,7 @@ Current slice:
 - apply recipient thresholds and max-recipient limits without mutating accrual
   state;
 - report merchant funding coverage or deficit by asset;
+- expose `POST /v1/merchants/:merchantId/payout-wallets`;
 - expose `POST /v1/merchants/:merchantId/payouts/preview`.
 
 Exit criteria:

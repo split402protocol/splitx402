@@ -215,6 +215,7 @@ Deliverables:
 
 Current slice:
 
+- merchant payout-wallet registration API and persistence;
 - payout preview planner for available accruals;
 - deterministic eligible-accrual filtering by merchant, asset, campaign, route,
   timestamp, and limit;
@@ -222,6 +223,7 @@ Current slice:
 - minimum-threshold and max-recipient controls;
 - funding coverage and deficit reporting;
 - PostgreSQL eligible-accrual selector;
+- `POST /v1/merchants/:merchantId/payout-wallets`;
 - `POST /v1/merchants/:merchantId/payouts/preview`.
 
 ## Phase 7: Dashboard And Discovery

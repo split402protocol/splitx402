@@ -336,7 +336,7 @@ describe("PostgresReceiptIngestionStore", () => {
 });
 
 describe("PostgresMerchantRegistry", () => {
-  it("persists merchants, origins, keys, and profiles", async () => {
+  it("persists merchants, origins, keys, payout wallets, and profiles", async () => {
     const bundle = createSampleProtocolArtifacts();
     const fakePool = new FakePostgresPool();
     const registry = createPostgresRegistry(fakePool);
@@ -360,13 +360,32 @@ describe("PostgresMerchantRegistry", () => {
       publicKey: bundle.keys.merchantPublicKey,
       validFrom: "2026-06-24T00:00:00Z"
     });
+    const payoutWallet = await registry.addPayoutWallet({
+      id: "mpw_ffffffffffffffffffffffffffffffff",
+      merchantId: merchant.id,
+      network: bundle.artifacts.receipt.network,
+      wallet: bundle.keys.payToWallet,
+      asset: bundle.artifacts.receipt.asset,
+      signerReference: "kms:split402-devnet-payout"
+    });
     const profile = await registry.getMerchantProfile(merchant.id);
 
     expect(origin.status).toBe("verified");
     expect(key.purpose).toBe("offer_receipt");
+    expect(payoutWallet.status).toBe("active");
     expect(profile?.id).toBe(merchant.id);
     expect(profile?.origins).toHaveLength(1);
     expect(profile?.keys).toHaveLength(1);
+    expect(profile?.payoutWallets).toEqual([payoutWallet]);
+    await expect(
+      registry.addPayoutWallet({
+        merchantId: merchant.id,
+        network: bundle.artifacts.receipt.network,
+        wallet: bundle.keys.payToWallet,
+        asset: bundle.artifacts.receipt.asset,
+        signerReference: "kms:split402-devnet-payout"
+      })
+    ).rejects.toBeInstanceOf(MerchantRegistryConflictError);
   });
 
   it("resolves active service keys and respects revocation windows", async () => {
@@ -796,7 +815,8 @@ async function createSnapshot(
 function createPostgresRegistry(fakePool: FakePostgresPool): PostgresMerchantRegistry {
   return new PostgresMerchantRegistry(fakePool, {
     now: () => new Date("2026-06-24T00:00:00Z"),
-    merchantIdFactory: () => "mrc_ffffffffffffffffffffffffffffffff"
+    merchantIdFactory: () => "mrc_ffffffffffffffffffffffffffffffff",
+    merchantPayoutWalletIdFactory: () => "mpw_ffffffffffffffffffffffffffffffff"
   });
 }
 
@@ -980,6 +1000,11 @@ class FakePostgresClient implements PostgresTransactionClient {
     if (normalized.startsWith("insert into merchant_keys")) {
       return result(this.database.insertMerchantKey(values) as unknown as Row[]);
     }
+    if (normalized.startsWith("insert into merchant_payout_wallets")) {
+      return result(
+        this.database.insertMerchantPayoutWallet(values) as unknown as Row[]
+      );
+    }
     if (normalized.startsWith("insert into campaigns")) {
       this.database.insertCampaign(values);
       return result([]);
@@ -1100,6 +1125,11 @@ class FakePostgresClient implements PostgresTransactionClient {
         this.database.selectMerchantKeys(normalized, values) as unknown as Row[]
       );
     }
+    if (normalized.includes("from merchant_payout_wallets")) {
+      return result(
+        this.database.selectMerchantPayoutWallets(values[0]) as unknown as Row[]
+      );
+    }
     if (normalized.includes("from campaigns")) {
       return result(this.database.selectCampaign(values[0]) as unknown as Row[]);
     }
@@ -1150,6 +1180,7 @@ class FakePostgresDatabase {
   merchants: StoredMerchantRow[] = [];
   merchantOrigins: StoredMerchantOriginRow[] = [];
   merchantKeys: StoredMerchantKeyRow[] = [];
+  merchantPayoutWallets: StoredMerchantPayoutWalletRow[] = [];
   campaigns: StoredCampaignRow[] = [];
   campaignVersions: StoredCampaignVersionRow[] = [];
   campaignOperations: StoredCampaignOperationRow[] = [];
@@ -1436,6 +1467,35 @@ class FakePostgresDatabase {
     return [row];
   }
 
+  insertMerchantPayoutWallet(
+    values: readonly unknown[]
+  ): StoredMerchantPayoutWalletRow[] {
+    const row: StoredMerchantPayoutWalletRow = {
+      id: readString(values[0]),
+      merchant_id: readString(values[1]),
+      network: readString(values[2]),
+      wallet: readString(values[3]),
+      asset_mint: readString(values[4]),
+      signer_reference: readString(values[5]),
+      status: readString(values[6]),
+      created_at: readString(values[7])
+    };
+    if (
+      this.merchantPayoutWallets.some(
+        (wallet) =>
+          wallet.id === row.id ||
+          (wallet.merchant_id === row.merchant_id &&
+            wallet.network === row.network &&
+            wallet.wallet === row.wallet &&
+            wallet.asset_mint === row.asset_mint)
+      )
+    ) {
+      throw Object.assign(new Error("duplicate key"), { code: "23505" });
+    }
+    this.merchantPayoutWallets.push(row);
+    return [row];
+  }
+
   revokeMerchantKey(values: readonly unknown[]): StoredMerchantKeyRow[] {
     const merchantId = readString(values[0]);
     const kid = readString(values[1]);
@@ -1499,6 +1559,12 @@ class FakePostgresDatabase {
     }
 
     return this.merchantKeys.filter((row) => row.merchant_id === merchantId);
+  }
+
+  selectMerchantPayoutWallets(merchantId: unknown): StoredMerchantPayoutWalletRow[] {
+    return this.merchantPayoutWallets.filter(
+      (row) => row.merchant_id === readString(merchantId)
+    );
   }
 
   insertCampaign(values: readonly unknown[]): void {
@@ -1975,6 +2041,17 @@ type StoredMerchantKeyRow = QueryResultRow & {
   valid_until: string | null;
   revoked_at: string | null;
   revocation_reason: string | null;
+  created_at: string;
+};
+
+type StoredMerchantPayoutWalletRow = QueryResultRow & {
+  id: string;
+  merchant_id: string;
+  network: string;
+  wallet: string;
+  asset_mint: string;
+  signer_reference: string;
+  status: string;
   created_at: string;
 };
 

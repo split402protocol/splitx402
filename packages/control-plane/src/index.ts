@@ -38,6 +38,7 @@ import {
   type MerchantKeyPurpose,
   type MerchantOriginStatus,
   type MerchantOriginVerificationMethod,
+  type MerchantPayoutWalletStatus,
   type MerchantRegistry,
   type MerchantStatus
 } from "./merchants.js";
@@ -1008,6 +1009,40 @@ export function createMerchantRegistryRouter(
     }
   });
 
+  router.post("/v1/merchants/:merchantId/payout-wallets", async (req, res, next) => {
+    try {
+      const session = await requireMerchantOwnerSession(
+        req,
+        res,
+        options,
+        merchantRegistry
+      );
+      if (session === undefined && isMerchantAuthRequired(options)) {
+        return;
+      }
+      const body = requireJsonObject(req.body);
+      const id = readOptionalString(body.id, "id");
+      const status = readOptionalMerchantPayoutWalletStatus(body.status);
+      const payoutWallet = await merchantRegistry.addPayoutWallet({
+        merchantId: readRouteParam(req.params.merchantId, "merchantId"),
+        network: readRequiredString(body.network, "network"),
+        wallet: readRequiredString(body.wallet, "wallet"),
+        asset: readRequiredString(body.asset, "asset"),
+        signerReference: readRequiredString(
+          body.signerReference,
+          "signerReference"
+        ),
+        ...(id === undefined ? {} : { id }),
+        ...(status === undefined ? {} : { status })
+      });
+      res.status(201).json({ payoutWallet });
+    } catch (error) {
+      if (!sendMerchantRegistryError(res, error)) {
+        next(error);
+      }
+    }
+  });
+
   router.use(jsonErrorHandler);
 
   return router;
@@ -1607,6 +1642,20 @@ function readOptionalMerchantKeyPurpose(
   }
   throw new MerchantRegistryValidationError(
     "purpose must be offer_receipt or webhook"
+  );
+}
+
+function readOptionalMerchantPayoutWalletStatus(
+  value: unknown
+): MerchantPayoutWalletStatus | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === "active" || value === "paused" || value === "retired") {
+    return value;
+  }
+  throw new MerchantRegistryValidationError(
+    "status must be a valid merchant payout wallet status"
   );
 }
 

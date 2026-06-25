@@ -4,6 +4,7 @@ import {
   createPrefixedId,
   type Split402ReceiptV1
 } from "@split402/protocol";
+import { randomBytes } from "node:crypto";
 
 import type { ReceiptIngestorOptions } from "./index.js";
 
@@ -12,6 +13,7 @@ export type MerchantOriginVerificationMethod = "well_known" | "dns";
 export type MerchantOriginStatus = "pending" | "verified" | "failed" | "revoked";
 export type MerchantKeyAlgorithm = "Ed25519" | "ES256";
 export type MerchantKeyPurpose = "offer_receipt" | "webhook";
+export type MerchantPayoutWalletStatus = "active" | "paused" | "retired";
 
 export interface MerchantRecord {
   id: string;
@@ -45,9 +47,21 @@ export interface MerchantKeyRecord {
   createdAt: string;
 }
 
+export interface MerchantPayoutWalletRecord {
+  id: string;
+  merchantId: string;
+  network: string;
+  wallet: string;
+  asset: string;
+  signerReference: string;
+  status: MerchantPayoutWalletStatus;
+  createdAt: string;
+}
+
 export interface MerchantProfile extends MerchantRecord {
   origins: MerchantOriginRecord[];
   keys: MerchantKeyRecord[];
+  payoutWallets: MerchantPayoutWalletRecord[];
 }
 
 export interface CreateMerchantInput {
@@ -76,6 +90,16 @@ export interface AddMerchantKeyInput {
   validUntil?: string;
 }
 
+export interface AddMerchantPayoutWalletInput {
+  id?: string;
+  merchantId: string;
+  network: string;
+  wallet: string;
+  asset: string;
+  signerReference: string;
+  status?: MerchantPayoutWalletStatus;
+}
+
 export interface RevokeMerchantKeyInput {
   merchantId: string;
   kid: string;
@@ -99,6 +123,9 @@ export interface MerchantRegistry {
     input: AddMerchantOriginInput
   ): Promise<MerchantOriginRecord> | MerchantOriginRecord;
   addKey(input: AddMerchantKeyInput): Promise<MerchantKeyRecord> | MerchantKeyRecord;
+  addPayoutWallet(
+    input: AddMerchantPayoutWalletInput
+  ): Promise<MerchantPayoutWalletRecord> | MerchantPayoutWalletRecord;
   revokeKey(
     input: RevokeMerchantKeyInput
   ): Promise<MerchantKeyRecord | undefined> | MerchantKeyRecord | undefined;
@@ -110,6 +137,7 @@ export interface MerchantRegistry {
 export interface InMemoryMerchantRegistryOptions {
   now?: () => Date;
   merchantIdFactory?: () => string;
+  merchantPayoutWalletIdFactory?: () => string;
 }
 
 export class MerchantRegistryValidationError extends Error {
@@ -135,6 +163,7 @@ export class InMemoryMerchantRegistry implements MerchantRegistry {
   private readonly merchantIdBySlug = new Map<string, string>();
   private readonly originsByMerchantId = new Map<string, Map<string, MerchantOriginRecord>>();
   private readonly keysByKid = new Map<string, MerchantKeyRecord>();
+  private readonly payoutWalletsById = new Map<string, MerchantPayoutWalletRecord>();
 
   constructor(private readonly options: InMemoryMerchantRegistryOptions = {}) {}
 
@@ -177,7 +206,11 @@ export class InMemoryMerchantRegistry implements MerchantRegistry {
       ),
       keys: Array.from(this.keysByKid.values())
         .filter((key) => key.merchantId === merchantId)
-        .map(cloneKey)
+        .map(cloneKey),
+      payoutWallets: Array.from(this.payoutWalletsById.values())
+        .filter((wallet) => wallet.merchantId === merchantId)
+        .sort(comparePayoutWallets)
+        .map(clonePayoutWallet)
     };
   }
 
@@ -231,6 +264,50 @@ export class InMemoryMerchantRegistry implements MerchantRegistry {
 
     this.keysByKid.set(key.kid, key);
     return cloneKey(key);
+  }
+
+  addPayoutWallet(
+    input: AddMerchantPayoutWalletInput
+  ): MerchantPayoutWalletRecord {
+    this.assertMerchantExists(input.merchantId);
+    const wallet: MerchantPayoutWalletRecord = {
+      id: assertSplit402Id(
+        input.id ??
+          this.options.merchantPayoutWalletIdFactory?.() ??
+          createMerchantPayoutWalletId(),
+        "merchant payout wallet id"
+      ),
+      merchantId: input.merchantId,
+      network: assertNonEmptyString(input.network, "network"),
+      wallet: assertBase58PublicKey(input.wallet, "wallet"),
+      asset: assertBase58PublicKey(input.asset, "asset"),
+      signerReference: assertNonEmptyString(input.signerReference, "signerReference"),
+      status: input.status ?? "active",
+      createdAt: this.now()
+    };
+    assertMerchantPayoutWalletStatus(wallet.status);
+
+    if (this.payoutWalletsById.has(wallet.id)) {
+      throw new MerchantRegistryConflictError(
+        `merchant payout wallet already exists: ${wallet.id}`
+      );
+    }
+    if (
+      Array.from(this.payoutWalletsById.values()).some(
+        (existing) =>
+          existing.merchantId === wallet.merchantId &&
+          existing.network === wallet.network &&
+          existing.wallet === wallet.wallet &&
+          existing.asset === wallet.asset
+      )
+    ) {
+      throw new MerchantRegistryConflictError(
+        "merchant payout wallet already exists for network, wallet, and asset"
+      );
+    }
+
+    this.payoutWalletsById.set(wallet.id, wallet);
+    return clonePayoutWallet(wallet);
   }
 
   revokeKey(input: RevokeMerchantKeyInput): MerchantKeyRecord | undefined {
@@ -404,6 +481,23 @@ function assertMerchantKeyPurpose(value: MerchantKeyPurpose): void {
   }
 }
 
+function assertMerchantPayoutWalletStatus(value: MerchantPayoutWalletStatus): void {
+  if (!["active", "paused", "retired"].includes(value)) {
+    throw new MerchantRegistryValidationError("invalid merchant payout wallet status");
+  }
+}
+
+function createMerchantPayoutWalletId(): string {
+  return `mpw_${randomBytes(16).toString("hex")}`;
+}
+
+function comparePayoutWallets(
+  left: MerchantPayoutWalletRecord,
+  right: MerchantPayoutWalletRecord
+): number {
+  return left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id);
+}
+
 function cloneMerchant(merchant: MerchantRecord): MerchantRecord {
   return { ...merchant };
 }
@@ -414,4 +508,10 @@ function cloneOrigin(origin: MerchantOriginRecord): MerchantOriginRecord {
 
 function cloneKey(key: MerchantKeyRecord): MerchantKeyRecord {
   return { ...key };
+}
+
+function clonePayoutWallet(
+  wallet: MerchantPayoutWalletRecord
+): MerchantPayoutWalletRecord {
+  return { ...wallet };
 }
