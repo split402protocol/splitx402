@@ -78,6 +78,9 @@ plus an unknown-outcome reconciliation queue and referrer payout views.
   review template for custody approval.
 - Added machine-checkable image provenance, emergency auth revocation, payout
   key custody, and rollback drill evidence gates with reusable review templates.
+- Added `corepack pnpm phase6:image-provenance` to generate a structured Phase 6
+  image provenance review record from immutable image digests and audit
+  artifacts.
 - Added signed payout transaction records and PostgreSQL persistence for exact
   signed bytes, expected signature, sequence, attempt, blockhash metadata, and
   submitted state before broadcast.
@@ -150,4 +153,5 @@ the merchant has enough funding.
 - `corepack pnpm test`
 - `corepack pnpm build`
 - `corepack pnpm phase6:custody:check <evidence-bundle.txt>`
+- `corepack pnpm phase6:image-provenance`
 - `corepack pnpm payout:finality:failover-drill`

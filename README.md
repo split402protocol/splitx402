@@ -295,6 +295,13 @@ corepack pnpm vectors:check
 corepack pnpm audit --audit-level high
 ```
 
+Generate the Phase 6 image provenance review record after building immutable
+signer and control-plane images:
+
+```bash
+corepack pnpm phase6:image-provenance
+```
+
 Run the optional live PostgreSQL harness against an empty test database:
 
 ```powershell
