@@ -29,6 +29,17 @@ Do not enable production payout custody while any required gate is `Pending` or
 
 ## Evidence Bundle Template
 
+Copy [`docs/templates/phase6-custody-evidence.txt`](../templates/phase6-custody-evidence.txt)
+and fill every field. Then run:
+
+```bash
+corepack pnpm phase6:custody:check <evidence-bundle.txt>
+```
+
+The validator fails while any required field is empty, placeholder-like, uses a
+mutable image tag instead of a `sha256:` digest, or leaves
+`approval_decision` as anything other than `approved`.
+
 ```text
 review_id:
 review_date:

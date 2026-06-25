@@ -64,6 +64,13 @@ ledger and chain state agree.
 
 ## Evidence Record
 
+Attach the completed record to the Phase 6 custody evidence bundle and validate
+the bundle with:
+
+```bash
+corepack pnpm phase6:custody:check <evidence-bundle.txt>
+```
+
 ```text
 drill_id:
 scenario:
