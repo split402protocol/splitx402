@@ -79,6 +79,7 @@ import type {
   LedgerAccountType,
   LedgerEntry,
   LedgerTransaction,
+  ListWebhookEventsInput,
   MarkOutboxEventDeliveredInput,
   MarkOutboxEventFailedInput,
   OutboxEventRecord,
@@ -89,7 +90,8 @@ import type {
   ReceiptChainVerificationStore,
   MarkReceiptChainVerifiedInput,
   ReceiptRecord,
-  ReceiptVerificationState
+  ReceiptVerificationState,
+  WebhookEventManagementStore
 } from "./index.js";
 import type {
   CreatePayoutBatchFromAvailableAccrualsInput,
@@ -1083,7 +1085,8 @@ export class PostgresReceiptIngestionStore
   }
 }
 
-export class PostgresOutboxEventStore implements OutboxEventStore {
+export class PostgresOutboxEventStore
+  implements OutboxEventStore, WebhookEventManagementStore {
   constructor(
     private readonly db: PostgresPool | PostgresQueryExecutor,
     private readonly options: PostgresOutboxEventStoreOptions = {}
@@ -1100,6 +1103,34 @@ export class PostgresOutboxEventStore implements OutboxEventStore {
     );
     const row = result.rows[0];
     return row === undefined ? undefined : mapOutboxEvent(row);
+  }
+
+  async listWebhookEvents(
+    input: ListWebhookEventsInput
+  ): Promise<OutboxEventRecord[]> {
+    const merchantId = assertNonEmptyString(input.merchantId, "merchantId");
+    const limit = assertOutboxListLimit(input.limit ?? 50);
+    const eventTypes = normalizeOutboxEventTypes(input.eventTypes);
+    const values: unknown[] = [merchantId, eventTypes];
+    const where = [
+      "payload ->> 'merchantId' = $1",
+      "($2::text[] is null or event_type = any($2::text[]))"
+    ];
+    if (input.status !== undefined) {
+      values.push(readOutboxEventStatus(input.status));
+      where.push(`status = $${values.length}`);
+    }
+    values.push(limit);
+    const result = await this.db.query<OutboxEventRow>(
+      `select id, event_type, aggregate_type, aggregate_id, payload, status,
+              attempts, available_at, locked_at, last_error, created_at
+         from outbox_events
+        where ${where.join(" and ")}
+        order by created_at desc, id desc
+        limit $${values.length}`,
+      values
+    );
+    return result.rows.map(mapOutboxEvent);
   }
 
   async claimNext(
@@ -3081,6 +3112,13 @@ function normalizeOutboxEventTypes(
     throw new Error("eventTypes must not be empty");
   }
   return eventTypes;
+}
+
+function assertOutboxListLimit(value: number): number {
+  if (!Number.isInteger(value) || value <= 0 || value > 100) {
+    throw new Error("limit must be an integer from 1 to 100");
+  }
+  return value;
 }
 
 function normalizePayoutReconciliationLimit(limit: number | undefined): number {

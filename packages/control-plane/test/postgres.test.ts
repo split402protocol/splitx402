@@ -266,6 +266,35 @@ describe("PostgresReceiptIngestionStore", () => {
     expect(webhookEvent?.eventType).toBe("webhook.receipt.accepted.v1");
   });
 
+  it("lists merchant webhook events from the durable outbox", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const fakePool = new FakePostgresPool();
+    const receiptStore = new PostgresReceiptIngestionStore(fakePool);
+    const outboxStore = new PostgresOutboxEventStore(fakePool);
+    const ingestor = new ReceiptIngestor(receiptStore, {
+      resolveMerchantPublicKey: () => bundle.keys.merchantPublicKey,
+      now: () => new Date("2026-06-24T00:02:00Z")
+    });
+    await ingestor.ingest({ receipt: bundle.artifacts.receipt, source: "merchant" });
+
+    const events = await outboxStore.listWebhookEvents({
+      merchantId: bundle.artifacts.receipt.merchantId,
+      eventTypes: ["webhook.receipt.accepted.v1"],
+      status: "pending"
+    });
+
+    expect(events).toEqual([
+      expect.objectContaining({
+        eventType: "webhook.receipt.accepted.v1",
+        aggregateId: bundle.artifacts.receipt.receiptId,
+        status: "pending",
+        payload: expect.objectContaining({
+          merchantId: bundle.artifacts.receipt.merchantId
+        })
+      })
+    ]);
+  });
+
   it("dead-letters failed processing outbox events", async () => {
     const bundle = createSampleProtocolArtifacts();
     const fakePool = new FakePostgresPool();
@@ -1827,7 +1856,7 @@ class FakePostgresClient implements PostgresTransactionClient {
     }
     if (normalized.includes("from outbox_events")) {
       return result(
-        this.database.selectOutboxEvent(values[0]) as unknown as Row[]
+        this.database.selectOutboxEvent(normalized, values) as unknown as Row[]
       );
     }
     if (normalized.includes("from wallet_auth_challenges")) {
@@ -2021,8 +2050,29 @@ class FakePostgresDatabase {
     return [event];
   }
 
-  selectOutboxEvent(eventId: unknown): StoredOutboxEventRow[] {
-    const event = this.outboxEvents.find((row) => row.id === readString(eventId));
+  selectOutboxEvent(
+    normalizedSql: string,
+    values: readonly unknown[]
+  ): StoredOutboxEventRow[] {
+    if (normalizedSql.includes("payload ->> 'merchantid' = $1")) {
+      const merchantId = readString(values[0]);
+      const eventTypes = readNullableStringArray(values[1]);
+      const hasStatus = normalizedSql.includes("status = $3");
+      const status = hasStatus ? readString(values[2]) : undefined;
+      const limit = readNumber(values[hasStatus ? 3 : 2]);
+      return this.outboxEvents
+        .filter((row) => readJsonPayload(row.payload)?.merchantId === merchantId)
+        .filter((row) => eventTypes === null || eventTypes.includes(row.event_type))
+        .filter((row) => status === undefined || row.status === status)
+        .sort(
+          (left, right) =>
+            right.created_at.localeCompare(left.created_at) ||
+            right.id.localeCompare(left.id)
+        )
+        .slice(0, limit);
+    }
+    const eventId = readString(values[0]);
+    const event = this.outboxEvents.find((row) => row.id === eventId);
     return event === undefined ? [] : [event];
   }
 
