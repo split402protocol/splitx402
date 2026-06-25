@@ -18,7 +18,8 @@ describe("control-plane migrations", () => {
       "0004_campaigns.sql",
       "0005_routes.sql",
       "0006_outbox_events.sql",
-      "0007_wallet_auth_refresh_tokens.sql"
+      "0007_wallet_auth_refresh_tokens.sql",
+      "0008_route_versions.sql"
     ]);
     expect(
       migrations.every((migration) =>

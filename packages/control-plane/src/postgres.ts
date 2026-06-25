@@ -63,6 +63,8 @@ import {
   type RouteOperationScope,
   type RouteRecord,
   type RouteRegistry,
+  type RouteVersionRecord,
+  type RotateRoutePayoutInput,
   type SearchRoutesInput,
   type RouteStatus,
   type SuspendRouteInput
@@ -257,6 +259,7 @@ interface CampaignVersionRow extends QueryResultRow {
 
 interface RouteRow extends QueryResultRow {
   id: string;
+  current_version: number;
   campaign_id: string;
   campaign_version_min: number;
   referrer_wallet: string;
@@ -273,6 +276,21 @@ interface RouteRow extends QueryResultRow {
   metadata_hash: `sha256:${string}` | null;
   created_at: Date | string;
   activated_at: Date | string;
+}
+
+interface RouteVersionRow extends QueryResultRow {
+  route_id: string;
+  version: number;
+  campaign_version_min: number;
+  payout_wallet: string;
+  claim_hash: `sha256:${string}`;
+  claim_json: unknown;
+  signing_bytes_hex: string;
+  issued_at: Date | string;
+  expires_at: Date | string;
+  nonce: string;
+  metadata_hash: `sha256:${string}` | null;
+  created_at: Date | string;
 }
 
 export interface PostgresMerchantRegistryOptions {
@@ -904,6 +922,15 @@ export class PostgresRouteRegistry implements RouteRegistry {
       if (existingByClaimHash !== undefined) {
         return existingByClaimHash;
       }
+      const existingVersionByClaimHash = await this.getRouteVersionByClaimHash(
+        route.claimHash
+      );
+      if (existingVersionByClaimHash !== undefined) {
+        const existingRoute = await this.getRoute(existingVersionByClaimHash.routeId);
+        if (existingRoute !== undefined) {
+          return existingRoute;
+        }
+      }
       const existingById = await this.getRoute(route.id);
       if (existingById !== undefined) {
         throw new RouteRegistryConflictError(`route already exists: ${route.id}`);
@@ -914,7 +941,7 @@ export class PostgresRouteRegistry implements RouteRegistry {
 
   async getRoute(routeId: string): Promise<RouteRecord | undefined> {
     const result = await this.db.query<RouteRow>(
-      `select id, campaign_id, campaign_version_min, referrer_wallet,
+      `select id, current_version, campaign_id, campaign_version_min, referrer_wallet,
               payout_wallet, resource_origin, operation_ids, claim_hash,
               claim_json, signing_bytes_hex, status, issued_at, expires_at,
               nonce, metadata_hash, created_at, activated_at
@@ -925,6 +952,99 @@ export class PostgresRouteRegistry implements RouteRegistry {
     );
     const row = result.rows[0];
     return row === undefined ? undefined : mapRoute(row);
+  }
+
+  async listRouteVersions(routeId: string): Promise<RouteVersionRecord[]> {
+    const result = await this.db.query<RouteVersionRow>(
+      `select route_id, version, campaign_version_min, payout_wallet,
+              claim_hash, claim_json, signing_bytes_hex, issued_at, expires_at,
+              nonce, metadata_hash, created_at
+         from route_versions
+        where route_id = $1
+        order by version asc`,
+      [routeId]
+    );
+    return result.rows.map(mapRouteVersion);
+  }
+
+  async rotateRoutePayout(input: RotateRoutePayoutInput): Promise<RouteRecord> {
+    const existing = await this.getRoute(input.routeId);
+    if (existing === undefined) {
+      throw new RouteRegistryValidationError(`unknown route: ${input.routeId}`);
+    }
+    if (existing.status !== "active") {
+      throw new RouteRegistryValidationError(
+        `route must be active to rotate payout; current status is ${existing.status}`
+      );
+    }
+
+    const validated = this.memoryRegistry().activateRoute({ claim: input.claim });
+    assertPostgresRouteRotation(existing, validated);
+    const existingVersion = await this.getRouteVersionByClaimHash(
+      validated.claimHash
+    );
+    if (existingVersion !== undefined) {
+      if (existingVersion.routeId !== existing.id) {
+        throw new RouteRegistryConflictError(
+          `route claim already exists for another route: ${existingVersion.routeId}`
+        );
+      }
+      return existing;
+    }
+
+    const nextVersion = existing.currentVersion + 1;
+    const now = this.now();
+    const rotated: RouteRecord = {
+      ...existing,
+      currentVersion: nextVersion,
+      campaignVersionMin: validated.campaignVersionMin,
+      payoutWallet: validated.payoutWallet,
+      claimHash: validated.claimHash,
+      claim: validated.claim,
+      signingBytesHex: validated.signingBytesHex,
+      issuedAt: validated.issuedAt,
+      expiresAt: validated.expiresAt,
+      nonce: validated.nonce
+    };
+    if (validated.metadataHash === undefined) {
+      delete rotated.metadataHash;
+    } else {
+      rotated.metadataHash = validated.metadataHash;
+    }
+    const version: RouteVersionRecord = {
+      routeId: rotated.id,
+      version: nextVersion,
+      campaignVersionMin: rotated.campaignVersionMin,
+      payoutWallet: rotated.payoutWallet,
+      claimHash: rotated.claimHash,
+      claim: rotated.claim,
+      signingBytesHex: rotated.signingBytesHex,
+      issuedAt: rotated.issuedAt,
+      expiresAt: rotated.expiresAt,
+      nonce: rotated.nonce,
+      ...(rotated.metadataHash === undefined
+        ? {}
+        : { metadataHash: rotated.metadataHash }),
+      createdAt: now
+    };
+
+    try {
+      await insertRouteVersion(this.db, version);
+      const updated = await updateRouteCurrentVersion(this.db, rotated);
+      return updated ?? rotated;
+    } catch (error) {
+      if (!isUniqueViolation(error)) {
+        throw error;
+      }
+      const duplicate = await this.getRouteVersionByClaimHash(rotated.claimHash);
+      if (duplicate !== undefined && duplicate.routeId === rotated.id) {
+        const current = await this.getRoute(rotated.id);
+        if (current !== undefined) {
+          return current;
+        }
+      }
+      throw mapRouteWriteError(error);
+    }
   }
 
   async suspendRoute(input: SuspendRouteInput): Promise<RouteRecord | undefined> {
@@ -946,7 +1066,7 @@ export class PostgresRouteRegistry implements RouteRegistry {
           set status = 'suspended'
         where id = $1
           and status = 'active'
-        returning id, campaign_id, campaign_version_min, referrer_wallet,
+        returning id, current_version, campaign_id, campaign_version_min, referrer_wallet,
                   payout_wallet, resource_origin, operation_ids, claim_hash,
                   claim_json, signing_bytes_hex, status, issued_at, expires_at,
                   nonce, metadata_hash, created_at, activated_at`,
@@ -998,7 +1118,7 @@ export class PostgresRouteRegistry implements RouteRegistry {
     }
     const limitParam = pushValue(search.limit);
     const result = await this.db.query<RouteRow>(
-      `select id, campaign_id, campaign_version_min, referrer_wallet,
+      `select id, current_version, campaign_id, campaign_version_min, referrer_wallet,
               payout_wallet, resource_origin, operation_ids, claim_hash,
               claim_json, signing_bytes_hex, status, issued_at, expires_at,
               nonce, metadata_hash, created_at, activated_at
@@ -1015,7 +1135,7 @@ export class PostgresRouteRegistry implements RouteRegistry {
     claimHash: `sha256:${string}`
   ): Promise<RouteRecord | undefined> {
     const result = await this.db.query<RouteRow>(
-      `select id, campaign_id, campaign_version_min, referrer_wallet,
+      `select id, current_version, campaign_id, campaign_version_min, referrer_wallet,
               payout_wallet, resource_origin, operation_ids, claim_hash,
               claim_json, signing_bytes_hex, status, issued_at, expires_at,
               nonce, metadata_hash, created_at, activated_at
@@ -1026,6 +1146,22 @@ export class PostgresRouteRegistry implements RouteRegistry {
     );
     const row = result.rows[0];
     return row === undefined ? undefined : mapRoute(row);
+  }
+
+  private async getRouteVersionByClaimHash(
+    claimHash: `sha256:${string}`
+  ): Promise<RouteVersionRecord | undefined> {
+    const result = await this.db.query<RouteVersionRow>(
+      `select route_id, version, campaign_version_min, payout_wallet,
+              claim_hash, claim_json, signing_bytes_hex, issued_at, expires_at,
+              nonce, metadata_hash, created_at
+         from route_versions
+        where claim_hash = $1
+        limit 1`,
+      [claimHash]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapRouteVersion(row);
   }
 
   private now(): string {
@@ -1510,18 +1646,33 @@ function insertRoute(
   client: PostgresQueryExecutor,
   route: RouteRecord
 ): Promise<QueryResult> {
+  const version: RouteVersionRecord = {
+    routeId: route.id,
+    version: route.currentVersion,
+    campaignVersionMin: route.campaignVersionMin,
+    payoutWallet: route.payoutWallet,
+    claimHash: route.claimHash,
+    claim: route.claim,
+    signingBytesHex: route.signingBytesHex,
+    issuedAt: route.issuedAt,
+    expiresAt: route.expiresAt,
+    nonce: route.nonce,
+    ...(route.metadataHash === undefined ? {} : { metadataHash: route.metadataHash }),
+    createdAt: route.activatedAt
+  };
   return client.query(
     `insert into routes (
-       id, campaign_id, campaign_version_min, referrer_wallet, payout_wallet,
-       resource_origin, operation_ids, claim_hash, claim_json, signing_bytes_hex,
-       status, issued_at, expires_at, nonce, metadata_hash, created_at,
-       activated_at
+       id, current_version, campaign_id, campaign_version_min, referrer_wallet,
+       payout_wallet, resource_origin, operation_ids, claim_hash, claim_json,
+       signing_bytes_hex, status, issued_at, expires_at, nonce, metadata_hash,
+       created_at, activated_at
      ) values (
-       $1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9::jsonb, $10, $11, $12, $13,
-       $14, $15, $16, $17
+       $1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10::jsonb, $11, $12, $13,
+       $14, $15, $16, $17, $18
      )`,
     [
       route.id,
+      route.currentVersion,
       route.campaignId,
       route.campaignVersionMin,
       route.referrerWallet,
@@ -1539,6 +1690,123 @@ function insertRoute(
       route.createdAt,
       route.activatedAt
     ]
+  ).then(async (result) => {
+    await insertRouteVersion(client, version);
+    return result;
+  });
+}
+
+function insertRouteVersion(
+  client: PostgresQueryExecutor,
+  version: RouteVersionRecord
+): Promise<QueryResult> {
+  return client.query(
+    `insert into route_versions (
+       route_id, version, campaign_version_min, payout_wallet, claim_hash,
+       claim_json, signing_bytes_hex, issued_at, expires_at, nonce,
+       metadata_hash, created_at
+     ) values (
+       $1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12
+     )`,
+    [
+      version.routeId,
+      version.version,
+      version.campaignVersionMin,
+      version.payoutWallet,
+      version.claimHash,
+      JSON.stringify(version.claim),
+      version.signingBytesHex,
+      version.issuedAt,
+      version.expiresAt,
+      version.nonce,
+      version.metadataHash ?? null,
+      version.createdAt
+    ]
+  );
+}
+
+async function updateRouteCurrentVersion(
+  client: PostgresQueryExecutor,
+  route: RouteRecord
+): Promise<RouteRecord | undefined> {
+  const result = await client.query<RouteRow>(
+    `update routes
+        set current_version = $2,
+            campaign_version_min = $3,
+            payout_wallet = $4,
+            claim_hash = $5,
+            claim_json = $6::jsonb,
+            signing_bytes_hex = $7,
+            issued_at = $8,
+            expires_at = $9,
+            nonce = $10,
+            metadata_hash = $11
+      where id = $1
+        and current_version = $12
+      returning id, current_version, campaign_id, campaign_version_min,
+                referrer_wallet, payout_wallet, resource_origin, operation_ids,
+                claim_hash, claim_json, signing_bytes_hex, status, issued_at,
+                expires_at, nonce, metadata_hash, created_at, activated_at`,
+    [
+      route.id,
+      route.currentVersion,
+      route.campaignVersionMin,
+      route.payoutWallet,
+      route.claimHash,
+      JSON.stringify(route.claim),
+      route.signingBytesHex,
+      route.issuedAt,
+      route.expiresAt,
+      route.nonce,
+      route.metadataHash ?? null,
+      route.currentVersion - 1
+    ]
+  );
+  const row = result.rows[0];
+  return row === undefined ? undefined : mapRoute(row);
+}
+
+function assertPostgresRouteRotation(
+  existing: RouteRecord,
+  validated: RouteRecord
+): void {
+  if (validated.id !== existing.id) {
+    throw new RouteRegistryValidationError("rotated claim routeId must match route");
+  }
+  if (validated.campaignId !== existing.campaignId) {
+    throw new RouteRegistryValidationError(
+      "rotated claim campaignId must match route"
+    );
+  }
+  if (validated.campaignVersionMin !== existing.campaignVersionMin) {
+    throw new RouteRegistryValidationError(
+      "rotated claim campaignVersionMin must match route"
+    );
+  }
+  if (validated.referrerWallet !== existing.referrerWallet) {
+    throw new RouteRegistryValidationError(
+      "rotated claim referrerWallet must match route"
+    );
+  }
+  if (validated.resourceOrigin !== existing.resourceOrigin) {
+    throw new RouteRegistryValidationError(
+      "rotated claim resourceOrigin must match route"
+    );
+  }
+  if (!routeOperationScopesEqual(validated.operationIds, existing.operationIds)) {
+    throw new RouteRegistryValidationError(
+      "rotated claim operationIds must match route"
+    );
+  }
+}
+
+function routeOperationScopesEqual(
+  left: RouteOperationScope,
+  right: RouteOperationScope
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((operationId, index) => operationId === right[index])
   );
 }
 
@@ -2043,6 +2311,7 @@ function mapCampaignVersion(row: CampaignVersionRow): CampaignVersionRecord {
 function mapRoute(row: RouteRow): RouteRecord {
   return {
     id: row.id,
+    currentVersion: row.current_version,
     campaignId: row.campaign_id,
     campaignVersionMin: row.campaign_version_min,
     referrerWallet: row.referrer_wallet,
@@ -2059,6 +2328,23 @@ function mapRoute(row: RouteRow): RouteRecord {
     ...(row.metadata_hash === null ? {} : { metadataHash: row.metadata_hash }),
     createdAt: toIsoString(row.created_at),
     activatedAt: toIsoString(row.activated_at)
+  };
+}
+
+function mapRouteVersion(row: RouteVersionRow): RouteVersionRecord {
+  return {
+    routeId: row.route_id,
+    version: row.version,
+    campaignVersionMin: row.campaign_version_min,
+    payoutWallet: row.payout_wallet,
+    claimHash: row.claim_hash,
+    claim: parseReferralClaimJson(row.claim_json),
+    signingBytesHex: row.signing_bytes_hex,
+    issuedAt: toIsoString(row.issued_at),
+    expiresAt: toIsoString(row.expires_at),
+    nonce: row.nonce,
+    ...(row.metadata_hash === null ? {} : { metadataHash: row.metadata_hash }),
+    createdAt: toIsoString(row.created_at)
   };
 }
 

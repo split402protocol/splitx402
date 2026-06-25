@@ -23,8 +23,12 @@ const REFERRER_SEED = hexToBytes(
 const PAYOUT_SEED = hexToBytes(
   "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f"
 );
+const ROTATED_PAYOUT_SEED = hexToBytes(
+  "606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f"
+);
 const REFERRER_WALLET = deriveEd25519PublicKey(REFERRER_SEED);
 const PAYOUT_WALLET = deriveEd25519PublicKey(PAYOUT_SEED);
+const ROTATED_PAYOUT_WALLET = deriveEd25519PublicKey(ROTATED_PAYOUT_SEED);
 
 describe("InMemoryRouteRegistry", () => {
   it("creates canonical unsigned route drafts and activates signed claims", () => {
@@ -40,12 +44,60 @@ describe("InMemoryRouteRegistry", () => {
     expect(draft.signingBytesHex).toMatch(/^[0-9a-f]+$/u);
     expect(draft.unsignedClaimHash).toBe(hashProtocolObject(draft.claim));
     expect(route.status).toBe("active");
+    expect(route.currentVersion).toBe(1);
     expect(route.claimHash).toBe(hashProtocolObject(claim));
     expect(route.signingBytesHex).toBe(draft.signingBytesHex);
     expect(route.referrerWallet).toBe(REFERRER_WALLET);
     expect(route.payoutWallet).toBe(PAYOUT_WALLET);
     expect(duplicate.id).toBe(route.id);
     expect(loaded?.claimHash).toBe(route.claimHash);
+  });
+
+  it("rotates payout wallets through immutable signed route versions", () => {
+    const registry = createRouteRegistry();
+    const route = registry.activateRoute({ claim: signRouteDraft(createRouteDraft()) });
+    const rotatedClaim = signRouteDraft(
+      createRouteDraft({
+        payoutWallet: ROTATED_PAYOUT_WALLET,
+        nonce: "route-nonce-0002",
+        issuedAt: "2026-06-24T00:01:00Z"
+      })
+    );
+
+    const rotated = registry.rotateRoutePayout({
+      routeId: route.id,
+      claim: rotatedClaim
+    });
+    const duplicate = registry.rotateRoutePayout({
+      routeId: route.id,
+      claim: rotatedClaim
+    });
+    const versions = registry.listRouteVersions(route.id);
+
+    expect(rotated.currentVersion).toBe(2);
+    expect(rotated.payoutWallet).toBe(ROTATED_PAYOUT_WALLET);
+    expect(rotated.claimHash).toBe(hashProtocolObject(rotatedClaim));
+    expect(duplicate.currentVersion).toBe(2);
+    expect(versions.map((version) => version.version)).toEqual([1, 2]);
+    expect(versions.map((version) => version.payoutWallet)).toEqual([
+      PAYOUT_WALLET,
+      ROTATED_PAYOUT_WALLET
+    ]);
+    expect(versions[0]?.claimHash).toBe(route.claimHash);
+    expect(versions[1]?.claimHash).toBe(rotated.claimHash);
+
+    expect(() =>
+      registry.rotateRoutePayout({
+        routeId: route.id,
+        claim: signRouteDraft(
+          createRouteDraft({
+            operationIds: ["operation-two"],
+            payoutWallet: ROTATED_PAYOUT_WALLET,
+            nonce: "route-nonce-0003"
+          })
+        )
+      })
+    ).toThrow("rotated claim operationIds must match route");
   });
 
   it("rejects invalid signatures and expired route claims", () => {

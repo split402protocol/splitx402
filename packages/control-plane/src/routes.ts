@@ -41,6 +41,11 @@ export interface ActivateRouteInput {
   claim: ReferralClaimV1;
 }
 
+export interface RotateRoutePayoutInput {
+  routeId: string;
+  claim: ReferralClaimV1;
+}
+
 export interface SuspendRouteInput {
   routeId: string;
 }
@@ -66,6 +71,7 @@ export interface NormalizedRouteSearchInput {
 
 export interface RouteRecord {
   id: string;
+  currentVersion: number;
   campaignId: string;
   campaignVersionMin: number;
   referrerWallet: string;
@@ -84,10 +90,27 @@ export interface RouteRecord {
   activatedAt: string;
 }
 
+export interface RouteVersionRecord {
+  routeId: string;
+  version: number;
+  campaignVersionMin: number;
+  payoutWallet: string;
+  claimHash: `sha256:${string}`;
+  claim: ReferralClaimV1;
+  signingBytesHex: string;
+  issuedAt: string;
+  expiresAt: string;
+  nonce: string;
+  metadataHash?: `sha256:${string}`;
+  createdAt: string;
+}
+
 export interface RouteRegistry {
   createRouteDraft(input: CreateRouteDraftInput): Promise<RouteDraft> | RouteDraft;
   activateRoute(input: ActivateRouteInput): Promise<RouteRecord> | RouteRecord;
   getRoute(routeId: string): Promise<RouteRecord | undefined> | RouteRecord | undefined;
+  listRouteVersions(routeId: string): Promise<RouteVersionRecord[]> | RouteVersionRecord[];
+  rotateRoutePayout(input: RotateRoutePayoutInput): Promise<RouteRecord> | RouteRecord;
   suspendRoute(input: SuspendRouteInput): Promise<RouteRecord | undefined> | RouteRecord | undefined;
   searchRoutes(input?: SearchRoutesInput): Promise<RouteRecord[]> | RouteRecord[];
 }
@@ -119,6 +142,7 @@ export class RouteRegistryConflictError extends Error {
 export class InMemoryRouteRegistry implements RouteRegistry {
   private readonly routesById = new Map<string, RouteRecord>();
   private readonly routeIdByClaimHash = new Map<`sha256:${string}`, string>();
+  private readonly versionsByRouteId = new Map<string, RouteVersionRecord[]>();
 
   constructor(private readonly options: InMemoryRouteRegistryOptions = {}) {}
 
@@ -163,19 +187,7 @@ export class InMemoryRouteRegistry implements RouteRegistry {
   }
 
   activateRoute(input: ActivateRouteInput): RouteRecord {
-    const parsed = ReferralClaimV1Schema.safeParse(input.claim);
-    if (!parsed.success) {
-      throw new RouteRegistryValidationError(
-        parsed.error.issues.map((issue) => issue.message).join("; ")
-      );
-    }
-    const claim = parsed.data;
-    const signatureVerification = verifyReferralClaimObject(claim);
-    if (!signatureVerification.ok) {
-      throw new RouteRegistryValidationError(
-        signatureVerification.errors.join("; ")
-      );
-    }
+    const claim = parseVerifiedRouteClaim(input.claim);
     assertChronologicalRange(claim.issuedAt, claim.expiresAt);
     if (Date.parse(claim.expiresAt) <= Date.parse(this.now())) {
       throw new RouteRegistryValidationError("route claim is expired");
@@ -200,6 +212,7 @@ export class InMemoryRouteRegistry implements RouteRegistry {
     const now = this.now();
     const route: RouteRecord = {
       id: claim.routeId,
+      currentVersion: 1,
       campaignId: claim.campaignId,
       campaignVersionMin: claim.campaignVersionMin,
       referrerWallet: claim.referrerWallet,
@@ -219,14 +232,87 @@ export class InMemoryRouteRegistry implements RouteRegistry {
       createdAt: now,
       activatedAt: now
     };
+    const version = createRouteVersionRecord(route, claim, 1, now);
     this.routesById.set(route.id, route);
     this.routeIdByClaimHash.set(route.claimHash, route.id);
+    this.versionsByRouteId.set(route.id, [version]);
     return cloneRoute(route);
   }
 
   getRoute(routeId: string): RouteRecord | undefined {
     const route = this.routesById.get(routeId);
     return route === undefined ? undefined : cloneRoute(route);
+  }
+
+  listRouteVersions(routeId: string): RouteVersionRecord[] {
+    assertSplit402Id(routeId, "route id");
+    return (this.versionsByRouteId.get(routeId) ?? []).map(cloneRouteVersion);
+  }
+
+  rotateRoutePayout(input: RotateRoutePayoutInput): RouteRecord {
+    const routeId = assertSplit402Id(input.routeId, "route id");
+    const existing = this.routesById.get(routeId);
+    if (existing === undefined) {
+      throw new RouteRegistryValidationError(`unknown route: ${routeId}`);
+    }
+    if (existing.status !== "active") {
+      throw new RouteRegistryValidationError(
+        `route must be active to rotate payout; current status is ${existing.status}`
+      );
+    }
+    const claim = parseVerifiedRouteClaim(input.claim);
+    assertRoutePayoutRotation(existing, claim);
+    assertChronologicalRange(claim.issuedAt, claim.expiresAt);
+    if (Date.parse(claim.expiresAt) <= Date.parse(this.now())) {
+      throw new RouteRegistryValidationError("route claim is expired");
+    }
+
+    const claimHash = hashProtocolObject(claim);
+    const duplicateRouteId = this.routeIdByClaimHash.get(claimHash);
+    if (duplicateRouteId !== undefined && duplicateRouteId !== routeId) {
+      throw new RouteRegistryConflictError(
+        `route claim already exists for another route: ${duplicateRouteId}`
+      );
+    }
+    if (
+      (this.versionsByRouteId.get(routeId) ?? []).some(
+        (version) => version.claimHash === claimHash
+      )
+    ) {
+      return cloneRoute(existing);
+    }
+    if (claimHash === existing.claimHash) {
+      return cloneRoute(existing);
+    }
+
+    const now = this.now();
+    const nextVersion = existing.currentVersion + 1;
+    const rotated: RouteRecord = {
+      ...existing,
+      currentVersion: nextVersion,
+      campaignVersionMin: claim.campaignVersionMin,
+      payoutWallet: claim.payoutWallet,
+      claimHash,
+      claim: cloneClaim(claim),
+      signingBytesHex: bytesToHex(buildReferralClaimSigningBytes(claim)),
+      issuedAt: claim.issuedAt,
+      expiresAt: claim.expiresAt,
+      nonce: claim.nonce
+    };
+    if (claim.metadataHash === undefined) {
+      delete rotated.metadataHash;
+    } else {
+      rotated.metadataHash = claim.metadataHash;
+    }
+
+    const version = createRouteVersionRecord(rotated, claim, nextVersion, now);
+    this.routesById.set(routeId, rotated);
+    this.routeIdByClaimHash.set(claimHash, routeId);
+    this.versionsByRouteId.set(routeId, [
+      ...(this.versionsByRouteId.get(routeId) ?? []),
+      version
+    ]);
+    return cloneRoute(rotated);
   }
 
   suspendRoute(input: SuspendRouteInput): RouteRecord | undefined {
@@ -434,6 +520,13 @@ function cloneRoute(route: RouteRecord): RouteRecord {
   };
 }
 
+function cloneRouteVersion(version: RouteVersionRecord): RouteVersionRecord {
+  return {
+    ...version,
+    claim: cloneClaim(version.claim)
+  };
+}
+
 function cloneClaim(claim: ReferralClaimV1): ReferralClaimV1 {
   return {
     ...claim,
@@ -496,4 +589,89 @@ function compareRoutesNewestFirst(left: RouteRecord, right: RouteRecord): number
     return createdAtComparison;
   }
   return right.id.localeCompare(left.id);
+}
+
+function parseVerifiedRouteClaim(claimInput: ReferralClaimV1): ReferralClaimV1 {
+  const parsed = ReferralClaimV1Schema.safeParse(claimInput);
+  if (!parsed.success) {
+    throw new RouteRegistryValidationError(
+      parsed.error.issues.map((issue) => issue.message).join("; ")
+    );
+  }
+  const claim = parsed.data;
+  const signatureVerification = verifyReferralClaimObject(claim);
+  if (!signatureVerification.ok) {
+    throw new RouteRegistryValidationError(
+      signatureVerification.errors.join("; ")
+    );
+  }
+  return claim;
+}
+
+function createRouteVersionRecord(
+  route: RouteRecord,
+  claim: ReferralClaimV1,
+  version: number,
+  createdAt: string
+): RouteVersionRecord {
+  return {
+    routeId: route.id,
+    version,
+    campaignVersionMin: claim.campaignVersionMin,
+    payoutWallet: claim.payoutWallet,
+    claimHash: route.claimHash,
+    claim: cloneClaim(claim),
+    signingBytesHex: route.signingBytesHex,
+    issuedAt: claim.issuedAt,
+    expiresAt: claim.expiresAt,
+    nonce: claim.nonce,
+    ...(claim.metadataHash === undefined
+      ? {}
+      : { metadataHash: claim.metadataHash }),
+    createdAt
+  };
+}
+
+function assertRoutePayoutRotation(
+  existing: RouteRecord,
+  claim: ReferralClaimV1
+): void {
+  if (claim.routeId !== existing.id) {
+    throw new RouteRegistryValidationError("rotated claim routeId must match route");
+  }
+  if (claim.campaignId !== existing.campaignId) {
+    throw new RouteRegistryValidationError(
+      "rotated claim campaignId must match route"
+    );
+  }
+  if (claim.campaignVersionMin !== existing.campaignVersionMin) {
+    throw new RouteRegistryValidationError(
+      "rotated claim campaignVersionMin must match route"
+    );
+  }
+  if (claim.referrerWallet !== existing.referrerWallet) {
+    throw new RouteRegistryValidationError(
+      "rotated claim referrerWallet must match route"
+    );
+  }
+  if (claim.resourceOrigin !== existing.resourceOrigin) {
+    throw new RouteRegistryValidationError(
+      "rotated claim resourceOrigin must match route"
+    );
+  }
+  if (!operationScopesEqual(claim.operationIds, existing.operationIds)) {
+    throw new RouteRegistryValidationError(
+      "rotated claim operationIds must match route"
+    );
+  }
+}
+
+function operationScopesEqual(
+  left: RouteOperationScope,
+  right: RouteOperationScope
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((operationId, index) => operationId === right[index])
+  );
 }

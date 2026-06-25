@@ -147,10 +147,12 @@ Current slice:
   merchant-owner-authorized suspension when auth is required;
 - route search API for active route discovery by campaign, referrer, origin,
   operation id, status, and bounded result limit;
+- payout-wallet rotation through a new referrer-signed route claim and immutable
+  route version history;
 - PostgreSQL campaign registry adapter with campaign, immutable version,
   operation, and activation persistence;
 - PostgreSQL route registry adapter with active/suspended route status, operation
-  scope, signed claim, and duplicate-claim persistence;
+  scope, signed claim, duplicate-claim persistence, and route-version history;
 - PostgreSQL outbox event persistence committed atomically with accepted receipts
   and accounting rows;
 - PostgreSQL outbox claiming, retry scheduling, delivery marking, and dead-letter
