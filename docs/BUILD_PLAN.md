@@ -1,15 +1,16 @@
 # Split402 Build Plan
 
-This plan follows the Split402 protocol architecture v0.1 spec and the
-`splitx402/ffff` implementation built from it. The project is not changing names or
-directions: **Split402** is the protocol/product, `ffff` is the first implementation
-repo, and this repository is the v2 implementation line.
+This plan follows the Split402 protocol architecture v0.1 spec and the current
+`split402protocol/splitx402` implementation. The project is not changing names
+or directions: **Split402** is the protocol/product, and `ffff` is only the
+historical first implementation reference.
 
-Canonical source:
+Canonical sources:
 
 - [`docs/reference/split402_protocol_architecture_v0.1.md`](reference/split402_protocol_architecture_v0.1.md)
+- [`split402protocol/splitx402`](https://github.com/split402protocol/splitx402)
 
-Implementation reference:
+Historical implementation reference:
 
 - [`splitx402/ffff`](https://github.com/splitx402/ffff)
 
@@ -60,8 +61,8 @@ Exit criteria:
 
 Status: implemented as a transitional slice.
 
-Purpose: keep a minimal x402-shaped HTTP host available while v2 ports the real
-Split402 protocol packages from `ffff`.
+Purpose: keep a minimal x402-shaped HTTP host available while this repository
+ports the real Split402 protocol packages from the historical baseline.
 
 Deliverables:
 
