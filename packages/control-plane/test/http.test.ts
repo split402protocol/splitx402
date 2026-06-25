@@ -1207,6 +1207,76 @@ describe("control-plane HTTP API", () => {
     expect(limitedSearchResponse.body.routes).toHaveLength(1);
   });
 
+  it("lists referrer routes for dashboard and discovery views", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const { app } = createTestApp({
+      withCampaignRegistry: true,
+      withMerchantRegistry: true,
+      withRouteRegistry: true
+    });
+    await createActiveCampaign(app);
+    const referrerDraftResponse = await request(app)
+      .post("/v1/routes/drafts")
+      .send({
+        campaignId: bundle.artifacts.receipt.campaignId,
+        referrerWallet: REFERRER_WALLET,
+        payoutWallet: PAYOUT_WALLET,
+        operationIds: [bundle.artifacts.receipt.operationId],
+        expiresAt: "2026-06-25T00:00:00Z",
+        nonce: "route-nonce-http-0001"
+      })
+      .expect(201);
+    const otherDraftResponse = await request(app)
+      .post("/v1/routes/drafts")
+      .send({
+        id: "rte_cccccccccccccccccccccccccccccccc",
+        campaignId: bundle.artifacts.receipt.campaignId,
+        referrerWallet: OTHER_OWNER_WALLET,
+        payoutWallet: ROTATED_PAYOUT_WALLET,
+        operationIds: [bundle.artifacts.receipt.operationId],
+        expiresAt: "2026-06-25T00:00:00Z",
+        nonce: "route-nonce-http-0002"
+      })
+      .expect(201);
+    const referrerDraft = referrerDraftResponse.body.draft as RouteDraft;
+    const otherDraft = otherDraftResponse.body.draft as RouteDraft;
+    await request(app)
+      .post("/v1/routes")
+      .send({ claim: signRouteDraft(referrerDraft) })
+      .expect(201);
+    await request(app)
+      .post("/v1/routes")
+      .send({ claim: signRouteDraft(otherDraft, OTHER_OWNER_SEED) })
+      .expect(201);
+
+    const response = await request(app)
+      .get(`/v1/referrers/${REFERRER_WALLET}/routes`)
+      .query({
+        campaignId: bundle.artifacts.receipt.campaignId,
+        operationId: bundle.artifacts.receipt.operationId,
+        limit: "10"
+      })
+      .expect(200);
+    const otherResponse = await request(app)
+      .get(`/v1/referrers/${OTHER_OWNER_WALLET}/routes`)
+      .query({ operationId: bundle.artifacts.receipt.operationId })
+      .expect(200);
+
+    expect(response.body.routes.map((route: { id: string }) => route.id)).toEqual([
+      referrerDraft.routeId
+    ]);
+    expect(response.body.routes[0]).toEqual(
+      expect.objectContaining({
+        referrerWallet: REFERRER_WALLET,
+        payoutWallet: PAYOUT_WALLET,
+        status: "active"
+      })
+    );
+    expect(
+      otherResponse.body.routes.map((route: { id: string }) => route.id)
+    ).toEqual([otherDraft.routeId]);
+  });
+
   it("suspends active routes with merchant-owner authorization when required", async () => {
     const bundle = createSampleProtocolArtifacts();
     const { app } = createTestApp({
@@ -1484,15 +1554,18 @@ function signCampaignTerms(version: CampaignVersionRecord): string {
   ).signature;
 }
 
-function signRouteDraft(draft: RouteDraft): ReferralClaimV1 {
-  return signUnsignedClaim(draft.claim);
+function signRouteDraft(
+  draft: RouteDraft,
+  seed: Uint8Array = REFERRER_SEED
+): ReferralClaimV1 {
+  return signUnsignedClaim(draft.claim, seed);
 }
 
-function signUnsignedClaim(claim: UnsignedReferralClaim): ReferralClaimV1 {
-  const signed = signEd25519Message(
-    buildReferralClaimSigningBytes(claim),
-    REFERRER_SEED
-  );
+function signUnsignedClaim(
+  claim: UnsignedReferralClaim,
+  seed: Uint8Array = REFERRER_SEED
+): ReferralClaimV1 {
+  const signed = signEd25519Message(buildReferralClaimSigningBytes(claim), seed);
   return {
     ...claim,
     signature: {
