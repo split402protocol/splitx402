@@ -35,10 +35,13 @@ Status: started.
 - Added deterministic Solana payout transaction planning that derives source and
   destination token accounts, adds idempotent associated-token-account creation
   steps, and emits transfer-checked instruction plans for allocated batches.
+- Added a Solana RPC payout simulation boundary that validates serialized
+  transactions against the plan, calls `simulateTransaction`, and reports
+  per-transaction succeeded, failed, or retryable outcomes.
 - Added `0010_payout_batches.sql` for payout batches, payout items, payout
   allocations, and the `allocated` accrual status.
-- Added control-plane tests for payout planning, Solana transaction planning,
-  allocation persistence, and the HTTP payout routes.
+- Added control-plane tests for payout planning, Solana transaction planning and
+  simulation, allocation persistence, and the HTTP payout routes.
 
 ## Why This Comes Next
 
@@ -50,7 +53,6 @@ the merchant has enough funding.
 
 ## Remaining Milestone 4 Work
 
-- Solana transaction simulation.
 - Isolated payout signer policy.
 - Broadcast, confirmation, finality, and retry handling.
 - Reconciliation for unknown transaction outcomes.

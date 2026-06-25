@@ -229,6 +229,8 @@ Current slice:
 - worker-side PostgreSQL `FOR UPDATE SKIP LOCKED` selection for concurrent batch
   creation;
 - deterministic Solana transfer plan generation for allocated payout batches;
+- Solana RPC payout transaction simulation with per-transaction
+  succeeded/failed/retry outcomes;
 - `POST /v1/merchants/:merchantId/payout-wallets`;
 - `POST /v1/merchants/:merchantId/payouts/preview`;
 - `POST /v1/merchants/:merchantId/payout-batches`.
