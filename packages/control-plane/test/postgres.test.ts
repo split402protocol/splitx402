@@ -484,6 +484,18 @@ describe("PostgresReceiptIngestionStore", () => {
       observedAt: "2026-06-24T00:08:00Z"
     });
     const rolledUpBatch = await store.getPayoutBatch(batch.id);
+    const ledgerClose = await store.closeFinalizedPayoutBatchLedger({
+      payoutBatchId: batch.id,
+      now: "2026-06-24T00:09:00Z",
+      transactionId: "ldg_ffffffffffffffffffffffffffffffff",
+      entryIdFactory: sequence([
+        "lde_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "lde_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ])
+    });
+    const repeatedLedgerClose = await store.closeFinalizedPayoutBatchLedger({
+      payoutBatchId: batch.id
+    });
 
     expect(saved).toHaveLength(1);
     expect(listed).toEqual(saved);
@@ -511,6 +523,30 @@ describe("PostgresReceiptIngestionStore", () => {
       })
     );
     expect(rolledUpBatch?.items[0]?.status).toBe("finalized");
+    expect(ledgerClose).toEqual(
+      expect.objectContaining({
+        id: "ldg_ffffffffffffffffffffffffffffffff",
+        sourceType: "payout_batch",
+        sourceId: batch.id,
+        asset: bundle.artifacts.receipt.asset,
+        createdAt: "2026-06-24T00:09:00.000Z",
+        entries: [
+          expect.objectContaining({
+            accountType: "merchant_commission_liability",
+            accountReference: bundle.artifacts.receipt.merchantId,
+            amountAtomic: "2000"
+          }),
+          expect.objectContaining({
+            accountType: "referrer_payable",
+            accountReference: bundle.artifacts.receipt.payoutWallet,
+            amountAtomic: "-2000"
+          })
+        ]
+      })
+    );
+    expect(repeatedLedgerClose?.id).toBe(ledgerClose?.id);
+    expect(fakePool.database.ledgerTransactions).toHaveLength(2);
+    expect(fakePool.database.ledgerEntries).toHaveLength(5);
     expect(fakePool.database.payoutTransactions).toHaveLength(1);
     await expect(
       store.saveSignedPayoutTransactions({
@@ -1341,7 +1377,7 @@ class FakePostgresClient implements PostgresTransactionClient {
     }
     if (normalized.includes("from ledger_transactions")) {
       return result(
-        this.database.selectLedgerTransaction(values[0]) as unknown as Row[]
+        this.database.selectLedgerTransaction(values) as unknown as Row[]
       );
     }
     if (normalized.includes("from ledger_entries")) {
@@ -1696,11 +1732,13 @@ class FakePostgresDatabase {
     }
   }
 
-  selectLedgerTransaction(accrualId: unknown): StoredLedgerTransactionRow[] {
+  selectLedgerTransaction(values: readonly unknown[]): StoredLedgerTransactionRow[] {
+    const sourceType = readString(values[0]);
+    const sourceId = readString(values[1]);
     const transaction = this.ledgerTransactions.find(
       (row) =>
-        row.source_type === "commission_accrual" &&
-        row.source_id === readString(accrualId)
+        row.source_type === sourceType &&
+        row.source_id === sourceId
     );
     return transaction === undefined ? [] : [transaction];
   }
@@ -2809,6 +2847,16 @@ function readJsonPayload(value: unknown): Record<string, unknown> {
     throw new Error("expected object payload");
   }
   return payload as Record<string, unknown>;
+}
+
+function sequence(values: string[]): () => string {
+  return () => {
+    const value = values.shift();
+    if (value === undefined) {
+      throw new Error("sequence exhausted");
+    }
+    return value;
+  };
 }
 
 function findOutboxEvent(

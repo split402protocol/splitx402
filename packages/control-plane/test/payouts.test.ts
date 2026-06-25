@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   createPayoutBatchPlan,
+  createPayoutFinalizationLedgerTransaction,
   createPayoutPreview,
   createSignedPayoutTransactionRecords,
   filterPayoutEligibleAccruals,
   summarizePayoutBatchFinality,
   type CommissionAccrual,
+  type PayoutBatchRecord,
   type PayoutTransactionRecord
 } from "../src/index.js";
 
@@ -329,6 +331,76 @@ describe("payout batch finality rollup", () => {
   });
 });
 
+describe("payout finalization ledger", () => {
+  it("creates a balanced ledger close for finalized payout items", () => {
+    const ledger = createPayoutFinalizationLedgerTransaction({
+      batch: finalizedBatch(),
+      now: NOW,
+      transactionId: "ldg_ffffffffffffffffffffffffffffffff",
+      entryIdFactory: sequence([
+        "lde_11111111111111111111111111111111",
+        "lde_22222222222222222222222222222222",
+        "lde_33333333333333333333333333333333"
+      ])
+    });
+
+    expect(ledger).toEqual({
+      id: "ldg_ffffffffffffffffffffffffffffffff",
+      sourceType: "payout_batch",
+      sourceId: "pbt_ffffffffffffffffffffffffffffffff",
+      asset: "usdc_mint",
+      createdAt: NOW,
+      entries: [
+        {
+          id: "lde_11111111111111111111111111111111",
+          transactionId: "ldg_ffffffffffffffffffffffffffffffff",
+          accountType: "merchant_commission_liability",
+          accountReference: "mrc_1",
+          asset: "usdc_mint",
+          amountAtomic: "100"
+        },
+        {
+          id: "lde_22222222222222222222222222222222",
+          transactionId: "ldg_ffffffffffffffffffffffffffffffff",
+          accountType: "referrer_payable",
+          accountReference: "payout_a",
+          asset: "usdc_mint",
+          amountAtomic: "-70"
+        },
+        {
+          id: "lde_33333333333333333333333333333333",
+          transactionId: "ldg_ffffffffffffffffffffffffffffffff",
+          accountType: "referrer_payable",
+          accountReference: "payout_b",
+          asset: "usdc_mint",
+          amountAtomic: "-30"
+        }
+      ]
+    });
+  });
+
+  it("rejects ledger closure before all payout items finalize", () => {
+    expect(() =>
+      createPayoutFinalizationLedgerTransaction({
+        batch: { ...finalizedBatch(), status: "confirmed" }
+      })
+    ).toThrow("payout batch must be finalized");
+    expect(() =>
+      createPayoutFinalizationLedgerTransaction({
+        batch: {
+          ...finalizedBatch(),
+          items: [
+            {
+              ...finalizedBatch().items[0]!,
+              status: "confirmed"
+            }
+          ]
+        }
+      })
+    ).toThrow("all payout items must be finalized");
+  });
+});
+
 function accrual(overrides: Partial<CommissionAccrual> = {}): CommissionAccrual {
   return {
     id: "acr_0",
@@ -347,6 +419,54 @@ function accrual(overrides: Partial<CommissionAccrual> = {}): CommissionAccrual 
   };
 }
 
+function finalizedBatch(): PayoutBatchRecord {
+  return {
+    id: "pbt_ffffffffffffffffffffffffffffffff",
+    merchantId: "mrc_1",
+    payoutWalletId: "mpw_ffffffffffffffffffffffffffffffff",
+    network: "solana:devnet",
+    asset: "usdc_mint",
+    status: "finalized",
+    totalAmountAtomic: "100",
+    itemCount: 2,
+    accrualCount: 2,
+    createdAt: NOW,
+    updatedAt: NOW,
+    items: [
+      {
+        id: "pit_11111111111111111111111111111111",
+        payoutBatchId: "pbt_ffffffffffffffffffffffffffffffff",
+        destinationWallet: "payout_a",
+        amountAtomic: "70",
+        status: "finalized",
+        createdAt: NOW,
+        allocations: [
+          {
+            payoutItemId: "pit_11111111111111111111111111111111",
+            accrualId: "acr_1",
+            amountAtomic: "70"
+          }
+        ]
+      },
+      {
+        id: "pit_22222222222222222222222222222222",
+        payoutBatchId: "pbt_ffffffffffffffffffffffffffffffff",
+        destinationWallet: "payout_b",
+        amountAtomic: "30",
+        status: "finalized",
+        createdAt: NOW,
+        allocations: [
+          {
+            payoutItemId: "pit_22222222222222222222222222222222",
+            accrualId: "acr_2",
+            amountAtomic: "30"
+          }
+        ]
+      }
+    ]
+  };
+}
+
 function payoutTransaction(
   overrides: Partial<PayoutTransactionRecord> = {}
 ): PayoutTransactionRecord {
@@ -358,5 +478,15 @@ function payoutTransaction(
     status: "submitted",
     createdAt: NOW,
     ...overrides
+  };
+}
+
+function sequence(values: string[]): () => string {
+  return () => {
+    const value = values.shift();
+    if (value === undefined) {
+      throw new Error("sequence exhausted");
+    }
+    return value;
   };
 }

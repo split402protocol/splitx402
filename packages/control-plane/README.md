@@ -79,7 +79,8 @@ POST /v1/merchants/:merchantId/payout-batches
 - signed-byte payout transaction persistence before broadcast;
 - Solana RPC broadcast submission boundary for persisted signed bytes;
 - Solana RPC finality monitoring with retry and outcome-unknown classification;
-- payout batch and item status rollup from transaction finality.
+- payout batch and item status rollup from transaction finality;
+- idempotent payout-batch ledger closure for finalized payouts.
 
 ## Commands
 

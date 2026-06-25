@@ -1,7 +1,7 @@
 import { parseAtomicAmount, serializeAtomicAmount } from "@split402/protocol";
 import { randomBytes } from "node:crypto";
 
-import type { CommissionAccrual } from "./index.js";
+import type { CommissionAccrual, LedgerTransaction } from "./index.js";
 
 export type PayoutFundingStatus = "unknown" | "covered" | "deficit";
 export type PayoutBatchStatus =
@@ -143,6 +143,19 @@ export interface PayoutTransactionStore {
   ): Promise<PayoutTransactionRecord | undefined> | PayoutTransactionRecord | undefined;
 }
 
+export interface ClosePayoutBatchLedgerInput {
+  payoutBatchId: string;
+  now?: string;
+  transactionId?: string;
+  entryIdFactory?: () => string;
+}
+
+export interface PayoutLedgerClosureStore {
+  closeFinalizedPayoutBatchLedger(
+    input: ClosePayoutBatchLedgerInput
+  ): Promise<LedgerTransaction | undefined> | LedgerTransaction | undefined;
+}
+
 export interface PayoutFundingBalance {
   asset: string;
   amountAtomic: string;
@@ -250,6 +263,13 @@ export interface PayoutBatchFinalityRollup {
   itemStatus?: PayoutItemStatus;
   failureCode?: string;
   failureMessage?: string;
+}
+
+export interface CreatePayoutFinalizationLedgerTransactionInput {
+  batch: PayoutBatchRecord;
+  now?: string;
+  transactionId?: string;
+  entryIdFactory?: () => string;
 }
 
 interface MutablePayoutItem {
@@ -679,6 +699,93 @@ export function summarizePayoutBatchFinality(
   return undefined;
 }
 
+export function createPayoutFinalizationLedgerTransaction(
+  input: CreatePayoutFinalizationLedgerTransactionInput
+): LedgerTransaction {
+  const batch = input.batch;
+  if (batch.status !== "finalized") {
+    throw new PayoutBatchValidationError(
+      "payout batch must be finalized before ledger closure"
+    );
+  }
+  if (batch.items.length === 0) {
+    throw new PayoutBatchValidationError("payout batch must contain items");
+  }
+  if (batch.items.some((item) => item.status !== "finalized")) {
+    throw new PayoutBatchValidationError(
+      "all payout items must be finalized before ledger closure"
+    );
+  }
+  const createdAt = normalizeTimestamp(input.now ?? new Date().toISOString(), "now");
+  const transactionId = assertSplit402Id(
+    input.transactionId ?? createLedgerTransactionId(),
+    "ledger transaction id"
+  );
+  const entryIdFactory = input.entryIdFactory ?? createLedgerEntryId;
+  const itemTotal = batch.items.reduce(
+    (total, item) => total + readPositiveAtomicAmount(item.amountAtomic, "item.amountAtomic"),
+    0n
+  );
+  if (itemTotal.toString() !== batch.totalAmountAtomic) {
+    throw new PayoutBatchValidationError(
+      "payout batch total does not match finalized item total"
+    );
+  }
+  const entries = [
+    {
+      id: assertSplit402Id(entryIdFactory(), "ledger entry id"),
+      transactionId,
+      accountType: "merchant_commission_liability" as const,
+      accountReference: batch.merchantId,
+      asset: batch.asset,
+      amountAtomic: itemTotal.toString()
+    },
+    ...batch.items.map((item) => ({
+      id: assertSplit402Id(entryIdFactory(), "ledger entry id"),
+      transactionId,
+      accountType: "referrer_payable" as const,
+      accountReference: item.destinationWallet,
+      asset: batch.asset,
+      amountAtomic: negatePositiveAtomic(item.amountAtomic)
+    }))
+  ];
+  assertPayoutLedgerBalances(entries);
+  return {
+    id: transactionId,
+    sourceType: "payout_batch",
+    sourceId: batch.id,
+    asset: batch.asset,
+    entries,
+    createdAt
+  };
+}
+
+function readPositiveAtomicAmount(value: string, label: string): bigint {
+  const amount = readAtomicAmount(value, label);
+  if (amount <= 0n) {
+    throw new PayoutBatchValidationError(`${label} must be a positive atomic amount`);
+  }
+  return amount;
+}
+
+function negatePositiveAtomic(value: string): string {
+  const amount = readPositiveAtomicAmount(value, "amountAtomic");
+  return `-${amount.toString()}`;
+}
+
+function assertPayoutLedgerBalances(
+  entries: readonly LedgerTransaction["entries"][number][]
+): void {
+  const byAsset = new Map<string, bigint>();
+  for (const entry of entries) {
+    byAsset.set(entry.asset, (byAsset.get(entry.asset) ?? 0n) + BigInt(entry.amountAtomic));
+  }
+  const unbalanced = Array.from(byAsset.entries()).filter(([, amount]) => amount !== 0n);
+  if (unbalanced.length > 0) {
+    throw new PayoutBatchValidationError("payout ledger transaction is not balanced");
+  }
+}
+
 function readPayoutTransactionFailureMessage(
   transaction: PayoutTransactionRecord
 ): string {
@@ -934,6 +1041,14 @@ function createPayoutItemId(): string {
 
 function createPayoutTransactionId(): string {
   return `ptx_${randomBytes(16).toString("hex")}`;
+}
+
+function createLedgerTransactionId(): string {
+  return `ldg_${randomBytes(16).toString("hex")}`;
+}
+
+function createLedgerEntryId(): string {
+  return `lde_${randomBytes(16).toString("hex")}`;
 }
 
 function readAttempt(transaction: SaveSignedPayoutTransactionInput): number {

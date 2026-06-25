@@ -106,10 +106,13 @@ import type {
   PayoutTransactionStore,
   SaveSignedPayoutTransactionsInput,
   MarkPayoutTransactionSubmittedInput,
-  MarkPayoutTransactionFinalityInput
+  MarkPayoutTransactionFinalityInput,
+  ClosePayoutBatchLedgerInput,
+  PayoutLedgerClosureStore
 } from "./payouts.js";
 import {
   PayoutBatchConflictError,
+  createPayoutFinalizationLedgerTransaction,
   createPayoutBatchPlan,
   createSignedPayoutTransactionRecords,
   summarizePayoutBatchFinality
@@ -407,7 +410,8 @@ export class PostgresReceiptIngestionStore
     ReceiptChainVerificationStore,
     PayoutAccrualStore,
     PayoutBatchStore,
-    PayoutTransactionStore {
+    PayoutTransactionStore,
+    PayoutLedgerClosureStore {
   constructor(
     private readonly db: PostgresPool | PostgresQueryExecutor,
     private readonly options: PostgresReceiptIngestionStoreOptions = {}
@@ -706,6 +710,39 @@ export class PostgresReceiptIngestionStore
     return row === undefined ? undefined : mapPayoutTransaction(row);
   }
 
+  async closeFinalizedPayoutBatchLedger(
+    input: ClosePayoutBatchLedgerInput
+  ): Promise<LedgerTransaction | undefined> {
+    const existing = await this.loadLedgerTransactionBySource(
+      "payout_batch",
+      input.payoutBatchId
+    );
+    if (existing !== undefined) {
+      return existing;
+    }
+    const batch = await this.getPayoutBatch(input.payoutBatchId);
+    if (batch === undefined) {
+      return undefined;
+    }
+    const transaction = createPayoutFinalizationLedgerTransaction({
+      batch,
+      ...(input.now === undefined ? {} : { now: input.now }),
+      ...(input.transactionId === undefined
+        ? {}
+        : { transactionId: input.transactionId }),
+      ...(input.entryIdFactory === undefined
+        ? {}
+        : { entryIdFactory: input.entryIdFactory })
+    });
+    await this.withTransaction(async (client) => {
+      await insertLedgerTransaction(client, transaction);
+      for (const entry of transaction.entries) {
+        await insertLedgerEntry(client, entry);
+      }
+    });
+    return transaction;
+  }
+
   async save(snapshot: ReceiptIngestionSnapshot): Promise<void> {
     await this.withTransaction(async (client) => {
       await insertReceipt(client, snapshot.receipt);
@@ -775,13 +812,20 @@ export class PostgresReceiptIngestionStore
   private async loadLedgerTransaction(
     accrualId: string
   ): Promise<LedgerTransaction | undefined> {
+    return this.loadLedgerTransactionBySource("commission_accrual", accrualId);
+  }
+
+  private async loadLedgerTransactionBySource(
+    sourceType: LedgerTransaction["sourceType"],
+    sourceId: string
+  ): Promise<LedgerTransaction | undefined> {
     const transactionResult = await this.db.query<LedgerTransactionRow>(
       `select id, source_type, source_id, asset_mint, created_at
          from ledger_transactions
-        where source_type = 'commission_accrual'
-          and source_id = $1
+        where source_type = $1
+          and source_id = $2
         limit 1`,
-      [accrualId]
+      [sourceType, sourceId]
     );
     const row = transactionResult.rows[0];
     if (row === undefined) {
@@ -2663,7 +2707,7 @@ function mapLedgerTransaction(
   row: LedgerTransactionRow,
   entries: LedgerEntry[]
 ): LedgerTransaction {
-  if (row.source_type !== "commission_accrual") {
+  if (row.source_type !== "commission_accrual" && row.source_type !== "payout_batch") {
     throw new Error(`unsupported ledger source type: ${row.source_type}`);
   }
 
