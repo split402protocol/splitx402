@@ -150,6 +150,7 @@ flowchart TB
   MerchantSdk["@split402/merchant-sdk"]
   Merchant["@split402/demo-merchant"]
   DemoAgent["@split402/demo-agent"]
+  McpDemo["@split402/mcp-demo"]
   Control["@split402/control-plane"]
 
   Protocol --> Vectors
@@ -161,9 +162,11 @@ flowchart TB
   Extension --> Merchant
   Extension --> MerchantSdk
   Agent --> DemoAgent
+  DemoAgent --> McpDemo
   MerchantSdk --> Merchant
   MerchantSdk --> Control
   Merchant --> DemoAgent
+  Merchant --> McpDemo
   Control -->|"receipt ingestion, registry, ledger, payouts"| Protocol
 ```
 
@@ -177,6 +180,7 @@ flowchart TB
 | `@split402/merchant-sdk` | Merchant helpers for campaign caching, service-key rotation, payment IDs, operation digests, and durable receipt outbox delivery. |
 | `@split402/demo-merchant` | Solana Devnet merchant API used to prove the x402 plus Split402 flow. |
 | `@split402/demo-agent` | Runnable buyer/agent harness for setup, preflight, offer inspection, and paid-suite proof runs. |
+| `@split402/mcp-demo` | MCP-facing paid-tool bundle describing the demo tool, x402 payment requirement, Split402 campaign metadata, receipt verification, and proof commands. |
 | `@split402/control-plane` | Receipt ingestion, auth, merchant/campaign/route registries, outbox workers, chain verification, accrual ledger, payout preview, allocation, transaction persistence, broadcast/finality boundaries, and payout ledger closure. |
 | `@split402/payout-signer` | Isolated payout signer appliance with HMAC request authentication, policy checks, Solana transaction signing, readiness/metrics endpoints, JSONL audit logging, and container deployment artifacts. |
 
@@ -413,6 +417,7 @@ Run the demo merchant and agent flows:
 ```bash
 corepack pnpm demo:merchant
 corepack pnpm demo:inspect-offer
+corepack pnpm demo:mcp-bundle
 corepack pnpm demo:preflight
 corepack pnpm demo:paid-suite
 ```
@@ -472,12 +477,14 @@ curl -X POST http://localhost:4020/v1/receipts \
 
 ## Current Phase
 
-Split402 is in public alpha. The repository already contains the protocol core,
-x402 extension, demo path, merchant SDK primitives, control-plane ingestion,
-durable PostgreSQL adapters, outbox workers, chain verification, and the first
-payout-engine boundaries.
+Split402 is in public alpha and actively in Phase 7: dashboard, discovery, and
+agent-facing demo packaging. The repository already contains the protocol core,
+x402 extension, demo path, MCP demo bundle, merchant SDK primitives,
+control-plane ingestion, durable PostgreSQL adapters, outbox workers, chain
+verification, payout-engine boundaries, merchant dashboard summaries, route
+discovery, referrer views, and webhook management.
 
-Active hardening is focused on Phase 6:
+Phase 6 production hardening remains a launch gate:
 
 - staging deployment of the production-packaged signer appliance;
 - production payout custody and incident-response review;
@@ -518,5 +525,6 @@ The latest Devnet proof is recorded in
 - [Phase 4 status](docs/PHASE_4.md)
 - [Phase 5 status](docs/PHASE_5.md)
 - [Phase 6 status](docs/PHASE_6.md)
+- [Phase 7 status](docs/PHASE_7.md)
 - [Architecture baseline decision](docs/decisions/0003-adopt-architecture-and-ffff-baseline.md)
 - [Security policy](SECURITY.md)
