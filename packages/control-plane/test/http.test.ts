@@ -1049,6 +1049,9 @@ describe("control-plane HTTP API", () => {
     const bazaarResponse = await request(app)
       .get(`/v1/routes/${draft.routeId}/bazaar-resources`)
       .expect(200);
+    const dashboardResponse = await request(app)
+      .get(`/v1/merchants/${bundle.artifacts.receipt.merchantId}/dashboard-summary`)
+      .expect(200);
 
     expect(draft.claim).toEqual(
       expect.objectContaining({
@@ -1091,6 +1094,30 @@ describe("control-plane HTTP API", () => {
         })
       })
     ]);
+    expect(dashboardResponse.body.summary).toEqual(
+      expect.objectContaining({
+        schema: "split402.merchant_dashboard_summary.v1",
+        merchant: expect.objectContaining({
+          id: bundle.artifacts.receipt.merchantId,
+          status: "active"
+        }),
+        campaigns: expect.objectContaining({
+          total: 1,
+          activeCampaignIds: [bundle.artifacts.receipt.campaignId],
+          operationCount: 1
+        }),
+        routes: expect.objectContaining({
+          total: 1,
+          activeRouteIds: [draft.routeId]
+        })
+      })
+    );
+    expect(dashboardResponse.body.summary.reliability.signals).toEqual(
+      expect.objectContaining({
+        verifiedOrigins: 1,
+        activeOfferReceiptKeys: 1
+      })
+    );
   });
 
   it("rotates route payout wallets and exposes immutable route versions", async () => {

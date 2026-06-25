@@ -1,6 +1,7 @@
 import type { CampaignOperation, CampaignVersionRecord } from "./campaigns.js";
+import type { CampaignProfile, CampaignStatus } from "./campaigns.js";
 import type { MerchantKeyRecord, MerchantProfile } from "./merchants.js";
-import type { RouteOperationScope, RouteRecord } from "./routes.js";
+import type { RouteOperationScope, RouteRecord, RouteStatus } from "./routes.js";
 
 export interface MerchantReliabilityProfile {
   schema: "split402.merchant_reliability_profile.v1";
@@ -63,6 +64,26 @@ export interface Split402BazaarResource {
   };
 }
 
+export interface MerchantDashboardSummary {
+  schema: "split402.merchant_dashboard_summary.v1";
+  generatedAt: string;
+  merchant: MerchantReliabilityProfile["merchant"];
+  reliability: MerchantReliabilityProfile["readiness"] & {
+    signals: MerchantReliabilityProfile["signals"];
+  };
+  campaigns: {
+    total: number;
+    byStatus: Record<CampaignStatus, number>;
+    activeCampaignIds: string[];
+    operationCount: number;
+  };
+  routes: {
+    total: number;
+    byStatus: Record<RouteStatus, number>;
+    activeRouteIds: string[];
+  };
+}
+
 export function createMerchantReliabilityProfile(
   merchant: MerchantProfile,
   now = new Date().toISOString(),
@@ -106,6 +127,51 @@ export function createMerchantReliabilityProfile(
       payoutReady,
       webhookReady,
       discoveryReady: acceptsReceipts && payoutReady,
+    },
+  };
+}
+
+export function createMerchantDashboardSummary(input: {
+  merchant: MerchantProfile;
+  campaigns: readonly CampaignProfile[];
+  routes: readonly RouteRecord[];
+  now?: string;
+}): MerchantDashboardSummary {
+  const generatedAt = input.now ?? new Date().toISOString();
+  const profile = createMerchantReliabilityProfile(input.merchant, generatedAt);
+  const campaignCounts = createCampaignStatusCounts();
+  const routeCounts = createRouteStatusCounts();
+  let operationCount = 0;
+  for (const campaign of input.campaigns) {
+    campaignCounts[campaign.status] += 1;
+    operationCount += campaign.current.terms.operations.length;
+  }
+  for (const route of input.routes) {
+    routeCounts[route.status] += 1;
+  }
+
+  return {
+    schema: "split402.merchant_dashboard_summary.v1",
+    generatedAt,
+    merchant: profile.merchant,
+    reliability: {
+      ...profile.readiness,
+      signals: profile.signals,
+    },
+    campaigns: {
+      total: input.campaigns.length,
+      byStatus: campaignCounts,
+      activeCampaignIds: input.campaigns
+        .filter((campaign) => campaign.status === "active")
+        .map((campaign) => campaign.id),
+      operationCount,
+    },
+    routes: {
+      total: input.routes.length,
+      byStatus: routeCounts,
+      activeRouteIds: input.routes
+        .filter((route) => route.status === "active")
+        .map((route) => route.id),
     },
   };
 }
@@ -186,4 +252,22 @@ function selectRouteOperations(
   }
   const operationIds = new Set(scope);
   return operations.filter((operation) => operationIds.has(operation.operationId));
+}
+
+function createCampaignStatusCounts(): Record<CampaignStatus, number> {
+  return {
+    draft: 0,
+    active: 0,
+    paused: 0,
+    closed: 0,
+  };
+}
+
+function createRouteStatusCounts(): Record<RouteStatus, number> {
+  return {
+    active: 0,
+    suspended: 0,
+    expired: 0,
+    revoked: 0,
+  };
 }

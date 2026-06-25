@@ -30,6 +30,7 @@ import {
 } from "./campaigns.js";
 import { isReceiptIngestionPersistenceConflict } from "./errors.js";
 import {
+  createMerchantDashboardSummary,
   createMerchantReliabilityProfile,
   createSplit402BazaarResources
 } from "./discovery.js";
@@ -115,6 +116,13 @@ export type OutboxEventStatus =
   | "processing"
   | "delivered"
   | "dead_letter";
+
+const DASHBOARD_ROUTE_STATUSES: readonly RouteStatus[] = [
+  "active",
+  "suspended",
+  "expired",
+  "revoked"
+];
 
 export interface ReceiptRecord {
   id: string;
@@ -1494,7 +1502,10 @@ export function createPayoutRouter(
 
 export function createMerchantRegistryRouter(
   merchantRegistry: MerchantRegistry,
-  options: Pick<ControlPlaneAppOptions, "auth" | "jsonLimit"> = {}
+  options: Pick<
+    ControlPlaneAppOptions,
+    "auth" | "campaignRegistry" | "jsonLimit" | "routeRegistry"
+  > = {}
 ): Router {
   const router = express.Router();
   router.use(express.json({ limit: options.jsonLimit ?? "128kb" }));
@@ -1566,6 +1577,74 @@ export function createMerchantRegistryRouter(
         });
       } catch (error) {
         next(error);
+      }
+    }
+  );
+
+  router.get(
+    "/v1/merchants/:merchantId/dashboard-summary",
+    async (req, res, next) => {
+      try {
+        if (options.campaignRegistry === undefined) {
+          res.status(500).json({
+            error: "internal_server_error",
+            message: "campaign registry is required"
+          });
+          return;
+        }
+        if (options.routeRegistry === undefined) {
+          res.status(500).json({
+            error: "internal_server_error",
+            message: "route registry is required"
+          });
+          return;
+        }
+        const routeRegistry = options.routeRegistry;
+        const merchantId = readRouteParam(req.params.merchantId, "merchantId");
+        const merchant = await merchantRegistry.getMerchantProfile(merchantId);
+        if (merchant === undefined) {
+          res.status(404).json({ error: "merchant_not_found" });
+          return;
+        }
+        const session = await requireMerchantOwnerSession(
+          req,
+          res,
+          options,
+          merchantRegistry
+        );
+        if (session === undefined && isMerchantAuthRequired(options)) {
+          return;
+        }
+        const campaigns = await options.campaignRegistry.listMerchantCampaigns({
+          merchantId,
+          limit: 100
+        });
+        const routeGroups = await Promise.all(
+          campaigns.flatMap((campaign) =>
+            DASHBOARD_ROUTE_STATUSES.map((status) =>
+              routeRegistry.searchRoutes({
+                campaignId: campaign.id,
+                status,
+                limit: 100
+              })
+            )
+          )
+        );
+        res.json({
+          summary: createMerchantDashboardSummary({
+            merchant,
+            campaigns,
+            routes: routeGroups.flat()
+          })
+        });
+      } catch (error) {
+        if (
+          !sendCampaignRegistryError(res, error) &&
+          !sendRouteRegistryError(res, error) &&
+          !sendMerchantRegistryError(res, error)
+        ) {
+          next(error);
+        }
       }
     }
   );

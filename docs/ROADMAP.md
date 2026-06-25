@@ -342,6 +342,8 @@ Current slice:
 - referrer route listing endpoint that reuses route-search filters for
   dashboard and discovery views.
 - Bazaar-compatible resource metadata projection for active Split402 routes.
+- merchant dashboard summary endpoint for readiness, campaign, operation, and
+  route status rollups.
 
 ## Later: Token Bonding And Atomic Settlement
 

@@ -1021,6 +1021,43 @@ describe("PostgresCampaignRegistry", () => {
     ).rejects.toBeInstanceOf(CampaignRegistryConflictError);
   });
 
+  it("lists merchant campaigns from PostgreSQL rows", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const fakePool = new FakePostgresPool();
+    const registry = createPostgresCampaignRegistry(fakePool);
+    const first = await registry.createCampaign({
+      id: bundle.artifacts.receipt.campaignId,
+      merchantId: bundle.artifacts.receipt.merchantId,
+      ...createCampaignTerms()
+    });
+    await registry.activateCampaignVersion({
+      campaignId: first.id,
+      merchantKid: bundle.artifacts.receipt.kid,
+      merchantPublicKey: bundle.keys.merchantPublicKey,
+      merchantSignature: signCampaignTerms(first.current)
+    });
+    const second = await registry.createCampaign({
+      id: "cmp_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      merchantId: bundle.artifacts.receipt.merchantId,
+      ...createCampaignTerms({ commissionBps: 2500 })
+    });
+
+    await expect(
+      registry.listMerchantCampaigns({
+        merchantId: bundle.artifacts.receipt.merchantId
+      })
+    ).resolves.toEqual([
+      expect.objectContaining({ id: second.id, status: "draft" }),
+      expect.objectContaining({ id: first.id, status: "active" })
+    ]);
+    await expect(
+      registry.listMerchantCampaigns({
+        merchantId: bundle.artifacts.receipt.merchantId,
+        status: "active"
+      })
+    ).resolves.toEqual([expect.objectContaining({ id: first.id })]);
+  });
+
   it("maps unique violations to campaign registry conflicts", async () => {
     const bundle = createSampleProtocolArtifacts();
     const fakePool = new FakePostgresPool();
@@ -1771,7 +1808,9 @@ class FakePostgresClient implements PostgresTransactionClient {
       );
     }
     if (normalized.includes("from campaigns")) {
-      return result(this.database.selectCampaign(values[0]) as unknown as Row[]);
+      return result(
+        this.database.selectCampaign(normalized, values) as unknown as Row[]
+      );
     }
     if (normalized.includes("from campaign_versions")) {
       return result(
@@ -2674,9 +2713,29 @@ class FakePostgresDatabase {
     this.routeVersions.push(row);
   }
 
-  selectCampaign(campaignId: unknown): StoredCampaignRow[] {
+  selectCampaign(
+    normalizedSql: string,
+    values: readonly unknown[]
+  ): StoredCampaignRow[] {
+    if (normalizedSql.includes("where merchant_id = $1")) {
+      const merchantId = readString(values[0]);
+      const status = normalizedSql.includes("status = $2")
+        ? readString(values[1])
+        : undefined;
+      const limit = readNumber(values[status === undefined ? 1 : 2]);
+      return this.campaigns
+        .filter((row) => row.merchant_id === merchantId)
+        .filter((row) => status === undefined || row.status === status)
+        .sort(
+          (left, right) =>
+            right.created_at.localeCompare(left.created_at) ||
+            right.id.localeCompare(left.id)
+        )
+        .slice(0, limit);
+    }
+    const campaignId = readString(values[0]);
     const campaign = this.campaigns.find(
-      (row) => row.id === readString(campaignId)
+      (row) => row.id === campaignId
     );
     return campaign === undefined ? [] : [campaign];
   }

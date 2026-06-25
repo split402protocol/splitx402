@@ -29,7 +29,8 @@ import {
   type CampaignTerms,
   type CampaignVersionRecord,
   type CreateCampaignInput,
-  type CreateCampaignVersionInput
+  type CreateCampaignVersionInput,
+  type ListMerchantCampaignsInput
 } from "./campaigns.js";
 import { ReceiptIngestionPersistenceConflictError } from "./errors.js";
 import {
@@ -1232,6 +1233,44 @@ export class PostgresCampaignRegistry implements CampaignRegistry {
       throw new Error(`missing current campaign version: ${campaign.id}`);
     }
     return { ...campaign, current };
+  }
+
+  async listMerchantCampaigns(
+    input: ListMerchantCampaignsInput
+  ): Promise<CampaignProfile[]> {
+    const merchantId = assertCampaignSplit402Id(input.merchantId, "merchant id");
+    const status =
+      input.status === undefined ? undefined : assertCampaignStatus(input.status);
+    const limit = assertCampaignListLimit(input.limit ?? 100);
+    const values: unknown[] = [merchantId];
+    const where = ["merchant_id = $1"];
+    if (status !== undefined) {
+      values.push(status);
+      where.push(`status = $${values.length}`);
+    }
+    values.push(limit);
+    const result = await this.db.query<CampaignRow>(
+      `select id, merchant_id, resource_origin, status, current_version,
+              created_at, updated_at
+         from campaigns
+        where ${where.join(" and ")}
+        order by created_at desc, id desc
+        limit $${values.length}`,
+      values
+    );
+    const campaigns = result.rows.map(mapCampaign);
+    return Promise.all(
+      campaigns.map(async (campaign) => {
+        const current = await this.getCampaignVersion(
+          campaign.id,
+          campaign.currentVersion
+        );
+        if (current === undefined) {
+          throw new Error(`missing current campaign version: ${campaign.id}`);
+        }
+        return { ...campaign, current };
+      })
+    );
   }
 
   async getCampaignVersion(
@@ -3735,6 +3774,27 @@ function assertCampaignPositiveVersion(value: number): number {
     );
   }
   return value;
+}
+
+function assertCampaignListLimit(value: number): number {
+  if (!Number.isInteger(value) || value <= 0 || value > 100) {
+    throw new CampaignRegistryValidationError("limit must be an integer from 1 to 100");
+  }
+  return value;
+}
+
+function assertCampaignStatus(value: CampaignStatus): CampaignStatus {
+  if (
+    value === "draft" ||
+    value === "active" ||
+    value === "paused" ||
+    value === "closed"
+  ) {
+    return value;
+  }
+  throw new CampaignRegistryValidationError(
+    "status must be draft, active, paused, or closed"
+  );
 }
 
 function readCampaignStatus(value: string): CampaignStatus {

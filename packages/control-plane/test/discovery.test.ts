@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  createMerchantDashboardSummary,
   createMerchantReliabilityProfile,
   createSplit402BazaarResources,
+  type CampaignProfile,
   type CampaignVersionRecord,
   type RouteRecord,
   type MerchantProfile
@@ -151,6 +153,17 @@ const ROUTE: RouteRecord = {
   activatedAt: "2026-06-24T00:02:00.000Z"
 };
 
+const CAMPAIGN_PROFILE: CampaignProfile = {
+  id: CAMPAIGN_VERSION.campaignId,
+  merchantId: MERCHANT.id,
+  resourceOrigin: CAMPAIGN_VERSION.terms.resourceOrigin,
+  status: "active",
+  currentVersion: 1,
+  createdAt: "2026-06-24T00:00:00.000Z",
+  updatedAt: "2026-06-24T00:01:00.000Z",
+  current: CAMPAIGN_VERSION
+};
+
 describe("merchant reliability profile", () => {
   it("summarizes public discovery readiness signals", () => {
     expect(
@@ -256,5 +269,67 @@ describe("Split402 Bazaar resource projection", () => {
       "https://merchant.example/v1/risk",
       "https://merchant.example/v1/labels"
     ]);
+  });
+});
+
+describe("merchant dashboard summary", () => {
+  it("summarizes merchant readiness, campaigns, operations, and routes", () => {
+    expect(
+      createMerchantDashboardSummary({
+        merchant: MERCHANT,
+        campaigns: [CAMPAIGN_PROFILE],
+        routes: [
+          ROUTE,
+          {
+            ...ROUTE,
+            id: "rte_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            status: "suspended"
+          }
+        ],
+        now: "2026-06-24T00:03:00.000Z"
+      })
+    ).toEqual({
+      schema: "split402.merchant_dashboard_summary.v1",
+      generatedAt: "2026-06-24T00:03:00.000Z",
+      merchant: {
+        id: MERCHANT.id,
+        slug: MERCHANT.slug,
+        displayName: MERCHANT.displayName,
+        status: "active"
+      },
+      reliability: {
+        acceptsReceipts: true,
+        payoutReady: true,
+        webhookReady: true,
+        discoveryReady: true,
+        signals: {
+          verifiedOrigins: 1,
+          activeOfferReceiptKeys: 1,
+          activeWebhookKeys: 1,
+          activePayoutWallets: 1
+        }
+      },
+      campaigns: {
+        total: 1,
+        byStatus: {
+          draft: 0,
+          active: 1,
+          paused: 0,
+          closed: 0
+        },
+        activeCampaignIds: [CAMPAIGN_PROFILE.id],
+        operationCount: 2
+      },
+      routes: {
+        total: 2,
+        byStatus: {
+          active: 1,
+          suspended: 1,
+          expired: 0,
+          revoked: 0
+        },
+        activeRouteIds: [ROUTE.id]
+      }
+    });
   });
 });
