@@ -17,6 +17,11 @@ settlement. If the campaign says the referral earns 10 percent, Split402 records
 that 10 percent as an auditable commission owed to the referrer's payout wallet.
 The actual referrer payout happens later from a merchant-funded payout process.
 
+That means Split402 is a referral commission protocol, not a replacement
+settlement path in the MVP. A `1.00 USDC` call with `1000` basis points of
+commission creates a `0.10 USDC` referrer credit; it does not yet split the live
+settlement into `0.90 USDC` and `0.10 USDC` inside the same transaction.
+
 Split402 is the project and protocol name. This repository,
 [`split402protocol/splitx402`](https://github.com/split402protocol/splitx402),
 is the v2 implementation line for the protocol work that started in
@@ -157,7 +162,10 @@ contracts, no mainnet payment flows, and no custody of real production balances.
 | Wallet-authenticated merchant mutations | Implemented foundation |
 | PostgreSQL wallet-auth persistence | Implemented foundation |
 | Campaign draft/version/activation APIs | Implemented foundation |
-| Route registry, outbox workers, chain verification, runtime wiring | Active PR stack |
+| Wallet-auth refresh-token rotation | Active PR stack |
+| Route draft/activation/suspension APIs and route persistence | Active PR stack |
+| Receipt outbox, worker stores, chain verification, runtime wiring | Active PR stack |
+| Route search, route history, payout-wallet rotation, webhooks | Not implemented |
 | Payout engine | Not implemented |
 | `$SPLIT` bonding and atomic split settlement | Later research |
 
@@ -208,6 +216,11 @@ POST /v1/campaigns/:campaignId/activate
 GET  /v1/campaigns/:campaignId/versions/:version
 POST /v1/campaigns/:campaignId/versions
 ```
+
+The active implementation stack after `main` adds durable campaign persistence,
+route draft/activation/suspension, wallet-session refresh tokens, receipt outbox
+processing, Solana chain-verification workers, and deployable runtime wiring.
+Those capabilities are documented as active stack work until the PRs are merged.
 
 ## Quick Start
 
