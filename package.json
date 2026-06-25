@@ -25,6 +25,7 @@
     "phase6:emergency-revocation": "tsx src/phase6-emergency-revocation.ts",
     "phase6:image-provenance": "tsx src/phase6-image-provenance.ts",
     "phase6:key-custody": "tsx src/phase6-key-custody.ts",
+    "phase6:network-policy": "tsx src/phase6-network-policy.ts",
     "phase6:rotation-drill": "tsx src/phase6-rotation-drill.ts",
     "phase6:rollback-drill": "tsx src/phase6-rollback-drill.ts",
     "phase6:rpc-failover": "tsx src/phase6-rpc-failover.ts",

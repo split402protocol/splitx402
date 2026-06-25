@@ -349,6 +349,9 @@ Current slice:
   secret-exposure validation;
 - add a private signer ingress network policy starter for the custody evidence
   bundle;
+- add a Phase 6 private signer networking review generator for signer selector,
+  control-plane ingress, private service type, and denied public-ingress
+  evidence;
 - add machine-checkable signer policy evidence fields and a signer policy
   review template;
 - add machine-checkable image provenance, emergency signer-auth revocation,

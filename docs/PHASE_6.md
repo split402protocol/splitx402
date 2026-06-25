@@ -87,6 +87,9 @@ plus an unknown-outcome reconciliation queue and referrer payout views.
 - Added `corepack pnpm phase6:key-custody` to generate a structured payout
   signer key custody review record with ownership, backup, recovery, access, and
   separation-of-duties evidence.
+- Added `corepack pnpm phase6:network-policy` to generate a structured private
+  signer networking review record with signer selector, control-plane ingress,
+  private service type, and denied public-ingress evidence.
 - Added `corepack pnpm phase6:emergency-revocation` to generate a structured
   emergency signer-auth revocation drill record with old-key rejection, new-key
   success, metrics, audit-log, and reconciliation evidence.
@@ -182,6 +185,7 @@ the merchant has enough funding.
 - `corepack pnpm phase6:emergency-revocation`
 - `corepack pnpm phase6:image-provenance`
 - `corepack pnpm phase6:key-custody`
+- `corepack pnpm phase6:network-policy`
 - `corepack pnpm phase6:rotation-drill`
 - `corepack pnpm phase6:rollback-drill`
 - `corepack pnpm phase6:rpc-failover`
