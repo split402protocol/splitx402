@@ -368,6 +368,9 @@ Current slice:
   audit-log evidence;
 - add a Phase 6 payout signer rollback drill generator for immutable image,
   secret-set, readiness, metrics, reconciliation, and safe batch-resume evidence;
+- add a Phase 6 payout custody incident drill generator for pause,
+  reconciliation, no-replacement-byte, smoke, metrics, audit, and resume
+  evidence;
 - add a Phase 6 evidence status command that lists required evidence commands
   and summarizes custody-bundle blockers;
 - add a Phase 6 custody evidence bundle scaffold command that emits validator
@@ -384,7 +387,8 @@ Current slice:
   internal and webhook outbox events;
 - add an unknown-outcome payout reconciliation queue for merchant/operator review;
 - add a payout reconciliation action endpoint and unknown-outcome runbook;
-- add a Phase 6 custody review checklist and payout custody incident drill;
+- add a Phase 6 custody review checklist and structured payout custody incident
+  drill evidence;
 - add a Phase 6 custody evidence validator for production go/no-go bundles;
 - add a payout finality RPC failover drill and structured review record for
   custody evidence;

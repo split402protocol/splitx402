@@ -45,6 +45,11 @@ export const PHASE6_EVIDENCE_COMMANDS = [
     evidenceField: "rollback_drill_record",
   },
   {
+    gate: "incident_drill",
+    command: "corepack pnpm phase6:incident-drill",
+    evidenceField: "incident_drill_record",
+  },
+  {
     gate: "rpc_failover",
     command:
       "corepack pnpm payout:finality:failover-drill && corepack pnpm phase6:rpc-failover",
