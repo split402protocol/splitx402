@@ -16,8 +16,18 @@ Configure the runtime finality monitor:
 ```bash
 SPLIT402_PAYOUT_FINALITY_NETWORK=solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1
 SPLIT402_PAYOUT_FINALITY_SOLANA_RPC_URL=https://api.devnet.solana.com
+SPLIT402_PAYOUT_FINALITY_SOLANA_RPC_URLS=https://primary.example,https://secondary.example
 SPLIT402_PAYOUT_FINALITY_UNKNOWN_OUTCOME_AFTER_MS=300000
 ```
+
+Before production payout custody, record RPC failover evidence:
+
+```bash
+corepack pnpm payout:finality:failover-drill
+```
+
+Attach the JSON output to `rpc_failover_record` in the Phase 6 custody evidence
+bundle.
 
 1. List batches that need review:
 

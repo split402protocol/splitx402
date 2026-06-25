@@ -13,6 +13,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "lint": "eslint .",
+    "payout:finality:failover-drill": "tsx src/payout-finality-failover-drill.ts",
     "test": "vitest run",
     "test:postgres": "node -e \"if (!process.env.SPLIT402_TEST_DATABASE_URL) { console.error('Set SPLIT402_TEST_DATABASE_URL to run live PostgreSQL tests.'); process.exit(1); }\" && vitest run test/postgres-live.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",

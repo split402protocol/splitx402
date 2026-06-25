@@ -277,6 +277,7 @@ Current slice:
 - unknown-outcome payout reconciliation queue for merchant/operator review;
 - Phase 6 custody review checklist and payout custody incident drill;
 - Phase 6 custody evidence validator for production go/no-go bundles;
+- payout finality RPC failover drill for custody evidence;
 - `POST /v1/merchants/:merchantId/payout-wallets`;
 - `POST /v1/merchants/:merchantId/payouts/preview`;
 - `GET /v1/merchants/:merchantId/payouts/reconciliation`;

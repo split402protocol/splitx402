@@ -61,6 +61,8 @@ ledger and chain state agree.
 5. Follow `report.recommendedAction`.
 6. Never create replacement bytes until reconciliation proves the old
    transaction cannot finalize.
+7. Run `corepack pnpm payout:finality:failover-drill` and attach the JSON output
+   to the custody evidence bundle.
 
 ## Evidence Record
 

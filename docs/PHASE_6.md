@@ -103,6 +103,7 @@ plus an unknown-outcome reconciliation queue and referrer payout views.
   `docs/checklists/phase6-custody-review.md`.
 - Added a payout custody incident drill at
   `docs/runbooks/payout-custody-incident-drill.md`.
+- Added a payout finality RPC failover drill command for custody evidence.
 - Added referrer-facing balance and payout history views with
   `GET /v1/referrers/:referrerWallet/balances` and
   `GET /v1/referrers/:referrerWallet/payouts`.
@@ -142,3 +143,4 @@ the merchant has enough funding.
 - `corepack pnpm test`
 - `corepack pnpm build`
 - `corepack pnpm phase6:custody:check <evidence-bundle.txt>`
+- `corepack pnpm payout:finality:failover-drill`
