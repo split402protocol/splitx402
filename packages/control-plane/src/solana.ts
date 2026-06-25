@@ -231,7 +231,39 @@ export interface SolanaPayoutBroadcastResult {
   error?: string;
 }
 
-type SolanaSignatureConfirmationStatus =
+export interface SolanaRpcPayoutTransactionFinalityMonitorOptions {
+  rpcUrl?: string;
+  rpcUrls?: string[];
+  network: string;
+  fetch?: SolanaRpcFetch;
+  retryDelayMs?: number;
+  unknownOutcomeAfterMs?: number;
+  now?: () => Date;
+}
+
+export interface MonitorSolanaPayoutTransactionInput {
+  transaction: PayoutTransactionRecord;
+}
+
+export type SolanaPayoutFinalityStatus =
+  | "confirmed"
+  | "finalized"
+  | "failed"
+  | "outcome_unknown"
+  | "retry";
+
+export interface SolanaPayoutFinalityResult {
+  transactionId: string;
+  status: SolanaPayoutFinalityStatus;
+  signature?: string;
+  rpcUrl?: string;
+  error?: string;
+  confirmationStatus?: SolanaSignatureConfirmationStatus;
+  confirmations?: number | null;
+  retryAt?: string;
+}
+
+export type SolanaSignatureConfirmationStatus =
   | "processed"
   | "confirmed"
   | "finalized";
@@ -703,6 +735,210 @@ export class SolanaRpcPayoutTransactionBroadcaster {
 
   private skipPreflight(): boolean {
     return this.options.skipPreflight ?? false;
+  }
+
+  private rpcUrls(): string[] {
+    const urls = [
+      ...(this.options.rpcUrl === undefined ? [] : [this.options.rpcUrl]),
+      ...(this.options.rpcUrls ?? [])
+    ];
+    return Array.from(
+      new Set(urls.map((url) => url.trim()).filter((url) => url.length > 0))
+    );
+  }
+}
+
+export class SolanaRpcPayoutTransactionFinalityMonitor {
+  constructor(
+    private readonly options: SolanaRpcPayoutTransactionFinalityMonitorOptions
+  ) {}
+
+  async monitor(
+    input: MonitorSolanaPayoutTransactionInput
+  ): Promise<SolanaPayoutFinalityResult> {
+    const transaction = input.transaction;
+    const signature = assertPayoutTransactionSignatureForMonitoring(transaction);
+    let lastRetry: SolanaPayoutFinalityResult | undefined;
+    for (const rpcUrl of this.rpcUrls()) {
+      const result = await this.monitorWithRpcUrl(rpcUrl, transaction, signature);
+      if (result.status !== "retry") {
+        return result;
+      }
+      lastRetry = result;
+    }
+    return (
+      lastRetry ?? {
+        transactionId: transaction.id,
+        status: "retry",
+        signature,
+        error: "no Solana RPC URLs configured",
+        retryAt: this.retryAt()
+      }
+    );
+  }
+
+  private async monitorWithRpcUrl(
+    rpcUrl: string,
+    transaction: PayoutTransactionRecord,
+    signature: string
+  ): Promise<SolanaPayoutFinalityResult> {
+    let response: SolanaRpcHttpResponse;
+    try {
+      response = await this.fetch()(rpcUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: `split402-payout-finality-${transaction.id}`,
+          method: "getSignatureStatuses",
+          params: [[signature], { searchTransactionHistory: true }]
+        })
+      });
+    } catch (error) {
+      return this.retryResult({
+        transaction,
+        signature,
+        rpcUrl,
+        error: `Solana RPC request failed: ${readErrorMessage(error)}`
+      });
+    }
+
+    if (!response.ok) {
+      return this.retryResult({
+        transaction,
+        signature,
+        rpcUrl,
+        error: `Solana RPC returned HTTP ${response.status}`
+      });
+    }
+
+    try {
+      const body = await response.json();
+      const rpcError = readRpcError(body);
+      if (rpcError !== undefined) {
+        return this.retryResult({
+          transaction,
+          signature,
+          rpcUrl,
+          error: `Solana RPC returned error: ${rpcError}`
+        });
+      }
+      const signatureStatus = readSignatureStatus(body);
+      return this.readFinalityResult(transaction, signature, rpcUrl, signatureStatus);
+    } catch (error) {
+      return this.retryResult({
+        transaction,
+        signature,
+        rpcUrl,
+        error: `Solana RPC response was invalid: ${readErrorMessage(error)}`
+      });
+    }
+  }
+
+  private readFinalityResult(
+    transaction: PayoutTransactionRecord,
+    signature: string,
+    rpcUrl: string,
+    signatureStatus: SolanaSignatureStatus | null
+  ): SolanaPayoutFinalityResult {
+    if (signatureStatus === null) {
+      if (this.isOutcomeUnknown(transaction)) {
+        return {
+          transactionId: transaction.id,
+          status: "outcome_unknown",
+          signature,
+          rpcUrl,
+          error: `payout transaction signature not found after unknown-outcome threshold: ${signature}`
+        };
+      }
+      return this.retryResult({
+        transaction,
+        signature,
+        rpcUrl,
+        error: `payout transaction signature not found: ${signature}`
+      });
+    }
+    const common = {
+      transactionId: transaction.id,
+      signature,
+      rpcUrl,
+      ...(signatureStatus.confirmationStatus === undefined
+        ? {}
+        : { confirmationStatus: signatureStatus.confirmationStatus }),
+      ...(signatureStatus.confirmations === undefined
+        ? {}
+        : { confirmations: signatureStatus.confirmations })
+    };
+    if (signatureStatus.err !== null) {
+      return {
+        ...common,
+        status: "failed",
+        error: `payout transaction failed: ${JSON.stringify(signatureStatus.err)}`
+      };
+    }
+    if (signatureStatus.confirmationStatus === "finalized") {
+      return {
+        ...common,
+        status: "finalized"
+      };
+    }
+    if (signatureStatus.confirmationStatus === "confirmed") {
+      return {
+        ...common,
+        status: "confirmed"
+      };
+    }
+    return this.retryResult({
+      transaction,
+      signature,
+      rpcUrl,
+      error: "payout transaction has not reached confirmed commitment",
+      signatureStatus
+    });
+  }
+
+  private retryResult(input: {
+    transaction: PayoutTransactionRecord;
+    signature: string;
+    rpcUrl?: string;
+    error: string;
+    signatureStatus?: SolanaSignatureStatus;
+  }): SolanaPayoutFinalityResult {
+    return {
+      transactionId: input.transaction.id,
+      status: "retry",
+      signature: input.signature,
+      ...(input.rpcUrl === undefined ? {} : { rpcUrl: input.rpcUrl }),
+      error: input.error,
+      ...(input.signatureStatus?.confirmationStatus === undefined
+        ? {}
+        : { confirmationStatus: input.signatureStatus.confirmationStatus }),
+      ...(input.signatureStatus?.confirmations === undefined
+        ? {}
+        : { confirmations: input.signatureStatus.confirmations }),
+      retryAt: this.retryAt()
+    };
+  }
+
+  private isOutcomeUnknown(transaction: PayoutTransactionRecord): boolean {
+    const unknownOutcomeAfterMs = this.options.unknownOutcomeAfterMs;
+    if (unknownOutcomeAfterMs === undefined || transaction.submittedAt === undefined) {
+      return false;
+    }
+    return this.now().getTime() - Date.parse(transaction.submittedAt) >= unknownOutcomeAfterMs;
+  }
+
+  private retryAt(): string {
+    const delayMs = this.options.retryDelayMs ?? 30_000;
+    return new Date(this.now().getTime() + delayMs).toISOString();
+  }
+
+  private now(): Date {
+    return this.options.now?.() ?? new Date();
+  }
+
+  private fetch(): SolanaRpcFetch {
+    return this.options.fetch ?? fetch;
   }
 
   private rpcUrls(): string[] {
@@ -1672,6 +1908,24 @@ function canBroadcastPayoutTransaction(
     transaction.status === "signed" ||
     transaction.status === "submitted" ||
     transaction.status === "outcome_unknown"
+  );
+}
+
+function assertPayoutTransactionSignatureForMonitoring(
+  transaction: PayoutTransactionRecord
+): string {
+  if (
+    transaction.status !== "submitted" &&
+    transaction.status !== "confirmed" &&
+    transaction.status !== "outcome_unknown"
+  ) {
+    throw new Error(
+      `payout transaction ${transaction.id} must be submitted before finality monitoring`
+    );
+  }
+  return assertNonEmptyString(
+    transaction.expectedSignature ?? "",
+    `payout transaction ${transaction.id} expectedSignature`
   );
 }
 

@@ -114,6 +114,20 @@ export interface MarkPayoutTransactionSubmittedInput {
   expectedSignature?: string;
 }
 
+export type PayoutTransactionFinalityStatus =
+  | "confirmed"
+  | "finalized"
+  | "failed"
+  | "expired"
+  | "outcome_unknown";
+
+export interface MarkPayoutTransactionFinalityInput {
+  id: string;
+  status: PayoutTransactionFinalityStatus;
+  observedAt?: string;
+  error?: Record<string, unknown>;
+}
+
 export interface PayoutTransactionStore {
   saveSignedPayoutTransactions(
     input: SaveSignedPayoutTransactionsInput
@@ -123,6 +137,9 @@ export interface PayoutTransactionStore {
   ): Promise<PayoutTransactionRecord[]> | PayoutTransactionRecord[];
   markPayoutTransactionSubmitted(
     input: MarkPayoutTransactionSubmittedInput
+  ): Promise<PayoutTransactionRecord | undefined> | PayoutTransactionRecord | undefined;
+  markPayoutTransactionFinality(
+    input: MarkPayoutTransactionFinalityInput
   ): Promise<PayoutTransactionRecord | undefined> | PayoutTransactionRecord | undefined;
 }
 
