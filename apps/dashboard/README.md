@@ -4,8 +4,9 @@ Operational dashboard for the Split402 public-alpha merchant and referrer flows.
 
 The app serves a focused browser UI and a narrow same-origin proxy for the
 control-plane read APIs. It is intentionally API-first: it visualizes the
-merchant dashboard summary, reliability profile, webhook delivery feed,
-referrer balances, referrer routes, and referrer payouts that Phase 7 exposes.
+merchant dashboard summary, reliability profile, merchant payout obligations,
+webhook delivery feed, referrer balances, referrer routes, and referrer payouts
+that Phase 7 exposes.
 
 ## Surface
 

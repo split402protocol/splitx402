@@ -168,6 +168,64 @@ describe("control-plane HTTP API", () => {
     ]);
   });
 
+  it("summarizes merchant payout obligations for dashboard funding views", async () => {
+    const { app, store, receipt, merchantRegistry } = createTestApp({
+      withMerchantRegistry: true,
+      withPayouts: true
+    });
+    if (merchantRegistry === undefined) {
+      throw new Error("expected merchant registry");
+    }
+    await request(app)
+      .post("/v1/merchants")
+      .send({
+        id: receipt.merchantId,
+        slug: "obligation-merchant",
+        displayName: "Obligation Merchant",
+        ownerWallet: receipt.payerWallet,
+        status: "active"
+      })
+      .expect(201);
+    await request(app).post("/v1/receipts").send({ receipt }).expect(201);
+    const snapshot = store.getByReceiptId(receipt.receiptId);
+    if (snapshot?.accrual === undefined) {
+      throw new Error("expected receipt accrual");
+    }
+    store.save({
+      ...snapshot,
+      receipt: {
+        ...snapshot.receipt,
+        verificationState: "signature_verified"
+      },
+      accrual: {
+        ...snapshot.accrual,
+        status: "available",
+        availableAt: "2026-06-24T00:04:00.000Z"
+      }
+    });
+
+    const response = await request(app)
+      .get(`/v1/merchants/${receipt.merchantId}/payout-obligations`)
+      .expect(200);
+
+    expect(response.body.summary).toEqual(
+      expect.objectContaining({
+        schema: "split402.merchant_obligation_summary.v1",
+        merchantId: receipt.merchantId,
+        assets: [
+          expect.objectContaining({
+            asset: receipt.asset,
+            fundingStatus: "unknown",
+            availableAmountAtomic: "2000",
+            outstandingAmountAtomic: "2000",
+            totalAccruedAmountAtomic: "2000",
+            availableAccrualCount: 1
+          })
+        ]
+      })
+    );
+  });
+
   it("creates a planned payout batch and marks selected accruals allocated", async () => {
     const { app, store, receipt, merchantRegistry } = createTestApp({
       withMerchantRegistry: true,
@@ -1511,6 +1569,7 @@ function createTestApp(
             payoutBatchStore: store,
             payoutTransactionStore: store,
             payoutReconciliationStore: store,
+            merchantObligationViewStore: store,
             referrerPayoutViewStore: store,
             ...(options.payoutFinalityMonitor === undefined
               ? {}

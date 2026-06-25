@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   createPayoutBatchPlan,
   createPayoutFinalizationLedgerTransaction,
+  createMerchantObligationSummary,
   createPayoutPreview,
   createReferrerBalanceSummary,
   createReferrerPayoutHistoryItems,
@@ -500,6 +501,94 @@ describe("referrer payout views", () => {
 
     expect(summary.assets[0]?.availableAmountAtomic).toBe("55");
     expect(summary.assets[0]?.totalEarnedAmountAtomic).toBe("55");
+  });
+});
+
+describe("merchant obligation views", () => {
+  it("summarizes merchant obligations by lifecycle status", () => {
+    const inFlight = accrual({
+      id: "acr_in_flight",
+      amountAtomic: "90",
+      status: "allocated"
+    });
+    const paid = accrual({
+      id: "acr_paid",
+      amountAtomic: "110",
+      status: "allocated"
+    });
+    const summary = createMerchantObligationSummary({
+      merchantId: "mrc_1",
+      now: NOW,
+      accruals: [
+        accrual({
+          id: "acr_pending",
+          amountAtomic: "70",
+          status: "pending_chain_verification"
+        }),
+        accrual({ id: "acr_available", amountAtomic: "50" }),
+        accrual({ id: "acr_held", amountAtomic: "30", status: "held" }),
+        inFlight,
+        paid,
+        accrual({ id: "acr_other", merchantId: "mrc_other", amountAtomic: "999" })
+      ],
+      payoutBatches: [
+        {
+          ...finalizedBatch(),
+          items: [
+            {
+              ...finalizedBatch().items[0]!,
+              id: "pit_in_flight",
+              status: "submitted",
+              amountAtomic: "90",
+              allocations: [
+                {
+                  payoutItemId: "pit_in_flight",
+                  accrualId: inFlight.id,
+                  amountAtomic: "90"
+                }
+              ]
+            },
+            {
+              ...finalizedBatch().items[1]!,
+              id: "pit_paid",
+              amountAtomic: "110",
+              allocations: [
+                {
+                  payoutItemId: "pit_paid",
+                  accrualId: paid.id,
+                  amountAtomic: "110"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    expect(summary).toEqual({
+      schema: "split402.merchant_obligation_summary.v1",
+      merchantId: "mrc_1",
+      generatedAt: NOW,
+      assets: [
+        {
+          asset: "usdc_mint",
+          fundingStatus: "unknown",
+          pendingAmountAtomic: "70",
+          availableAmountAtomic: "50",
+          heldAmountAtomic: "30",
+          inFlightAmountAtomic: "90",
+          paidAmountAtomic: "110",
+          outstandingAmountAtomic: "240",
+          totalAccruedAmountAtomic: "350",
+          accrualCount: 5,
+          pendingAccrualCount: 1,
+          availableAccrualCount: 1,
+          heldAccrualCount: 1,
+          inFlightAccrualCount: 1,
+          paidAccrualCount: 1
+        }
+      ]
+    });
   });
 });
 
