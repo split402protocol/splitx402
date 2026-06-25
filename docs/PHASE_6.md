@@ -129,6 +129,8 @@ the merchant has enough funding.
   appliance.
 - Complete every pending gate in
   `docs/checklists/phase6-custody-review.md`.
+- Validate the completed custody evidence bundle with
+  `corepack pnpm phase6:custody:check <evidence-bundle.txt>`.
 
 ## Acceptance Checks
 
@@ -139,3 +141,4 @@ the merchant has enough funding.
 - `corepack pnpm typecheck`
 - `corepack pnpm test`
 - `corepack pnpm build`
+- `corepack pnpm phase6:custody:check <evidence-bundle.txt>`

@@ -1,0 +1,15 @@
+review_id:
+review_date:
+reviewers:
+source_commit:
+signer_image_digest:
+control_plane_image_digest:
+staging_environment:
+funding_wallet:
+network:
+smoke_check_output:
+rotation_drill_record:
+incident_drill_record:
+rpc_failover_record:
+approval_decision: no-go
+approval_notes:
