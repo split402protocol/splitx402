@@ -342,10 +342,10 @@ process `receipt.accepted.v1` events with a pluggable verifier and make
 confirmed accruals available for future payout selection. The webhook dispatch
 worker processes `webhook.receipt.accepted.v1` events and sends signed HTTP POST
 envelopes to a configured endpoint. The first Solana verifier checks settlement
-signature status through JSON-RPC and parses confirmed transaction data to reject
-receipts whose token mint, payer authority, pay-to owner evidence, or amount do
-not match the receipt.
-Full x402 SVM parity and payout execution are still remaining hardening steps.
+signature status through one or more JSON-RPC providers and parses confirmed
+transaction data to reject receipts whose token mint, payer authority, pay-to
+wallet or associated token account, or amount do not match the receipt.
+Payout execution is still a remaining hardening step.
 
 ## MVP Rules
 
@@ -404,9 +404,10 @@ corepack pnpm worker:chain
 ```
 
 The worker reads `SPLIT402_CHAIN_WORKER_NETWORK`,
-`SPLIT402_CHAIN_WORKER_SOLANA_RPC_URL`, and optional polling/retry settings from
-the environment, then claims `receipt.accepted.v1` outbox events and verifies
-Solana settlement receipts through JSON-RPC.
+`SPLIT402_CHAIN_WORKER_SOLANA_RPC_URL` or the comma-separated
+`SPLIT402_CHAIN_WORKER_SOLANA_RPC_URLS` failover list, and optional
+polling/retry settings from the environment, then claims `receipt.accepted.v1`
+outbox events and verifies Solana settlement receipts through JSON-RPC.
 
 Run the deployable webhook dispatch worker process:
 

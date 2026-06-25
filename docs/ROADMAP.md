@@ -163,7 +163,8 @@ Current slice:
 - durable control-plane runtime factory with PostgreSQL store wiring and
   required-by-default merchant auth policy;
 - Solana JSON-RPC verifier for receipt settlement signatures and parsed transfer
-  checks;
+  checks, including pay-to associated token account derivation and
+  multi-provider RPC failover;
 - packaged PostgreSQL migration runner with checksum tracking and an opt-in live
   integration harness;
 - receipt verifier key resolution through registered merchant service keys.

@@ -229,6 +229,8 @@ Current slice:
 - add a Solana JSON-RPC verifier for settlement signatures and parsed
   transaction transfer checks covering mint, payer authority, pay-to owner
   evidence, and amount;
+- harden the Solana verifier with explicit pay-to associated token account
+  derivation and comma-separated multi-provider RPC failover;
 - add the packaged PostgreSQL migration runner and opt-in live integration harness
   for real database validation;
 - resolve receipt verification keys through registered merchant service keys by

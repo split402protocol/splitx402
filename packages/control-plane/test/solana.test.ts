@@ -48,6 +48,98 @@ describe("SolanaRpcReceiptVerifier", () => {
     );
   });
 
+  it("confirms receipts when the destination is the pay-to associated token account", async () => {
+    const receipt = createSampleProtocolArtifacts().artifacts.receipt;
+    const verifier = new SolanaRpcReceiptVerifier({
+      rpcUrl: "https://api.devnet.solana.com",
+      network: receipt.network,
+      fetch: createFetchSequence([
+        signatureStatusesBody({
+          err: null,
+          confirmationStatus: "confirmed",
+          confirmations: 1
+        }),
+        transactionBody(receipt, {
+          destination: SAMPLE_PAY_TO_ASSOCIATED_TOKEN_ACCOUNT,
+          omitDestinationOwner: true
+        })
+      ])
+    });
+
+    await expect(verifier.verify(receipt)).resolves.toEqual({
+      status: "confirmed"
+    });
+  });
+
+  it("falls back across configured RPC URLs before retrying", async () => {
+    const receipt = createSampleProtocolArtifacts().artifacts.receipt;
+    const calls: string[] = [];
+    const verifier = new SolanaRpcReceiptVerifier({
+      rpcUrls: ["https://primary-rpc.example", "https://secondary-rpc.example"],
+      network: receipt.network,
+      fetch: async (input, init) => {
+        calls.push(input);
+        if (input === "https://primary-rpc.example") {
+          return {
+            ok: false,
+            status: 503,
+            async json() {
+              return {};
+            }
+          };
+        }
+        const request = JSON.parse(init.body) as { method: string };
+        return createResponse(
+          request.method === "getSignatureStatuses"
+            ? signatureStatusesBody({
+                err: null,
+                confirmationStatus: "confirmed",
+                confirmations: 1
+              })
+            : transactionBody(receipt)
+        );
+      }
+    });
+
+    await expect(verifier.verify(receipt)).resolves.toEqual({
+      status: "confirmed"
+    });
+    expect(calls).toEqual([
+      "https://primary-rpc.example",
+      "https://secondary-rpc.example",
+      "https://secondary-rpc.example"
+    ]);
+  });
+
+  it("prefers a later provider confirmation over a primary parsed-transfer mismatch", async () => {
+    const receipt = createSampleProtocolArtifacts().artifacts.receipt;
+    const verifier = new SolanaRpcReceiptVerifier({
+      rpcUrls: ["https://primary-rpc.example", "https://secondary-rpc.example"],
+      network: receipt.network,
+      fetch: async (input, init) => {
+        const request = JSON.parse(init.body) as { method: string };
+        if (request.method === "getSignatureStatuses") {
+          return createResponse(
+            signatureStatusesBody({
+              err: null,
+              confirmationStatus: "confirmed",
+              confirmations: 1
+            })
+          );
+        }
+        return createResponse(
+          input === "https://primary-rpc.example"
+            ? transactionBody(receipt, { amount: "1" })
+            : transactionBody(receipt)
+        );
+      }
+    });
+
+    await expect(verifier.verify(receipt)).resolves.toEqual({
+      status: "confirmed"
+    });
+  });
+
   it("waits until finalized when finalized commitment is required", async () => {
     const receipt = createSampleProtocolArtifacts().artifacts.receipt;
     const confirmedVerifier = new SolanaRpcReceiptVerifier({
@@ -290,21 +382,41 @@ function createResponse(body: unknown): Awaited<ReturnType<SolanaRpcFetch>> {
 interface TransactionBodyOverrides {
   amount?: string;
   authority?: string;
+  destination?: string;
   destinationOwner?: string;
+  destinationProgramId?: string;
   metaErr?: unknown;
   mint?: string;
+  omitDestinationOwner?: boolean;
 }
 
 const TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+const SAMPLE_PAY_TO_ASSOCIATED_TOKEN_ACCOUNT =
+  "Ay71VZA4NmCmqF8V8xQLDR7kCqDkVQ94TDo3878qh537";
 
 function transactionBody(
   receipt: ReturnType<typeof createSampleProtocolArtifacts>["artifacts"]["receipt"],
   overrides: TransactionBodyOverrides = {}
 ): Record<string, unknown> {
   const mint = overrides.mint ?? receipt.asset;
-  const destination = "merchantTokenAccount111111111111111111111111111111";
+  const destination =
+    overrides.destination ?? "merchantTokenAccount111111111111111111111111111111";
   const amount =
     overrides.amount ?? receipt.settledAmountAtomic ?? receipt.requiredAmountAtomic;
+  const tokenBalance: Record<string, unknown> = {
+    accountIndex: 1,
+    mint,
+    programId: overrides.destinationProgramId ?? TOKEN_PROGRAM_ID,
+    uiTokenAmount: {
+      amount,
+      decimals: 6,
+      uiAmount: null,
+      uiAmountString: "0"
+    }
+  };
+  if (overrides.omitDestinationOwner !== true) {
+    tokenBalance.owner = overrides.destinationOwner ?? receipt.payToWallet;
+  }
   return {
     jsonrpc: "2.0",
     id: "split402-chain-verification",
@@ -316,18 +428,7 @@ function transactionBody(
         err: overrides.metaErr ?? null,
         preTokenBalances: [],
         postTokenBalances: [
-          {
-            accountIndex: 1,
-            mint,
-            owner: overrides.destinationOwner ?? receipt.payToWallet,
-            programId: TOKEN_PROGRAM_ID,
-            uiTokenAmount: {
-              amount,
-              decimals: 6,
-              uiAmount: null,
-              uiAmountString: "0"
-            }
-          }
+          tokenBalance
         ],
         innerInstructions: []
       },
