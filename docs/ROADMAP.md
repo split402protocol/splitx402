@@ -341,6 +341,7 @@ Current slice:
   active receipt/webhook keys, active payout wallets, and discovery readiness.
 - referrer route listing endpoint that reuses route-search filters for
   dashboard and discovery views.
+- Bazaar-compatible resource metadata projection for active Split402 routes.
 
 ## Later: Token Bonding And Atomic Settlement
 
