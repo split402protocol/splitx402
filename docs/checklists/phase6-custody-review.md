@@ -33,8 +33,10 @@ Copy [`docs/templates/phase6-custody-evidence.txt`](../templates/phase6-custody-
 and fill every field. Then run:
 
 ```bash
+corepack pnpm phase6:evidence:bundle > phase6-custody-evidence.txt
 corepack pnpm phase6:evidence:status <evidence-bundle.txt>
 corepack pnpm phase6:custody:check <evidence-bundle.txt>
+corepack pnpm phase6:evidence:bundle | corepack pnpm phase6:custody:check -
 ```
 
 The validator fails while any required field is empty, placeholder-like, uses a

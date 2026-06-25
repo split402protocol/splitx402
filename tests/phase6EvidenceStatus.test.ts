@@ -15,8 +15,11 @@ describe("Phase 6 evidence status", () => {
       evidenceBundleChecked: false,
     });
     expect(report.commands).toBe(PHASE6_EVIDENCE_COMMANDS);
+    expect(report.commands[0]?.command).toBe(
+      "corepack pnpm phase6:evidence:bundle",
+    );
     expect(report.nextActions).toContain(
-      "Run each listed evidence command against staging outputs.",
+      "Generate a bundle scaffold with corepack pnpm phase6:evidence:bundle.",
     );
   });
 

@@ -7,13 +7,12 @@ const evidencePath =
 
 if (evidencePath === undefined || evidencePath.trim().length === 0) {
   console.error(
-    "Usage: corepack pnpm phase6:custody:check <evidence-bundle.txt>",
+    "Usage: corepack pnpm phase6:custody:check <evidence-bundle.txt|->",
   );
   process.exitCode = 1;
 } else {
-  const result = validatePhase6CustodyEvidence(
-    readFileSync(evidencePath, "utf8"),
-  );
+  const input = evidencePath === "-" ? 0 : evidencePath;
+  const result = validatePhase6CustodyEvidence(readFileSync(input, "utf8"));
   console.log(JSON.stringify(result, null, 2));
   if (!result.approved) {
     process.exitCode = 1;
