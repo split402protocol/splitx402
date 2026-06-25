@@ -57,6 +57,7 @@ curl -s -X POST \
 
 ## Current Limit
 
-The public-alpha repo includes local-dev signer wiring and reconciliation
-decision tooling. Production payout custody still requires remote signer
-isolation, operational key controls, and an incident-response drill.
+The public-alpha repo includes local-dev signer wiring, remote signer client
+wiring, and reconciliation decision tooling. Production payout custody still
+requires a deployed signer appliance, operational key controls, and an
+incident-response drill.

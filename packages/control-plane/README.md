@@ -57,8 +57,9 @@ stateDiagram-v2
 The current payout engine is still public-alpha infrastructure. It has the
 accounting, transaction, and eventing boundaries needed to prevent duplicate
 allocation, duplicate lifecycle notifications, and duplicate ledger closure,
-plus disposable local-dev signer wiring for Devnet testing. Remote signer
-isolation and unknown-outcome reconciliation remain active hardening work.
+plus disposable local-dev signer wiring for Devnet testing and remote signer
+client wiring for isolated custody integrations. Production custody review
+remains active hardening work.
 
 ## API Surface
 
@@ -115,6 +116,9 @@ GET  /v1/referrers/:referrerWallet/payouts
 - policy-enforced Solana payout signing boundary;
 - local-dev Solana payout signer factory backed by disposable key material or
   `SPLIT402_PAYOUT_SIGNER_*` environment variables;
+- remote Solana payout signer client that posts policy-checked transactions to
+  an isolated signer using `SPLIT402_REMOTE_PAYOUT_SIGNER_*` configuration and
+  optional HMAC request authentication;
 - signed-byte payout transaction persistence before broadcast;
 - Solana RPC broadcast submission boundary for persisted signed bytes;
 - Solana RPC finality monitoring with retry and outcome-unknown classification;
@@ -149,6 +153,25 @@ SPLIT402_PAYOUT_SIGNER_PRIVATE_KEY_BASE64=<32-byte-private-key-base64>
 
 The local-dev signer verifies the configured address against the payout policy
 before signing. Do not use these environment variables for production custody.
+
+## Remote Payout Signer
+
+For isolated custody integrations, construct the signer with
+`createRemoteSolanaPayoutSigner` or `createRemoteSolanaPayoutSignerFromEnv`.
+The signer reference must not start with `local-dev:`. The control plane still
+enforces payout policy before delegating to the remote signer:
+
+```bash
+SPLIT402_REMOTE_PAYOUT_SIGNER_REF=kms:split402-devnet-payout
+SPLIT402_REMOTE_PAYOUT_SIGNER_URL=https://signer.example/v1/solana/payouts/sign
+SPLIT402_REMOTE_PAYOUT_SIGNER_KEY_ID=control-plane-key
+SPLIT402_REMOTE_PAYOUT_SIGNER_SHARED_SECRET=replace-with-shared-secret
+SPLIT402_REMOTE_PAYOUT_SIGNER_TIMEOUT_MS=5000
+```
+
+When a shared secret is configured, requests include
+`x-split402-signature-timestamp` and `x-split402-signature`, where the signature
+is HMAC-SHA256 over `timestamp.body` and encoded as `v1=<hex>`.
 
 ## Payout Reconciliation
 

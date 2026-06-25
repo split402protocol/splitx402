@@ -21,9 +21,9 @@ Express adapter, demo merchant, demo agent, agent SDK, merchant SDK primitives,
 control-plane ingestion, PostgreSQL persistence, outbox workers, Solana chain
 verification, and the first payout-engine execution boundaries, including payout
 lifecycle outbox/webhook events, an unknown-outcome reconciliation queue, and
-referrer payout views, and payout reconciliation decision tooling. Phase 6 now
-includes disposable local-dev signer wiring and remains active for remote signer
-isolation and production custody review.
+referrer payout views, payout reconciliation decision tooling, and remote signer
+client wiring. Phase 6 remains active for production signer appliance
+integration and custody review.
 
 ## Architecture Rule
 
@@ -334,6 +334,7 @@ Current slice:
   succeeded/failed/retry outcomes;
 - add Solana payout signer interface and policy gate before isolated signing;
 - add disposable local-dev signer wiring for Devnet payout tests;
+- add remote signer client wiring with optional HMAC request authentication;
 - add signed-byte payout transaction persistence and Solana broadcast submission
   boundary;
 - add Solana payout transaction finality monitor with retry and outcome-unknown
