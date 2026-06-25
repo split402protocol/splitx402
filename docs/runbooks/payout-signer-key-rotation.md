@@ -70,6 +70,33 @@ If a control-plane auth secret is suspected compromised:
 Attach planned and emergency rotation evidence to
 [`docs/checklists/phase6-custody-review.md`](../checklists/phase6-custody-review.md).
 
+For planned rotation, copy
+[`docs/templates/phase6-rotation-drill.txt`](../templates/phase6-rotation-drill.txt),
+record the previous key ID, current key ID, dual-active deploy time,
+control-plane rotation time, previous-key retirement deploy time, current-key
+traffic evidence, health evidence, metrics evidence, and sanitized audit-log
+evidence. Attach the completed drill to `rotation_drill_record` in the Phase 6
+custody evidence bundle.
+
+You can generate the correctly shaped planned rotation drill record with:
+
+```bash
+SPLIT402_PHASE6_ROTATION_DRILL_ID=phase6-rotation-001 \
+SPLIT402_PHASE6_ROTATION_OWNERS="security, operations" \
+SPLIT402_PHASE6_ROTATION_STAGING_ENVIRONMENT=split402-staging \
+SPLIT402_PHASE6_ROTATION_PREVIOUS_KEY_ID=control-plane-previous \
+SPLIT402_PHASE6_ROTATION_CURRENT_KEY_ID=control-plane-current \
+SPLIT402_PHASE6_ROTATION_DUAL_ACTIVE_DEPLOY_TIME=2026-06-25T20:00:00Z \
+SPLIT402_PHASE6_ROTATION_CONTROL_PLANE_ROTATION_TIME=2026-06-25T20:05:00Z \
+SPLIT402_PHASE6_ROTATION_RETIRED_KEY_DEPLOY_TIME=2026-06-25T20:10:00Z \
+SPLIT402_PHASE6_ROTATION_CURRENT_KEY_TRAFFIC_EVIDENCE="attached: current-key-traffic.log" \
+SPLIT402_PHASE6_ROTATION_PREVIOUS_KEY_RETIRED_EVIDENCE="attached: previous key status retired" \
+SPLIT402_PHASE6_ROTATION_HEALTH_EVIDENCE="attached: signer-health-after-rotation.json" \
+SPLIT402_PHASE6_ROTATION_METRICS_EVIDENCE="attached: signer-metrics-after-rotation.log" \
+SPLIT402_PHASE6_ROTATION_AUDIT_LOG_EVIDENCE="attached: sanitized-audit-log-sample.jsonl" \
+  corepack pnpm phase6:rotation-drill
+```
+
 For emergency revocation, copy
 [`docs/templates/phase6-emergency-revocation-drill.txt`](../templates/phase6-emergency-revocation-drill.txt),
 record the retired key ID, replacement key ID, deploy timing, old-key rejection

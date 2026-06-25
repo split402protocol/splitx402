@@ -30,6 +30,11 @@ export const PHASE6_EVIDENCE_COMMANDS = [
     evidenceField: "emergency_revocation_drill_record",
   },
   {
+    gate: "hmac_key_rotation",
+    command: "corepack pnpm phase6:rotation-drill",
+    evidenceField: "rotation_drill_record",
+  },
+  {
     gate: "rollback_drill",
     command: "corepack pnpm phase6:rollback-drill",
     evidenceField: "rollback_drill_record",

@@ -90,6 +90,9 @@ plus an unknown-outcome reconciliation queue and referrer payout views.
 - Added `corepack pnpm phase6:emergency-revocation` to generate a structured
   emergency signer-auth revocation drill record with old-key rejection, new-key
   success, metrics, audit-log, and reconciliation evidence.
+- Added `corepack pnpm phase6:rotation-drill` to generate a structured planned
+  signer-auth rotation drill record with dual-active deploy, control-plane
+  rotation, previous-key retirement, health, metrics, and audit-log evidence.
 - Added `corepack pnpm phase6:rollback-drill` to generate a structured payout
   signer rollback drill record with immutable image digests, secret-set
   rollback, readiness, metrics, reconciliation, and safe batch-resume evidence.
@@ -175,6 +178,7 @@ the merchant has enough funding.
 - `corepack pnpm phase6:emergency-revocation`
 - `corepack pnpm phase6:image-provenance`
 - `corepack pnpm phase6:key-custody`
+- `corepack pnpm phase6:rotation-drill`
 - `corepack pnpm phase6:rollback-drill`
 - `corepack pnpm phase6:signer-policy`
 - `corepack pnpm payout:finality:failover-drill`
