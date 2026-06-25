@@ -40,6 +40,7 @@ flowchart LR
 | Demo path | Implemented for Solana Devnet paid-suite proof runs. |
 | MCP demo bundle | Implemented first Phase 7 slice: paid tool card, x402 payment metadata, Split402 campaign metadata, expected referral economics, and proof commands. |
 | Dashboard UI | Implemented first Phase 7 slice: merchant/referrer operations UI with a narrow read proxy for dashboard summary, reliability, webhook delivery, referrer routes, balances, and payouts. |
+| Phase 7 staging proof | Implemented proof scaffold, status validator, template, and runbook for hosted end-to-end evidence. |
 | Agent SDK | Implemented for offer inspection, claim creation, paid calls, and receipt verification. |
 | Merchant SDK | Implemented for campaign caching, service-key rotation helpers, payment identifiers, operation digests, and receipt outbox primitives. |
 | Control plane | Implemented foundation: receipt ingestion, merchant/campaign/route registries, wallet auth, PostgreSQL persistence, outbox workers, chain verification, public merchant reliability profiles, merchant dashboard summaries, webhook delivery feeds, referrer balances/routes, Bazaar-compatible route metadata, and signed webhooks for accepted receipts and payout lifecycle events. |
@@ -61,4 +62,5 @@ flowchart LR
 The near-term objective is to finish Phase 7 productization: a usable
 merchant/referrer dashboard, agent-demo packaging, and staging proof that an
 agent can discover, pay, and verify Split402 earnings without manual database
-work.
+work. The staging proof command surface now exists; the remaining gate is
+running it against a real hosted environment and approving the evidence.

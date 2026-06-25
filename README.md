@@ -421,6 +421,13 @@ Run the dashboard:
 corepack pnpm dashboard
 ```
 
+Prepare and check the Phase 7 staging proof:
+
+```bash
+corepack pnpm phase7:staging-proof > phase7-staging-proof.txt
+corepack pnpm phase7:staging:status phase7-staging-proof.txt
+```
+
 Run the demo merchant and agent flows:
 
 ```bash
@@ -535,5 +542,7 @@ The latest Devnet proof is recorded in
 - [Phase 5 status](docs/PHASE_5.md)
 - [Phase 6 status](docs/PHASE_6.md)
 - [Phase 7 status](docs/PHASE_7.md)
+- [Phase 7 staging proof runbook](docs/runbooks/phase7-staging-proof.md)
+- [Phase 7 staging proof template](docs/templates/phase7-staging-proof.txt)
 - [Architecture baseline decision](docs/decisions/0003-adopt-architecture-and-ffff-baseline.md)
 - [Security policy](SECURITY.md)
