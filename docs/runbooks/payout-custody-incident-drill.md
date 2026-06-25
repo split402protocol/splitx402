@@ -67,8 +67,38 @@ ledger and chain state agree.
 
 ## Evidence Record
 
-Attach the completed record to the Phase 6 custody evidence bundle and validate
-the bundle with:
+Copy [`docs/templates/phase6-incident-drill.txt`](../templates/phase6-incident-drill.txt)
+or generate the correctly shaped record:
+
+```bash
+SPLIT402_PHASE6_INCIDENT_DRILL_ID=phase6-incident-001 \
+SPLIT402_PHASE6_INCIDENT_SCENARIO=rpc_timeout_after_broadcast \
+SPLIT402_PHASE6_INCIDENT_STARTED_AT=2026-06-26T20:00:00Z \
+SPLIT402_PHASE6_INCIDENT_ENDED_AT=2026-06-26T20:30:00Z \
+SPLIT402_PHASE6_INCIDENT_COMMANDER=security-lead \
+SPLIT402_PHASE6_INCIDENT_CONTROL_PLANE_OPERATOR=control-plane-operator \
+SPLIT402_PHASE6_INCIDENT_SIGNER_OPERATOR=signer-operator \
+SPLIT402_PHASE6_INCIDENT_CHAIN_OPERATOR=chain-operator \
+SPLIT402_PHASE6_INCIDENT_REVIEWER=protocol-reviewer \
+SPLIT402_PHASE6_INCIDENT_SOURCE_COMMIT=<git-sha> \
+SPLIT402_PHASE6_INCIDENT_SIGNER_IMAGE_DIGEST=sha256:<signer-image-digest> \
+SPLIT402_PHASE6_INCIDENT_SIGNER_REFERENCE=kms:split402-devnet-payout \
+SPLIT402_PHASE6_INCIDENT_NETWORK=solana:devnet \
+SPLIT402_PHASE6_INCIDENT_FUNDING_WALLET=<funding-wallet> \
+SPLIT402_PHASE6_INCIDENT_AFFECTED_BATCH_IDS=pbt_incident_drill_001 \
+SPLIT402_PHASE6_INCIDENT_PAYOUT_CREATION_PAUSED_EVIDENCE="attached: payout creation paused at 20:00Z" \
+SPLIT402_PHASE6_INCIDENT_SMOKE_CHECK_OUTPUT="attached: signer-smoke-after-incident.log" \
+SPLIT402_PHASE6_INCIDENT_METRICS_BEFORE="attached: signer-metrics-before.json" \
+SPLIT402_PHASE6_INCIDENT_METRICS_AFTER="attached: signer-metrics-after.json" \
+SPLIT402_PHASE6_INCIDENT_AUDIT_LOG_SAMPLE="attached: sanitized audit log sample" \
+SPLIT402_PHASE6_INCIDENT_RECONCILIATION_REPORTS="attached: reconciliation reports for affected batches" \
+SPLIT402_PHASE6_INCIDENT_NO_REPLACEMENT_BYTES_EVIDENCE="attached: no replacement signed bytes were created before reconciliation" \
+SPLIT402_PHASE6_INCIDENT_RESUME_EVIDENCE="attached: payout creation resumed after reviewer approval" \
+  corepack pnpm phase6:incident-drill
+```
+
+Attach the completed record to `incident_drill_record` in the Phase 6 custody
+evidence bundle and validate the bundle with:
 
 ```bash
 corepack pnpm phase6:custody:check <evidence-bundle.txt>
@@ -90,12 +120,15 @@ signer_reference:
 network:
 funding_wallet:
 affected_batch_ids:
+payout_creation_paused_evidence:
 smoke_check_output:
 metrics_before:
 metrics_after:
 audit_log_sample:
 reconciliation_reports:
-decision:
+no_replacement_bytes_evidence:
+resume_evidence:
+drill_decision: no-go
 follow_up_actions:
 ```
 

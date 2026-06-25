@@ -18,7 +18,7 @@ all required gates are approved.
 | Signer policy review | `corepack pnpm phase6:signer-policy` output plus signer policy fields proving funding wallet, source token account, USDC mint, token program allow-list, amount caps, and network settings were reviewed. | Pending |
 | Unknown-outcome reconciliation | Drill proving no replacement transaction is built before `POST /v1/payout-batches/:batchId/reconcile`. | Pending |
 | RPC failover | `corepack pnpm payout:finality:failover-drill` output plus `corepack pnpm phase6:rpc-failover` review proving `passed: true`, primary RPC unavailable, secondary RPC returning status, and finality observed from the secondary RPC. | Pending |
-| Incident drill | Completed `docs/runbooks/payout-custody-incident-drill.md` with timestamps and owners. | Pending |
+| Incident drill | `corepack pnpm phase6:incident-drill` output proving payout creation paused, affected batches reconciled, no replacement bytes were created while unsafe, smoke/metrics/audit evidence was captured, and payout creation resumed only after review. | Pending |
 | Rollback drill | `corepack pnpm phase6:rollback-drill` output proving rollback to last known-good image and secret set, readiness, metrics, reconciliation records, and safe batch resume. | Pending |
 | Production approval | Security, operations, and protocol owners approve the evidence bundle. | Pending |
 

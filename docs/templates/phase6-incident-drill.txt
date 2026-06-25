@@ -1,0 +1,25 @@
+drill_id:
+scenario:
+started_at:
+ended_at:
+incident_commander:
+control_plane_operator:
+signer_operator:
+chain_operator:
+reviewer:
+source_commit:
+signer_image_digest:
+signer_reference:
+network:
+funding_wallet:
+affected_batch_ids:
+payout_creation_paused_evidence:
+smoke_check_output:
+metrics_before:
+metrics_after:
+audit_log_sample:
+reconciliation_reports:
+no_replacement_bytes_evidence:
+resume_evidence:
+drill_decision: no-go
+follow_up_actions:
