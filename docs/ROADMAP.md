@@ -187,6 +187,7 @@ Deliverables:
 Current slice:
 
 - `@split402/merchant-sdk` package;
+- cached control-plane campaign resolver for active campaign terms;
 - durable receipt outbox interfaces;
 - in-memory receipt outbox store for tests and examples;
 - control-plane receipt submitter;

@@ -144,7 +144,7 @@ mainnet payment flows exist yet.
 | x402 extension, Express adapter, demo merchant | Implemented |
 | Agent SDK and Devnet paid-suite harness | Implemented |
 | Existing-token Devnet receipt proof | Recorded |
-| Merchant SDK durable receipt outbox | Started |
+| Merchant SDK cached campaign resolver and durable receipt outbox | Started |
 | Control-plane receipt ingestion API | Started |
 | PostgreSQL receipt, accrual, and ledger persistence | Started |
 | Merchant/key/origin registry APIs | Started |
@@ -210,7 +210,7 @@ flowchart TB
 | `@split402/x402-extension` | Split402 offer, attribution, and receipt hooks around x402 settlement. |
 | `@split402/express` | Request-context adapter for stable operation digest inputs. |
 | `@split402/agent-sdk` | Buyer-side offer inspection, referral claim creation, paid calls, and receipt verification. |
-| `@split402/merchant-sdk` | Merchant-side durable receipt outbox and control-plane ingestion retry helpers. |
+| `@split402/merchant-sdk` | Merchant-side cached campaign resolver, durable receipt outbox, and control-plane ingestion retry helpers. |
 | `@split402/demo-merchant` | x402-protected merchant API for the Devnet demo. |
 | `@split402/demo-agent` | Runnable buyer/agent harness for setup, preflight, and paid-suite proof. |
 | `@split402/control-plane` | Receipt ingestion, merchant/key registry, accruals, ledger model, and PostgreSQL adapters. |
