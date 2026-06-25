@@ -23,6 +23,7 @@ import { createPayoutSignerApp, readPayoutSignerConfigFromEnv } from "../src/app
 
 const PRIVATE_KEY_BYTES = new Uint8Array(32).fill(7);
 const SHARED_SECRET = "signer-shared-secret";
+const NEXT_SHARED_SECRET = "next-signer-shared-secret";
 const TIMESTAMP = "2026-06-24T00:00:00.000Z";
 
 describe("payout signer app", () => {
@@ -79,13 +80,99 @@ describe("payout signer app", () => {
       .expect(400);
   });
 
+  it("supports active and retired HMAC auth keys for rotation", async () => {
+    const signer = await createKeyPairSignerFromPrivateKeyBytes(PRIVATE_KEY_BYTES);
+    const { app, body } = await createFixture({
+      fundingWallet: signer.address,
+      authKeys: [
+        {
+          keyId: "old-control-plane",
+          sharedSecret: SHARED_SECRET,
+          status: "retired"
+        },
+        {
+          keyId: "new-control-plane",
+          sharedSecret: NEXT_SHARED_SECRET,
+          status: "active"
+        }
+      ]
+    });
+
+    await request(app)
+      .post("/v1/solana/payouts/sign")
+      .set(
+        signHeaders(body, {
+          keyId: "new-control-plane",
+          sharedSecret: NEXT_SHARED_SECRET
+        })
+      )
+      .send(body)
+      .expect(200);
+
+    await request(app)
+      .post("/v1/solana/payouts/sign")
+      .set(
+        signHeaders(body, {
+          keyId: "old-control-plane",
+          sharedSecret: SHARED_SECRET
+        })
+      )
+      .send(body)
+      .expect(401);
+
+    await request(app)
+      .post("/v1/solana/payouts/sign")
+      .set(signHeaders(body, { sharedSecret: NEXT_SHARED_SECRET }))
+      .send(body)
+      .expect(401);
+  });
+
+  it("reports auth key status without exposing secrets", async () => {
+    const signer = await createKeyPairSignerFromPrivateKeyBytes(PRIVATE_KEY_BYTES);
+    const { app } = await createFixture({
+      fundingWallet: signer.address,
+      authKeys: [
+        {
+          keyId: "current",
+          sharedSecret: NEXT_SHARED_SECRET,
+          status: "active"
+        },
+        {
+          keyId: "previous",
+          sharedSecret: SHARED_SECRET,
+          status: "retired"
+        }
+      ]
+    });
+
+    const response = await request(app).get("/v1/health").expect(200);
+
+    expect(response.body.authKeys).toEqual([
+      { keyId: "current", status: "active" },
+      { keyId: "previous", status: "retired" }
+    ]);
+    expect(JSON.stringify(response.body)).not.toContain(SHARED_SECRET);
+    expect(JSON.stringify(response.body)).not.toContain(NEXT_SHARED_SECRET);
+  });
+
   it("loads configuration from environment variables", () => {
     expect(
       readPayoutSignerConfigFromEnv({
         SPLIT402_PAYOUT_SIGNER_SERVICE_REF: "kms:env-payout",
         SPLIT402_PAYOUT_SIGNER_SERVICE_NETWORK: "solana:devnet",
         SPLIT402_PAYOUT_SIGNER_SERVICE_EXPECTED_FUNDING_WALLET: "wallet",
-        SPLIT402_PAYOUT_SIGNER_SERVICE_SHARED_SECRET: "secret",
+        SPLIT402_PAYOUT_SIGNER_SERVICE_AUTH_KEYS_JSON: JSON.stringify([
+          {
+            keyId: "current",
+            sharedSecret: "secret",
+            status: "active"
+          },
+          {
+            keyId: "previous",
+            sharedSecret: "old-secret",
+            status: "retired"
+          }
+        ]),
         SPLIT402_PAYOUT_SIGNER_SERVICE_PORT: "4999",
         SPLIT402_PAYOUT_SIGNER_SERVICE_PRIVATE_KEY_BASE64:
           Buffer.from(PRIVATE_KEY_BYTES).toString("base64")
@@ -94,13 +181,28 @@ describe("payout signer app", () => {
       expect.objectContaining({
         signerReference: "kms:env-payout",
         network: "solana:devnet",
-        port: 4999
+        port: 4999,
+        authKeys: [
+          {
+            keyId: "current",
+            sharedSecret: "secret",
+            status: "active"
+          },
+          {
+            keyId: "previous",
+            sharedSecret: "old-secret",
+            status: "retired"
+          }
+        ]
       })
     );
   });
 });
 
-async function createFixture(input: { fundingWallet: string }) {
+async function createFixture(input: {
+  fundingWallet: string;
+  authKeys?: Parameters<typeof createPayoutSignerApp>[0]["authKeys"];
+}) {
   const receipt = createSampleProtocolArtifacts().artifacts.receipt;
   const batch = {
     id: "pbt_ffffffffffffffffffffffffffffffff",
@@ -172,21 +274,29 @@ async function createFixture(input: { fundingWallet: string }) {
     signerReference: "kms:test-payout",
     network: plan.network,
     expectedFundingWallet: input.fundingWallet,
-    sharedSecret: SHARED_SECRET,
+    ...(input.authKeys === undefined
+      ? { sharedSecret: SHARED_SECRET }
+      : { authKeys: input.authKeys }),
     port: 4022,
     privateKeyBytes: PRIVATE_KEY_BYTES
   });
   return { app, body };
 }
 
-function signHeaders(body: unknown) {
+function signHeaders(
+  body: unknown,
+  options: { keyId?: string; sharedSecret?: string } = {}
+) {
   const rawBody = JSON.stringify(body);
-  const digest = createHmac("sha256", SHARED_SECRET)
+  const digest = createHmac("sha256", options.sharedSecret ?? SHARED_SECRET)
     .update(`${TIMESTAMP}.${rawBody}`)
     .digest("hex");
   return {
     "x-split402-signature-timestamp": TIMESTAMP,
-    "x-split402-signature": `v1=${digest}`
+    "x-split402-signature": `v1=${digest}`,
+    ...(options.keyId === undefined
+      ? {}
+      : { "x-split402-signer-key-id": options.keyId })
   };
 }
 
