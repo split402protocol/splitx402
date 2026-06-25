@@ -146,5 +146,5 @@ auth key ring, and key material before applying it.
 
 ## Status
 
-Public-alpha scaffold. Do not use for mainnet custody without production key
-management, deployment hardening, monitoring, and an incident-response drill.
+Public-alpha scaffold. Do not use for mainnet custody until the Phase 6 custody
+review checklist and payout custody incident drill are complete.

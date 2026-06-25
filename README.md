@@ -405,6 +405,8 @@ The latest Devnet proof is recorded in
 - [Canonical architecture spec](docs/reference/split402_protocol_architecture_v0.1.md)
 - [Current state](docs/CURRENT_STATE.md)
 - [Architecture alignment note](docs/SPLIT402_ARCHITECTURE.md)
+- [Phase 6 custody review checklist](docs/checklists/phase6-custody-review.md)
+- [Payout custody incident drill](docs/runbooks/payout-custody-incident-drill.md)
 - [Payout reconciliation runbook](docs/runbooks/payout-reconciliation.md)
 - [Payout signer deployment runbook](docs/runbooks/payout-signer-deployment.md)
 - [Payout signer key rotation runbook](docs/runbooks/payout-signer-key-rotation.md)

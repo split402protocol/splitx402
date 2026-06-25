@@ -43,8 +43,9 @@ flowchart LR
 - The original x402 payment is not atomically split onchain in the MVP.
 - `$SPLIT` route bonding is not in the critical path yet.
 - Mainnet production operation is not approved.
-- Phase 6 still needs staging deployment validation, custody review, and
-  incident-response review before any mainnet payout custody.
+- Phase 6 still needs completed staging deployment evidence and all pending
+  gates in `docs/checklists/phase6-custody-review.md` before any mainnet payout
+  custody.
 
 ## Current Direction
 

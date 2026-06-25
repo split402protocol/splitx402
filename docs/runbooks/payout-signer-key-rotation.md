@@ -66,3 +66,6 @@ If a control-plane auth secret is suspected compromised:
   every unauthorized request is a rotation issue.
 - When `SPLIT402_PAYOUT_SIGNER_SERVICE_AUDIT_LOG=stdout-jsonl` is enabled,
   signer logs include sanitized audit events for rejected old-key attempts.
+
+Attach planned and emergency rotation evidence to
+[`docs/checklists/phase6-custody-review.md`](../checklists/phase6-custody-review.md).

@@ -275,6 +275,7 @@ Current slice:
 - payout submitted, confirmed, finalized, failed, and outcome-unknown internal
   and webhook outbox events;
 - unknown-outcome payout reconciliation queue for merchant/operator review;
+- Phase 6 custody review checklist and payout custody incident drill;
 - `POST /v1/merchants/:merchantId/payout-wallets`;
 - `POST /v1/merchants/:merchantId/payouts/preview`;
 - `GET /v1/merchants/:merchantId/payouts/reconciliation`;
