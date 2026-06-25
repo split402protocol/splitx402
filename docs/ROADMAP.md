@@ -191,6 +191,7 @@ Current slice:
 - service-key provider/key-ring rotation support;
 - required x402 `payment-identifier` helpers;
 - operation digest helpers for production GET and JSON POST requests;
+- compile-checked Express/x402 integration example and compatibility matrix;
 - durable receipt outbox interfaces;
 - in-memory receipt outbox store for tests and examples;
 - control-plane receipt submitter;

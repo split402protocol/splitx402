@@ -21,6 +21,8 @@ Status: started.
   are missing an identifier.
 - Added merchant operation digest helpers for production GET and JSON POST
   request shapes, with JSON-compatibility checks before hashing.
+- Added a compile-checked Express/x402 integration example and compatibility
+  matrix in `packages/merchant-sdk`.
 - Added `MerchantReceiptOutboxStore` interfaces for durable merchant-local
   receipt persistence.
 - Added `InMemoryMerchantReceiptOutboxStore` for deterministic tests and examples.
@@ -43,13 +45,18 @@ retry ingestion later without creating duplicate commissions.
 
 ## Remaining Milestone 3 Work
 
-- Compile-ready merchant integration example and compatibility matrix.
+The package-level SDK deliverables are now represented in code and docs. The
+next hardening step is wiring these primitives into a deployable merchant runtime
+and exercising the full outage/retry path against a live x402 flow.
 
 ## Acceptance Checks
 
 - `corepack pnpm --filter @split402/merchant-sdk test`
 - `corepack pnpm --filter @split402/merchant-sdk typecheck`
 - `corepack pnpm --filter @split402/merchant-sdk build`
+- `corepack pnpm --filter @split402/x402-extension test`
+- `corepack pnpm --filter @split402/x402-extension typecheck`
+- `corepack pnpm --filter @split402/x402-extension build`
 - `corepack pnpm lint`
 - `corepack pnpm typecheck`
 - `corepack pnpm test`
