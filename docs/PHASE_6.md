@@ -62,6 +62,8 @@ reconciliation queue and referrer payout views.
   `/v1/solana/payouts/sign`.
 - Added payout signer HMAC auth key-ring support so operators can run
   active/retired control-plane authentication keys during rotation.
+- Added payout signer metrics and safe audit events for signed/rejected signing
+  attempts without logging private keys, shared secrets, or transaction bytes.
 - Added signed payout transaction records and PostgreSQL persistence for exact
   signed bytes, expected signature, sequence, attempt, blockhash metadata, and
   submitted state before broadcast.

@@ -11,6 +11,7 @@ returns signed bytes plus the expected signature.
 
 ```text
 GET  /v1/health
+GET  /v1/metrics
 POST /v1/solana/payouts/sign
 ```
 
@@ -47,6 +48,32 @@ SPLIT402_PAYOUT_SIGNER_SERVICE_AUTH_KEYS_JSON='[
 When more than one auth key is configured, requests must include
 `x-split402-signer-key-id`. Retired keys remain documented in config but cannot
 authorize signing requests.
+
+## Metrics And Audit
+
+`GET /v1/metrics` returns bounded counters:
+
+```json
+{
+  "metrics": {
+    "service": "split402-payout-signer",
+    "signerReference": "kms:split402-devnet-payout",
+    "network": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+    "requestsTotal": 2,
+    "signedTotal": 1,
+    "rejectedTotal": 1,
+    "rejectedByCode": {
+      "forbidden": 1
+    }
+  }
+}
+```
+
+Deployments can pass an audit sink to `createPayoutSignerApp`. Audit events use
+schema `split402.payout_signer.audit_event.v1` and include safe signing
+metadata: outcome, status code, auth key ID, batch ID, transaction index,
+amount, destination hash, and expected signature. They do not include private
+keys, shared secrets, unsigned transaction bytes, or signed transaction bytes.
 
 Exactly one key source must be set:
 

@@ -258,6 +258,7 @@ Current slice:
 - isolated payout signer appliance scaffold with HMAC verification and Solana
   transaction signing;
 - payout signer auth key-ring rotation support;
+- payout signer metrics and safe audit events for signed/rejected attempts;
 - signed-byte payout transaction persistence and Solana broadcast submission
   boundary;
 - Solana payout transaction finality monitor with retry and outcome-unknown

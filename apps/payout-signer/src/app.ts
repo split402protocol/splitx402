@@ -32,6 +32,8 @@ export interface PayoutSignerConfig {
   privateKeyBase64?: string;
   secretKeyBase64?: string;
   secretKeyJson?: string;
+  auditSink?: PayoutSignerAuditSink;
+  now?: () => Date;
 }
 
 export type PayoutSignerAuthKeyStatus = "active" | "retired";
@@ -53,6 +55,39 @@ interface NormalizedPayoutSignerConfig
   authKeys: PayoutSignerAuthKey[];
 }
 
+export type PayoutSignerAuditOutcome = "signed" | "rejected";
+
+export interface PayoutSignerAuditEvent {
+  schema: "split402.payout_signer.audit_event.v1";
+  observedAt: string;
+  outcome: PayoutSignerAuditOutcome;
+  statusCode: number;
+  code: string;
+  signerReference: string;
+  network: string;
+  authKeyId?: string;
+  batchId?: string;
+  transactionIndex?: number;
+  amountAtomic?: string;
+  destinationAmountListHash?: `sha256:${string}`;
+  expectedSignature?: string;
+  message?: string;
+}
+
+export type PayoutSignerAuditSink = (
+  event: PayoutSignerAuditEvent
+) => void | Promise<void>;
+
+export interface PayoutSignerMetricsSnapshot {
+  service: "split402-payout-signer";
+  signerReference: string;
+  network: string;
+  requestsTotal: number;
+  signedTotal: number;
+  rejectedTotal: number;
+  rejectedByCode: Record<string, number>;
+}
+
 interface RemotePayoutSignRequest {
   schema: "split402.solana.remote_payout_sign_request.v1";
   batchId: string;
@@ -72,6 +107,7 @@ export function createPayoutSignerApp(config: PayoutSignerConfig): express.Expre
   app.use(express.json({ limit: "128kb" }));
   const normalizedConfig = normalizePayoutSignerConfig(config);
   const signerPromise = createSigner(normalizedConfig);
+  const metrics = createMetrics(normalizedConfig);
 
   app.get("/v1/health", (_req, res) => {
     res.json({
@@ -87,22 +123,55 @@ export function createPayoutSignerApp(config: PayoutSignerConfig): express.Expre
     });
   });
 
+  app.get("/v1/metrics", (_req, res) => {
+    res.json({ metrics: snapshotMetrics(metrics) });
+  });
+
   app.post("/v1/solana/payouts/sign", async (req, res) => {
+    let authKeyId: string | undefined;
+    let signRequest: RemotePayoutSignRequest | undefined;
     try {
+      metrics.requestsTotal += 1;
       const rawBody = JSON.stringify(req.body);
-      assertRequestSignature(req, rawBody, normalizedConfig.authKeys ?? []);
-      const request = readRemotePayoutSignRequest(req.body);
-      assertRemotePayoutSignRequest(request, normalizedConfig);
+      authKeyId = assertRequestSignature(
+        req,
+        rawBody,
+        normalizedConfig.authKeys
+      ).keyId;
+      signRequest = readRemotePayoutSignRequest(req.body);
+      assertRemotePayoutSignRequest(signRequest, normalizedConfig);
       const signer = await signerPromise;
-      const transactionBytes = Buffer.from(request.transactionBase64, "base64");
+      const transactionBytes = Buffer.from(signRequest.transactionBase64, "base64");
       const transaction = getTransactionDecoder().decode(transactionBytes);
       const signed = await signTransaction([signer.keyPair], transaction);
+      const expectedSignature = getSignatureFromTransaction(signed);
+      metrics.signedTotal += 1;
+      await emitAuditEvent(normalizedConfig, {
+        outcome: "signed",
+        statusCode: 200,
+        code: "signed",
+        authKeyId,
+        request: signRequest,
+        expectedSignature
+      });
       res.json({
-        transactionIndex: request.transactionIndex,
+        transactionIndex: signRequest.transactionIndex,
         signedTransactionBase64: getBase64EncodedWireTransaction(signed),
-        expectedSignature: getSignatureFromTransaction(signed)
+        expectedSignature
       });
     } catch (error) {
+      const errorResponse = readSignerErrorResponse(error);
+      metrics.rejectedTotal += 1;
+      metrics.rejectedByCode[errorResponse.code] =
+        (metrics.rejectedByCode[errorResponse.code] ?? 0) + 1;
+      await emitAuditEvent(normalizedConfig, {
+        outcome: "rejected",
+        statusCode: errorResponse.statusCode,
+        code: errorResponse.code,
+        message: errorResponse.message,
+        ...(authKeyId === undefined ? {} : { authKeyId }),
+        ...(signRequest === undefined ? {} : { request: signRequest })
+      });
       sendSignerError(res, error);
     }
   });
@@ -199,7 +268,9 @@ function normalizePayoutSignerConfig(
       : { secretKeyBase64: config.secretKeyBase64 }),
     ...(config.secretKeyJson === undefined
       ? {}
-      : { secretKeyJson: config.secretKeyJson })
+      : { secretKeyJson: config.secretKeyJson }),
+    ...(config.auditSink === undefined ? {} : { auditSink: config.auditSink }),
+    ...(config.now === undefined ? {} : { now: config.now })
   };
 }
 
@@ -297,7 +368,7 @@ function assertRequestSignature(
   req: Request,
   body: string,
   authKeys: readonly PayoutSignerAuthKey[]
-): void {
+): PayoutSignerAuthKey {
   const timestamp = readHeader(req, "x-split402-signature-timestamp");
   const signature = readHeader(req, "x-split402-signature");
   const authKey = selectAuthKey(req, authKeys);
@@ -309,6 +380,7 @@ function assertRequestSignature(
   if (!safeEqual(signature, expected)) {
     throw new SignerHttpError(401, "unauthorized", "invalid request signature");
   }
+  return authKey;
 }
 
 function selectAuthKey(
@@ -352,6 +424,73 @@ function safeEqual(left: string, right: string): boolean {
   const leftBytes = Buffer.from(left);
   const rightBytes = Buffer.from(right);
   return leftBytes.length === rightBytes.length && timingSafeEqual(leftBytes, rightBytes);
+}
+
+function createMetrics(
+  config: NormalizedPayoutSignerConfig
+): PayoutSignerMetricsSnapshot {
+  return {
+    service: "split402-payout-signer",
+    signerReference: config.signerReference,
+    network: config.network,
+    requestsTotal: 0,
+    signedTotal: 0,
+    rejectedTotal: 0,
+    rejectedByCode: {}
+  };
+}
+
+function snapshotMetrics(
+  metrics: PayoutSignerMetricsSnapshot
+): PayoutSignerMetricsSnapshot {
+  return {
+    ...metrics,
+    rejectedByCode: { ...metrics.rejectedByCode }
+  };
+}
+
+async function emitAuditEvent(
+  config: NormalizedPayoutSignerConfig,
+  input: {
+    outcome: PayoutSignerAuditOutcome;
+    statusCode: number;
+    code: string;
+    authKeyId?: string;
+    request?: RemotePayoutSignRequest;
+    expectedSignature?: string;
+    message?: string;
+  }
+): Promise<void> {
+  if (config.auditSink === undefined) {
+    return;
+  }
+  const event: PayoutSignerAuditEvent = {
+    schema: "split402.payout_signer.audit_event.v1",
+    observedAt: (config.now?.() ?? new Date()).toISOString(),
+    outcome: input.outcome,
+    statusCode: input.statusCode,
+    code: input.code,
+    signerReference: config.signerReference,
+    network: config.network,
+    ...(input.authKeyId === undefined ? {} : { authKeyId: input.authKeyId }),
+    ...(input.request === undefined
+      ? {}
+      : {
+          batchId: input.request.batchId,
+          transactionIndex: input.request.transactionIndex,
+          amountAtomic: input.request.amountAtomic,
+          destinationAmountListHash: input.request.destinationAmountListHash
+        }),
+    ...(input.expectedSignature === undefined
+      ? {}
+      : { expectedSignature: input.expectedSignature }),
+    ...(input.message === undefined ? {} : { message: input.message })
+  };
+  try {
+    await config.auditSink(event);
+  } catch {
+    // Signing responses must not depend on the audit transport being healthy.
+  }
 }
 
 function readRemotePayoutSignRequest(value: unknown): RemotePayoutSignRequest {
@@ -895,17 +1034,30 @@ function readByteArray(
 }
 
 function sendSignerError(res: Response, error: unknown): void {
-  if (error instanceof SignerHttpError) {
-    res.status(error.statusCode).json({
-      error: error.code,
-      message: error.message
-    });
-    return;
-  }
-  res.status(500).json({
-    error: "internal_server_error",
-    message: error instanceof Error ? error.message : "unknown error"
+  const response = readSignerErrorResponse(error);
+  res.status(response.statusCode).json({
+    error: response.code,
+    message: response.message
   });
+}
+
+function readSignerErrorResponse(error: unknown): {
+  statusCode: number;
+  code: string;
+  message: string;
+} {
+  if (error instanceof SignerHttpError) {
+    return {
+      statusCode: error.statusCode,
+      code: error.code,
+      message: error.message
+    };
+  }
+  return {
+    statusCode: 500,
+    code: "internal_server_error",
+    message: error instanceof Error ? error.message : "unknown error"
+  };
 }
 
 class SignerHttpError extends Error {
