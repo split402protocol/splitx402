@@ -1,9 +1,201 @@
 import {
+  Sha256HashSchema,
+  Split402IdSchema,
   Split402ReceiptV1Schema,
   hashProtocolObject,
   type Split402ReceiptV1
 } from "@split402/protocol";
 import { randomBytes } from "node:crypto";
+
+export interface MerchantRouteDeclaration {
+  campaignId: string;
+  operationId: string;
+}
+
+export interface MerchantCampaignConfig {
+  campaignId: string;
+  campaignVersion: number;
+  campaignTermsHash: `sha256:${string}`;
+  commissionBps: number;
+  attributionRequired: boolean;
+  allowSelfReferral: boolean;
+}
+
+export interface MerchantCampaignOperation {
+  operationId: string;
+  method: string;
+  pathTemplate: string;
+  inputSchema?: unknown;
+}
+
+export interface MerchantCachedCampaign {
+  campaignId: string;
+  status: "active";
+  config: MerchantCampaignConfig;
+  operations: MerchantCampaignOperation[];
+  fetchedAt: string;
+  staleAt: string;
+}
+
+export interface CachedControlPlaneCampaignResolverOptions {
+  controlPlaneUrl: string;
+  fetch?: MerchantControlPlaneFetch;
+  headers?: Record<string, string>;
+  staleAfterMs?: number;
+  now?: () => Date;
+}
+
+export type MerchantControlPlaneFetch = (
+  input: string,
+  init: {
+    method: "GET";
+    headers: Record<string, string>;
+  }
+) => Promise<MerchantControlPlaneFetchResponse>;
+
+export interface MerchantControlPlaneFetchResponse {
+  ok: boolean;
+  status: number;
+  json(): Promise<unknown>;
+}
+
+export class MerchantCampaignResolverError extends Error {
+  readonly code = "merchant_campaign_resolver_error";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "MerchantCampaignResolverError";
+  }
+}
+
+export class CachedControlPlaneCampaignResolver {
+  private readonly campaignsById = new Map<string, MerchantCachedCampaign>();
+  private readonly staleAfterMs: number;
+  private readonly now: () => Date;
+
+  constructor(private readonly options: CachedControlPlaneCampaignResolverOptions) {
+    this.staleAfterMs = options.staleAfterMs ?? 300_000;
+    if (!Number.isInteger(this.staleAfterMs) || this.staleAfterMs < 0) {
+      throw new Error("staleAfterMs must be a non-negative integer");
+    }
+    this.now = options.now ?? (() => new Date());
+  }
+
+  readonly resolveCampaign = (
+    declaration: MerchantRouteDeclaration
+  ): MerchantCampaignConfig => {
+    const campaignId = assertSplit402IdValue(
+      declaration.campaignId,
+      "campaignId"
+    );
+    const operationId = assertNonEmptyString(
+      declaration.operationId,
+      "operationId"
+    );
+    const cached = this.campaignsById.get(campaignId);
+    if (cached === undefined) {
+      throw new MerchantCampaignResolverError(
+        `campaign is not cached: ${campaignId}`
+      );
+    }
+    if (!cached.operations.some((operation) => operation.operationId === operationId)) {
+      throw new MerchantCampaignResolverError(
+        `campaign ${campaignId} does not cover operation: ${operationId}`
+      );
+    }
+    return cloneCampaignConfig(cached.config);
+  };
+
+  async refreshCampaign(campaignId: string): Promise<MerchantCachedCampaign> {
+    const id = assertSplit402IdValue(campaignId, "campaignId");
+    let response: MerchantControlPlaneFetchResponse;
+    try {
+      response = await this.fetch()(this.campaignUrl(id), {
+        method: "GET",
+        headers: this.headers()
+      });
+    } catch (error) {
+      throw new MerchantCampaignResolverError(
+        `campaign fetch failed: ${readErrorMessage(error)}`
+      );
+    }
+
+    if (!response.ok) {
+      throw new MerchantCampaignResolverError(
+        `campaign fetch failed with HTTP ${response.status}`
+      );
+    }
+
+    let body: unknown;
+    try {
+      body = await response.json();
+    } catch (error) {
+      throw new MerchantCampaignResolverError(
+        `campaign response was invalid JSON: ${readErrorMessage(error)}`
+      );
+    }
+
+    const fetchedAt = this.now().toISOString();
+    const staleAt = new Date(Date.parse(fetchedAt) + this.staleAfterMs).toISOString();
+    const cached = parseCampaignResponse(body, {
+      expectedCampaignId: id,
+      fetchedAt,
+      staleAt
+    });
+    this.campaignsById.set(cached.campaignId, cached);
+    return cloneCachedCampaign(cached);
+  }
+
+  async refreshCampaigns(campaignIds: string[]): Promise<MerchantCachedCampaign[]> {
+    const uniqueIds = Array.from(new Set(campaignIds));
+    const campaigns: MerchantCachedCampaign[] = [];
+    for (const campaignId of uniqueIds) {
+      campaigns.push(await this.refreshCampaign(campaignId));
+    }
+    return campaigns;
+  }
+
+  getCachedCampaign(campaignId: string): MerchantCachedCampaign | undefined {
+    const cached = this.campaignsById.get(
+      assertSplit402IdValue(campaignId, "campaignId")
+    );
+    return cached === undefined ? undefined : cloneCachedCampaign(cached);
+  }
+
+  listCachedCampaigns(): MerchantCachedCampaign[] {
+    return Array.from(this.campaignsById.values())
+      .map(cloneCachedCampaign)
+      .sort((left, right) => left.campaignId.localeCompare(right.campaignId));
+  }
+
+  isCampaignStale(campaignId: string): boolean {
+    const cached = this.campaignsById.get(
+      assertSplit402IdValue(campaignId, "campaignId")
+    );
+    if (cached === undefined) {
+      return true;
+    }
+    return Date.parse(cached.staleAt) <= this.now().getTime();
+  }
+
+  private campaignUrl(campaignId: string): string {
+    return new URL(
+      `/v1/campaigns/${encodeURIComponent(campaignId)}`,
+      this.options.controlPlaneUrl
+    ).toString();
+  }
+
+  private headers(): Record<string, string> {
+    return {
+      accept: "application/json",
+      ...(this.options.headers ?? {})
+    };
+  }
+
+  private fetch(): MerchantControlPlaneFetch {
+    return this.options.fetch ?? fetch;
+  }
+}
 
 export type MerchantReceiptOutboxStatus =
   | "pending"
@@ -428,6 +620,103 @@ export class ControlPlaneReceiptSubmitter implements MerchantReceiptSubmitter {
   }
 }
 
+function parseCampaignResponse(
+  body: unknown,
+  context: {
+    expectedCampaignId: string;
+    fetchedAt: string;
+    staleAt: string;
+  }
+): MerchantCachedCampaign {
+  const campaign = requireRecord(
+    requireRecord(body, "response").campaign,
+    "campaign"
+  );
+  const campaignId = assertSplit402IdValue(
+    readRequiredString(campaign.id, "campaign.id"),
+    "campaign.id"
+  );
+  if (campaignId !== context.expectedCampaignId) {
+    throw new MerchantCampaignResolverError(
+      `campaign response id mismatch: expected ${context.expectedCampaignId}, got ${campaignId}`
+    );
+  }
+
+  const status = readRequiredString(campaign.status, "campaign.status");
+  if (status !== "active") {
+    throw new MerchantCampaignResolverError(
+      `campaign ${campaignId} is not active: ${status}`
+    );
+  }
+
+  const current = requireRecord(campaign.current, "campaign.current");
+  const currentCampaignId = assertSplit402IdValue(
+    readRequiredString(current.campaignId, "campaign.current.campaignId"),
+    "campaign.current.campaignId"
+  );
+  if (currentCampaignId !== campaignId) {
+    throw new MerchantCampaignResolverError(
+      `campaign.current.campaignId does not match campaign.id: ${currentCampaignId}`
+    );
+  }
+
+  const terms = requireRecord(current.terms, "campaign.current.terms");
+  const termsCampaignId = assertSplit402IdValue(
+    readRequiredString(terms.campaignId, "campaign.current.terms.campaignId"),
+    "campaign.current.terms.campaignId"
+  );
+  if (termsCampaignId !== campaignId) {
+    throw new MerchantCampaignResolverError(
+      `campaign terms campaignId does not match campaign.id: ${termsCampaignId}`
+    );
+  }
+
+  const version = readPositiveInteger(current.version, "campaign.current.version");
+  const termsVersion = readPositiveInteger(
+    terms.campaignVersion,
+    "campaign.current.terms.campaignVersion"
+  );
+  if (termsVersion !== version) {
+    throw new MerchantCampaignResolverError(
+      `campaign terms version does not match current version: ${termsVersion}`
+    );
+  }
+
+  const operations = readCampaignOperations(
+    terms.operations,
+    "campaign.current.terms.operations"
+  );
+  const config: MerchantCampaignConfig = {
+    campaignId,
+    campaignVersion: version,
+    campaignTermsHash: assertSha256HashValue(
+      readRequiredString(current.termsHash, "campaign.current.termsHash"),
+      "campaign.current.termsHash"
+    ),
+    commissionBps: readBasisPoints(
+      terms.commissionBps,
+      "campaign.current.terms.commissionBps"
+    ),
+    attributionRequired: readRequiredBoolean(
+      terms.attributionRequired,
+      "campaign.current.terms.attributionRequired"
+    ),
+    allowSelfReferral: readRequiredBoolean(
+      terms.allowSelfReferral,
+      "campaign.current.terms.allowSelfReferral"
+    )
+  };
+
+  return {
+    campaignId,
+    status: "active",
+    config,
+    operations,
+    fetchedAt: assertUtc(context.fetchedAt, "fetchedAt"),
+    staleAt: assertUtc(context.staleAt, "staleAt")
+  };
+}
+
 function parseReceipt(receipt: Split402ReceiptV1): Split402ReceiptV1 {
   return Split402ReceiptV1Schema.parse(receipt);
 }
@@ -447,6 +736,35 @@ function cloneRecord(
         ? {}
         : { routeId: record.receiptJson.routeId })
     }
+  };
+}
+
+function cloneCachedCampaign(
+  campaign: MerchantCachedCampaign
+): MerchantCachedCampaign {
+  return {
+    ...campaign,
+    config: cloneCampaignConfig(campaign.config),
+    operations: campaign.operations.map(cloneCampaignOperation)
+  };
+}
+
+function cloneCampaignConfig(
+  config: MerchantCampaignConfig
+): MerchantCampaignConfig {
+  return { ...config };
+}
+
+function cloneCampaignOperation(
+  operation: MerchantCampaignOperation
+): MerchantCampaignOperation {
+  return {
+    operationId: operation.operationId,
+    method: operation.method,
+    pathTemplate: operation.pathTemplate,
+    ...(operation.inputSchema === undefined
+      ? {}
+      : { inputSchema: operation.inputSchema })
   };
 }
 
@@ -470,6 +788,32 @@ function comparePendingRecords(
 function assertUtc(value: string, label: string): string {
   if (!value.endsWith("Z") || Number.isNaN(Date.parse(value))) {
     throw new Error(`${label} must be a UTC timestamp`);
+  }
+  return value;
+}
+
+function assertSplit402IdValue(value: string, label: string): string {
+  const parsed = Split402IdSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new MerchantCampaignResolverError(`${label} must be a Split402 id`);
+  }
+  return parsed.data;
+}
+
+function assertSha256HashValue(
+  value: string,
+  label: string
+): `sha256:${string}` {
+  const parsed = Sha256HashSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new MerchantCampaignResolverError(`${label} must be a sha256 hash`);
+  }
+  return parsed.data;
+}
+
+function assertNonEmptyString(value: string, label: string): string {
+  if (value.length === 0) {
+    throw new MerchantCampaignResolverError(`${label} must be non-empty`);
   }
   return value;
 }
@@ -506,6 +850,74 @@ function readSubmissionError(body: unknown): string | undefined {
     return record.errors.join("; ");
   }
   return undefined;
+}
+
+function requireRecord(value: unknown, label: string): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new MerchantCampaignResolverError(`${label} must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function readRequiredString(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.length === 0) {
+    throw new MerchantCampaignResolverError(`${label} must be a non-empty string`);
+  }
+  return value;
+}
+
+function readRequiredBoolean(value: unknown, label: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new MerchantCampaignResolverError(`${label} must be a boolean`);
+  }
+  return value;
+}
+
+function readPositiveInteger(value: unknown, label: string): number {
+  if (!Number.isInteger(value) || typeof value !== "number" || value <= 0) {
+    throw new MerchantCampaignResolverError(`${label} must be a positive integer`);
+  }
+  return value;
+}
+
+function readBasisPoints(value: unknown, label: string): number {
+  if (
+    !Number.isInteger(value) ||
+    typeof value !== "number" ||
+    value < 0 ||
+    value > 10_000
+  ) {
+    throw new MerchantCampaignResolverError(
+      `${label} must be an integer from 0 to 10000`
+    );
+  }
+  return value;
+}
+
+function readCampaignOperations(
+  value: unknown,
+  label: string
+): MerchantCampaignOperation[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new MerchantCampaignResolverError(`${label} must be a non-empty array`);
+  }
+  return value.map((item, index) => {
+    const operation = requireRecord(item, `${label}[${index}]`);
+    return {
+      operationId: readRequiredString(
+        operation.operationId,
+        `${label}[${index}].operationId`
+      ),
+      method: readRequiredString(operation.method, `${label}[${index}].method`),
+      pathTemplate: readRequiredString(
+        operation.pathTemplate,
+        `${label}[${index}].pathTemplate`
+      ),
+      ...(operation.inputSchema === undefined
+        ? {}
+        : { inputSchema: operation.inputSchema })
+    };
+  });
 }
 
 function readErrorMessage(error: unknown): string {

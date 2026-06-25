@@ -257,6 +257,8 @@ Deliverables:
 Current slice:
 
 - add `@split402/merchant-sdk`;
+- add a cached control-plane campaign resolver that refreshes active campaign
+  terms remotely and serves the x402 extension synchronously from cache;
 - add durable merchant receipt outbox store interfaces;
 - add an in-memory outbox implementation for deterministic tests and examples;
 - add a receipt outbox dispatcher with retry scheduling, max-attempt dead-lettering,
