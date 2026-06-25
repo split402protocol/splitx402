@@ -315,6 +315,12 @@ Generate the Phase 6 payout signer key custody review record:
 corepack pnpm phase6:key-custody
 ```
 
+Generate the Phase 6 emergency signer-auth revocation drill record:
+
+```bash
+corepack pnpm phase6:emergency-revocation
+```
+
 Run the optional live PostgreSQL harness against an empty test database:
 
 ```powershell
