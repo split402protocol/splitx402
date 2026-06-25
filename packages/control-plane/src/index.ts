@@ -60,11 +60,17 @@ import {
   type PostgresPool
 } from "./postgres.js";
 import {
+  PayoutBatchConflictError,
+  createPayoutBatchPlan,
   createPayoutPreview,
   filterPayoutEligibleAccruals,
+  isPayoutBatchConflictError,
+  isPayoutBatchValidationError,
   isPayoutPreviewValidationError,
   type ListPayoutEligibleAccrualsInput,
   type PayoutAccrualStore,
+  type PayoutBatchRecord,
+  type PayoutBatchStore,
   type PayoutFundingBalance
 } from "./payouts.js";
 
@@ -72,7 +78,11 @@ export type ReceiptIngestSource = "buyer" | "merchant" | "relay" | "unknown";
 export type ReceiptVerificationState =
   | "signature_verified"
   | "pending_chain_verification";
-export type AccrualStatus = "pending_chain_verification" | "available" | "held";
+export type AccrualStatus =
+  | "pending_chain_verification"
+  | "available"
+  | "held"
+  | "allocated";
 export type LedgerAccountType =
   | "merchant_commission_liability"
   | "referrer_payable"
@@ -245,11 +255,12 @@ export interface ReceiptIngestionStore {
 const RECEIPT_INGEST_SOURCES = ["buyer", "merchant", "relay", "unknown"] as const;
 
 export class InMemoryReceiptIngestionStore
-  implements ReceiptIngestionStore, PayoutAccrualStore {
+  implements ReceiptIngestionStore, PayoutAccrualStore, PayoutBatchStore {
   private readonly receiptsById = new Map<string, ReceiptIngestionSnapshot>();
   private readonly receiptIdByHash = new Map<`sha256:${string}`, string>();
   private readonly receiptIdByPaymentId = new Map<string, string>();
   private readonly receiptIdBySettlementTx = new Map<string, string>();
+  private readonly payoutBatchesById = new Map<string, PayoutBatchRecord>();
 
   getByReceiptId(receiptId: string): ReceiptIngestionSnapshot | undefined {
     return this.receiptsById.get(receiptId);
@@ -293,6 +304,53 @@ export class InMemoryReceiptIngestionStore
     input: ListPayoutEligibleAccrualsInput
   ): CommissionAccrual[] {
     return filterPayoutEligibleAccruals(this.listAccruals(), input);
+  }
+
+  createPayoutBatch(
+    input: Parameters<PayoutBatchStore["createPayoutBatch"]>[0]
+  ): PayoutBatchRecord {
+    const batch = createPayoutBatchPlan(input);
+    const selectedAccrualIds = new Set(
+      batch.items.flatMap((item) =>
+        item.allocations.map((allocation) => allocation.accrualId)
+      )
+    );
+    const snapshotsToAllocate: ReceiptIngestionSnapshot[] = [];
+    for (const snapshot of this.receiptsById.values()) {
+      if (
+        snapshot.accrual !== undefined &&
+        selectedAccrualIds.has(snapshot.accrual.id)
+      ) {
+        if (snapshot.accrual.status !== "available") {
+          throw new PayoutBatchConflictError(
+            `accrual is not available for payout: ${snapshot.accrual.id}`
+          );
+        }
+        snapshotsToAllocate.push(snapshot);
+      }
+    }
+    if (snapshotsToAllocate.length !== selectedAccrualIds.size) {
+      throw new PayoutBatchConflictError("one or more selected accruals were not found");
+    }
+
+    for (const snapshot of snapshotsToAllocate) {
+      if (snapshot.accrual === undefined) {
+        continue;
+      }
+      this.save({
+        ...snapshot,
+        accrual: {
+          ...snapshot.accrual,
+          status: "allocated"
+        }
+      });
+    }
+    this.payoutBatchesById.set(batch.id, batch);
+    return batch;
+  }
+
+  getPayoutBatch(batchId: string): PayoutBatchRecord | undefined {
+    return this.payoutBatchesById.get(batchId);
   }
 }
 
@@ -509,6 +567,7 @@ export interface ControlPlaneAppOptions {
   campaignRegistry?: CampaignRegistry;
   routeRegistry?: RouteRegistry;
   payoutAccrualStore?: PayoutAccrualStore;
+  payoutBatchStore?: PayoutBatchStore;
   auth?: ControlPlaneAuthOptions;
   jsonLimit?: string;
 }
@@ -573,6 +632,7 @@ export function createControlPlaneRuntime(
     campaignRegistry,
     routeRegistry,
     payoutAccrualStore: receiptStore,
+    payoutBatchStore: receiptStore,
     ...(options.jsonLimit === undefined ? {} : { jsonLimit: options.jsonLimit }),
     ...(authenticator === undefined
       ? {}
@@ -783,7 +843,7 @@ export function createPayoutRouter(
   payoutAccrualStore: PayoutAccrualStore,
   options: Pick<
     ControlPlaneAppOptions,
-    "auth" | "jsonLimit" | "merchantRegistry"
+    "auth" | "jsonLimit" | "merchantRegistry" | "payoutBatchStore"
   > = {}
 ): Router {
   const router = express.Router();
@@ -841,6 +901,105 @@ export function createPayoutRouter(
       res.json({ preview });
     } catch (error) {
       if (
+        !sendPayoutPreviewError(res, error) &&
+        !sendMerchantRegistryError(res, error)
+      ) {
+        next(error);
+      }
+    }
+  });
+
+  router.post("/v1/merchants/:merchantId/payout-batches", async (req, res, next) => {
+    try {
+      const merchantId = readRouteParam(req.params.merchantId, "merchantId");
+      const session = await requireMerchantOwnerForMerchantId(
+        req,
+        res,
+        options,
+        merchantId
+      );
+      if (session === undefined && isMerchantAuthRequired(options)) {
+        return;
+      }
+      if (options.merchantRegistry === undefined) {
+        res.status(500).json({
+          error: "internal_server_error",
+          message: "merchant registry is required for payout batch creation"
+        });
+        return;
+      }
+      if (options.payoutBatchStore === undefined) {
+        res.status(500).json({
+          error: "internal_server_error",
+          message: "payout batch store is required for payout batch creation"
+        });
+        return;
+      }
+
+      const body = readJsonObject(req.body) ?? {};
+      const payoutWalletId = readRequiredString(
+        body.payoutWalletId,
+        "payoutWalletId"
+      );
+      const profile = await options.merchantRegistry.getMerchantProfile(merchantId);
+      if (profile === undefined) {
+        res.status(404).json({ error: "merchant_not_found" });
+        return;
+      }
+      const payoutWallet = profile.payoutWallets.find(
+        (wallet) => wallet.id === payoutWalletId
+      );
+      if (payoutWallet === undefined) {
+        res.status(404).json({ error: "merchant_payout_wallet_not_found" });
+        return;
+      }
+      if (payoutWallet.status !== "active") {
+        res.status(409).json({
+          error: "payout_wallet_not_active",
+          message: `merchant payout wallet is ${payoutWallet.status}`
+        });
+        return;
+      }
+
+      const campaignId = readOptionalString(body.campaignId, "campaignId");
+      const routeId = readOptionalString(body.routeId, "routeId");
+      const now = readOptionalString(body.now, "now") ?? new Date().toISOString();
+      const maxAccruals = readOptionalPositiveInteger(
+        body.maxAccruals,
+        "maxAccruals"
+      );
+      const maxRecipients = readOptionalPositiveInteger(
+        body.maxRecipients,
+        "maxRecipients"
+      );
+      const minimumPayoutAmountAtomic = readOptionalString(
+        body.minimumPayoutAmountAtomic,
+        "minimumPayoutAmountAtomic"
+      );
+      const accruals = await payoutAccrualStore.listPayoutEligibleAccruals({
+        merchantId,
+        asset: payoutWallet.asset,
+        now,
+        ...(campaignId === undefined ? {} : { campaignId }),
+        ...(routeId === undefined ? {} : { routeId }),
+        ...(maxAccruals === undefined ? {} : { limit: maxAccruals })
+      });
+      const batch = await options.payoutBatchStore.createPayoutBatch({
+        merchantId,
+        payoutWalletId,
+        network: payoutWallet.network,
+        asset: payoutWallet.asset,
+        accruals,
+        now,
+        ...(minimumPayoutAmountAtomic === undefined
+          ? {}
+          : { minimumPayoutAmountAtomic }),
+        ...(maxRecipients === undefined ? {} : { maxRecipients })
+      });
+      res.status(201).json({ batch });
+    } catch (error) {
+      if (
+        !sendPayoutBatchError(res, error) &&
         !sendPayoutPreviewError(res, error) &&
         !sendMerchantRegistryError(res, error)
       ) {
@@ -2280,6 +2439,18 @@ function sendRouteRegistryError(res: Response, error: unknown): boolean {
 function sendPayoutPreviewError(res: Response, error: unknown): boolean {
   if (isPayoutPreviewValidationError(error)) {
     res.status(400).json({ error: "invalid_request", message: error.message });
+    return true;
+  }
+  return false;
+}
+
+function sendPayoutBatchError(res: Response, error: unknown): boolean {
+  if (isPayoutBatchValidationError(error)) {
+    res.status(400).json({ error: "invalid_request", message: error.message });
+    return true;
+  }
+  if (isPayoutBatchConflictError(error)) {
+    res.status(409).json({ error: "conflict", message: error.message });
     return true;
   }
   return false;

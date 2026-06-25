@@ -91,8 +91,19 @@ import type {
   ReceiptVerificationState
 } from "./index.js";
 import type {
+  CreatePayoutBatchInput,
   ListPayoutEligibleAccrualsInput,
-  PayoutAccrualStore
+  PayoutAccrualStore,
+  PayoutAllocationRecord,
+  PayoutBatchRecord,
+  PayoutBatchStore,
+  PayoutBatchStatus,
+  PayoutItemRecord,
+  PayoutItemStatus
+} from "./payouts.js";
+import {
+  PayoutBatchConflictError,
+  createPayoutBatchPlan
 } from "./payouts.js";
 
 export interface PostgresQueryExecutor {
@@ -207,6 +218,38 @@ interface MerchantPayoutWalletRow extends QueryResultRow {
   signer_reference: string;
   status: string;
   created_at: Date | string;
+}
+
+interface PayoutBatchRow extends QueryResultRow {
+  id: string;
+  merchant_id: string;
+  payout_wallet_id: string;
+  network: string;
+  asset_mint: string;
+  status: string;
+  total_amount_atomic: string;
+  item_count: number;
+  accrual_count: number;
+  failure_code: string | null;
+  failure_message: string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+interface PayoutItemRow extends QueryResultRow {
+  id: string;
+  payout_batch_id: string;
+  destination_wallet: string;
+  destination_token_account: string | null;
+  amount_atomic: string;
+  status: string;
+  created_at: Date | string;
+}
+
+interface PayoutAllocationRow extends QueryResultRow {
+  payout_item_id: string;
+  accrual_id: string;
+  amount_atomic: string;
 }
 
 interface WalletAuthChallengeRow extends QueryResultRow {
@@ -333,7 +376,11 @@ export interface PostgresOutboxEventStoreOptions {
 export type PostgresRouteRegistryOptions = InMemoryRouteRegistryOptions;
 
 export class PostgresReceiptIngestionStore
-  implements ReceiptIngestionStore, ReceiptChainVerificationStore, PayoutAccrualStore {
+  implements
+    ReceiptIngestionStore,
+    ReceiptChainVerificationStore,
+    PayoutAccrualStore,
+    PayoutBatchStore {
   constructor(
     private readonly db: PostgresPool | PostgresQueryExecutor,
     private readonly options: PostgresReceiptIngestionStoreOptions = {}
@@ -442,6 +489,78 @@ export class PostgresReceiptIngestionStore
       values
     );
     return result.rows.map(mapAccrual);
+  }
+
+  async createPayoutBatch(
+    input: CreatePayoutBatchInput
+  ): Promise<PayoutBatchRecord> {
+    const batch = createPayoutBatchPlan(input);
+    await this.withTransaction(async (client) => {
+      for (const item of batch.items) {
+        for (const allocation of item.allocations) {
+          const result = await client.query<Pick<CommissionAccrualRow, "id">>(
+            `update commission_accruals
+                set status = 'allocated'
+              where id = $1
+                and merchant_id = $2
+                and asset_mint = $3
+                and status = 'available'
+              returning id`,
+            [allocation.accrualId, batch.merchantId, batch.asset]
+          );
+          if (result.rows[0] === undefined) {
+            throw new PayoutBatchConflictError(
+              `accrual is not available for payout: ${allocation.accrualId}`
+            );
+          }
+        }
+      }
+
+      await insertPayoutBatch(client, batch);
+      for (const item of batch.items) {
+        await insertPayoutItem(client, item);
+        for (const allocation of item.allocations) {
+          await insertPayoutAllocation(client, allocation);
+        }
+      }
+    });
+    return batch;
+  }
+
+  async getPayoutBatch(batchId: string): Promise<PayoutBatchRecord | undefined> {
+    const batchResult = await this.db.query<PayoutBatchRow>(
+      `select id, merchant_id, payout_wallet_id, network, asset_mint, status,
+              total_amount_atomic, item_count, accrual_count, failure_code,
+              failure_message, created_at, updated_at
+         from payout_batches
+        where id = $1
+        limit 1`,
+      [batchId]
+    );
+    const batchRow = batchResult.rows[0];
+    if (batchRow === undefined) {
+      return undefined;
+    }
+    const itemsResult = await this.db.query<PayoutItemRow>(
+      `select id, payout_batch_id, destination_wallet, destination_token_account,
+              amount_atomic, status, created_at
+         from payout_items
+        where payout_batch_id = $1
+        order by created_at, id`,
+      [batchId]
+    );
+    const allocationsResult = await this.db.query<PayoutAllocationRow>(
+      `select payout_item_id, accrual_id, amount_atomic
+         from payout_allocations
+        where payout_item_id = any($1)
+        order by payout_item_id, accrual_id`,
+      [itemsResult.rows.map((item) => item.id)]
+    );
+    return mapPayoutBatch(
+      batchRow,
+      itemsResult.rows,
+      allocationsResult.rows
+    );
   }
 
   async save(snapshot: ReceiptIngestionSnapshot): Promise<void> {
@@ -2041,6 +2160,77 @@ function insertLedgerEntry(
   );
 }
 
+function insertPayoutBatch(
+  client: PostgresQueryExecutor,
+  batch: PayoutBatchRecord
+): Promise<QueryResult> {
+  return client.query(
+    `insert into payout_batches (
+       id, merchant_id, payout_wallet_id, network, asset_mint, status,
+       total_amount_atomic, item_count, accrual_count, failure_code,
+       failure_message, created_at, updated_at
+     ) values (
+       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+     )`,
+    [
+      batch.id,
+      batch.merchantId,
+      batch.payoutWalletId,
+      batch.network,
+      batch.asset,
+      batch.status,
+      batch.totalAmountAtomic,
+      batch.itemCount,
+      batch.accrualCount,
+      batch.failureCode ?? null,
+      batch.failureMessage ?? null,
+      batch.createdAt,
+      batch.updatedAt
+    ]
+  );
+}
+
+function insertPayoutItem(
+  client: PostgresQueryExecutor,
+  item: PayoutItemRecord
+): Promise<QueryResult> {
+  return client.query(
+    `insert into payout_items (
+       id, payout_batch_id, destination_wallet, destination_token_account,
+       amount_atomic, status, created_at
+     ) values (
+       $1, $2, $3, $4, $5, $6, $7
+     )`,
+    [
+      item.id,
+      item.payoutBatchId,
+      item.destinationWallet,
+      item.destinationTokenAccount ?? null,
+      item.amountAtomic,
+      item.status,
+      item.createdAt
+    ]
+  );
+}
+
+function insertPayoutAllocation(
+  client: PostgresQueryExecutor,
+  allocation: PayoutAllocationRecord
+): Promise<QueryResult> {
+  return client.query(
+    `insert into payout_allocations (
+       payout_item_id, accrual_id, amount_atomic
+     ) values (
+       $1, $2, $3
+     )`,
+    [
+      allocation.payoutItemId,
+      allocation.accrualId,
+      allocation.amountAtomic
+    ]
+  );
+}
+
 function insertOutboxEvent(
   client: PostgresQueryExecutor,
   event: OutboxEventRecord
@@ -2186,6 +2376,67 @@ function mapLedgerEntry(row: LedgerEntryRow): LedgerEntry {
   };
 }
 
+function mapPayoutBatch(
+  batch: PayoutBatchRow,
+  itemRows: PayoutItemRow[],
+  allocationRows: PayoutAllocationRow[]
+): PayoutBatchRecord {
+  const allocationsByItemId = new Map<string, PayoutAllocationRecord[]>();
+  for (const row of allocationRows) {
+    const allocation = mapPayoutAllocation(row);
+    allocationsByItemId.set(row.payout_item_id, [
+      ...(allocationsByItemId.get(row.payout_item_id) ?? []),
+      allocation
+    ]);
+  }
+  return {
+    id: batch.id,
+    merchantId: batch.merchant_id,
+    payoutWalletId: batch.payout_wallet_id,
+    network: batch.network,
+    asset: batch.asset_mint,
+    status: readPayoutBatchStatus(batch.status),
+    totalAmountAtomic: batch.total_amount_atomic,
+    itemCount: batch.item_count,
+    accrualCount: batch.accrual_count,
+    ...(batch.failure_code === null ? {} : { failureCode: batch.failure_code }),
+    ...(batch.failure_message === null
+      ? {}
+      : { failureMessage: batch.failure_message }),
+    createdAt: toIsoString(batch.created_at),
+    updatedAt: toIsoString(batch.updated_at),
+    items: itemRows.map((item) =>
+      mapPayoutItem(item, allocationsByItemId.get(item.id) ?? [])
+    )
+  };
+}
+
+function mapPayoutItem(
+  row: PayoutItemRow,
+  allocations: PayoutAllocationRecord[]
+): PayoutItemRecord {
+  return {
+    id: row.id,
+    payoutBatchId: row.payout_batch_id,
+    destinationWallet: row.destination_wallet,
+    ...(row.destination_token_account === null
+      ? {}
+      : { destinationTokenAccount: row.destination_token_account }),
+    amountAtomic: row.amount_atomic,
+    status: readPayoutItemStatus(row.status),
+    createdAt: toIsoString(row.created_at),
+    allocations
+  };
+}
+
+function mapPayoutAllocation(row: PayoutAllocationRow): PayoutAllocationRecord {
+  return {
+    payoutItemId: row.payout_item_id,
+    accrualId: row.accrual_id,
+    amountAtomic: row.amount_atomic
+  };
+}
+
 function mapOutboxEvent(row: OutboxEventRow): OutboxEventRecord {
   return {
     id: row.id,
@@ -2245,7 +2496,8 @@ function readAccrualStatus(value: string): AccrualStatus {
   if (
     value === "pending_chain_verification" ||
     value === "available" ||
-    value === "held"
+    value === "held" ||
+    value === "allocated"
   ) {
     return value;
   }
@@ -2273,6 +2525,37 @@ function readOutboxEventStatus(value: string): OutboxEventRecord["status"] {
     return value;
   }
   throw new Error(`unsupported outbox event status: ${value}`);
+}
+
+function readPayoutBatchStatus(value: string): PayoutBatchStatus {
+  if (
+    value === "draft" ||
+    value === "planned" ||
+    value === "signing" ||
+    value === "submitted" ||
+    value === "confirmed" ||
+    value === "finalized" ||
+    value === "failed" ||
+    value === "cancelled" ||
+    value === "outcome_unknown"
+  ) {
+    return value;
+  }
+  throw new Error(`unsupported payout batch status: ${value}`);
+}
+
+function readPayoutItemStatus(value: string): PayoutItemStatus {
+  if (
+    value === "allocated" ||
+    value === "submitted" ||
+    value === "confirmed" ||
+    value === "finalized" ||
+    value === "failed" ||
+    value === "released"
+  ) {
+    return value;
+  }
+  throw new Error(`unsupported payout item status: ${value}`);
 }
 
 function toIsoString(value: Date | string): string {

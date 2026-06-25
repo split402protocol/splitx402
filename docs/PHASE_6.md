@@ -26,7 +26,14 @@ Status: started.
   existing payout-selection index.
 - Added `POST /v1/merchants/:merchantId/payouts/preview` for merchant payout
   previews.
-- Added control-plane tests for payout planning and the HTTP preview route.
+- Added `PayoutBatchStore` and `createPayoutBatchPlan` for planned payout
+  batches.
+- Added `POST /v1/merchants/:merchantId/payout-batches` to allocate currently
+  available accruals into a durable batch.
+- Added `0010_payout_batches.sql` for payout batches, payout items, payout
+  allocations, and the `allocated` accrual status.
+- Added control-plane tests for payout planning, allocation persistence, and the
+  HTTP payout routes.
 
 ## Why This Comes Next
 
@@ -38,8 +45,7 @@ the merchant has enough funding.
 
 ## Remaining Milestone 4 Work
 
-- Durable payout batches, items, and allocation rows.
-- Allocation locking that prevents two workers from selecting the same accrual.
+- Worker-side `SKIP LOCKED` selection for high-concurrency batch creation.
 - Solana transfer transaction planning and simulation.
 - Isolated payout signer policy.
 - Broadcast, confirmation, finality, and retry handling.
