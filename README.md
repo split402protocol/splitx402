@@ -144,6 +144,7 @@ mainnet payment flows exist yet.
 | x402 extension, Express adapter, demo merchant | Implemented |
 | Agent SDK and Devnet paid-suite harness | Implemented |
 | Existing-token Devnet receipt proof | Recorded |
+| Merchant SDK durable receipt outbox | Started |
 | Control-plane receipt ingestion API | Started |
 | PostgreSQL receipt, accrual, and ledger persistence | Started |
 | Merchant/key/origin registry APIs | Started |
@@ -184,6 +185,7 @@ flowchart TB
   Extension["@split402/x402-extension"]
   Express["@split402/express"]
   Agent["@split402/agent-sdk"]
+  MerchantSdk["@split402/merchant-sdk"]
   Merchant["@split402/demo-merchant"]
   DemoAgent["@split402/demo-agent"]
   Control["@split402/control-plane"]
@@ -194,7 +196,9 @@ flowchart TB
   Protocol --> Control
   Express --> Merchant
   Extension --> Merchant
+  Extension --> MerchantSdk
   Agent --> DemoAgent
+  MerchantSdk --> Control
   Merchant --> DemoAgent
   Control -->|"receipt ingestion, registry, ledger"| Protocol
 ```
@@ -206,6 +210,7 @@ flowchart TB
 | `@split402/x402-extension` | Split402 offer, attribution, and receipt hooks around x402 settlement. |
 | `@split402/express` | Request-context adapter for stable operation digest inputs. |
 | `@split402/agent-sdk` | Buyer-side offer inspection, referral claim creation, paid calls, and receipt verification. |
+| `@split402/merchant-sdk` | Merchant-side durable receipt outbox and control-plane ingestion retry helpers. |
 | `@split402/demo-merchant` | x402-protected merchant API for the Devnet demo. |
 | `@split402/demo-agent` | Runnable buyer/agent harness for setup, preflight, and paid-suite proof. |
 | `@split402/control-plane` | Receipt ingestion, merchant/key registry, accruals, ledger model, and PostgreSQL adapters. |
@@ -511,5 +516,6 @@ curl -X POST http://localhost:4020/v1/receipts \
 - [Phase 2 status](docs/PHASE_2.md)
 - [Phase 3 status](docs/PHASE_3.md)
 - [Phase 4 status](docs/PHASE_4.md)
+- [Phase 5 status](docs/PHASE_5.md)
 - [Architecture baseline decision](docs/decisions/0003-adopt-architecture-and-ffff-baseline.md)
 - [Security policy](SECURITY.md)
