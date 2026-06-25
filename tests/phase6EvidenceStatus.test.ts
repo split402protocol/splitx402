@@ -1,0 +1,36 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  PHASE6_EVIDENCE_COMMANDS,
+  createPhase6EvidenceStatusReport,
+} from "../src/phase6EvidenceStatus.js";
+
+describe("Phase 6 evidence status", () => {
+  it("lists the operator evidence commands before a bundle exists", () => {
+    const report = createPhase6EvidenceStatusReport();
+
+    expect(report).toMatchObject({
+      schema: "split402.phase6_evidence_status.v1",
+      readyForCustody: false,
+      evidenceBundleChecked: false,
+    });
+    expect(report.commands).toBe(PHASE6_EVIDENCE_COMMANDS);
+    expect(report.nextActions).toContain(
+      "Run each listed evidence command against staging outputs.",
+    );
+  });
+
+  it("reports blockers from an incomplete evidence bundle", () => {
+    const report = createPhase6EvidenceStatusReport(`review_id: pending
+approval_decision: no-go
+`);
+
+    expect(report.readyForCustody).toBe(false);
+    expect(report.evidenceBundleChecked).toBe(true);
+    expect(report.validation?.missingFields).toContain("review_date");
+    expect(report.validation?.placeholderFields).toContain("review_id");
+    expect(report.nextActions.join("\n")).toContain(
+      "approval_decision must be approved before Phase 6 custody can go live",
+    );
+  });
+});

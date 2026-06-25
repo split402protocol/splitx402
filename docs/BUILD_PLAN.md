@@ -362,6 +362,8 @@ Current slice:
   rejection, new-key success, metrics, audit-log, and reconciliation evidence;
 - add a Phase 6 payout signer rollback drill generator for immutable image,
   secret-set, readiness, metrics, reconciliation, and safe batch-resume evidence;
+- add a Phase 6 evidence status command that lists required evidence commands
+  and summarizes custody-bundle blockers;
 - add signed-byte payout transaction persistence and Solana broadcast submission
   boundary;
 - add Solana payout transaction finality monitor with retry and outcome-unknown
