@@ -7,6 +7,8 @@ invariants.
 ## Working Principles
 
 - Prefer x402 compatibility over custom protocol surface.
+- Preserve Split402 as the protocol and product name. Use `splitx402` only when
+  referring to the literal GitHub repository path.
 - Record protocol-impacting choices in `docs/decisions/`.
 - Add tests before expanding payment or payout behavior.
 - Keep mainnet deployment out of scope until replay, mutation, idempotency, and

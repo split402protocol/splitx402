@@ -34,7 +34,9 @@ Those are later milestones after the USDC referral-payment loop works end to end
 repo built from the Split402 architecture. This repository continues that work as the
 v2 implementation line.
 
-Phase 2 starts by preserving the `ffff` protocol package and deterministic test
-vectors. Future phases port the extension, demo merchant, demo agent, control plane,
-ledger, payout engine, dashboard, discovery, route bonding, and `split-exact`
-research in the order defined by the architecture spec.
+Phase 2 started by preserving the `ffff` protocol package and deterministic test
+vectors. The current repository has since ported and evolved the x402 extension,
+demo merchant, demo agent, agent SDK, control plane, merchant SDK, ledger, outbox
+workers, chain verification, and the first payout-engine boundaries. Dashboard
+and discovery, `$SPLIT` route bonding, and `split-exact` atomic settlement remain
+later milestones.

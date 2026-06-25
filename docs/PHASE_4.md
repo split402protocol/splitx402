@@ -6,7 +6,8 @@ that can later feed chain verification, payout selection, dashboards, and webhoo
 
 ## Current Status
 
-Status: started.
+Status: implemented foundation. Later hardening continues through the merchant
+SDK and payout-engine phases.
 
 ## What Changed
 

@@ -6,7 +6,7 @@ survive control-plane outages, and keep x402 retry/idempotency behavior explicit
 
 ## Current Status
 
-Status: started.
+Status: first SDK slice implemented.
 
 ## What Changed
 

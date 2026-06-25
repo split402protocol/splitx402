@@ -33,8 +33,9 @@ The canonical project direction is Split402:
 - Repository has license, security, contribution, issue, and PR templates.
 - GitHub remote exists and contains the Phase 0 commits.
 
-## Next Phase
+## Current Position
 
-The current implementation path is Phase 2, which maps to architecture Milestone 0:
-pnpm workspace, `@split402/protocol`, deterministic test vectors, signing helpers,
-receipts, request digests, and commission math.
+The repo has moved well beyond setup. Phase 2 established the protocol core,
+Phase 3 proved the x402 demo path, Phase 4 added durable control-plane
+ingestion, Phase 5 added merchant SDK reliability primitives, and Phase 6 is now
+hardening the payout engine.

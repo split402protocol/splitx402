@@ -6,6 +6,22 @@ The demo agent sets up disposable Devnet keys and token accounts, inspects a
 Split402-enabled merchant offer, creates a signed referral claim, pays the API
 through the x402 SVM `exact` client, and verifies the merchant-signed receipt.
 
+## Proof Loop
+
+```mermaid
+flowchart LR
+  Setup["Set up Devnet buyer"]
+  Inspect["Inspect merchant offer"]
+  Claim["Sign referral claim"]
+  Pay["Pay x402 API"]
+  Verify["Verify receipt and credit"]
+
+  Setup --> Inspect
+  Inspect --> Claim
+  Claim --> Pay
+  Pay --> Verify
+```
+
 ## Flow
 
 ```mermaid

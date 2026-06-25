@@ -7,6 +7,26 @@ request digests, referral claims, offers, attributions, receipts, and commission
 math. They are the contract that keeps SDKs, demos, and future language ports
 aligned.
 
+## Fixture Pipeline
+
+```mermaid
+flowchart LR
+  Protocol["@split402/protocol"]
+  Generate["Generate fixtures"]
+  Fixtures["JSON test vectors"]
+  Check["Vector check"]
+  SDKs["SDKs and ports"]
+
+  Protocol --> Generate
+  Generate --> Fixtures
+  Fixtures --> Check
+  Fixtures --> SDKs
+```
+
+Any intentional protocol behavior change should update these vectors in the same
+change set. That keeps downstream clients from silently drifting on hashes,
+signatures, or commission arithmetic.
+
 ## Commands
 
 ```bash

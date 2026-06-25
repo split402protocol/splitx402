@@ -6,6 +6,28 @@ This package connects the Split402 protocol primitives to x402 client and
 resource-server extension points. It keeps the commercial payment path as normal
 x402 while adding signed referral context around that payment.
 
+## What It Adds To x402
+
+```mermaid
+flowchart LR
+  Challenge["402 challenge"]
+  Offer["Signed Split402 offer"]
+  Payment["x402 payment payload"]
+  Claim["Signed referral claim"]
+  Settlement["Normal x402 settlement"]
+  Receipt["Signed Split402 receipt"]
+
+  Challenge --> Offer
+  Offer --> Payment
+  Claim --> Payment
+  Payment --> Settlement
+  Settlement --> Receipt
+```
+
+The extension does not split the original x402 payment. It carries the signed
+offer, referral claim, request digest evidence, and receipt needed for later
+commission accrual and payout.
+
 ## Resource-Server Flow
 
 ```mermaid
