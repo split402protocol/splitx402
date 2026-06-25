@@ -226,6 +226,8 @@ Current slice:
 - durable payout batch, item, and allocation rows;
 - compare-and-set allocation that moves selected accruals from `available` to
   `allocated`;
+- worker-side PostgreSQL `FOR UPDATE SKIP LOCKED` selection for concurrent batch
+  creation;
 - `POST /v1/merchants/:merchantId/payout-wallets`;
 - `POST /v1/merchants/:merchantId/payouts/preview`;
 - `POST /v1/merchants/:merchantId/payout-batches`.

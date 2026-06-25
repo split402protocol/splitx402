@@ -310,6 +310,8 @@ Current slice:
 - add durable payout batch, item, and allocation rows;
 - mark selected accruals `allocated` with compare-and-set updates before
   inserting payout allocations;
+- add worker-side PostgreSQL `FOR UPDATE SKIP LOCKED` selection for concurrent
+  batch creation;
 - expose `POST /v1/merchants/:merchantId/payout-wallets`;
 - expose `POST /v1/merchants/:merchantId/payouts/preview`;
 - expose `POST /v1/merchants/:merchantId/payout-batches`.

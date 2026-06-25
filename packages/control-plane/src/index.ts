@@ -67,6 +67,7 @@ import {
   isPayoutBatchConflictError,
   isPayoutBatchValidationError,
   isPayoutPreviewValidationError,
+  type CreatePayoutBatchFromAvailableAccrualsInput,
   type ListPayoutEligibleAccrualsInput,
   type PayoutAccrualStore,
   type PayoutBatchRecord,
@@ -347,6 +348,37 @@ export class InMemoryReceiptIngestionStore
     }
     this.payoutBatchesById.set(batch.id, batch);
     return batch;
+  }
+
+  createPayoutBatchFromAvailableAccruals(
+    input: CreatePayoutBatchFromAvailableAccrualsInput
+  ): PayoutBatchRecord {
+    const accruals = this.listPayoutEligibleAccruals({
+      merchantId: input.merchantId,
+      asset: input.asset,
+      ...(input.now === undefined ? {} : { now: input.now }),
+      ...(input.campaignId === undefined ? {} : { campaignId: input.campaignId }),
+      ...(input.routeId === undefined ? {} : { routeId: input.routeId }),
+      ...(input.limit === undefined ? {} : { limit: input.limit })
+    });
+    return this.createPayoutBatch({
+      merchantId: input.merchantId,
+      payoutWalletId: input.payoutWalletId,
+      network: input.network,
+      asset: input.asset,
+      accruals,
+      ...(input.now === undefined ? {} : { now: input.now }),
+      ...(input.batchId === undefined ? {} : { batchId: input.batchId }),
+      ...(input.itemIdFactory === undefined
+        ? {}
+        : { itemIdFactory: input.itemIdFactory }),
+      ...(input.minimumPayoutAmountAtomic === undefined
+        ? {}
+        : { minimumPayoutAmountAtomic: input.minimumPayoutAmountAtomic }),
+      ...(input.maxRecipients === undefined
+        ? {}
+        : { maxRecipients: input.maxRecipients })
+    });
   }
 
   getPayoutBatch(batchId: string): PayoutBatchRecord | undefined {
@@ -976,26 +1008,21 @@ export function createPayoutRouter(
         body.minimumPayoutAmountAtomic,
         "minimumPayoutAmountAtomic"
       );
-      const accruals = await payoutAccrualStore.listPayoutEligibleAccruals({
-        merchantId,
-        asset: payoutWallet.asset,
-        now,
-        ...(campaignId === undefined ? {} : { campaignId }),
-        ...(routeId === undefined ? {} : { routeId }),
-        ...(maxAccruals === undefined ? {} : { limit: maxAccruals })
-      });
-      const batch = await options.payoutBatchStore.createPayoutBatch({
-        merchantId,
-        payoutWalletId,
-        network: payoutWallet.network,
-        asset: payoutWallet.asset,
-        accruals,
-        now,
-        ...(minimumPayoutAmountAtomic === undefined
-          ? {}
-          : { minimumPayoutAmountAtomic }),
-        ...(maxRecipients === undefined ? {} : { maxRecipients })
-      });
+      const batch =
+        await options.payoutBatchStore.createPayoutBatchFromAvailableAccruals({
+          merchantId,
+          payoutWalletId,
+          network: payoutWallet.network,
+          asset: payoutWallet.asset,
+          now,
+          ...(campaignId === undefined ? {} : { campaignId }),
+          ...(routeId === undefined ? {} : { routeId }),
+          ...(maxAccruals === undefined ? {} : { limit: maxAccruals }),
+          ...(minimumPayoutAmountAtomic === undefined
+            ? {}
+            : { minimumPayoutAmountAtomic }),
+          ...(maxRecipients === undefined ? {} : { maxRecipients })
+        });
       res.status(201).json({ batch });
     } catch (error) {
       if (
