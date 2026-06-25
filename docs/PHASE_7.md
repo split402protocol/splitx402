@@ -15,7 +15,8 @@ Implemented:
   route status;
 - merchant webhook delivery feed for pending, processing, delivered, and
   dead-letter webhook outbox events;
-- MCP-facing demo bundle at `@split402/mcp-demo`.
+- MCP-facing demo bundle at `@split402/mcp-demo`;
+- merchant/referrer operations dashboard at `@split402/dashboard`.
 
 ## MCP Demo Bundle
 
@@ -43,10 +44,37 @@ Run it with:
 corepack pnpm demo:mcp-bundle
 ```
 
+## Dashboard UI
+
+The dashboard app visualizes Phase 7 read APIs through a narrow same-origin
+proxy:
+
+```mermaid
+flowchart LR
+  Browser["Dashboard UI"]
+  Proxy["Read proxy"]
+  Summary["Merchant summary"]
+  Reliability["Reliability profile"]
+  Webhooks["Webhook feed"]
+  Referrer["Referrer routes and payouts"]
+
+  Browser --> Proxy
+  Proxy --> Summary
+  Proxy --> Reliability
+  Proxy --> Webhooks
+  Proxy --> Referrer
+```
+
+Run it with:
+
+```bash
+corepack pnpm dashboard
+```
+
 ## Remaining Phase 7 Work
 
-- Build the actual merchant/referrer dashboard UI on top of the existing
-  dashboard APIs.
+- Expand the dashboard from public-alpha operations UI into a production hosted
+  merchant/referrer service with hardened auth, sessions, and deployment config.
 - Add a hosted end-to-end staging proof where an agent discovers a route, pays
   through x402, receives a Split402 receipt, and sees referrer earnings without
   manual database work.

@@ -35,6 +35,7 @@
     "phase6:signer-smoke": "tsx src/phase6-signer-smoke.ts",
     "phase6:signer-policy": "tsx src/phase6-signer-policy.ts",
     "audit": "corepack pnpm audit --audit-level high",
+    "dashboard": "corepack pnpm --filter @split402/dashboard dev",
     "demo:merchant": "corepack pnpm --filter @split402/demo-merchant dev",
     "demo:inspect-offer": "corepack pnpm --filter @split402/demo-agent inspect-offer",
     "demo:setup-buyer": "corepack pnpm --filter @split402/demo-agent setup-buyer",

@@ -435,6 +435,9 @@ Current slice:
   dead-letter webhook outbox events.
 - MCP-facing paid-tool demo bundle with tool metadata, x402 payment details,
   Split402 campaign metadata, expected referral economics, and proof commands.
+- merchant/referrer dashboard UI with a narrow control-plane read proxy for
+  summaries, reliability profiles, webhook delivery, routes, balances, and
+  payouts.
 
 Exit criteria:
 
