@@ -28,7 +28,8 @@
     "demo:preflight": "corepack pnpm --filter @split402/demo-agent preflight",
     "demo:paid-suite": "corepack pnpm build && corepack pnpm --filter @split402/demo-agent paid-suite",
     "demo:agent": "corepack pnpm --filter @split402/demo-agent dev",
-    "worker:chain": "corepack pnpm --filter @split402/control-plane worker:chain"
+    "worker:chain": "corepack pnpm --filter @split402/control-plane worker:chain",
+    "worker:webhook": "corepack pnpm --filter @split402/control-plane worker:webhook"
   },
   "dependencies": {
     "@x402/core": "2.16.0",

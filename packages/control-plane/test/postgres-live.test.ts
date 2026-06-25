@@ -191,7 +191,8 @@ describeLive("live PostgreSQL control-plane persistence", () => {
       source: "buyer"
     });
     const claimedOutboxEvent = await outboxStore.claimNext({
-      now: "2026-06-24T00:03:00Z"
+      now: "2026-06-24T00:03:00Z",
+      eventTypes: ["receipt.accepted.v1"]
     });
     if (claimedOutboxEvent === undefined) {
       throw new Error("expected a ready outbox event");
@@ -252,7 +253,7 @@ describeLive("live PostgreSQL control-plane persistence", () => {
       commission_accruals: 1,
       ledger_transactions: 1,
       ledger_entries: 3,
-      outbox_events: 1
+      outbox_events: 2
     });
   }, 30_000);
 });

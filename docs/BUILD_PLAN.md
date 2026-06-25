@@ -211,9 +211,9 @@ Current slice:
 - add the PostgreSQL route registry adapter and migration for durable active and
   suspended routes, signed referral claims, and duplicate-claim idempotency;
 - add the PostgreSQL outbox migration and transaction insert for durable
-  `receipt.accepted.v1` worker events;
-- add the PostgreSQL outbox worker store for claiming ready events, retrying
-  failures, marking delivery, and dead-lettering exhausted work;
+  `receipt.accepted.v1` and `webhook.receipt.accepted.v1` worker events;
+- add the PostgreSQL outbox worker store for claiming ready events by event type,
+  retrying failures, marking delivery, and dead-lettering exhausted work;
 - add the receipt chain-verification worker framework and PostgreSQL state update
   that makes confirmed accruals payout-eligible;
 - add a bounded/abortable chain-verification polling loop around the worker
@@ -221,6 +221,8 @@ Current slice:
 - add a deployable chain-verification worker process entrypoint and package script
   that compose PostgreSQL stores, the Solana verifier, and polling loop from
   environment configuration;
+- add a signed HTTP webhook dispatch worker loop and process entrypoint that
+  deliver `webhook.receipt.accepted.v1` events from the durable outbox;
 - add a durable control-plane runtime factory that wires PostgreSQL stores,
   receipt key resolution, wallet auth, and required-by-default merchant auth
   policy from runtime configuration;
