@@ -149,6 +149,37 @@ importers:
         specifier: ^4.1.9
         version: 4.1.9(@types/node@22.20.0)(vite@8.1.0(@types/node@22.20.0)(esbuild@0.28.1)(tsx@4.22.4))
 
+  apps/payout-signer:
+    dependencies:
+      '@solana/kit':
+        specifier: ^5.1.0
+        version: 5.5.1(typescript@5.7.3)
+      '@split402/control-plane':
+        specifier: workspace:*
+        version: link:../../packages/control-plane
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
+      express:
+        specifier: ^5.2.1
+        version: 5.2.1
+    devDependencies:
+      '@split402/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@types/express':
+        specifier: ^5.0.6
+        version: 5.0.6
+      '@types/supertest':
+        specifier: ^6.0.3
+        version: 6.0.3
+      supertest:
+        specifier: ^7.2.2
+        version: 7.2.2
+      vitest:
+        specifier: ^4.1.9
+        version: 4.1.9(@types/node@22.20.0)(vite@8.1.0(@types/node@22.20.0)(esbuild@0.28.1)(tsx@4.22.4))
+
   packages/agent-sdk:
     dependencies:
       '@solana/kit':
