@@ -2,7 +2,9 @@ import {
   Sha256HashSchema,
   Split402IdSchema,
   Split402ReceiptV1Schema,
+  calculateOperationDigest,
   hashProtocolObject,
+  type CalculateOperationDigestInput,
   type Split402ReceiptV1
 } from "@split402/protocol";
 import { randomBytes } from "node:crypto";
@@ -65,6 +67,15 @@ export class MerchantCampaignResolverError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "MerchantCampaignResolverError";
+  }
+}
+
+export class MerchantOperationDigestError extends Error {
+  readonly code = "merchant_operation_digest_error";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "MerchantOperationDigestError";
   }
 }
 
@@ -195,6 +206,55 @@ export class CachedControlPlaneCampaignResolver {
   private fetch(): MerchantControlPlaneFetch {
     return this.options.fetch ?? fetch;
   }
+}
+
+export interface MerchantOperationDigestBaseInput {
+  merchantId: string;
+  operationId: string;
+  pathTemplate: string;
+  paymentId: string;
+  offerNonce: string;
+  pathParams?: Record<string, unknown>;
+  query?: Record<string, unknown>;
+}
+
+export type MerchantGetOperationDigestInput = MerchantOperationDigestBaseInput;
+
+export interface MerchantJsonPostOperationDigestInput
+  extends MerchantOperationDigestBaseInput {
+  body: unknown;
+}
+
+export function buildGetOperationDigestInput(
+  input: MerchantGetOperationDigestInput
+): CalculateOperationDigestInput {
+  return {
+    ...buildOperationDigestBase(input),
+    method: "GET"
+  };
+}
+
+export function calculateGetOperationDigest(
+  input: MerchantGetOperationDigestInput
+): `sha256:${string}` {
+  return calculateOperationDigest(buildGetOperationDigestInput(input));
+}
+
+export function buildJsonPostOperationDigestInput(
+  input: MerchantJsonPostOperationDigestInput
+): CalculateOperationDigestInput {
+  assertJsonCompatible(input.body, "body");
+  return {
+    ...buildOperationDigestBase(input),
+    method: "POST",
+    body: input.body
+  };
+}
+
+export function calculateJsonPostOperationDigest(
+  input: MerchantJsonPostOperationDigestInput
+): `sha256:${string}` {
+  return calculateOperationDigest(buildJsonPostOperationDigestInput(input));
 }
 
 export type MerchantReceiptOutboxStatus =
@@ -620,6 +680,23 @@ export class ControlPlaneReceiptSubmitter implements MerchantReceiptSubmitter {
   }
 }
 
+function buildOperationDigestBase(
+  input: MerchantOperationDigestBaseInput
+): Omit<CalculateOperationDigestInput, "method" | "body"> {
+  return {
+    merchantId: assertOperationSplit402IdValue(input.merchantId, "merchantId"),
+    operationId: assertOperationNonEmptyString(input.operationId, "operationId"),
+    pathTemplate: assertOperationNonEmptyString(
+      input.pathTemplate,
+      "pathTemplate"
+    ),
+    paymentId: assertOperationSplit402IdValue(input.paymentId, "paymentId"),
+    offerNonce: assertOperationSplit402IdValue(input.offerNonce, "offerNonce"),
+    pathParams: normalizeOperationRecord(input.pathParams, "pathParams"),
+    query: normalizeOperationRecord(input.query, "query")
+  };
+}
+
 function parseCampaignResponse(
   body: unknown,
   context: {
@@ -818,6 +895,21 @@ function assertNonEmptyString(value: string, label: string): string {
   return value;
 }
 
+function assertOperationSplit402IdValue(value: string, label: string): string {
+  const parsed = Split402IdSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new MerchantOperationDigestError(`${label} must be a Split402 id`);
+  }
+  return parsed.data;
+}
+
+function assertOperationNonEmptyString(value: string, label: string): string {
+  if (value.length === 0) {
+    throw new MerchantOperationDigestError(`${label} must be non-empty`);
+  }
+  return value;
+}
+
 function classifyHttpFailure(status: number): "retry" | "rejected" {
   return status === 408 ||
     status === 425 ||
@@ -918,6 +1010,66 @@ function readCampaignOperations(
         : { inputSchema: operation.inputSchema })
     };
   });
+}
+
+function normalizeOperationRecord(
+  value: Record<string, unknown> | undefined,
+  label: string
+): Record<string, unknown> {
+  if (value === undefined) {
+    return {};
+  }
+  if (Array.isArray(value)) {
+    throw new MerchantOperationDigestError(`${label} must be an object`);
+  }
+  for (const [key, item] of Object.entries(value)) {
+    assertJsonCompatible(item, `${label}.${key}`);
+  }
+  return { ...value };
+}
+
+function assertJsonCompatible(value: unknown, label: string): void {
+  assertJsonCompatibleInner(value, label, new Set<object>());
+}
+
+function assertJsonCompatibleInner(
+  value: unknown,
+  label: string,
+  seen: Set<object>
+): void {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean"
+  ) {
+    return;
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      throw new MerchantOperationDigestError(
+        `${label} must be a finite JSON number`
+      );
+    }
+    return;
+  }
+  if (typeof value !== "object") {
+    throw new MerchantOperationDigestError(`${label} must be JSON-compatible`);
+  }
+  if (seen.has(value)) {
+    throw new MerchantOperationDigestError(`${label} must not be circular`);
+  }
+  seen.add(value);
+  if (Array.isArray(value)) {
+    value.forEach((item, index) =>
+      assertJsonCompatibleInner(item, `${label}[${index}]`, seen)
+    );
+    seen.delete(value);
+    return;
+  }
+  for (const [key, item] of Object.entries(value)) {
+    assertJsonCompatibleInner(item, `${label}.${key}`, seen);
+  }
+  seen.delete(value);
 }
 
 function readErrorMessage(error: unknown): string {
