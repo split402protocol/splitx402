@@ -276,6 +276,8 @@ Current slice:
 - Phase 6 signer policy review generation for deployment policy evidence;
 - Phase 6 payout signer key custody review generation for ownership, backup,
   recovery, access, and separation-of-duties evidence;
+- Phase 6 emergency signer-auth revocation drill generation for old-key
+  rejection, new-key success, metrics, audit-log, and reconciliation evidence;
 - signed-byte payout transaction persistence and Solana broadcast submission
   boundary;
 - Solana payout transaction finality monitor with retry and outcome-unknown

@@ -76,3 +76,22 @@ record the retired key ID, replacement key ID, deploy timing, old-key rejection
 evidence, new-key success evidence, metrics evidence, audit-log evidence, and
 affected payout-batch reconciliation records. Attach the completed drill to
 `emergency_revocation_drill_record` in the Phase 6 custody evidence bundle.
+
+You can generate the correctly shaped emergency revocation drill record with:
+
+```bash
+SPLIT402_PHASE6_EMERGENCY_REVOCATION_DRILL_ID=phase6-emergency-revocation-001 \
+SPLIT402_PHASE6_EMERGENCY_REVOCATION_OWNERS="security, operations" \
+SPLIT402_PHASE6_EMERGENCY_REVOCATION_STAGING_ENVIRONMENT=split402-staging \
+SPLIT402_PHASE6_EMERGENCY_REVOCATION_RETIRED_KEY_ID=control-plane-compromised \
+SPLIT402_PHASE6_EMERGENCY_REVOCATION_REPLACEMENT_KEY_ID=control-plane-current \
+SPLIT402_PHASE6_EMERGENCY_REVOCATION_START_TIME=2026-06-25T20:00:00Z \
+SPLIT402_PHASE6_EMERGENCY_REVOCATION_SIGNER_DEPLOY_TIME=2026-06-25T20:05:00Z \
+SPLIT402_PHASE6_EMERGENCY_REVOCATION_CONTROL_PLANE_ROTATION_TIME=2026-06-25T20:10:00Z \
+SPLIT402_PHASE6_EMERGENCY_REVOCATION_OLD_KEY_REJECTION_EVIDENCE="attached: old-key-request returned 401" \
+SPLIT402_PHASE6_EMERGENCY_REVOCATION_NEW_KEY_SUCCESS_EVIDENCE="attached: new-key request signed successfully" \
+SPLIT402_PHASE6_EMERGENCY_REVOCATION_METRICS_EVIDENCE="attached: signer-metrics-after-revocation.log" \
+SPLIT402_PHASE6_EMERGENCY_REVOCATION_AUDIT_LOG_EVIDENCE="attached: sanitized-audit-log-sample.jsonl" \
+SPLIT402_PHASE6_EMERGENCY_REVOCATION_RECONCILIATION_EVIDENCE="attached: reconciliation-records-001.md" \
+  corepack pnpm phase6:emergency-revocation
+```
