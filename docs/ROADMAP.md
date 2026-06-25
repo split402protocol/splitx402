@@ -266,6 +266,8 @@ Current slice:
 - deployable payout signer JSONL audit logging for sanitized custody evidence;
 - payout signer staging smoke checks for health, readiness, metrics, and
   secret-exposure validation;
+- Phase 6 signer smoke and secret-exposure review generation from staging smoke
+  output and audit evidence;
 - private signer ingress network policy starter for custody evidence;
 - Phase 6 private signer networking review generation for signer selector,
   control-plane ingress, private service type, and denied public-ingress

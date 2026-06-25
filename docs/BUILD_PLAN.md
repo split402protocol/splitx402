@@ -347,6 +347,8 @@ Current slice:
   evidence;
 - add a payout signer staging smoke check for health, readiness, metrics, and
   secret-exposure validation;
+- add a Phase 6 signer smoke and secret-exposure review generator from staging
+  smoke output and audit evidence;
 - add a private signer ingress network policy starter for the custody evidence
   bundle;
 - add a Phase 6 private signer networking review generator for signer selector,
