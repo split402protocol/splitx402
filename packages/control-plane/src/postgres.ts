@@ -91,6 +91,7 @@ import type {
   ReceiptVerificationState
 } from "./index.js";
 import type {
+  CreatePayoutBatchFromAvailableAccrualsInput,
   CreatePayoutBatchInput,
   ListPayoutEligibleAccrualsInput,
   PayoutAccrualStore,
@@ -442,53 +443,7 @@ export class PostgresReceiptIngestionStore
   async listPayoutEligibleAccruals(
     input: ListPayoutEligibleAccrualsInput
   ): Promise<CommissionAccrual[]> {
-    const now = input.now ?? new Date().toISOString();
-    if (!Number.isFinite(Date.parse(now))) {
-      throw new MerchantRegistryValidationError("now must be an ISO timestamp");
-    }
-    if (
-      input.limit !== undefined &&
-      (!Number.isInteger(input.limit) || input.limit <= 0)
-    ) {
-      throw new MerchantRegistryValidationError("limit must be a positive integer");
-    }
-
-    const values: unknown[] = [input.merchantId, now];
-    const conditions = [
-      "merchant_id = $1",
-      "status = 'available'",
-      "(available_at is null or available_at <= $2)"
-    ];
-    if (input.asset !== undefined) {
-      values.push(input.asset);
-      conditions.push(`asset_mint = $${values.length}`);
-    }
-    if (input.campaignId !== undefined) {
-      values.push(input.campaignId);
-      conditions.push(`campaign_id = $${values.length}`);
-    }
-    if (input.routeId !== undefined) {
-      values.push(input.routeId);
-      conditions.push(`route_id = $${values.length}`);
-    }
-
-    let limitClause = "";
-    if (input.limit !== undefined) {
-      values.push(input.limit);
-      limitClause = `limit $${values.length}`;
-    }
-
-    const result = await this.db.query<CommissionAccrualRow>(
-      `select id, receipt_id, merchant_id, campaign_id, route_id, referrer_wallet,
-              payout_wallet, asset_mint, amount_atomic, status, available_at,
-              created_at
-         from commission_accruals
-        where ${conditions.join("\n          and ")}
-        order by asset_mint, payout_wallet, available_at nulls first, created_at, id
-        ${limitClause}`,
-      values
-    );
-    return result.rows.map(mapAccrual);
+    return selectPayoutEligibleAccruals(this.db, input);
   }
 
   async createPayoutBatch(
@@ -496,35 +451,48 @@ export class PostgresReceiptIngestionStore
   ): Promise<PayoutBatchRecord> {
     const batch = createPayoutBatchPlan(input);
     await this.withTransaction(async (client) => {
-      for (const item of batch.items) {
-        for (const allocation of item.allocations) {
-          const result = await client.query<Pick<CommissionAccrualRow, "id">>(
-            `update commission_accruals
-                set status = 'allocated'
-              where id = $1
-                and merchant_id = $2
-                and asset_mint = $3
-                and status = 'available'
-              returning id`,
-            [allocation.accrualId, batch.merchantId, batch.asset]
-          );
-          if (result.rows[0] === undefined) {
-            throw new PayoutBatchConflictError(
-              `accrual is not available for payout: ${allocation.accrualId}`
-            );
-          }
-        }
-      }
-
-      await insertPayoutBatch(client, batch);
-      for (const item of batch.items) {
-        await insertPayoutItem(client, item);
-        for (const allocation of item.allocations) {
-          await insertPayoutAllocation(client, allocation);
-        }
-      }
+      await allocateAndInsertPayoutBatch(client, batch);
     });
     return batch;
+  }
+
+  async createPayoutBatchFromAvailableAccruals(
+    input: CreatePayoutBatchFromAvailableAccrualsInput
+  ): Promise<PayoutBatchRecord> {
+    return this.withTransaction(async (client) => {
+      const accruals = await selectPayoutEligibleAccruals(
+        client,
+        {
+          merchantId: input.merchantId,
+          asset: input.asset,
+          ...(input.now === undefined ? {} : { now: input.now }),
+          ...(input.campaignId === undefined ? {} : { campaignId: input.campaignId }),
+          ...(input.routeId === undefined ? {} : { routeId: input.routeId }),
+          ...(input.limit === undefined ? {} : { limit: input.limit })
+        },
+        { forUpdateSkipLocked: true }
+      );
+      const batch = createPayoutBatchPlan({
+        merchantId: input.merchantId,
+        payoutWalletId: input.payoutWalletId,
+        network: input.network,
+        asset: input.asset,
+        accruals,
+        ...(input.now === undefined ? {} : { now: input.now }),
+        ...(input.batchId === undefined ? {} : { batchId: input.batchId }),
+        ...(input.itemIdFactory === undefined
+          ? {}
+          : { itemIdFactory: input.itemIdFactory }),
+        ...(input.minimumPayoutAmountAtomic === undefined
+          ? {}
+          : { minimumPayoutAmountAtomic: input.minimumPayoutAmountAtomic }),
+        ...(input.maxRecipients === undefined
+          ? {}
+          : { maxRecipients: input.maxRecipients })
+      });
+      await allocateAndInsertPayoutBatch(client, batch);
+      return batch;
+    });
   }
 
   async getPayoutBatch(batchId: string): Promise<PayoutBatchRecord | undefined> {
@@ -675,16 +643,17 @@ export class PostgresReceiptIngestionStore
     );
   }
 
-  private async withTransaction(
-    operation: (client: PostgresQueryExecutor) => Promise<void>
-  ): Promise<void> {
+  private async withTransaction<Result>(
+    operation: (client: PostgresQueryExecutor) => Promise<Result>
+  ): Promise<Result> {
     const client = await this.createTransactionClient();
     let transactionStarted = false;
     try {
       await client.query("begin");
       transactionStarted = true;
-      await operation(client);
+      const result = await operation(client);
       await client.query("commit");
+      return result;
     } catch (error) {
       if (transactionStarted) {
         await rollbackQuietly(client);
@@ -2158,6 +2127,97 @@ function insertLedgerEntry(
       entry.amountAtomic
     ]
   );
+}
+
+async function selectPayoutEligibleAccruals(
+  db: PostgresQueryExecutor,
+  input: ListPayoutEligibleAccrualsInput,
+  options: { forUpdateSkipLocked?: boolean } = {}
+): Promise<CommissionAccrual[]> {
+  const now = input.now ?? new Date().toISOString();
+  if (!Number.isFinite(Date.parse(now))) {
+    throw new MerchantRegistryValidationError("now must be an ISO timestamp");
+  }
+  if (
+    input.limit !== undefined &&
+    (!Number.isInteger(input.limit) || input.limit <= 0)
+  ) {
+    throw new MerchantRegistryValidationError("limit must be a positive integer");
+  }
+
+  const values: unknown[] = [input.merchantId, now];
+  const conditions = [
+    "merchant_id = $1",
+    "status = 'available'",
+    "(available_at is null or available_at <= $2)"
+  ];
+  if (input.asset !== undefined) {
+    values.push(input.asset);
+    conditions.push(`asset_mint = $${values.length}`);
+  }
+  if (input.campaignId !== undefined) {
+    values.push(input.campaignId);
+    conditions.push(`campaign_id = $${values.length}`);
+  }
+  if (input.routeId !== undefined) {
+    values.push(input.routeId);
+    conditions.push(`route_id = $${values.length}`);
+  }
+
+  let limitClause = "";
+  if (input.limit !== undefined) {
+    values.push(input.limit);
+    limitClause = `limit $${values.length}`;
+  }
+  const lockClause = options.forUpdateSkipLocked === true
+    ? "for update skip locked"
+    : "";
+
+  const result = await db.query<CommissionAccrualRow>(
+    `select id, receipt_id, merchant_id, campaign_id, route_id, referrer_wallet,
+            payout_wallet, asset_mint, amount_atomic, status, available_at,
+            created_at
+       from commission_accruals
+      where ${conditions.join("\n        and ")}
+      order by asset_mint, payout_wallet, available_at nulls first, created_at, id
+      ${limitClause}
+      ${lockClause}`,
+    values
+  );
+  return result.rows.map(mapAccrual);
+}
+
+async function allocateAndInsertPayoutBatch(
+  client: PostgresQueryExecutor,
+  batch: PayoutBatchRecord
+): Promise<void> {
+  for (const item of batch.items) {
+    for (const allocation of item.allocations) {
+      const result = await client.query<Pick<CommissionAccrualRow, "id">>(
+        `update commission_accruals
+            set status = 'allocated'
+          where id = $1
+            and merchant_id = $2
+            and asset_mint = $3
+            and status = 'available'
+          returning id`,
+        [allocation.accrualId, batch.merchantId, batch.asset]
+      );
+      if (result.rows[0] === undefined) {
+        throw new PayoutBatchConflictError(
+          `accrual is not available for payout: ${allocation.accrualId}`
+        );
+      }
+    }
+  }
+
+  await insertPayoutBatch(client, batch);
+  for (const item of batch.items) {
+    await insertPayoutItem(client, item);
+    for (const allocation of item.allocations) {
+      await insertPayoutAllocation(client, allocation);
+    }
+  }
 }
 
 function insertPayoutBatch(

@@ -375,8 +375,11 @@ payout-engine slice can register merchant-controlled payout funding wallets,
 query eligible available accruals, group them by asset and destination wallet,
 apply recipient thresholds and limits, report funding coverage or deficit through
 `POST /v1/merchants/:merchantId/payouts/preview`, and create planned payout
-batches that mark selected accruals `allocated` exactly once. Transaction
-signing, broadcasting, and reconciliation are still remaining hardening steps.
+batches that mark selected accruals `allocated` exactly once. PostgreSQL-backed
+batch creation can also select eligible accruals inside the allocation
+transaction with `FOR UPDATE SKIP LOCKED` so concurrent payout workers do not
+claim the same rows. Transaction signing, broadcasting, and reconciliation are
+still remaining hardening steps.
 
 ## MVP Rules
 
