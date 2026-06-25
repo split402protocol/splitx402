@@ -364,6 +364,8 @@ Current slice:
   secret-set, readiness, metrics, reconciliation, and safe batch-resume evidence;
 - add a Phase 6 evidence status command that lists required evidence commands
   and summarizes custody-bundle blockers;
+- add a Phase 6 custody evidence bundle scaffold command that emits validator
+  fields in canonical order with safe defaults;
 - add signed-byte payout transaction persistence and Solana broadcast submission
   boundary;
 - add Solana payout transaction finality monitor with retry and outcome-unknown

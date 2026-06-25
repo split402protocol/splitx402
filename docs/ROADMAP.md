@@ -282,6 +282,7 @@ Current slice:
   secret-set, readiness, metrics, reconciliation, and safe batch-resume evidence;
 - Phase 6 evidence status reporting for required evidence commands and
   custody-bundle blockers;
+- Phase 6 custody evidence bundle scaffolding in canonical validator order;
 - signed-byte payout transaction persistence and Solana broadcast submission
   boundary;
 - Solana payout transaction finality monitor with retry and outcome-unknown

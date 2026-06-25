@@ -330,8 +330,10 @@ corepack pnpm phase6:rollback-drill
 List the Phase 6 evidence commands and check the current custody bundle:
 
 ```bash
+corepack pnpm phase6:evidence:bundle
 corepack pnpm phase6:evidence:status
 corepack pnpm phase6:evidence:status <evidence-bundle.txt>
+corepack pnpm phase6:evidence:bundle | corepack pnpm phase6:custody:check -
 ```
 
 Run the optional live PostgreSQL harness against an empty test database:

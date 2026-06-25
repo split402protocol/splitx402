@@ -5,6 +5,11 @@ import {
 
 export const PHASE6_EVIDENCE_COMMANDS = [
   {
+    gate: "custody_bundle_scaffold",
+    command: "corepack pnpm phase6:evidence:bundle",
+    evidenceField: "review_id",
+  },
+  {
     gate: "signer_image_provenance",
     command: "corepack pnpm phase6:image-provenance",
     evidenceField: "signer_image_dependency_audit_output",
@@ -78,6 +83,7 @@ function createNextActions(
 ): string[] {
   if (validation === undefined) {
     return [
+      "Generate a bundle scaffold with corepack pnpm phase6:evidence:bundle.",
       "Run each listed evidence command against staging outputs.",
       "Attach generated records to docs/templates/phase6-custody-evidence.txt copy.",
       "Run corepack pnpm phase6:evidence:status <evidence-bundle.txt>.",
