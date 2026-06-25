@@ -1,0 +1,14 @@
+review_id:
+review_date:
+reviewers:
+staging_environment:
+policy_name:
+signer_pod_selector:
+allowed_ingress_selector:
+allowed_port:
+service_type:
+applied_policy_evidence:
+denied_public_ingress_evidence:
+cluster_or_mesh_evidence:
+review_decision: no-go
+review_notes:

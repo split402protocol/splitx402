@@ -315,6 +315,12 @@ Generate the Phase 6 payout signer key custody review record:
 corepack pnpm phase6:key-custody
 ```
 
+Generate the Phase 6 private signer network policy review record:
+
+```bash
+corepack pnpm phase6:network-policy
+```
+
 Generate the Phase 6 emergency signer-auth revocation drill record:
 
 ```bash
@@ -466,6 +472,7 @@ The latest Devnet proof is recorded in
 - [Phase 6 signer policy review template](docs/templates/phase6-signer-policy-review.txt)
 - [Phase 6 emergency revocation drill template](docs/templates/phase6-emergency-revocation-drill.txt)
 - [Phase 6 key custody review template](docs/templates/phase6-key-custody-review.txt)
+- [Phase 6 network policy review template](docs/templates/phase6-network-policy-review.txt)
 - [Phase 6 rotation drill template](docs/templates/phase6-rotation-drill.txt)
 - [Phase 6 rollback drill template](docs/templates/phase6-rollback-drill.txt)
 - [Phase 6 RPC failover review template](docs/templates/phase6-rpc-failover-review.txt)

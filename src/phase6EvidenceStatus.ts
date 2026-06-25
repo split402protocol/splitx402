@@ -25,6 +25,11 @@ export const PHASE6_EVIDENCE_COMMANDS = [
     evidenceField: "key_custody_record",
   },
   {
+    gate: "private_signer_networking",
+    command: "corepack pnpm phase6:network-policy",
+    evidenceField: "network_policy_record",
+  },
+  {
     gate: "emergency_auth_revocation",
     command: "corepack pnpm phase6:emergency-revocation",
     evidenceField: "emergency_revocation_drill_record",
