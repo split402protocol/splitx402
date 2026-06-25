@@ -316,6 +316,8 @@ Current slice:
 - add Solana RPC payout transaction simulation with per-transaction
   succeeded/failed/retry outcomes;
 - add Solana payout signer interface and policy gate before isolated signing;
+- add signed-byte payout transaction persistence and Solana broadcast submission
+  boundary;
 - expose `POST /v1/merchants/:merchantId/payout-wallets`;
 - expose `POST /v1/merchants/:merchantId/payouts/preview`;
 - expose `POST /v1/merchants/:merchantId/payout-batches`.

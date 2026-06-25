@@ -62,6 +62,7 @@ import {
 import {
   PayoutBatchConflictError,
   createPayoutBatchPlan,
+  createSignedPayoutTransactionRecords,
   createPayoutPreview,
   filterPayoutEligibleAccruals,
   isPayoutBatchConflictError,
@@ -72,7 +73,11 @@ import {
   type PayoutAccrualStore,
   type PayoutBatchRecord,
   type PayoutBatchStore,
-  type PayoutFundingBalance
+  type PayoutFundingBalance,
+  type PayoutTransactionRecord,
+  type PayoutTransactionStore,
+  type MarkPayoutTransactionSubmittedInput,
+  type SaveSignedPayoutTransactionsInput
 } from "./payouts.js";
 
 export type ReceiptIngestSource = "buyer" | "merchant" | "relay" | "unknown";
@@ -256,12 +261,20 @@ export interface ReceiptIngestionStore {
 const RECEIPT_INGEST_SOURCES = ["buyer", "merchant", "relay", "unknown"] as const;
 
 export class InMemoryReceiptIngestionStore
-  implements ReceiptIngestionStore, PayoutAccrualStore, PayoutBatchStore {
+  implements
+    ReceiptIngestionStore,
+    PayoutAccrualStore,
+    PayoutBatchStore,
+    PayoutTransactionStore {
   private readonly receiptsById = new Map<string, ReceiptIngestionSnapshot>();
   private readonly receiptIdByHash = new Map<`sha256:${string}`, string>();
   private readonly receiptIdByPaymentId = new Map<string, string>();
   private readonly receiptIdBySettlementTx = new Map<string, string>();
   private readonly payoutBatchesById = new Map<string, PayoutBatchRecord>();
+  private readonly payoutTransactionsById = new Map<
+    string,
+    PayoutTransactionRecord
+  >();
 
   getByReceiptId(receiptId: string): ReceiptIngestionSnapshot | undefined {
     return this.receiptsById.get(receiptId);
@@ -383,6 +396,86 @@ export class InMemoryReceiptIngestionStore
 
   getPayoutBatch(batchId: string): PayoutBatchRecord | undefined {
     return this.payoutBatchesById.get(batchId);
+  }
+
+  saveSignedPayoutTransactions(
+    input: SaveSignedPayoutTransactionsInput
+  ): PayoutTransactionRecord[] {
+    if (!this.payoutBatchesById.has(input.payoutBatchId)) {
+      throw new PayoutBatchConflictError(
+        `unknown payout batch: ${input.payoutBatchId}`
+      );
+    }
+    const records = createSignedPayoutTransactionRecords(input);
+    for (const record of records) {
+      if (this.payoutTransactionsById.has(record.id)) {
+        throw new PayoutBatchConflictError(
+          `payout transaction already exists: ${record.id}`
+        );
+      }
+      const existingForAttempt = this.listPayoutTransactions(record.payoutBatchId)
+        .find((existing) =>
+          existing.sequence === record.sequence &&
+          existing.attempt === record.attempt
+        );
+      if (existingForAttempt !== undefined) {
+        throw new PayoutBatchConflictError(
+          `payout transaction already exists for sequence ${record.sequence} attempt ${record.attempt}`
+        );
+      }
+      if (
+        record.expectedSignature !== undefined &&
+        Array.from(this.payoutTransactionsById.values()).some(
+          (existing) => existing.expectedSignature === record.expectedSignature
+        )
+      ) {
+        throw new PayoutBatchConflictError(
+          `payout transaction expected signature already exists: ${record.expectedSignature}`
+        );
+      }
+    }
+    for (const record of records) {
+      this.payoutTransactionsById.set(record.id, record);
+    }
+    return records;
+  }
+
+  listPayoutTransactions(payoutBatchId: string): PayoutTransactionRecord[] {
+    return Array.from(this.payoutTransactionsById.values())
+      .filter((transaction) => transaction.payoutBatchId === payoutBatchId)
+      .sort(comparePayoutTransactions);
+  }
+
+  markPayoutTransactionSubmitted(
+    input: MarkPayoutTransactionSubmittedInput
+  ): PayoutTransactionRecord | undefined {
+    const existing = this.payoutTransactionsById.get(input.id);
+    if (existing === undefined) {
+      return undefined;
+    }
+    if (input.expectedSignature !== undefined) {
+      if (
+        existing.expectedSignature !== undefined &&
+        existing.expectedSignature !== input.expectedSignature
+      ) {
+        throw new PayoutBatchConflictError(
+          "submitted payout transaction signature does not match expected signature"
+        );
+      }
+    }
+    const submitted: PayoutTransactionRecord = {
+      ...existing,
+      status: "submitted",
+      ...(input.expectedSignature === undefined
+        ? {}
+        : { expectedSignature: input.expectedSignature }),
+      submittedAt: (input.submittedAt === undefined
+        ? new Date()
+        : new Date(input.submittedAt)
+      ).toISOString()
+    };
+    this.payoutTransactionsById.set(submitted.id, submitted);
+    return submitted;
   }
 }
 
@@ -2195,6 +2288,18 @@ function readHttpErrorStatus(error: unknown): number | undefined {
   return typeof status === "number" && status >= 400 && status < 500
     ? status
     : undefined;
+}
+
+function comparePayoutTransactions(
+  left: PayoutTransactionRecord,
+  right: PayoutTransactionRecord
+): number {
+  return (
+    left.sequence - right.sequence ||
+    left.attempt - right.attempt ||
+    left.createdAt.localeCompare(right.createdAt) ||
+    left.id.localeCompare(right.id)
+  );
 }
 
 function createRuntimePool(
