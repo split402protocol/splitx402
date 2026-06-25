@@ -19,8 +19,9 @@ The repository now contains the protocol core, test vectors, x402 extension,
 Express adapter, demo merchant, demo agent, agent SDK, merchant SDK primitives,
 control-plane ingestion, PostgreSQL persistence, outbox workers, Solana chain
 verification, and the first payout-engine execution boundaries, including payout
-lifecycle outbox/webhook events. Phase 6 remains active for signer runtime
-wiring, reconciliation, and referrer-facing payout history.
+lifecycle outbox/webhook events and an unknown-outcome reconciliation queue.
+Phase 6 remains active for signer runtime wiring, reconciliation runbooks, and
+referrer-facing payout history.
 
 ## Architecture Rule
 
@@ -338,8 +339,10 @@ Current slice:
 - add idempotent payout-batch ledger closure for finalized payouts;
 - add payout submitted, confirmed, finalized, failed, and outcome-unknown
   internal and webhook outbox events;
+- add an unknown-outcome payout reconciliation queue for merchant/operator review;
 - expose `POST /v1/merchants/:merchantId/payout-wallets`;
 - expose `POST /v1/merchants/:merchantId/payouts/preview`;
+- expose `GET /v1/merchants/:merchantId/payouts/reconciliation`;
 - expose `POST /v1/merchants/:merchantId/payout-batches`.
 
 Exit criteria:

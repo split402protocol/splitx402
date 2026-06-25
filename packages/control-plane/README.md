@@ -87,6 +87,7 @@ GET  /v1/routes/search
 GET  /v1/routes/:routeId/versions
 GET  /v1/routes/:routeId
 POST /v1/merchants/:merchantId/payouts/preview
+GET  /v1/merchants/:merchantId/payouts/reconciliation
 POST /v1/merchants/:merchantId/payout-batches
 ```
 
@@ -100,6 +101,7 @@ POST /v1/merchants/:merchantId/payout-batches
 - webhook dispatch worker with signed POST envelopes and retry/dead-letter state;
 - payout preview and batch allocation stores that select available accruals and
   mark them `allocated` exactly once;
+- unknown-outcome reconciliation queue for merchant/operator review before retry;
 - PostgreSQL payout batch creation with `FOR UPDATE SKIP LOCKED` eligible-accrual
   selection for concurrent workers;
 - deterministic Solana payout transfer planning for allocated batches;
