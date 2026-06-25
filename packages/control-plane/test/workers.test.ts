@@ -210,21 +210,31 @@ describe("WebhookDispatchWorker", () => {
     expect(outboxStore.event?.attempts).toBe(1);
   });
 
-  it("claims payout finalized webhook events by default", async () => {
-    const outboxStore = new FakeOutboxEventStore(createPayoutFinalizedWebhookEvent());
-    const dispatcher = new FakeWebhookDispatcher([
-      { status: "delivered", statusCode: 202 }
-    ]);
-    const worker = new WebhookDispatchWorker(outboxStore, dispatcher, {
-      now: () => FIXED_NOW
-    });
+  it("claims payout lifecycle webhook events by default", async () => {
+    for (const eventType of [
+      "webhook.payout.submitted.v1",
+      "webhook.payout.confirmed.v1",
+      "webhook.payout.finalized.v1",
+      "webhook.payout.failed.v1",
+      "webhook.payout.outcome_unknown.v1"
+    ]) {
+      const outboxStore = new FakeOutboxEventStore(
+        createPayoutLifecycleWebhookEvent(eventType)
+      );
+      const dispatcher = new FakeWebhookDispatcher([
+        { status: "delivered", statusCode: 202 }
+      ]);
+      const worker = new WebhookDispatchWorker(outboxStore, dispatcher, {
+        now: () => FIXED_NOW
+      });
 
-    await worker.processNext();
+      await worker.processNext();
 
-    expect(dispatcher.events.map((event) => event.eventType)).toEqual([
-      "webhook.payout.finalized.v1"
-    ]);
-    expect(outboxStore.event?.status).toBe("delivered");
+      expect(dispatcher.events.map((event) => event.eventType)).toEqual([
+        eventType
+      ]);
+      expect(outboxStore.event?.status).toBe("delivered");
+    }
   });
 
   it("reschedules retryable webhook failures", async () => {
@@ -358,10 +368,10 @@ function createWebhookEvent(): OutboxEventRecord {
   };
 }
 
-function createPayoutFinalizedWebhookEvent(): OutboxEventRecord {
+function createPayoutLifecycleWebhookEvent(eventType: string): OutboxEventRecord {
   return {
     id: "33333333-3333-4333-8333-333333333333",
-    eventType: "webhook.payout.finalized.v1",
+    eventType,
     aggregateType: "payout_batch",
     aggregateId: "pbt_00000000000000000000000000000001",
     payload: {

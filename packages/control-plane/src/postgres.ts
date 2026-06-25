@@ -117,7 +117,13 @@ import {
   createSignedPayoutTransactionRecords,
   summarizePayoutBatchFinality
 } from "./payouts.js";
-import { WEBHOOK_PAYOUT_FINALIZED_EVENT_TYPE } from "./webhooks.js";
+import {
+  WEBHOOK_PAYOUT_CONFIRMED_EVENT_TYPE,
+  WEBHOOK_PAYOUT_FAILED_EVENT_TYPE,
+  WEBHOOK_PAYOUT_FINALIZED_EVENT_TYPE,
+  WEBHOOK_PAYOUT_OUTCOME_UNKNOWN_EVENT_TYPE,
+  WEBHOOK_PAYOUT_SUBMITTED_EVENT_TYPE
+} from "./webhooks.js";
 
 export interface PostgresQueryExecutor {
   query<Row extends QueryResultRow = QueryResultRow>(
@@ -133,6 +139,12 @@ export interface PostgresTransactionClient extends PostgresQueryExecutor {
 export interface PostgresPool extends PostgresQueryExecutor {
   connect(): Promise<PostgresTransactionClient>;
 }
+
+type PayoutLifecycleEventKind =
+  | "submitted"
+  | "confirmed"
+  | "failed"
+  | "outcome_unknown";
 
 interface PaymentReceiptRow extends QueryResultRow {
   id: string;
@@ -527,39 +539,7 @@ export class PostgresReceiptIngestionStore
   }
 
   async getPayoutBatch(batchId: string): Promise<PayoutBatchRecord | undefined> {
-    const batchResult = await this.db.query<PayoutBatchRow>(
-      `select id, merchant_id, payout_wallet_id, network, asset_mint, status,
-              total_amount_atomic, item_count, accrual_count, failure_code,
-              failure_message, created_at, updated_at
-         from payout_batches
-        where id = $1
-        limit 1`,
-      [batchId]
-    );
-    const batchRow = batchResult.rows[0];
-    if (batchRow === undefined) {
-      return undefined;
-    }
-    const itemsResult = await this.db.query<PayoutItemRow>(
-      `select id, payout_batch_id, destination_wallet, destination_token_account,
-              amount_atomic, status, created_at
-         from payout_items
-        where payout_batch_id = $1
-        order by created_at, id`,
-      [batchId]
-    );
-    const allocationsResult = await this.db.query<PayoutAllocationRow>(
-      `select payout_item_id, accrual_id, amount_atomic
-         from payout_allocations
-        where payout_item_id = any($1)
-        order by payout_item_id, accrual_id`,
-      [itemsResult.rows.map((item) => item.id)]
-    );
-    return mapPayoutBatch(
-      batchRow,
-      itemsResult.rows,
-      allocationsResult.rows
-    );
+    return loadPayoutBatch(this.db, batchId);
   }
 
   async saveSignedPayoutTransactions(
@@ -627,25 +607,33 @@ export class PostgresReceiptIngestionStore
     }
     const submittedAt = normalizeDateInput(input.submittedAt, "submittedAt");
     const expectedSignature = input.expectedSignature ?? existing.expectedSignature ?? null;
-    const result = await this.db.query<PayoutTransactionRow>(
-      `update payout_transactions
-          set status = 'submitted',
-              submitted_at = $2,
-              expected_signature = $3
-        where id = $1
-        returning id, payout_batch_id, sequence, attempt, recent_blockhash,
-                  last_valid_block_height, signed_transaction_base64,
-                  expected_signature, status, submitted_at, confirmed_at,
-                  finalized_at, error_json, created_at`,
-      [input.id, submittedAt, expectedSignature]
-    );
-    const row = result.rows[0];
-    if (row === undefined) {
-      return undefined;
-    }
-    const transaction = mapPayoutTransaction(row);
-    await rollUpPayoutBatchFinality(this.db, transaction.payoutBatchId, submittedAt);
-    return transaction;
+    return this.withTransaction(async (client) => {
+      const result = await client.query<PayoutTransactionRow>(
+        `update payout_transactions
+            set status = 'submitted',
+                submitted_at = $2,
+                expected_signature = $3
+          where id = $1
+          returning id, payout_batch_id, sequence, attempt, recent_blockhash,
+                    last_valid_block_height, signed_transaction_base64,
+                    expected_signature, status, submitted_at, confirmed_at,
+                    finalized_at, error_json, created_at`,
+        [input.id, submittedAt, expectedSignature]
+      );
+      const row = result.rows[0];
+      if (row === undefined) {
+        return undefined;
+      }
+      const transaction = mapPayoutTransaction(row);
+      await rollUpPayoutBatchFinality(client, transaction.payoutBatchId, submittedAt);
+      await this.insertPayoutLifecycleEventsIfBatchMatches(
+        client,
+        transaction,
+        "submitted",
+        submittedAt
+      );
+      return transaction;
+    });
   }
 
   async markPayoutTransactionFinality(
@@ -672,26 +660,37 @@ export class PostgresReceiptIngestionStore
           ? null
           : JSON.stringify(existing.error)
         : JSON.stringify(input.error);
-    const result = await this.db.query<PayoutTransactionRow>(
-      `update payout_transactions
-          set status = $2,
-              confirmed_at = $3,
-              finalized_at = $4,
-              error_json = $5
-        where id = $1
-        returning id, payout_batch_id, sequence, attempt, recent_blockhash,
-                  last_valid_block_height, signed_transaction_base64,
-                  expected_signature, status, submitted_at, confirmed_at,
-                  finalized_at, error_json, created_at`,
-      [input.id, input.status, confirmedAt, finalizedAt, errorJson]
-    );
-    const row = result.rows[0];
-    if (row === undefined) {
-      return undefined;
-    }
-    const transaction = mapPayoutTransaction(row);
-    await rollUpPayoutBatchFinality(this.db, transaction.payoutBatchId, observedAt);
-    return transaction;
+    const lifecycleKind = payoutLifecycleKindForFinalityStatus(input.status);
+    return this.withTransaction(async (client) => {
+      const result = await client.query<PayoutTransactionRow>(
+        `update payout_transactions
+            set status = $2,
+                confirmed_at = $3,
+                finalized_at = $4,
+                error_json = $5
+          where id = $1
+          returning id, payout_batch_id, sequence, attempt, recent_blockhash,
+                    last_valid_block_height, signed_transaction_base64,
+                    expected_signature, status, submitted_at, confirmed_at,
+                    finalized_at, error_json, created_at`,
+        [input.id, input.status, confirmedAt, finalizedAt, errorJson]
+      );
+      const row = result.rows[0];
+      if (row === undefined) {
+        return undefined;
+      }
+      const transaction = mapPayoutTransaction(row);
+      await rollUpPayoutBatchFinality(client, transaction.payoutBatchId, observedAt);
+      if (lifecycleKind !== undefined) {
+        await this.insertPayoutLifecycleEventsIfBatchMatches(
+          client,
+          transaction,
+          lifecycleKind,
+          observedAt
+        );
+      }
+      return transaction;
+    });
   }
 
   private async getPayoutTransaction(
@@ -892,6 +891,43 @@ export class PostgresReceiptIngestionStore
       transaction,
       this.options.outboxEventIdFactory?.() ?? randomUUID(),
       WEBHOOK_PAYOUT_FINALIZED_EVENT_TYPE
+    );
+  }
+
+  private async insertPayoutLifecycleEventsIfBatchMatches(
+    client: PostgresQueryExecutor,
+    transaction: PayoutTransactionRecord,
+    kind: PayoutLifecycleEventKind,
+    occurredAt: string
+  ): Promise<void> {
+    const batch = await loadPayoutBatch(client, transaction.payoutBatchId);
+    if (batch === undefined || !doesBatchMatchPayoutLifecycleKind(batch, kind)) {
+      return;
+    }
+    await insertOutboxEventOnce(
+      client,
+      this.createPayoutLifecycleEvent(batch, transaction, kind, false, occurredAt)
+    );
+    await insertOutboxEventOnce(
+      client,
+      this.createPayoutLifecycleEvent(batch, transaction, kind, true, occurredAt)
+    );
+  }
+
+  private createPayoutLifecycleEvent(
+    batch: PayoutBatchRecord,
+    transaction: PayoutTransactionRecord,
+    kind: PayoutLifecycleEventKind,
+    webhook: boolean,
+    occurredAt: string
+  ): OutboxEventRecord {
+    return createPayoutLifecycleOutboxEvent(
+      batch,
+      transaction,
+      this.options.outboxEventIdFactory?.() ?? randomUUID(),
+      kind,
+      webhook,
+      occurredAt
     );
   }
 
@@ -2631,20 +2667,40 @@ function insertOutboxEvent(
      ) values (
        $1::uuid, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11
      )`,
-    [
-      event.id,
-      event.eventType,
-      event.aggregateType,
-      event.aggregateId,
-      JSON.stringify(event.payload),
-      event.status,
-      event.attempts,
-      event.availableAt,
-      event.lockedAt ?? null,
-      event.lastError ?? null,
-      event.createdAt
-    ]
+    outboxEventValues(event)
   );
+}
+
+function insertOutboxEventOnce(
+  client: PostgresQueryExecutor,
+  event: OutboxEventRecord
+): Promise<QueryResult> {
+  return client.query(
+    `insert into outbox_events (
+       id, event_type, aggregate_type, aggregate_id, payload, status, attempts,
+       available_at, locked_at, last_error, created_at
+     ) values (
+       $1::uuid, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11
+     )
+     on conflict (event_type, aggregate_type, aggregate_id) do nothing`,
+    outboxEventValues(event)
+  );
+}
+
+function outboxEventValues(event: OutboxEventRecord): readonly unknown[] {
+  return [
+    event.id,
+    event.eventType,
+    event.aggregateType,
+    event.aggregateId,
+    JSON.stringify(event.payload),
+    event.status,
+    event.attempts,
+    event.availableAt,
+    event.lockedAt ?? null,
+    event.lastError ?? null,
+    event.createdAt
+  ];
 }
 
 function createReceiptAcceptedOutboxEvent(
@@ -2731,6 +2787,129 @@ function createPayoutFinalizedOutboxEvent(
     availableAt: transaction.createdAt,
     createdAt: transaction.createdAt
   };
+}
+
+function createPayoutLifecycleOutboxEvent(
+  batch: PayoutBatchRecord,
+  transaction: PayoutTransactionRecord,
+  id: string,
+  kind: PayoutLifecycleEventKind,
+  webhook: boolean,
+  occurredAt: string
+): OutboxEventRecord {
+  return {
+    id,
+    eventType: webhook
+      ? payoutLifecycleWebhookEventType(kind)
+      : `payout.${kind}.v1`,
+    aggregateType: "payout_batch",
+    aggregateId: batch.id,
+    payload: {
+      payoutBatchId: batch.id,
+      payoutTransactionId: transaction.id,
+      merchantId: batch.merchantId,
+      payoutWalletId: batch.payoutWalletId,
+      network: batch.network,
+      asset: batch.asset,
+      status: batch.status,
+      transactionStatus: transaction.status,
+      totalAmountAtomic: batch.totalAmountAtomic,
+      itemCount: batch.itemCount,
+      accrualCount: batch.accrualCount,
+      expectedSignature: transaction.expectedSignature ?? null,
+      submittedAt: transaction.submittedAt ?? null,
+      confirmedAt: transaction.confirmedAt ?? null,
+      finalizedAt: transaction.finalizedAt ?? null,
+      failureCode: batch.failureCode ?? null,
+      failureMessage: batch.failureMessage ?? null,
+      transactionError: transaction.error ?? null,
+      occurredAt
+    },
+    status: "pending",
+    attempts: 0,
+    availableAt: occurredAt,
+    createdAt: occurredAt
+  };
+}
+
+function payoutLifecycleWebhookEventType(kind: PayoutLifecycleEventKind): string {
+  switch (kind) {
+    case "submitted":
+      return WEBHOOK_PAYOUT_SUBMITTED_EVENT_TYPE;
+    case "confirmed":
+      return WEBHOOK_PAYOUT_CONFIRMED_EVENT_TYPE;
+    case "failed":
+      return WEBHOOK_PAYOUT_FAILED_EVENT_TYPE;
+    case "outcome_unknown":
+      return WEBHOOK_PAYOUT_OUTCOME_UNKNOWN_EVENT_TYPE;
+  }
+}
+
+function payoutLifecycleKindForFinalityStatus(
+  status: MarkPayoutTransactionFinalityInput["status"]
+): PayoutLifecycleEventKind | undefined {
+  switch (status) {
+    case "confirmed":
+      return "confirmed";
+    case "failed":
+      return "failed";
+    case "expired":
+    case "outcome_unknown":
+      return "outcome_unknown";
+    case "finalized":
+      return undefined;
+  }
+}
+
+function doesBatchMatchPayoutLifecycleKind(
+  batch: PayoutBatchRecord,
+  kind: PayoutLifecycleEventKind
+): boolean {
+  switch (kind) {
+    case "submitted":
+      return batch.status === "submitted";
+    case "confirmed":
+      return batch.status === "confirmed";
+    case "failed":
+      return batch.status === "failed";
+    case "outcome_unknown":
+      return batch.status === "outcome_unknown";
+  }
+}
+
+async function loadPayoutBatch(
+  db: PostgresQueryExecutor,
+  batchId: string
+): Promise<PayoutBatchRecord | undefined> {
+  const batchResult = await db.query<PayoutBatchRow>(
+    `select id, merchant_id, payout_wallet_id, network, asset_mint, status,
+            total_amount_atomic, item_count, accrual_count, failure_code,
+            failure_message, created_at, updated_at
+       from payout_batches
+      where id = $1
+      limit 1`,
+    [batchId]
+  );
+  const batchRow = batchResult.rows[0];
+  if (batchRow === undefined) {
+    return undefined;
+  }
+  const itemsResult = await db.query<PayoutItemRow>(
+    `select id, payout_batch_id, destination_wallet, destination_token_account,
+            amount_atomic, status, created_at
+       from payout_items
+      where payout_batch_id = $1
+      order by created_at, id`,
+    [batchId]
+  );
+  const allocationsResult = await db.query<PayoutAllocationRow>(
+    `select payout_item_id, accrual_id, amount_atomic
+       from payout_allocations
+      where payout_item_id = any($1)
+      order by payout_item_id, accrual_id`,
+    [itemsResult.rows.map((item) => item.id)]
+  );
+  return mapPayoutBatch(batchRow, itemsResult.rows, allocationsResult.rows);
 }
 
 function normalizeOutboxEventTypes(
