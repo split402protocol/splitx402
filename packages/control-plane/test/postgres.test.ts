@@ -391,6 +391,45 @@ describe("PostgresReceiptIngestionStore", () => {
       })
     ).rejects.toBeInstanceOf(PayoutBatchConflictError);
   });
+
+  it("selects payout accruals with SKIP LOCKED when creating worker batches", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const fakePool = new FakePostgresPool();
+    const store = new PostgresReceiptIngestionStore(fakePool);
+    const ingestor = new ReceiptIngestor(store, {
+      resolveMerchantPublicKey: () => bundle.keys.merchantPublicKey,
+      now: () => new Date("2026-06-24T00:02:00Z")
+    });
+    await ingestor.ingest({ receipt: bundle.artifacts.receipt, source: "merchant" });
+    const verified = await store.markReceiptChainVerified({
+      receiptId: bundle.artifacts.receipt.receiptId,
+      verifiedAt: "2026-06-24T00:04:00Z"
+    });
+    if (verified?.accrual === undefined) {
+      throw new Error("expected verified accrual");
+    }
+
+    const batch = await store.createPayoutBatchFromAvailableAccruals({
+      merchantId: bundle.artifacts.receipt.merchantId,
+      payoutWalletId: "mpw_ffffffffffffffffffffffffffffffff",
+      network: bundle.artifacts.receipt.network,
+      asset: bundle.artifacts.receipt.asset,
+      batchId: "pbt_ffffffffffffffffffffffffffffffff",
+      itemIdFactory: () => "pit_ffffffffffffffffffffffffffffffff",
+      now: "2026-06-24T00:05:00Z",
+      limit: 1
+    });
+
+    expect(batch.totalAmountAtomic).toBe("2000");
+    expect(batch.accrualCount).toBe(1);
+    expect(fakePool.database.accruals[0]?.status).toBe("allocated");
+    expect(fakePool.client.commands).toContainEqual(
+      expect.stringContaining("for update skip locked")
+    );
+    expect(fakePool.client.commands).toContainEqual(
+      expect.stringContaining("limit $4 for update skip locked")
+    );
+  });
 });
 
 describe("PostgresMerchantRegistry", () => {
@@ -1472,10 +1511,29 @@ class FakePostgresDatabase {
         (row.available_at === null ||
           Date.parse(row.available_at) <= Date.parse(now))
     );
-    if (normalizedSql.includes("asset_mint = $3")) {
-      result = result.filter((row) => row.asset_mint === readString(values[2]));
+    let valueIndex = 2;
+    if (/asset_mint = \$[0-9]+/u.test(normalizedSql)) {
+      result = result.filter(
+        (row) => row.asset_mint === readString(values[valueIndex])
+      );
+      valueIndex += 1;
     }
-    return result.sort(compareAccrualRows);
+    if (/campaign_id = \$[0-9]+/u.test(normalizedSql)) {
+      result = result.filter(
+        (row) => row.campaign_id === readString(values[valueIndex])
+      );
+      valueIndex += 1;
+    }
+    if (/route_id = \$[0-9]+/u.test(normalizedSql)) {
+      result = result.filter(
+        (row) => row.route_id === readString(values[valueIndex])
+      );
+      valueIndex += 1;
+    }
+    const sorted = result.sort(compareAccrualRows);
+    return /limit \$[0-9]+/u.test(normalizedSql)
+      ? sorted.slice(0, readNumber(values[valueIndex]))
+      : sorted;
   }
 
   allocateAccrual(values: readonly unknown[]): Pick<StoredAccrualRow, "id">[] {

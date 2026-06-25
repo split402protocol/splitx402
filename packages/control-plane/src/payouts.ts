@@ -57,8 +57,26 @@ export interface CreatePayoutBatchInput {
   maxRecipients?: number;
 }
 
+export interface CreatePayoutBatchFromAvailableAccrualsInput {
+  merchantId: string;
+  payoutWalletId: string;
+  network: string;
+  asset: string;
+  campaignId?: string;
+  routeId?: string;
+  now?: string;
+  limit?: number;
+  batchId?: string;
+  itemIdFactory?: () => string;
+  minimumPayoutAmountAtomic?: string;
+  maxRecipients?: number;
+}
+
 export interface PayoutBatchStore {
   createPayoutBatch(input: CreatePayoutBatchInput): Promise<PayoutBatchRecord> | PayoutBatchRecord;
+  createPayoutBatchFromAvailableAccruals(
+    input: CreatePayoutBatchFromAvailableAccrualsInput
+  ): Promise<PayoutBatchRecord> | PayoutBatchRecord;
   getPayoutBatch(
     batchId: string
   ): Promise<PayoutBatchRecord | undefined> | PayoutBatchRecord | undefined;

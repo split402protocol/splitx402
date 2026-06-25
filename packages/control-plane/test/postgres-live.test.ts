@@ -230,15 +230,15 @@ describeLive("live PostgreSQL control-plane persistence", () => {
     if (verifiedSnapshot?.accrual === undefined) {
       throw new Error("expected verified accrual");
     }
-    const payoutBatch = await receiptStore.createPayoutBatch({
+    const payoutBatch = await receiptStore.createPayoutBatchFromAvailableAccruals({
       merchantId: bundle.artifacts.receipt.merchantId,
       payoutWalletId: merchantPayoutWallet.id,
       network: bundle.artifacts.receipt.network,
       asset: bundle.artifacts.receipt.asset,
-      accruals: [verifiedSnapshot.accrual],
       batchId: "pbt_ffffffffffffffffffffffffffffffff",
       itemIdFactory: () => "pit_ffffffffffffffffffffffffffffffff",
-      now: "2026-06-24T00:05:00Z"
+      now: "2026-06-24T00:05:00Z",
+      limit: 1
     });
     const loadedPayoutBatch = await receiptStore.getPayoutBatch(payoutBatch.id);
     const counts = await readTableCounts(pool, [

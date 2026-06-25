@@ -70,7 +70,9 @@ POST /v1/merchants/:merchantId/payout-batches
 - chain-verification worker with Solana JSON-RPC signature and transfer checks;
 - webhook dispatch worker with signed POST envelopes and retry/dead-letter state;
 - payout preview and batch allocation stores that select available accruals and
-  mark them `allocated` exactly once.
+  mark them `allocated` exactly once;
+- PostgreSQL payout batch creation with `FOR UPDATE SKIP LOCKED` eligible-accrual
+  selection for concurrent workers.
 
 ## Commands
 
