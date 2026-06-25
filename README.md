@@ -162,6 +162,7 @@ mainnet payment flows exist yet.
 | Chain verification worker framework | Started |
 | Chain verification polling loop | Started |
 | Chain verification worker process entrypoint | Started |
+| Webhook dispatch worker process entrypoint | Started |
 | Durable control-plane runtime factory | Started |
 | Production auth policy wiring | Started |
 | Solana RPC signature-status verifier | Started |
@@ -331,16 +332,19 @@ referrer, origin, operation, status, and limit. Routes are keyed by route id and
 canonical referral-claim hash so exact duplicate activation is idempotent while
 conflicting claims are rejected.
 When merchant auth is required, route suspension is limited to the owner wallet
-of the route campaign's merchant. Accepted receipts
-also create pending outbox events in the same PostgreSQL transaction, giving future
-workers a durable feed for chain verification, payout selection, dashboards, and
-webhooks. The PostgreSQL outbox store can claim ready events, mark them delivered,
-or reschedule/dead-letter failures without creating duplicate worker work. The
-first chain-verification worker framework can process `receipt.accepted.v1` events
-with a pluggable verifier and make confirmed accruals available for future payout
-selection. The first Solana verifier checks settlement signature status through
-JSON-RPC and parses confirmed transaction data to reject receipts whose token
-mint, payer authority, pay-to owner evidence, or amount do not match the receipt.
+of the route campaign's merchant. Accepted receipts also create pending
+chain-verification and webhook outbox events in the same PostgreSQL transaction,
+giving workers a durable feed for chain verification, payout selection,
+dashboards, and webhooks. The PostgreSQL outbox store can claim ready events by
+event type, mark them delivered, or reschedule/dead-letter failures without
+creating duplicate worker work. The first chain-verification worker framework can
+process `receipt.accepted.v1` events with a pluggable verifier and make
+confirmed accruals available for future payout selection. The webhook dispatch
+worker processes `webhook.receipt.accepted.v1` events and sends signed HTTP POST
+envelopes to a configured endpoint. The first Solana verifier checks settlement
+signature status through JSON-RPC and parses confirmed transaction data to reject
+receipts whose token mint, payer authority, pay-to owner evidence, or amount do
+not match the receipt.
 Full x402 SVM parity and payout execution are still remaining hardening steps.
 
 ## MVP Rules
@@ -403,6 +407,17 @@ The worker reads `SPLIT402_CHAIN_WORKER_NETWORK`,
 `SPLIT402_CHAIN_WORKER_SOLANA_RPC_URL`, and optional polling/retry settings from
 the environment, then claims `receipt.accepted.v1` outbox events and verifies
 Solana settlement receipts through JSON-RPC.
+
+Run the deployable webhook dispatch worker process:
+
+```bash
+corepack pnpm worker:webhook
+```
+
+The worker reads `SPLIT402_WEBHOOK_WORKER_URL`,
+`SPLIT402_WEBHOOK_WORKER_SECRET`, and optional polling/retry settings from the
+environment, then claims `webhook.receipt.accepted.v1` outbox events and POSTs
+signed JSON webhook envelopes with `split402-webhook-signature`.
 
 Run the demo merchant and agent flows:
 

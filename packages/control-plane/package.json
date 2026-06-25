@@ -6,7 +6,8 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "split402-chain-worker": "./dist/chain-worker.js"
+    "split402-chain-worker": "./dist/chain-worker.js",
+    "split402-webhook-worker": "./dist/webhook-worker.js"
   },
   "files": ["dist", "migrations"],
   "scripts": {
@@ -15,7 +16,8 @@
     "test": "vitest run",
     "test:postgres": "node -e \"if (!process.env.SPLIT402_TEST_DATABASE_URL) { console.error('Set SPLIT402_TEST_DATABASE_URL to run live PostgreSQL tests.'); process.exit(1); }\" && vitest run test/postgres-live.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "worker:chain": "tsx src/chain-worker.ts"
+    "worker:chain": "tsx src/chain-worker.ts",
+    "worker:webhook": "tsx src/webhook-worker.ts"
   },
   "dependencies": {
     "@split402/protocol": "workspace:*",

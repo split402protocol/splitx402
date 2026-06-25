@@ -99,7 +99,10 @@ export class ReceiptChainVerificationWorker
 
   async processNext(): Promise<ReceiptChainVerificationWorkerResult> {
     const now = this.now();
-    const event = await this.outboxStore.claimNext({ now });
+    const event = await this.outboxStore.claimNext({
+      now,
+      eventTypes: [RECEIPT_ACCEPTED_EVENT_TYPE]
+    });
     if (event === undefined) {
       return { status: "idle" };
     }

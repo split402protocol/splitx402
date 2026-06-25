@@ -371,6 +371,7 @@ export class PostgresReceiptIngestionStore
       }
 
       await insertOutboxEvent(client, this.createReceiptAcceptedEvent(snapshot));
+      await insertOutboxEvent(client, this.createWebhookReceiptAcceptedEvent(snapshot));
     });
   }
 
@@ -457,6 +458,15 @@ export class PostgresReceiptIngestionStore
     );
   }
 
+  private createWebhookReceiptAcceptedEvent(
+    snapshot: ReceiptIngestionSnapshot
+  ): OutboxEventRecord {
+    return createWebhookReceiptAcceptedOutboxEvent(
+      snapshot,
+      this.options.outboxEventIdFactory?.() ?? randomUUID()
+    );
+  }
+
   private async withTransaction(
     operation: (client: PostgresQueryExecutor) => Promise<void>
   ): Promise<void> {
@@ -506,8 +516,11 @@ export class PostgresOutboxEventStore implements OutboxEventStore {
     return row === undefined ? undefined : mapOutboxEvent(row);
   }
 
-  async claimNext(input: { now?: string } = {}): Promise<OutboxEventRecord | undefined> {
+  async claimNext(
+    input: { eventTypes?: string[]; now?: string } = {}
+  ): Promise<OutboxEventRecord | undefined> {
     const now = input.now ?? this.now();
+    const eventTypes = normalizeOutboxEventTypes(input.eventTypes);
     const result = await this.db.query<OutboxEventRow>(
       `update outbox_events
           set status = 'processing',
@@ -519,13 +532,14 @@ export class PostgresOutboxEventStore implements OutboxEventStore {
             from outbox_events
            where status = 'pending'
              and available_at <= $1
+             and ($2::text[] is null or event_type = any($2::text[]))
            order by available_at, created_at, id
            for update skip locked
            limit 1
         )
       returning id, event_type, aggregate_type, aggregate_id, payload, status,
                 attempts, available_at, locked_at, last_error, created_at`,
-      [now]
+      [now, eventTypes]
     );
     const row = result.rows[0];
     return row === undefined ? undefined : mapOutboxEvent(row);
@@ -1662,10 +1676,25 @@ function createReceiptAcceptedOutboxEvent(
   snapshot: ReceiptIngestionSnapshot,
   id: string
 ): OutboxEventRecord {
+  return createReceiptOutboxEvent(snapshot, id, "receipt.accepted.v1");
+}
+
+function createWebhookReceiptAcceptedOutboxEvent(
+  snapshot: ReceiptIngestionSnapshot,
+  id: string
+): OutboxEventRecord {
+  return createReceiptOutboxEvent(snapshot, id, "webhook.receipt.accepted.v1");
+}
+
+function createReceiptOutboxEvent(
+  snapshot: ReceiptIngestionSnapshot,
+  id: string,
+  eventType: "receipt.accepted.v1" | "webhook.receipt.accepted.v1"
+): OutboxEventRecord {
   const receipt = snapshot.receipt.receipt;
   return {
     id,
-    eventType: "receipt.accepted.v1",
+    eventType,
     aggregateType: "receipt",
     aggregateId: snapshot.receipt.id,
     payload: {
@@ -1688,6 +1717,18 @@ function createReceiptAcceptedOutboxEvent(
     availableAt: snapshot.receipt.createdAt,
     createdAt: snapshot.receipt.createdAt
   };
+}
+
+function normalizeOutboxEventTypes(
+  eventTypes: string[] | undefined
+): string[] | null {
+  if (eventTypes === undefined) {
+    return null;
+  }
+  if (eventTypes.length === 0) {
+    throw new Error("eventTypes must not be empty");
+  }
+  return eventTypes;
 }
 
 function mapReceiptRecord(row: PaymentReceiptRow): ReceiptRecord {
