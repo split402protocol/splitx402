@@ -5,6 +5,7 @@ Production merchant helpers for Split402-enabled x402 APIs.
 This package starts with production merchant boundaries:
 
 - a cached campaign resolver for x402 offer and receipt signing;
+- service-key rotation helpers for offer and receipt signing;
 - explicit x402 payment-identifier helpers for idempotent paid retries;
 - operation digest helpers for production GET and JSON POST request shapes;
 - a durable receipt outbox for post-settlement control-plane ingestion.
@@ -87,6 +88,40 @@ const routeExtensions = {
 `createSplit402PaymentIdentifier` generates IDs that are valid for both x402 and
 Split402 receipts. `assertRequiredSplit402PaymentIdentifier` fails closed when a
 settled payment payload is missing the required identifier.
+
+## Service-Key Rotation
+
+`InMemoryMerchantServiceKeyRing` keeps a current signing key while still
+resolving older public keys by `kid`. Pass it to
+`createSplit402ResourceServerExtension` as `serviceKeyProvider`.
+
+```ts
+import { InMemoryMerchantServiceKeyRing } from "@split402/merchant-sdk";
+import { createSplit402ResourceServerExtension } from "@split402/x402-extension";
+
+const serviceKeyProvider = new InMemoryMerchantServiceKeyRing({
+  current: {
+    kid: "kid_merchant_2026_06",
+    privateSeed: currentSeed
+  },
+  additional: [
+    {
+      kid: "kid_merchant_2026_05",
+      privateSeed: previousSeed
+    }
+  ]
+});
+
+const split402Extension = createSplit402ResourceServerExtension({
+  merchantId: "mrc_...",
+  merchantOrigin: "https://api.example.com",
+  serviceKeyProvider,
+  resolveCampaign: campaignResolver.resolveCampaign
+});
+```
+
+New offers and receipts use the current key. Offers issued before rotation can
+still verify as long as their `kid` remains resolvable.
 
 ## Receipt Outbox Flow
 

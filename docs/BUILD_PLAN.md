@@ -259,6 +259,8 @@ Current slice:
 - add `@split402/merchant-sdk`;
 - add a cached control-plane campaign resolver that refreshes active campaign
   terms remotely and serves the x402 extension synchronously from cache;
+- add service-key provider support and an in-memory merchant key ring for
+  current-key rotation with old-`kid` public-key lookup;
 - add required x402 `payment-identifier` helpers for route declarations,
   Split402-compatible id generation, and fail-closed settled payload validation;
 - add merchant operation digest helpers for production GET and JSON POST request

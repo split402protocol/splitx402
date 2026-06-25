@@ -13,6 +13,9 @@ Status: started.
 - Added `packages/merchant-sdk`.
 - Added `CachedControlPlaneCampaignResolver` for active campaign refresh from
   the control plane and synchronous x402 extension resolution from a local cache.
+- Added service-key provider support in the x402 extension plus
+  `InMemoryMerchantServiceKeyRing` for rotating the current signing key while
+  still resolving older public keys by `kid`.
 - Added x402 `payment-identifier` helpers that declare the extension as required,
   generate Split402-compatible payment ids, and fail closed when settled payloads
   are missing an identifier.
@@ -40,7 +43,6 @@ retry ingestion later without creating duplicate commissions.
 
 ## Remaining Milestone 3 Work
 
-- Service-key rotation support.
 - Compile-ready merchant integration example and compatibility matrix.
 
 ## Acceptance Checks

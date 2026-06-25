@@ -4,6 +4,7 @@ import {
   Split402ReceiptV1Schema,
   calculateOperationDigest,
   createPrefixedId,
+  deriveEd25519PublicKey,
   hashProtocolObject,
   type CalculateOperationDigestInput,
   type Split402ReceiptV1
@@ -33,6 +34,17 @@ export interface MerchantCampaignConfig {
   commissionBps: number;
   attributionRequired: boolean;
   allowSelfReferral: boolean;
+}
+
+export interface MerchantServiceSigningKey {
+  kid: string;
+  privateSeed: Uint8Array;
+}
+
+export interface MerchantServicePublicKey {
+  kid: string;
+  publicKey: string;
+  current: boolean;
 }
 
 export interface MerchantCampaignOperation {
@@ -97,6 +109,85 @@ export class MerchantPaymentIdentifierError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "MerchantPaymentIdentifierError";
+  }
+}
+
+export class MerchantServiceKeyRingError extends Error {
+  readonly code = "merchant_service_key_ring_error";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "MerchantServiceKeyRingError";
+  }
+}
+
+export class InMemoryMerchantServiceKeyRing {
+  private readonly keysByKid = new Map<
+    string,
+    MerchantServiceSigningKey & { publicKey: string }
+  >();
+  private currentKid = "";
+
+  constructor(input: {
+    current: MerchantServiceSigningKey;
+    additional?: MerchantServiceSigningKey[];
+  }) {
+    this.addKey(input.current, { makeCurrent: true });
+    for (const key of input.additional ?? []) {
+      this.addKey(key);
+    }
+    this.currentKid = input.current.kid;
+  }
+
+  addKey(
+    key: MerchantServiceSigningKey,
+    options: { makeCurrent?: boolean } = {}
+  ): MerchantServicePublicKey {
+    const stored = storeServiceSigningKey(key);
+    this.keysByKid.set(stored.kid, stored);
+    if (options.makeCurrent === true) {
+      this.currentKid = stored.kid;
+    }
+    return {
+      kid: stored.kid,
+      publicKey: stored.publicKey,
+      current: this.currentKid === stored.kid
+    };
+  }
+
+  rotateTo(kid: string): MerchantServicePublicKey {
+    const key = this.keysByKid.get(assertServiceKid(kid));
+    if (key === undefined) {
+      throw new MerchantServiceKeyRingError(`unknown service key kid: ${kid}`);
+    }
+    this.currentKid = key.kid;
+    return {
+      kid: key.kid,
+      publicKey: key.publicKey,
+      current: true
+    };
+  }
+
+  current(): MerchantServiceSigningKey {
+    const key = this.keysByKid.get(this.currentKid);
+    if (key === undefined) {
+      throw new MerchantServiceKeyRingError("current service key is missing");
+    }
+    return cloneServiceSigningKey(key);
+  }
+
+  resolvePublicKey(kid: string): string | undefined {
+    return this.keysByKid.get(assertServiceKid(kid))?.publicKey;
+  }
+
+  listPublicKeys(): MerchantServicePublicKey[] {
+    return Array.from(this.keysByKid.values())
+      .map((key) => ({
+        kid: key.kid,
+        publicKey: key.publicKey,
+        current: key.kid === this.currentKid
+      }))
+      .sort((left, right) => left.kid.localeCompare(right.kid));
   }
 }
 
@@ -928,6 +1019,36 @@ function cloneCampaignOperation(
   };
 }
 
+function storeServiceSigningKey(
+  key: MerchantServiceSigningKey
+): MerchantServiceSigningKey & { publicKey: string } {
+  const kid = assertServiceKid(key.kid);
+  const privateSeed = clonePrivateSeed(key.privateSeed);
+  return {
+    kid,
+    privateSeed,
+    publicKey: deriveEd25519PublicKey(privateSeed)
+  };
+}
+
+function cloneServiceSigningKey(
+  key: MerchantServiceSigningKey
+): MerchantServiceSigningKey {
+  return {
+    kid: key.kid,
+    privateSeed: clonePrivateSeed(key.privateSeed)
+  };
+}
+
+function clonePrivateSeed(privateSeed: Uint8Array): Uint8Array {
+  if (privateSeed.byteLength !== 32) {
+    throw new MerchantServiceKeyRingError(
+      "service private seed must be 32 bytes"
+    );
+  }
+  return new Uint8Array(privateSeed);
+}
+
 function comparePendingRecords(
   left: MerchantReceiptOutboxRecord,
   right: MerchantReceiptOutboxRecord
@@ -1006,6 +1127,13 @@ function assertSplit402PaymentIdentifier(value: string): string {
     );
   }
   return parsed.data;
+}
+
+function assertServiceKid(value: string): string {
+  if (value.length === 0) {
+    throw new MerchantServiceKeyRingError("service key kid must be non-empty");
+  }
+  return value;
 }
 
 function classifyHttpFailure(status: number): "retry" | "rejected" {
