@@ -278,6 +278,8 @@ Current slice:
   recovery, access, and separation-of-duties evidence;
 - Phase 6 emergency signer-auth revocation drill generation for old-key
   rejection, new-key success, metrics, audit-log, and reconciliation evidence;
+- Phase 6 payout signer rollback drill generation for immutable image,
+  secret-set, readiness, metrics, reconciliation, and safe batch-resume evidence;
 - signed-byte payout transaction persistence and Solana broadcast submission
   boundary;
 - Solana payout transaction finality monitor with retry and outcome-unknown
