@@ -12,8 +12,8 @@ extension, demo merchant, demo agent, agent SDK, merchant SDK primitives,
 control-plane ingestion, PostgreSQL adapters, outbox workers, Solana chain
 verification, payout preview/allocation, payout transaction persistence,
 broadcast/finality boundaries, rollup, payout lifecycle outbox/webhook events,
-unknown-outcome reconciliation queue, and idempotent payout ledger closure are
-present.
+unknown-outcome reconciliation queue, referrer payout views, and idempotent
+payout ledger closure are present.
 
 The MVP still uses normal x402 settlement to the merchant and records a
 commission liability for later merchant-funded payout. Atomic split settlement and
@@ -262,7 +262,9 @@ Current slice:
 - `POST /v1/merchants/:merchantId/payout-wallets`;
 - `POST /v1/merchants/:merchantId/payouts/preview`;
 - `GET /v1/merchants/:merchantId/payouts/reconciliation`;
-- `POST /v1/merchants/:merchantId/payout-batches`.
+- `POST /v1/merchants/:merchantId/payout-batches`;
+- `GET /v1/referrers/:referrerWallet/balances`;
+- `GET /v1/referrers/:referrerWallet/payouts`.
 
 ## Phase 7: Dashboard And Discovery
 

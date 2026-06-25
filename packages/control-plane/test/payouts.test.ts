@@ -4,6 +4,8 @@ import {
   createPayoutBatchPlan,
   createPayoutFinalizationLedgerTransaction,
   createPayoutPreview,
+  createReferrerBalanceSummary,
+  createReferrerPayoutHistoryItems,
   createSignedPayoutTransactionRecords,
   filterPayoutEligibleAccruals,
   summarizePayoutBatchFinality,
@@ -398,6 +400,106 @@ describe("payout finalization ledger", () => {
         }
       })
     ).toThrow("all payout items must be finalized");
+  });
+});
+
+describe("referrer payout views", () => {
+  it("summarizes pending, available, in-flight, and paid balances", () => {
+    const available = accrual({ id: "acr_available", amountAtomic: "50" });
+    const pending = accrual({
+      id: "acr_pending",
+      amountAtomic: "70",
+      status: "pending_chain_verification"
+    });
+    const inFlight = accrual({
+      id: "acr_in_flight",
+      amountAtomic: "90",
+      status: "allocated"
+    });
+    const paid = accrual({
+      id: "acr_paid",
+      amountAtomic: "110",
+      status: "allocated"
+    });
+    const batch = finalizedBatch();
+    const viewBatch: PayoutBatchRecord = {
+      ...batch,
+      items: [
+        {
+          ...batch.items[0]!,
+          status: "submitted",
+          amountAtomic: "90",
+          allocations: [
+            {
+              payoutItemId: batch.items[0]!.id,
+              accrualId: inFlight.id,
+              amountAtomic: "90"
+            }
+          ]
+        },
+        {
+          ...batch.items[1]!,
+          status: "finalized",
+          amountAtomic: "110",
+          allocations: [
+            {
+              payoutItemId: batch.items[1]!.id,
+              accrualId: paid.id,
+              amountAtomic: "110"
+            }
+          ]
+        }
+      ]
+    };
+
+    const summary = createReferrerBalanceSummary({
+      referrerWallet: "referrer_1",
+      now: NOW,
+      accruals: [available, pending, inFlight, paid],
+      payoutBatches: [viewBatch]
+    });
+    const history = createReferrerPayoutHistoryItems({
+      referrerWallet: "referrer_1",
+      accruals: [available, pending, inFlight, paid],
+      payoutBatches: [viewBatch]
+    });
+
+    expect(summary.assets).toEqual([
+      {
+        asset: "usdc_mint",
+        pendingAmountAtomic: "70",
+        availableAmountAtomic: "50",
+        heldAmountAtomic: "0",
+        inFlightAmountAtomic: "90",
+        paidAmountAtomic: "110",
+        totalEarnedAmountAtomic: "320"
+      }
+    ]);
+    expect(history.map((item) => item.status).sort()).toEqual([
+      "available",
+      "in_flight",
+      "paid",
+      "pending"
+    ]);
+  });
+
+  it("does not paginate balance summaries", () => {
+    const accruals = Array.from({ length: 55 }, (_, index) =>
+      accrual({
+        id: `acr_${index.toString().padStart(2, "0")}`,
+        amountAtomic: "1"
+      })
+    );
+
+    const summary = createReferrerBalanceSummary({
+      referrerWallet: "referrer_1",
+      now: NOW,
+      accruals,
+      payoutBatches: []
+    });
+
+    expect(summary.assets[0]?.availableAmountAtomic).toBe("55");
+    expect(summary.assets[0]?.totalEarnedAmountAtomic).toBe("55");
   });
 });
 
