@@ -257,6 +257,7 @@ Current slice:
 - remote signer client wiring with optional HMAC request authentication;
 - isolated payout signer appliance scaffold with HMAC verification and Solana
   transaction signing;
+- payout signer auth key-ring rotation support;
 - signed-byte payout transaction persistence and Solana broadcast submission
   boundary;
 - Solana payout transaction finality monitor with retry and outcome-unknown
