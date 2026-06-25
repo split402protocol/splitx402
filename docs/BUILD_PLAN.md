@@ -429,6 +429,8 @@ Current slice:
   receipt-key, webhook-key, payout-wallet, and discovery-readiness signals.
 - referrer route listing endpoint for dashboard and discovery views.
 - Bazaar-compatible resource metadata projection for active Split402 routes.
+- merchant dashboard summary endpoint with readiness, campaign, operation, and
+  route status rollups.
 
 Exit criteria:
 

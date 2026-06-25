@@ -72,6 +72,7 @@ POST /v1/receipts
 POST /v1/merchants
 GET  /v1/merchants/:merchantId
 GET  /v1/merchants/:merchantId/reliability-profile
+GET  /v1/merchants/:merchantId/dashboard-summary
 POST /v1/merchants/:merchantId/origins
 POST /v1/merchants/:merchantId/keys
 POST /v1/merchants/:merchantId/keys/:kid/revoke

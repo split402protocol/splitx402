@@ -103,9 +103,18 @@ export interface ActivateCampaignVersionInput {
   merchantSignature: string;
 }
 
+export interface ListMerchantCampaignsInput {
+  merchantId: string;
+  status?: CampaignStatus;
+  limit?: number;
+}
+
 export interface CampaignRegistry {
   createCampaign(input: CreateCampaignInput): Promise<CampaignProfile> | CampaignProfile;
   getCampaign(campaignId: string): Promise<CampaignProfile | undefined> | CampaignProfile | undefined;
+  listMerchantCampaigns(
+    input: ListMerchantCampaignsInput
+  ): Promise<CampaignProfile[]> | CampaignProfile[];
   getCampaignVersion(
     campaignId: string,
     version: number
@@ -192,6 +201,30 @@ export class InMemoryCampaignRegistry implements CampaignRegistry {
       ...cloneCampaign(campaign),
       current: cloneCampaignVersion(current)
     };
+  }
+
+  listMerchantCampaigns(input: ListMerchantCampaignsInput): CampaignProfile[] {
+    const merchantId = assertSplit402Id(input.merchantId, "merchant id");
+    const status =
+      input.status === undefined ? undefined : assertCampaignStatus(input.status);
+    const limit = assertListLimit(input.limit ?? 100);
+    return Array.from(this.campaigns.values())
+      .filter((campaign) => campaign.merchantId === merchantId)
+      .filter((campaign) => status === undefined || campaign.status === status)
+      .sort(compareCampaignsNewestFirst)
+      .slice(0, limit)
+      .map((campaign) => {
+        const current = this.versionsByCampaignId
+          .get(campaign.id)
+          ?.get(campaign.currentVersion);
+        if (current === undefined) {
+          throw new Error(`missing current campaign version: ${campaign.id}`);
+        }
+        return {
+          ...cloneCampaign(campaign),
+          current: cloneCampaignVersion(current)
+        };
+      });
   }
 
   getCampaignVersion(
@@ -479,6 +512,27 @@ function assertCommissionBase(value: CampaignCommissionBase): void {
   }
 }
 
+function assertCampaignStatus(value: CampaignStatus): CampaignStatus {
+  if (
+    value === "draft" ||
+    value === "active" ||
+    value === "paused" ||
+    value === "closed"
+  ) {
+    return value;
+  }
+  throw new CampaignRegistryValidationError(
+    "status must be draft, active, paused, or closed"
+  );
+}
+
+function assertListLimit(value: number): number {
+  if (!Number.isInteger(value) || value <= 0 || value > 100) {
+    throw new CampaignRegistryValidationError("limit must be an integer from 1 to 100");
+  }
+  return value;
+}
+
 function assertPositiveVersion(value: number): number {
   if (!Number.isInteger(value) || value <= 0) {
     throw new CampaignRegistryValidationError("version must be a positive integer");
@@ -518,6 +572,16 @@ function assertUrlOrigin(value: string): string {
   } catch {
     throw new CampaignRegistryValidationError("resourceOrigin must be an http(s) URL origin");
   }
+}
+
+function compareCampaignsNewestFirst(
+  left: CampaignRecord,
+  right: CampaignRecord
+): number {
+  return (
+    right.createdAt.localeCompare(left.createdAt) ||
+    right.id.localeCompare(left.id)
+  );
 }
 
 function cloneCampaign(campaign: CampaignRecord): CampaignRecord {

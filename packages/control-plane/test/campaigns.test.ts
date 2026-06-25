@@ -84,6 +84,41 @@ describe("campaign registry", () => {
     ).toThrow(CampaignRegistryConflictError);
   });
 
+  it("lists merchant campaigns with status filtering and newest-first order", () => {
+    const bundle = createSampleProtocolArtifacts();
+    const registry = createRegistry();
+    const first = registry.createCampaign({
+      id: bundle.artifacts.receipt.campaignId,
+      merchantId: bundle.artifacts.receipt.merchantId,
+      ...createCampaignTerms()
+    });
+    registry.activateCampaignVersion({
+      campaignId: first.id,
+      merchantKid: bundle.artifacts.receipt.kid,
+      merchantPublicKey: bundle.keys.merchantPublicKey,
+      merchantSignature: signCampaignTerms(first.current)
+    });
+    const second = registry.createCampaign({
+      id: "cmp_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      merchantId: bundle.artifacts.receipt.merchantId,
+      ...createCampaignTerms({ commissionBps: 2500 })
+    });
+
+    expect(
+      registry
+        .listMerchantCampaigns({ merchantId: bundle.artifacts.receipt.merchantId })
+        .map((campaign) => campaign.id)
+    ).toEqual([second.id, first.id]);
+    expect(
+      registry
+        .listMerchantCampaigns({
+          merchantId: bundle.artifacts.receipt.merchantId,
+          status: "active"
+        })
+        .map((campaign) => campaign.id)
+    ).toEqual([first.id]);
+  });
+
   it("activates the current campaign version with a merchant service-key signature", () => {
     const bundle = createSampleProtocolArtifacts();
     const registry = createRegistry();
