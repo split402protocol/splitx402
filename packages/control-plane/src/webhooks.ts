@@ -4,8 +4,15 @@ import type { OutboxEventRecord, OutboxEventStore } from "./index.js";
 
 export const WEBHOOK_RECEIPT_ACCEPTED_EVENT_TYPE =
   "webhook.receipt.accepted.v1";
+export const WEBHOOK_PAYOUT_SUBMITTED_EVENT_TYPE =
+  "webhook.payout.submitted.v1";
+export const WEBHOOK_PAYOUT_CONFIRMED_EVENT_TYPE =
+  "webhook.payout.confirmed.v1";
 export const WEBHOOK_PAYOUT_FINALIZED_EVENT_TYPE =
   "webhook.payout.finalized.v1";
+export const WEBHOOK_PAYOUT_FAILED_EVENT_TYPE = "webhook.payout.failed.v1";
+export const WEBHOOK_PAYOUT_OUTCOME_UNKNOWN_EVENT_TYPE =
+  "webhook.payout.outcome_unknown.v1";
 
 export type WebhookDeliveryResult =
   | {
@@ -124,7 +131,11 @@ const DEFAULT_POLL_INTERVAL_MS = 5_000;
 const DEFAULT_MAX_ATTEMPTS = 10;
 const DEFAULT_WEBHOOK_EVENT_TYPES = [
   WEBHOOK_RECEIPT_ACCEPTED_EVENT_TYPE,
-  WEBHOOK_PAYOUT_FINALIZED_EVENT_TYPE
+  WEBHOOK_PAYOUT_SUBMITTED_EVENT_TYPE,
+  WEBHOOK_PAYOUT_CONFIRMED_EVENT_TYPE,
+  WEBHOOK_PAYOUT_FINALIZED_EVENT_TYPE,
+  WEBHOOK_PAYOUT_FAILED_EVENT_TYPE,
+  WEBHOOK_PAYOUT_OUTCOME_UNKNOWN_EVENT_TYPE
 ];
 
 export class WebhookDispatchWorker implements WebhookDispatchProcessor {

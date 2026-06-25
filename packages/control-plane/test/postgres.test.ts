@@ -546,7 +546,53 @@ describe("PostgresReceiptIngestionStore", () => {
     );
     expect(repeatedLedgerClose?.id).toBe(ledgerClose?.id);
     expect(repeatedLedgerClose?.sourceType).toBe("payout_batch");
-    expect(fakePool.database.outboxEvents).toHaveLength(4);
+    expect(fakePool.database.outboxEvents).toHaveLength(6);
+    const payoutSubmittedEvent = findOutboxEvent(
+      fakePool.database.outboxEvents,
+      "payout.submitted.v1"
+    );
+    const payoutSubmittedWebhookEvent = findOutboxEvent(
+      fakePool.database.outboxEvents,
+      "webhook.payout.submitted.v1"
+    );
+    expect(payoutSubmittedEvent).toEqual(
+      expect.objectContaining({
+        event_type: "payout.submitted.v1",
+        aggregate_type: "payout_batch",
+        aggregate_id: batch.id,
+        status: "pending",
+        attempts: 0,
+        available_at: "2026-06-24T00:07:00.000Z",
+        created_at: "2026-06-24T00:07:00.000Z"
+      })
+    );
+    expect(readJsonPayload(payoutSubmittedEvent?.payload)).toEqual(
+      expect.objectContaining({
+        payoutBatchId: batch.id,
+        payoutTransactionId: saved[0]?.id,
+        merchantId: bundle.artifacts.receipt.merchantId,
+        payoutWalletId: "mpw_ffffffffffffffffffffffffffffffff",
+        network: bundle.artifacts.receipt.network,
+        asset: bundle.artifacts.receipt.asset,
+        status: "submitted",
+        transactionStatus: "submitted",
+        totalAmountAtomic: "2000",
+        expectedSignature: "expected_sig_0",
+        submittedAt: "2026-06-24T00:07:00.000Z",
+        occurredAt: "2026-06-24T00:07:00.000Z"
+      })
+    );
+    expect(payoutSubmittedWebhookEvent).toEqual(
+      expect.objectContaining({
+        event_type: "webhook.payout.submitted.v1",
+        aggregate_type: "payout_batch",
+        aggregate_id: batch.id,
+        status: "pending"
+      })
+    );
+    expect(readJsonPayload(payoutSubmittedWebhookEvent?.payload)).toEqual(
+      readJsonPayload(payoutSubmittedEvent?.payload)
+    );
     const payoutFinalizedEvent = findOutboxEvent(
       fakePool.database.outboxEvents,
       "payout.finalized.v1"
@@ -612,6 +658,106 @@ describe("PostgresReceiptIngestionStore", () => {
         transactions: [{ sequence: 0, signedTransactionBase64: "BAUG" }]
       })
     ).rejects.toBeInstanceOf(PayoutBatchConflictError);
+  });
+
+  it("emits idempotent payout finality lifecycle events", async () => {
+    const confirmed = await createPostgresPayoutTransactionFixture();
+    await confirmed.store.markPayoutTransactionSubmitted({
+      id: confirmed.transaction.id,
+      submittedAt: "2026-06-24T00:07:00Z",
+      expectedSignature: "expected_sig_0"
+    });
+    await confirmed.store.markPayoutTransactionFinality({
+      id: confirmed.transaction.id,
+      status: "confirmed",
+      observedAt: "2026-06-24T00:08:00Z"
+    });
+    await confirmed.store.markPayoutTransactionFinality({
+      id: confirmed.transaction.id,
+      status: "confirmed",
+      observedAt: "2026-06-24T00:08:30Z"
+    });
+
+    expect(confirmed.fakePool.database.outboxEvents).toHaveLength(6);
+    expectPayoutLifecycleEventPair(
+      confirmed.fakePool.database.outboxEvents,
+      "payout.confirmed.v1",
+      "webhook.payout.confirmed.v1",
+      confirmed.batch.id,
+      expect.objectContaining({
+        status: "confirmed",
+        transactionStatus: "confirmed",
+        confirmedAt: "2026-06-24T00:08:00.000Z",
+        occurredAt: "2026-06-24T00:08:00.000Z"
+      })
+    );
+
+    const failed = await createPostgresPayoutTransactionFixture();
+    await failed.store.markPayoutTransactionSubmitted({
+      id: failed.transaction.id,
+      submittedAt: "2026-06-24T00:07:00Z",
+      expectedSignature: "expected_sig_0"
+    });
+    await failed.store.markPayoutTransactionFinality({
+      id: failed.transaction.id,
+      status: "failed",
+      observedAt: "2026-06-24T00:08:00Z",
+      error: { message: "insufficient funds" }
+    });
+    await failed.store.markPayoutTransactionFinality({
+      id: failed.transaction.id,
+      status: "failed",
+      observedAt: "2026-06-24T00:08:30Z",
+      error: { message: "insufficient funds" }
+    });
+
+    expect(failed.fakePool.database.outboxEvents).toHaveLength(6);
+    expectPayoutLifecycleEventPair(
+      failed.fakePool.database.outboxEvents,
+      "payout.failed.v1",
+      "webhook.payout.failed.v1",
+      failed.batch.id,
+      expect.objectContaining({
+        status: "failed",
+        transactionStatus: "failed",
+        failureCode: "payout_transaction_failed",
+        failureMessage: "insufficient funds",
+        transactionError: { message: "insufficient funds" },
+        occurredAt: "2026-06-24T00:08:00.000Z"
+      })
+    );
+
+    const unknown = await createPostgresPayoutTransactionFixture();
+    await unknown.store.markPayoutTransactionSubmitted({
+      id: unknown.transaction.id,
+      submittedAt: "2026-06-24T00:07:00Z",
+      expectedSignature: "expected_sig_0"
+    });
+    await unknown.store.markPayoutTransactionFinality({
+      id: unknown.transaction.id,
+      status: "outcome_unknown",
+      observedAt: "2026-06-24T00:08:00Z"
+    });
+    await unknown.store.markPayoutTransactionFinality({
+      id: unknown.transaction.id,
+      status: "outcome_unknown",
+      observedAt: "2026-06-24T00:08:30Z"
+    });
+
+    expect(unknown.fakePool.database.outboxEvents).toHaveLength(6);
+    expectPayoutLifecycleEventPair(
+      unknown.fakePool.database.outboxEvents,
+      "payout.outcome_unknown.v1",
+      "webhook.payout.outcome_unknown.v1",
+      unknown.batch.id,
+      expect.objectContaining({
+        status: "outcome_unknown",
+        transactionStatus: "outcome_unknown",
+        failureCode: "payout_transaction_outcome_unknown",
+        failureMessage: `payout transaction outcome is unknown: ${unknown.transaction.id}`,
+        occurredAt: "2026-06-24T00:08:00.000Z"
+      })
+    );
   });
 });
 
@@ -1206,6 +1352,84 @@ function signUnsignedClaim(claim: UnsignedReferralClaim): ReferralClaimV1 {
   };
 }
 
+async function createPostgresPayoutTransactionFixture() {
+  const bundle = createSampleProtocolArtifacts();
+  const fakePool = new FakePostgresPool();
+  const store = new PostgresReceiptIngestionStore(fakePool);
+  const ingestor = new ReceiptIngestor(store, {
+    resolveMerchantPublicKey: () => bundle.keys.merchantPublicKey,
+    now: () => new Date("2026-06-24T00:02:00Z")
+  });
+  await ingestor.ingest({ receipt: bundle.artifacts.receipt, source: "merchant" });
+  const verified = await store.markReceiptChainVerified({
+    receiptId: bundle.artifacts.receipt.receiptId,
+    verifiedAt: "2026-06-24T00:04:00Z"
+  });
+  if (verified?.accrual === undefined) {
+    throw new Error("expected verified accrual");
+  }
+  const batch = await store.createPayoutBatch({
+    merchantId: bundle.artifacts.receipt.merchantId,
+    payoutWalletId: "mpw_ffffffffffffffffffffffffffffffff",
+    network: bundle.artifacts.receipt.network,
+    asset: bundle.artifacts.receipt.asset,
+    accruals: [verified.accrual],
+    batchId: "pbt_ffffffffffffffffffffffffffffffff",
+    itemIdFactory: () => "pit_ffffffffffffffffffffffffffffffff",
+    now: "2026-06-24T00:05:00Z"
+  });
+  const saved = await store.saveSignedPayoutTransactions({
+    payoutBatchId: batch.id,
+    now: "2026-06-24T00:06:00Z",
+    idFactory: () => "ptx_ffffffffffffffffffffffffffffffff",
+    transactions: [
+      {
+        sequence: 0,
+        recentBlockhash: "blockhash_0",
+        lastValidBlockHeight: 123,
+        signedTransactionBase64: "AQID",
+        expectedSignature: "expected_sig_0"
+      }
+    ]
+  });
+  const transaction = saved[0];
+  if (transaction === undefined) {
+    throw new Error("expected saved payout transaction");
+  }
+  return { batch, bundle, fakePool, store, transaction, verified };
+}
+
+function expectPayoutLifecycleEventPair(
+  events: StoredOutboxEventRow[],
+  eventType: string,
+  webhookEventType: string,
+  aggregateId: string,
+  expectedPayload: unknown
+): void {
+  const event = findOutboxEvent(events, eventType);
+  const webhookEvent = findOutboxEvent(events, webhookEventType);
+  expect(event).toEqual(
+    expect.objectContaining({
+      event_type: eventType,
+      aggregate_type: "payout_batch",
+      aggregate_id: aggregateId,
+      status: "pending"
+    })
+  );
+  expect(webhookEvent).toEqual(
+    expect.objectContaining({
+      event_type: webhookEventType,
+      aggregate_type: "payout_batch",
+      aggregate_id: aggregateId,
+      status: "pending"
+    })
+  );
+  expect(readJsonPayload(event?.payload)).toEqual(expectedPayload);
+  expect(readJsonPayload(webhookEvent?.payload)).toEqual(
+    readJsonPayload(event?.payload)
+  );
+}
+
 class FakePostgresPool implements PostgresPool {
   readonly database = new FakePostgresDatabase();
   readonly client = new FakePostgresClient(this.database);
@@ -1268,7 +1492,9 @@ class FakePostgresClient implements PostgresTransactionClient {
       return result([]);
     }
     if (normalized.startsWith("insert into outbox_events")) {
-      this.database.insertOutboxEvent(values);
+      this.database.insertOutboxEvent(values, {
+        ignoreDuplicates: normalized.includes("on conflict")
+      });
       return result([]);
     }
     if (normalized.startsWith("insert into merchants")) {
@@ -1601,7 +1827,10 @@ class FakePostgresDatabase {
     });
   }
 
-  insertOutboxEvent(values: readonly unknown[]): void {
+  insertOutboxEvent(
+    values: readonly unknown[],
+    options: { ignoreDuplicates?: boolean } = {}
+  ): void {
     const row: StoredOutboxEventRow = {
       id: readString(values[0]),
       event_type: readString(values[1]),
@@ -1624,6 +1853,9 @@ class FakePostgresDatabase {
             event.aggregate_id === row.aggregate_id)
       )
     ) {
+      if (options.ignoreDuplicates === true) {
+        return;
+      }
       throw Object.assign(new Error("duplicate key"), { code: "23505" });
     }
     this.outboxEvents.push(row);
