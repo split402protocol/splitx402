@@ -302,6 +302,13 @@ signer and control-plane images:
 corepack pnpm phase6:image-provenance
 ```
 
+Generate the Phase 6 signer policy review record from deployed signer policy
+values:
+
+```bash
+corepack pnpm phase6:signer-policy
+```
+
 Run the optional live PostgreSQL harness against an empty test database:
 
 ```powershell

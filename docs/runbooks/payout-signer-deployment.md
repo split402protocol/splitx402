@@ -164,6 +164,24 @@ and record the signer policy values used for deployment. Attach it to
 `signer_policy_record`, then copy its reviewed values into the
 `signer_policy_*` fields in the custody evidence bundle.
 
+You can generate the correctly shaped signer policy review with:
+
+```bash
+SPLIT402_PHASE6_SIGNER_POLICY_REVIEW_ID=phase6-signer-policy-001 \
+SPLIT402_PHASE6_SIGNER_POLICY_REVIEWERS="security, operations" \
+SPLIT402_SIGNER_POLICY_NETWORK=solana:devnet \
+SPLIT402_SIGNER_POLICY_FUNDING_WALLET=<funding-wallet> \
+SPLIT402_SIGNER_POLICY_SOURCE_TOKEN_ACCOUNT=<source-token-account> \
+SPLIT402_SIGNER_POLICY_MINT=<usdc-mint> \
+SPLIT402_SIGNER_POLICY_ALLOWED_TOKEN_PROGRAM_IDS=TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA \
+SPLIT402_SIGNER_POLICY_MAX_TRANSACTION_AMOUNT_ATOMIC=100000000 \
+SPLIT402_SIGNER_POLICY_MAX_BATCH_AMOUNT_ATOMIC=500000000 \
+SPLIT402_SIGNER_POLICY_EXPECTED_DESTINATION_AMOUNT_LIST_HASH=<destination-amount-list-hash> \
+SPLIT402_SIGNER_POLICY_REQUIRE_SUCCESSFUL_SIMULATION=true \
+SPLIT402_SIGNER_POLICY_SIGNER_REFERENCE=kms:split402-devnet-payout \
+  corepack pnpm phase6:signer-policy
+```
+
 ## Rollback
 
 If signing fails after a deploy:

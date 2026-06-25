@@ -15,7 +15,7 @@ all required gates are approved.
 | HMAC key rotation | Completed planned rotation using `docs/runbooks/payout-signer-key-rotation.md`. | Pending |
 | Emergency auth revocation | `emergency_revocation_drill_record` proving old-key rejection and new-key success using `docs/templates/phase6-emergency-revocation-drill.txt`. | Pending |
 | Payout signer key custody | `key_custody_record` proving key source, owner, backup policy, access list, recovery process, and separation of duties using `docs/templates/phase6-key-custody-review.txt`. | Pending |
-| Signer policy review | `signer_policy_record` plus signer policy fields proving funding wallet, source token account, USDC mint, token program allow-list, amount caps, and network settings were reviewed. | Pending |
+| Signer policy review | `corepack pnpm phase6:signer-policy` output plus signer policy fields proving funding wallet, source token account, USDC mint, token program allow-list, amount caps, and network settings were reviewed. | Pending |
 | Unknown-outcome reconciliation | Drill proving no replacement transaction is built before `POST /v1/payout-batches/:batchId/reconcile`. | Pending |
 | RPC failover | `corepack pnpm payout:finality:failover-drill` output with `passed: true`, primary RPC unavailable, and secondary RPC returning status. | Pending |
 | Incident drill | Completed `docs/runbooks/payout-custody-incident-drill.md` with timestamps and owners. | Pending |

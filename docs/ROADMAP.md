@@ -273,6 +273,7 @@ Current slice:
   key custody, and rollback drill evidence fields and templates;
 - Phase 6 image provenance record generation for immutable image digest and
   dependency audit evidence;
+- Phase 6 signer policy review generation for deployment policy evidence;
 - signed-byte payout transaction persistence and Solana broadcast submission
   boundary;
 - Solana payout transaction finality monitor with retry and outcome-unknown
