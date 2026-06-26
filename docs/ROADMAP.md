@@ -17,7 +17,8 @@ broadcast/finality boundaries, local-dev signer, remote signer client, signer
 appliance scaffold, signer deployment artifacts, rollup, payout lifecycle
 outbox/webhook events, unknown-outcome reconciliation queue, referrer payout
 views, payout reconciliation decision tooling, and idempotent payout ledger
-closure are present.
+closure are present. Chain verification rejection now creates terminal rejected
+accrual state, and finalized payout ledger closure marks allocated accruals paid.
 
 The MVP still uses normal x402 settlement to the merchant and records a
 commission liability for later merchant-funded payout. Protocol fee is a
@@ -332,6 +333,8 @@ Current hardening:
   and verification timestamps and creates pending origins;
 - receipt ingestion can run a control-plane policy verifier before accrual
   creation.
+- chain-verification rejection moves pending accruals to `rejected`.
+- finalized payout ledger closure moves allocated accruals to `paid`.
 
 ## Phase 7: Dashboard And Discovery
 

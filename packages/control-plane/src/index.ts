@@ -114,12 +114,16 @@ import {
 export type ReceiptIngestSource = "buyer" | "merchant" | "relay" | "unknown";
 export type ReceiptVerificationState =
   | "signature_verified"
-  | "pending_chain_verification";
+  | "pending_chain_verification"
+  | "chain_rejected";
 export type AccrualStatus =
   | "pending_chain_verification"
   | "available"
   | "held"
-  | "allocated";
+  | "allocated"
+  | "paid"
+  | "rejected"
+  | "reversed";
 export type LedgerAccountType =
   | "merchant_commission_liability"
   | "referrer_payable"
@@ -151,6 +155,7 @@ export interface ReceiptRecord {
   receipt: Split402ReceiptV1;
   source: ReceiptIngestSource;
   verificationState: ReceiptVerificationState;
+  verificationReason?: string;
   ingestionState: "accepted";
   createdAt: string;
 }
@@ -258,12 +263,21 @@ export interface MarkReceiptChainVerifiedInput {
   verifiedAt: string;
 }
 
+export interface MarkReceiptChainRejectedInput {
+  receiptId: string;
+  rejectedAt: string;
+  reason: string;
+}
+
 export interface ReceiptChainVerificationStore {
   getReceiptForChainVerification(
     receiptId: string
   ): Promise<ReceiptIngestionSnapshot | undefined> | ReceiptIngestionSnapshot | undefined;
   markReceiptChainVerified(
     input: MarkReceiptChainVerifiedInput
+  ): Promise<ReceiptIngestionSnapshot | undefined> | ReceiptIngestionSnapshot | undefined;
+  markReceiptChainRejected(
+    input: MarkReceiptChainRejectedInput
   ): Promise<ReceiptIngestionSnapshot | undefined> | ReceiptIngestionSnapshot | undefined;
 }
 
@@ -347,7 +361,8 @@ export class InMemoryReceiptIngestionStore
     PayoutLedgerClosureStore,
     PayoutReconciliationStore,
     MerchantObligationViewStore,
-    ReferrerPayoutViewStore {
+    ReferrerPayoutViewStore,
+    ReceiptChainVerificationStore {
   private readonly receiptsById = new Map<string, ReceiptIngestionSnapshot>();
   private readonly receiptIdByHash = new Map<`sha256:${string}`, string>();
   private readonly receiptIdByPaymentId = new Map<string, string>();
@@ -379,6 +394,76 @@ export class InMemoryReceiptIngestionStore
   getBySettlementTxSignature(signature: string): ReceiptIngestionSnapshot | undefined {
     const receiptId = this.receiptIdBySettlementTx.get(signature);
     return receiptId === undefined ? undefined : this.receiptsById.get(receiptId);
+  }
+
+  getReceiptForChainVerification(receiptId: string): ReceiptIngestionSnapshot | undefined {
+    return this.getByReceiptId(receiptId);
+  }
+
+  markReceiptChainVerified(
+    input: MarkReceiptChainVerifiedInput
+  ): ReceiptIngestionSnapshot | undefined {
+    const snapshot = this.getByReceiptId(input.receiptId);
+    if (snapshot === undefined) {
+      return undefined;
+    }
+    const updated: ReceiptIngestionSnapshot = {
+      ...snapshot,
+      receipt: {
+        ...snapshot.receipt,
+        verificationState:
+          snapshot.receipt.verificationState === "pending_chain_verification"
+            ? "signature_verified"
+            : snapshot.receipt.verificationState
+      },
+      ...(snapshot.accrual === undefined
+        ? {}
+        : {
+            accrual: {
+              ...snapshot.accrual,
+              ...(snapshot.accrual.status === "pending_chain_verification"
+                ? {
+                    status: "available" as const,
+                    availableAt: input.verifiedAt
+                  }
+                : {})
+            }
+          })
+    };
+    this.save(updated);
+    return updated;
+  }
+
+  markReceiptChainRejected(
+    input: MarkReceiptChainRejectedInput
+  ): ReceiptIngestionSnapshot | undefined {
+    const snapshot = this.getByReceiptId(input.receiptId);
+    if (snapshot === undefined) {
+      return undefined;
+    }
+    const updated: ReceiptIngestionSnapshot = {
+      ...snapshot,
+      receipt: {
+        ...snapshot.receipt,
+        verificationState:
+          snapshot.receipt.verificationState === "pending_chain_verification"
+            ? "chain_rejected"
+            : snapshot.receipt.verificationState,
+        verificationReason: input.reason
+      },
+      ...(snapshot.accrual === undefined
+        ? {}
+        : {
+            accrual: {
+              ...snapshot.accrual,
+              ...(snapshot.accrual.status === "pending_chain_verification"
+                ? { status: "rejected" as const }
+                : {})
+            }
+          })
+    };
+    this.save(updated);
+    return updated;
   }
 
   save(snapshot: ReceiptIngestionSnapshot): void {
@@ -696,6 +781,26 @@ export class InMemoryReceiptIngestionStore
         : { entryIdFactory: input.entryIdFactory })
     });
     this.payoutLedgerTransactionsByBatchId.set(input.payoutBatchId, transaction);
+    const finalizedAccrualIds = new Set(
+      batch.items
+        .filter((item) => item.status === "finalized")
+        .flatMap((item) => item.allocations.map((allocation) => allocation.accrualId))
+    );
+    for (const snapshot of this.receiptsById.values()) {
+      if (
+        snapshot.accrual !== undefined &&
+        snapshot.accrual.status === "allocated" &&
+        finalizedAccrualIds.has(snapshot.accrual.id)
+      ) {
+        this.save({
+          ...snapshot,
+          accrual: {
+            ...snapshot.accrual,
+            status: "paid"
+          }
+        });
+      }
+    }
     return transaction;
   }
 }
