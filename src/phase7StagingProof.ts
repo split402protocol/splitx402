@@ -1,4 +1,4 @@
-const REQUIRED_PHASE7_STAGING_FIELDS = [
+export const REQUIRED_PHASE7_STAGING_FIELDS = [
   "proof_id",
   "proof_date",
   "reviewers",
@@ -27,6 +27,31 @@ export type Phase7StagingProofField =
 export type Phase7StagingProofValues = Partial<
   Record<Phase7StagingProofField, string>
 >;
+
+const PHASE7_STAGING_PROOF_ENV_NAMES: Record<Phase7StagingProofField, string> = {
+  proof_id: "SPLIT402_PHASE7_PROOF_ID",
+  proof_date: "SPLIT402_PHASE7_PROOF_DATE",
+  reviewers: "SPLIT402_PHASE7_PROOF_REVIEWERS",
+  source_commit: "SPLIT402_PHASE7_SOURCE_COMMIT",
+  staging_environment: "SPLIT402_PHASE7_STAGING_ENVIRONMENT",
+  control_plane_url: "SPLIT402_PHASE7_CONTROL_PLANE_URL",
+  dashboard_url: "SPLIT402_PHASE7_DASHBOARD_URL",
+  demo_merchant_url: "SPLIT402_PHASE7_DEMO_MERCHANT_URL",
+  webhook_receiver_url: "SPLIT402_PHASE7_WEBHOOK_RECEIVER_URL",
+  agent_discovery_evidence: "SPLIT402_PHASE7_AGENT_DISCOVERY_EVIDENCE",
+  paid_request_evidence: "SPLIT402_PHASE7_PAID_REQUEST_EVIDENCE",
+  receipt_verification_evidence:
+    "SPLIT402_PHASE7_RECEIPT_VERIFICATION_EVIDENCE",
+  referrer_balance_evidence: "SPLIT402_PHASE7_REFERRER_BALANCE_EVIDENCE",
+  dashboard_summary_evidence: "SPLIT402_PHASE7_DASHBOARD_SUMMARY_EVIDENCE",
+  webhook_delivery_evidence: "SPLIT402_PHASE7_WEBHOOK_DELIVERY_EVIDENCE",
+  payout_obligation_evidence: "SPLIT402_PHASE7_PAYOUT_OBLIGATION_EVIDENCE",
+  funding_balance_evidence: "SPLIT402_PHASE7_FUNDING_BALANCE_EVIDENCE",
+  mcp_bundle_evidence: "SPLIT402_PHASE7_MCP_BUNDLE_EVIDENCE",
+  commands_run: "SPLIT402_PHASE7_COMMANDS_RUN",
+  approval_decision: "SPLIT402_PHASE7_APPROVAL_DECISION",
+  approval_notes: "SPLIT402_PHASE7_APPROVAL_NOTES",
+};
 
 export interface Phase7StagingProofValidation {
   schema: "split402.phase7_staging_proof_validation.v1";
@@ -63,6 +88,12 @@ export function createPhase7StagingProofRecord(
     `approval_notes: ${values.approval_notes ?? ""}`,
     "",
   ].join("\n");
+}
+
+export function phase7StagingProofEnvName(
+  field: Phase7StagingProofField,
+): string {
+  return PHASE7_STAGING_PROOF_ENV_NAMES[field];
 }
 
 export function validatePhase7StagingProof(
