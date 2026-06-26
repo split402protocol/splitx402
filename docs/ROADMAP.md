@@ -11,7 +11,8 @@ Split402 currently implements the USDC accrual-and-payout architecture up throug
 the first Phase 6 payout-engine boundaries. The protocol core, test vectors, x402
 extension, demo merchant, demo agent, agent SDK, merchant SDK primitives,
 control-plane ingestion, PostgreSQL adapters, outbox workers, Solana chain
-verification, payout preview/allocation, payout transaction persistence,
+verification, receipt economic-policy verification, public pending-only
+merchant/origin registration, payout preview/allocation, payout transaction persistence,
 broadcast/finality boundaries, local-dev signer, remote signer client, signer
 appliance scaffold, signer deployment artifacts, rollup, payout lifecycle
 outbox/webhook events, unknown-outcome reconciliation queue, referrer payout
@@ -322,6 +323,15 @@ Current slice:
 - `POST /v1/merchants/:merchantId/payout-batches`;
 - `GET /v1/referrers/:referrerWallet/balances`;
 - `GET /v1/referrers/:referrerWallet/payouts`.
+
+Current hardening:
+
+- public merchant creation rejects caller-supplied approval status and creates
+  pending merchants;
+- public merchant-origin registration rejects caller-supplied approval status
+  and verification timestamps and creates pending origins;
+- receipt ingestion can run a control-plane policy verifier before accrual
+  creation.
 
 ## Phase 7: Dashboard And Discovery
 

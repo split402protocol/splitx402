@@ -45,7 +45,7 @@ flowchart LR
 | Phase 7 staging proof | Implemented proof scaffold, assembly, status validator, hosted preflight collector, read collector, artifact manifest validation, funding-balance semantic validation, template, and runbooks for hosted end-to-end evidence, including payout-obligation funding coverage. |
 | Agent SDK | Implemented for offer inspection, claim creation, paid calls, and receipt verification. |
 | Merchant SDK | Implemented for campaign caching, service-key rotation helpers, payment identifiers, operation digests, and receipt outbox primitives. |
-| Control plane | Implemented foundation: receipt ingestion, merchant/campaign/route registries, wallet auth, PostgreSQL persistence, outbox workers, chain verification, public merchant reliability profiles, merchant dashboard summaries, payout-obligation summaries with optional Solana RPC funding balances, webhook delivery feeds, referrer balances/routes, Bazaar-compatible route metadata, and signed webhooks for accepted receipts and payout lifecycle events. |
+| Control plane | Implemented foundation: receipt ingestion, merchant/campaign/route registries, wallet auth, PostgreSQL persistence, receipt economic-policy verification, pending-only public merchant/origin registration, outbox workers, chain verification, public merchant reliability profiles, merchant dashboard summaries, payout-obligation summaries with optional Solana RPC funding balances, webhook delivery feeds, referrer balances/routes, Bazaar-compatible route metadata, and signed webhooks for accepted receipts and payout lifecycle events. |
 | Payout engine | In progress: preview, allocation, Solana transfer planning, simulation, signer policy, local-dev signer, remote signer client, signer appliance scaffold, signer deployment and private-network artifacts, custody evidence gates, signed-byte persistence, broadcast boundary, finality monitor, rollup, lifecycle events, unknown-outcome reconciliation queue, referrer payout views, and ledger closure are present. |
 
 ## What Is Not Built Yet
@@ -55,6 +55,8 @@ flowchart LR
 - The dashboard UI is a public-alpha operations surface with a hosted-staging
   viewer gate and expiring sessions, not a production mainnet dashboard service
   yet.
+- Public merchant/origin approval workflows are not production admin workflows
+  yet; public registration creates pending state only.
 - Mainnet production operation is not approved.
 - Phase 6 still needs completed staging deployment evidence and all pending
   custody gates in `docs/checklists/phase6-custody-review.md` before any mainnet
@@ -62,9 +64,10 @@ flowchart LR
 
 ## Current Direction
 
-The near-term objective is the correctness-router sprint. First, fix protocol
-fee wiring, self-referral semantics, receipt policy gates, public approval
-boundaries, payout safety, dashboard contracts, and deployment-proof honesty.
+The near-term objective is the correctness-router sprint. Protocol fee wiring,
+self-referral semantics, receipt policy gates, and public approval boundaries
+are now implemented in the working branch. Next are payout safety, dashboard
+contracts, deployment-proof honesty, and then the router/MCP adoption layer.
 After those checks are green, the next adoption layer is a static-provider
 Split402 router and a runnable MCP gateway that agents can use to discover,
 pay for, verify, and monetize paid tools. The hosted staging proof remains
