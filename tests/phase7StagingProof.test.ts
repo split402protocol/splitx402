@@ -165,4 +165,62 @@ funding_balance_evidence: funding.json
       blockers: ["mcp_bundle_evidence is missing"],
     });
   });
+
+  it("blocks approved proof records when attached artifacts are missing", () => {
+    const report = createPhase7StagingStatusReport(
+      createPhase7StagingProofRecord({
+        proof_id: "phase7-staging-2026-06-26",
+        proof_date: "2026-06-26",
+        reviewers: "Split402 operators",
+        source_commit: "fd88024",
+        staging_environment: "staging-us",
+        control_plane_url: "https://control.staging.example",
+        dashboard_url: "https://dashboard.staging.example",
+        demo_merchant_url: "https://merchant.staging.example",
+        webhook_receiver_url: "https://webhook.staging.example",
+        agent_discovery_evidence: "https://artifacts.example/discovery.json",
+        paid_request_evidence: "attached: paid-suite.log",
+        receipt_verification_evidence: "attached: receipt-verification.json",
+        referrer_balance_evidence: "attached: referrer-balances.json",
+        dashboard_summary_evidence: "attached: dashboard-summary.json",
+        webhook_delivery_evidence: "attached: webhook-events.json",
+        payout_obligation_evidence: "attached: payout-obligations.json",
+        funding_balance_evidence: "attached: missing-funding-balance.json",
+        mcp_bundle_evidence: "attached: mcp-bundle.json",
+        commands_run: "attached: commands.log",
+        approval_decision: "approved",
+      }),
+      {
+        artifactBaseDir: "evidence",
+        artifactExists: (path) => !path.endsWith("missing-funding-balance.json"),
+        resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+      },
+    );
+
+    expect(report.validation?.approved).toBe(true);
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.artifactStatuses).toContainEqual({
+      evidenceField: "agent_discovery_evidence",
+      reference: "https://artifacts.example/discovery.json",
+      status: "remote",
+      blockers: [],
+    });
+    expect(report.artifactStatuses).toContainEqual({
+      evidenceField: "funding_balance_evidence",
+      reference: "attached: missing-funding-balance.json",
+      artifactPath: "evidence/missing-funding-balance.json",
+      status: "missing",
+      blockers: [
+        "funding_balance_evidence artifact is missing: evidence/missing-funding-balance.json",
+      ],
+    });
+    expect(report.gateStatuses).toContainEqual({
+      gate: "funding_balance",
+      evidenceField: "funding_balance_evidence",
+      status: "invalid",
+      blockers: [
+        "funding_balance_evidence artifact is missing: evidence/missing-funding-balance.json",
+      ],
+    });
+  });
 });

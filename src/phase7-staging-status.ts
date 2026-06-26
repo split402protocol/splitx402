@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, isAbsolute, resolve } from "node:path";
 
 import { createPhase7StagingStatusReport } from "./phase7StagingStatus.js";
 
@@ -10,7 +11,20 @@ const proofText =
     ? undefined
     : readFileSync(proofPath, "utf8");
 
-const report = createPhase7StagingStatusReport(proofText);
+const artifactBaseDir =
+  proofPath === undefined || proofPath.trim().length === 0
+    ? undefined
+    : dirname(resolve(proofPath));
+const report = createPhase7StagingStatusReport(proofText, {
+  ...(artifactBaseDir === undefined
+    ? {}
+    : {
+        artifactBaseDir,
+        artifactExists: existsSync,
+        resolveArtifactPath: (artifactPath, baseDir) =>
+          isAbsolute(artifactPath) ? artifactPath : resolve(baseDir, artifactPath),
+      }),
+});
 console.log(JSON.stringify(report, null, 2));
 
 if (report.proofChecked && !report.readyForPublicAlphaDemo) {

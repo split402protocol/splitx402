@@ -35,7 +35,7 @@ const PHASE7_URL_FIELDS = [
   "webhook_receiver_url",
 ] as const satisfies readonly Phase7StagingProofField[];
 
-const PHASE7_EVIDENCE_FIELDS = [
+export const PHASE7_EVIDENCE_FIELDS = [
   "agent_discovery_evidence",
   "paid_request_evidence",
   "receipt_verification_evidence",
