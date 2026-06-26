@@ -15,6 +15,7 @@ corepack pnpm demo:mcp-bundle
 corepack pnpm demo:paid-suite
 # Capture payout obligations with SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc
 # and attach covered/deficit funding evidence to funding_balance_evidence.
+corepack pnpm phase7:staging:manifest phase7-staging-proof.txt > phase7-staging-evidence/artifact-manifest.json
 corepack pnpm phase7:staging:assemble > phase7-staging-proof.txt
 corepack pnpm phase7:staging:status phase7-staging-proof.txt
 ```
@@ -22,6 +23,9 @@ corepack pnpm phase7:staging:status phase7-staging-proof.txt
 `phase7:staging:init` creates a `phase7-staging-evidence/` directory README and
 `phase7-staging.env` attachment-path template. It does not create evidence
 artifact files; those must be captured from the hosted staging run.
+`phase7:staging:manifest` records SHA-256 hashes for local attached artifacts
+and remote references for URL-based artifacts. Generate it after the evidence
+files exist and before the final assemble/status check.
 
 The status report includes `gateStatuses`; each gate is marked `ready`,
 `missing`, `placeholder`, `invalid`, or `not_checked` with blockers attached to
@@ -57,7 +61,8 @@ Attach response captures or artifact paths for every field in
 `SPLIT402_PHASE7_ASSEMBLE_*` attachment variables and run
 `corepack pnpm phase7:staging:assemble`. Leave `approval_decision` as `no-go`
 until all attached evidence is from the same staging environment and source
-commit.
+commit. Include `artifact_manifest_evidence` from
+`corepack pnpm phase7:staging:manifest`.
 
 The validator requires:
 

@@ -16,6 +16,7 @@ webhook_delivery_evidence:
 payout_obligation_evidence:
 funding_balance_evidence:
 mcp_bundle_evidence:
+artifact_manifest_evidence:
 commands_run:
 approval_decision: no-go
 approval_notes:

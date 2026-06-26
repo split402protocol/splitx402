@@ -57,6 +57,7 @@ approval_decision: no-go
         payout_obligation_evidence: "attached: payout-obligations.json",
         funding_balance_evidence: "attached: funding-balance.json",
         mcp_bundle_evidence: "attached: mcp-bundle.json",
+        artifact_manifest_evidence: "attached: artifact-manifest.json",
         commands_run: "attached: commands.log",
         approval_decision: "approved",
       }),
@@ -91,6 +92,7 @@ approval_decision: no-go
         payout_obligation_evidence: "attached: payout-obligations.json",
         funding_balance_evidence: "attached: funding-balance.json",
         mcp_bundle_evidence: "attached: mcp-bundle.json",
+        artifact_manifest_evidence: "attached: artifact-manifest.json",
         commands_run: "attached: commands.log",
         approval_decision: "approved",
       }),
@@ -126,6 +128,9 @@ approval_decision: no-go
     );
     expect(report.commands.map((item) => item.command)).toContain(
       "corepack pnpm phase7:staging:assemble",
+    );
+    expect(report.commands.map((item) => item.command)).toContain(
+      "corepack pnpm phase7:staging:manifest <phase7-staging-proof.txt>",
     );
     expect(report.commands.map((item) => item.evidenceField)).toContain(
       "funding_balance_evidence",
@@ -193,6 +198,7 @@ funding_balance_evidence: funding.json
         payout_obligation_evidence: "attached: payout-obligations.json",
         funding_balance_evidence: "attached: missing-funding-balance.json",
         mcp_bundle_evidence: "attached: mcp-bundle.json",
+        artifact_manifest_evidence: "attached: artifact-manifest.json",
         commands_run: "attached: commands.log",
         approval_decision: "approved",
       }),
