@@ -41,6 +41,7 @@
     "phase7:staging:manifest": "tsx src/phase7-staging-manifest.ts",
     "phase7:staging:status": "tsx src/phase7-staging-status.ts",
     "audit": "corepack pnpm audit --audit-level high",
+    "control-plane": "corepack pnpm --filter @split402/control-plane server",
     "dashboard": "corepack pnpm --filter @split402/dashboard dev",
     "demo:merchant": "corepack pnpm --filter @split402/demo-merchant dev",
     "demo:inspect-offer": "corepack pnpm --filter @split402/demo-agent inspect-offer",

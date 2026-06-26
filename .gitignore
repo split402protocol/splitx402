@@ -14,6 +14,7 @@ npm-debug.log*
 .env
 .env.*
 !.env.example
+deploy/phase7-staging/phase7-staging.env
 
 # Databases
 *.sqlite

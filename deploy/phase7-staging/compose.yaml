@@ -1,0 +1,121 @@
+name: split402-phase7-staging
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: split402
+      POSTGRES_USER: split402
+      POSTGRES_PASSWORD: split402
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U split402 -d split402"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "${SPLIT402_PHASE7_POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - split402-phase7-postgres:/var/lib/postgresql/data
+
+  control-plane:
+    image: node:22-slim
+    working_dir: /workspace
+    command: >
+      sh -lc "corepack enable &&
+      corepack pnpm install --frozen-lockfile &&
+      corepack pnpm control-plane"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - phase7-staging.env
+    environment:
+      PORT: "4021"
+      SPLIT402_DATABASE_URL: postgresql://split402:split402@postgres:5432/split402
+      SPLIT402_DATABASE_SSL: "false"
+      SPLIT402_CONTROL_PLANE_AUTH_POLICY: required
+    ports:
+      - "${SPLIT402_PHASE7_CONTROL_PLANE_PORT:-4021}:4021"
+    volumes:
+      - ../..:/workspace
+
+  dashboard:
+    image: node:22-slim
+    working_dir: /workspace
+    command: >
+      sh -lc "corepack enable &&
+      corepack pnpm install --frozen-lockfile &&
+      corepack pnpm dashboard"
+    depends_on:
+      - control-plane
+    env_file:
+      - phase7-staging.env
+    environment:
+      SPLIT402_DASHBOARD_PORT: "4027"
+      SPLIT402_DASHBOARD_CONTROL_PLANE_URL: http://control-plane:4021
+      SPLIT402_DASHBOARD_SESSION_COOKIE_SECURE: "false"
+    ports:
+      - "${SPLIT402_PHASE7_DASHBOARD_PORT:-4027}:4027"
+    volumes:
+      - ../..:/workspace
+
+  demo-merchant:
+    profiles: ["demo"]
+    image: node:22-slim
+    working_dir: /workspace
+    command: >
+      sh -lc "corepack enable &&
+      corepack pnpm install --frozen-lockfile &&
+      corepack pnpm demo:merchant"
+    depends_on:
+      - control-plane
+    env_file:
+      - phase7-staging.env
+    environment:
+      SPLIT402_MERCHANT_ORIGIN: http://localhost:4023
+      PORT: "4023"
+    ports:
+      - "${SPLIT402_PHASE7_DEMO_MERCHANT_PORT:-4023}:4023"
+    volumes:
+      - ../..:/workspace
+
+  chain-worker:
+    profiles: ["workers"]
+    image: node:22-slim
+    working_dir: /workspace
+    command: >
+      sh -lc "corepack enable &&
+      corepack pnpm install --frozen-lockfile &&
+      corepack pnpm worker:chain"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - phase7-staging.env
+    environment:
+      SPLIT402_DATABASE_URL: postgresql://split402:split402@postgres:5432/split402
+      SPLIT402_DATABASE_SSL: "false"
+    volumes:
+      - ../..:/workspace
+
+  webhook-worker:
+    profiles: ["workers"]
+    image: node:22-slim
+    working_dir: /workspace
+    command: >
+      sh -lc "corepack enable &&
+      corepack pnpm install --frozen-lockfile &&
+      corepack pnpm worker:webhook"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - phase7-staging.env
+    environment:
+      SPLIT402_DATABASE_URL: postgresql://split402:split402@postgres:5432/split402
+      SPLIT402_DATABASE_SSL: "false"
+    volumes:
+      - ../..:/workspace
+
+volumes:
+  split402-phase7-postgres:
