@@ -82,6 +82,7 @@ Then run the normal proof sequence:
 ```bash
 corepack pnpm phase7:staging:init
 corepack pnpm phase7:staging-proof > phase7-staging-proof.txt
+corepack pnpm phase7:hosted:preflight
 corepack pnpm phase7:staging:collect-reads
 corepack pnpm demo:mcp-bundle > phase7-staging-evidence/mcp-bundle.json
 corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log

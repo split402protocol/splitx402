@@ -14,6 +14,7 @@ proof sequence.
 ```bash
 corepack pnpm phase7:staging:init
 corepack pnpm phase7:staging-proof > phase7-staging-proof.txt
+corepack pnpm phase7:hosted:preflight
 corepack pnpm phase7:staging:collect-reads
 corepack pnpm dashboard
 corepack pnpm demo:mcp-bundle
@@ -32,6 +33,9 @@ artifact files; those must be captured from the hosted staging run.
 referrer routes, referrer balances, dashboard summary, webhook delivery, payout
 obligations, and funding-balance coverage using the staging merchant and
 referrer environment variables.
+`phase7:hosted:preflight` captures `hosted-preflight.json` with control-plane
+health, dashboard health, dashboard session state, and dashboard viewer-token
+checks before the payment proof run.
 `phase7:staging:manifest` records SHA-256 hashes for local attached artifacts
 and remote references for URL-based artifacts. Generate it after the evidence
 files exist and before the final assemble/status check.
