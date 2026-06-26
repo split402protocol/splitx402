@@ -352,7 +352,8 @@ Current slice:
 - merchant/referrer dashboard UI with a narrow control-plane read proxy for
   summaries, reliability profiles, webhook delivery, routes, balances, and
   payouts.
-- optional dashboard viewer session gate for hosted staging evidence captures.
+- optional dashboard viewer gate with signed, expiring sessions for hosted
+  staging evidence captures.
 - hosted-staging compose stack with PostgreSQL, control plane, migration job,
   dashboard, optional demo merchant, and optional workers.
 - Phase 7 staging proof scaffold, hosted preflight collector, read collector,

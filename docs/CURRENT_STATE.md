@@ -39,7 +39,7 @@ flowchart LR
 | x402 integration | Implemented: Split402 offers, referral claims, request digests, and receipts around standard x402 settlement. |
 | Demo path | Implemented for Solana Devnet paid-suite proof runs. |
 | MCP demo bundle and gateway | Implemented public-alpha bundle and stdio gateway: paid tool card, x402 payment metadata, Split402 campaign metadata, expected referral economics, MCP `tools/list`, MCP `tools/call`, and proof commands. |
-| Dashboard UI | Implemented public-alpha merchant/referrer operations UI with a narrow read proxy for dashboard summary, reliability, payout obligations, webhook delivery, referrer routes, balances, payouts, and an optional hosted-staging viewer session gate. |
+| Dashboard UI | Implemented public-alpha merchant/referrer operations UI with a narrow read proxy for dashboard summary, reliability, payout obligations, webhook delivery, referrer routes, balances, payouts, and an optional hosted-staging viewer gate with signed, expiring session cookies. |
 | Phase 7 hosted staging | Implemented compose stack for PostgreSQL, control plane, migration job, dashboard, optional demo merchant, and optional workers. |
 | Phase 7 staging proof | Implemented proof scaffold, assembly, status validator, hosted preflight collector, read collector, artifact manifest validation, funding-balance semantic validation, template, and runbooks for hosted end-to-end evidence, including payout-obligation funding coverage. |
 | Agent SDK | Implemented for offer inspection, claim creation, paid calls, and receipt verification. |
@@ -52,7 +52,8 @@ flowchart LR
 - The original x402 payment is not atomically split onchain in the MVP.
 - `$SPLIT` route bonding is not in the critical path yet.
 - The dashboard UI is a public-alpha operations surface with a hosted-staging
-  viewer gate, not a production mainnet dashboard service yet.
+  viewer gate and expiring sessions, not a production mainnet dashboard service
+  yet.
 - Mainnet production operation is not approved.
 - Phase 6 still needs completed staging deployment evidence and all pending
   custody gates in `docs/checklists/phase6-custody-review.md` before any mainnet

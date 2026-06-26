@@ -553,8 +553,8 @@ ingestion, durable PostgreSQL adapters, outbox workers, chain verification,
 payout-engine boundaries, merchant dashboard summaries, payout-obligation views
 with optional Solana RPC funding balances, route discovery, referrer views,
 webhook management, a hosted-staging compose stack, control-plane migration job,
-dashboard viewer session gate, and machine-checkable Phase 7 staging proof
-gates.
+dashboard viewer gate with expiring sessions, and machine-checkable Phase 7
+staging proof gates.
 
 Phase 6 production hardening remains a launch gate:
 

@@ -85,19 +85,22 @@ describe("Split402 dashboard app", () => {
 
   it("protects dashboard APIs when a viewer token is configured", async () => {
     const calls: Array<{ url: string; authorization?: string }> = [];
+    let now = Date.parse("2030-06-26T00:00:00.000Z");
     const agent = request.agent(
       createDashboardApp({
         config: {
           controlPlaneUrl: "https://control.example",
           port: 4027,
           viewerToken: "viewer-secret",
-          secureSessionCookie: false
+          secureSessionCookie: false,
+          sessionMaxAgeSeconds: 60
         },
         fetch: fakeFetch(calls, {
           dashboard: {
             schema: "split402.merchant_dashboard_summary.v1"
           }
-        })
+        }),
+        now: () => now
       }).app
     );
 
@@ -114,18 +117,21 @@ describe("Split402 dashboard app", () => {
       .expect(200);
 
     const cookies = session.headers["set-cookie"];
-    expect(Array.isArray(cookies) ? cookies[0] : cookies).toContain(
-      "split402_dashboard_session="
-    );
+    const sessionCookie = Array.isArray(cookies) ? cookies[0] : cookies;
+    expect(sessionCookie).toContain("split402_dashboard_session=");
+    expect(sessionCookie).toContain("Max-Age=60");
     await agent.get("/api/config").expect(200, {
       controlPlaneUrl: "https://control.example",
       configuredBearerToken: false,
-      viewerAuthRequired: true
+      viewerAuthRequired: true,
+      sessionMaxAgeSeconds: 60
     });
     await agent
       .get("/api/merchants/mrc_1/dashboard-summary")
       .set("Authorization", "Bearer caller-token")
       .expect(200);
+    now = Date.parse("2030-06-26T00:01:01.000Z");
+    await agent.get("/api/config").expect(401);
 
     expect(calls).toEqual([
       {
@@ -207,13 +213,20 @@ describe("Split402 dashboard app", () => {
       readDashboardConfig({}, {
         SPLIT402_DASHBOARD_VIEWER_TOKEN: "viewer-secret",
         SPLIT402_DASHBOARD_SESSION_COOKIE_NAME: "split402_staging",
-        SPLIT402_DASHBOARD_SESSION_COOKIE_SECURE: "true"
+        SPLIT402_DASHBOARD_SESSION_COOKIE_SECURE: "true",
+        SPLIT402_DASHBOARD_SESSION_MAX_AGE_SECONDS: "600"
       })
     ).toMatchObject({
       viewerToken: "viewer-secret",
       sessionCookieName: "split402_staging",
-      secureSessionCookie: true
+      secureSessionCookie: true,
+      sessionMaxAgeSeconds: 600
     });
+    expect(() =>
+      readDashboardConfig({}, {
+        SPLIT402_DASHBOARD_SESSION_MAX_AGE_SECONDS: "0"
+      })
+    ).toThrow("SPLIT402_DASHBOARD_SESSION_MAX_AGE_SECONDS must be a positive integer");
   });
 });
 
