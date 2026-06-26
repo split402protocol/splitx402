@@ -784,9 +784,7 @@ export class InMemoryReceiptIngestionStore
     await verifyPayoutFinalizedTransfersBeforeLedgerClosure({
       batch,
       transactions: this.listPayoutTransactions(batch.id),
-      ...(input.finalizedTransferVerifier === undefined
-        ? {}
-        : { verifier: input.finalizedTransferVerifier })
+      verifier: input.finalizedTransferVerifier
     });
     const transaction = createPayoutFinalizationLedgerTransaction({
       batch,

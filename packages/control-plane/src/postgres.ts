@@ -962,9 +962,7 @@ export class PostgresReceiptIngestionStore
     await verifyPayoutFinalizedTransfersBeforeLedgerClosure({
       batch,
       transactions: await this.listPayoutTransactions(batch.id),
-      ...(input.finalizedTransferVerifier === undefined
-        ? {}
-        : { verifier: input.finalizedTransferVerifier })
+      verifier: input.finalizedTransferVerifier
     });
     const transaction = createPayoutFinalizationLedgerTransaction({
       batch,
