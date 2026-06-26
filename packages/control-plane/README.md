@@ -45,6 +45,7 @@ stateDiagram-v2
   [*] --> PendingChainVerification
   PendingChainVerification --> Available: settlement verified
   Available --> Allocated: payout batch created
+  Allocated --> Available: safe release before submission
   Allocated --> Signed: signed bytes persisted
   Signed --> Submitted: broadcast sent
   Submitted --> Confirmed: signature confirmed
@@ -95,6 +96,7 @@ GET  /v1/routes/:routeId
 POST /v1/merchants/:merchantId/payouts/preview
 GET  /v1/merchants/:merchantId/payouts/reconciliation
 POST /v1/payout-batches/:batchId/reconcile
+POST /v1/payout-batches/:batchId/release-allocations
 POST /v1/merchants/:merchantId/payout-batches
 GET  /v1/referrers/:referrerWallet/balances
 GET  /v1/referrers/:referrerWallet/payouts
@@ -111,6 +113,9 @@ GET  /v1/referrers/:referrerWallet/routes
 - webhook dispatch worker with signed POST envelopes and retry/dead-letter state;
 - payout preview and batch allocation stores that select available accruals and
   mark them `allocated` exactly once;
+- allocation release for draft, planned, signing, failed, and cancelled payout
+  batches, returning allocated accruals to `available` while blocking submitted,
+  confirmed, finalized, and outcome-unknown batches;
 - unknown-outcome reconciliation queue for merchant/operator review before retry;
 - payout reconciliation action endpoint that rechecks chain finality and persists
   observed transaction outcomes before any retry decision;
