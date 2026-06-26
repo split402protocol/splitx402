@@ -104,12 +104,13 @@ corepack pnpm phase7:staging:assemble > phase7-staging-proof.txt
 corepack pnpm phase7:staging:status phase7-staging-proof.txt
 ```
 
-The proof must attach evidence for route discovery, x402 payment, Split402
-receipt verification, referrer earnings, dashboard summary, webhook delivery,
-payout obligations, Solana RPC funding-balance coverage, MCP bundle output, and
-artifact manifest hashes from the same staging environment. The final status
-check verifies that local `attached:` artifacts still match the recorded
-manifest sizes and SHA-256 hashes.
+The proof must attach evidence for hosted preflight, route discovery, x402
+payment, Split402 receipt verification, referrer earnings, dashboard summary,
+webhook delivery, payout obligations, Solana RPC funding-balance coverage, MCP
+bundle output, and artifact manifest hashes from the same staging environment.
+The final status check verifies that local `attached:` artifacts still match the
+recorded manifest sizes and SHA-256 hashes, and that the hosted preflight checks
+passed.
 
 ## Remaining Phase 7 Work
 

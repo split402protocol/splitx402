@@ -10,6 +10,7 @@ const values = {
   dashboard_url: process.env.SPLIT402_PHASE7_DASHBOARD_URL,
   demo_merchant_url: process.env.SPLIT402_PHASE7_DEMO_MERCHANT_URL,
   webhook_receiver_url: process.env.SPLIT402_PHASE7_WEBHOOK_RECEIVER_URL,
+  hosted_preflight_evidence: process.env.SPLIT402_PHASE7_HOSTED_PREFLIGHT_EVIDENCE,
   agent_discovery_evidence: process.env.SPLIT402_PHASE7_AGENT_DISCOVERY_EVIDENCE,
   paid_request_evidence: process.env.SPLIT402_PHASE7_PAID_REQUEST_EVIDENCE,
   receipt_verification_evidence:

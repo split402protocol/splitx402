@@ -5,6 +5,7 @@ import {
 } from "./phase7StagingProof.js";
 
 export const PHASE7_STAGING_ATTACHMENT_FIELDS = [
+  "hosted_preflight_evidence",
   "agent_discovery_evidence",
   "paid_request_evidence",
   "receipt_verification_evidence",
