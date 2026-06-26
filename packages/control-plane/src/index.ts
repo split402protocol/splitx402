@@ -1,6 +1,7 @@
 import {
   ReferralClaimV1Schema,
   Split402ReceiptV1Schema,
+  evaluateSelfReferralPolicy,
   hashProtocolObject,
   verifySplit402ReceiptObject,
   type ReferralClaimV1,
@@ -41,12 +42,10 @@ import {
   isMerchantRegistryValidationError,
   type MerchantKeyAlgorithm,
   type MerchantKeyPurpose,
-  type MerchantOriginStatus,
   type MerchantOriginVerificationMethod,
   type MerchantPayoutWalletRecord,
   type MerchantPayoutWalletStatus,
-  type MerchantRegistry,
-  type MerchantStatus
+  type MerchantRegistry
 } from "./merchants.js";
 import {
   RouteRegistryValidationError,
@@ -301,10 +300,22 @@ export type ReceiptIngestResult =
       errors: string[];
     };
 
+export interface ReceiptPolicyVerificationResult {
+  ok: boolean;
+  errors: string[];
+}
+
+export interface ReceiptPolicyVerifier {
+  verify(
+    receipt: Split402ReceiptV1
+  ): Promise<ReceiptPolicyVerificationResult> | ReceiptPolicyVerificationResult;
+}
+
 export interface ReceiptIngestorOptions {
   resolveMerchantPublicKey: (
     receipt: Split402ReceiptV1
   ) => Promise<string | undefined> | string | undefined;
+  policyVerifier?: ReceiptPolicyVerifier;
   now?: () => Date;
   idFactory?: (prefix: "acr" | "ldg" | "lde") => string;
 }
@@ -737,6 +748,15 @@ export class ReceiptIngestor {
       };
     }
 
+    const policyVerification = await this.options.policyVerifier?.verify(receipt);
+    if (policyVerification !== undefined && !policyVerification.ok) {
+      return {
+        status: "rejected",
+        statusCode: 400,
+        errors: policyVerification.errors
+      };
+    }
+
     const snapshot = this.createSnapshot(
       receipt,
       receiptHash,
@@ -896,6 +916,229 @@ export class ReceiptIngestor {
   }
 }
 
+export interface ControlPlaneReceiptPolicyVerifierOptions {
+  merchantRegistry: MerchantRegistry;
+  campaignRegistry: CampaignRegistry;
+  routeRegistry: RouteRegistry;
+}
+
+export class ControlPlaneReceiptPolicyVerifier implements ReceiptPolicyVerifier {
+  constructor(
+    private readonly options: ControlPlaneReceiptPolicyVerifierOptions
+  ) {}
+
+  async verify(
+    receipt: Split402ReceiptV1
+  ): Promise<ReceiptPolicyVerificationResult> {
+    const errors: string[] = [];
+    const merchant = await this.options.merchantRegistry.getMerchantProfile(
+      receipt.merchantId
+    );
+    if (merchant === undefined) {
+      errors.push("merchant does not exist");
+    } else {
+      if (merchant.status !== "active") {
+        errors.push("merchant is not active");
+      }
+      if (
+        !merchant.origins.some(
+          (origin) =>
+            origin.origin === receipt.merchantOrigin &&
+            origin.status === "verified"
+        )
+      ) {
+        errors.push("merchant origin is not verified");
+      }
+      const serviceKey = await this.options.merchantRegistry.resolveKey({
+        merchantId: receipt.merchantId,
+        kid: receipt.kid,
+        purpose: "offer_receipt",
+        at: receipt.issuedAt
+      });
+      if (serviceKey === undefined) {
+        errors.push("merchant service key is not active for receipt kid");
+      }
+    }
+
+    const campaign = await this.options.campaignRegistry.getCampaign(
+      receipt.campaignId
+    );
+    if (campaign === undefined) {
+      errors.push("campaign does not exist");
+    } else {
+      if (campaign.merchantId !== receipt.merchantId) {
+        errors.push("campaign merchantId does not match receipt merchantId");
+      }
+      if (campaign.status !== "active") {
+        errors.push("campaign is not active");
+      }
+    }
+
+    const version = await this.options.campaignRegistry.getCampaignVersion(
+      receipt.campaignId,
+      receipt.campaignVersion
+    );
+    if (version === undefined) {
+      errors.push("campaign version does not exist");
+    } else {
+      if (version.termsHash !== receipt.campaignTermsHash) {
+        errors.push("campaign terms hash does not match receipt");
+      }
+      if (
+        !version.terms.operations.some(
+          (operation) => operation.operationId === receipt.operationId
+        )
+      ) {
+        errors.push("operationId is not in campaign version terms");
+      }
+      expectReceiptField(
+        errors,
+        "merchantOrigin",
+        receipt.merchantOrigin,
+        version.terms.resourceOrigin
+      );
+      expectReceiptField(errors, "network", receipt.network, version.terms.network);
+      expectReceiptField(errors, "asset", receipt.asset, version.terms.asset);
+      expectReceiptField(
+        errors,
+        "payToWallet",
+        receipt.payToWallet,
+        version.terms.payToWallet
+      );
+      expectReceiptField(
+        errors,
+        "requiredAmountAtomic",
+        receipt.requiredAmountAtomic,
+        version.terms.requiredAmountAtomic
+      );
+      expectReceiptField(
+        errors,
+        "settlementMode",
+        receipt.settlementMode,
+        version.terms.settlementMode
+      );
+      if (receipt.routeId !== undefined) {
+        expectReceiptField(
+          errors,
+          "commissionBps",
+          receipt.commissionBps,
+          version.terms.commissionBps
+        );
+        expectReceiptField(
+          errors,
+          "protocolFeeBpsOfCommission",
+          receipt.protocolFeeBpsOfCommission,
+          version.terms.protocolFeeBpsOfCommission
+        );
+      }
+    }
+
+    if (receipt.offerNonce.length === 0) {
+      errors.push("offerNonce is empty");
+    }
+
+    if (receipt.routeId === undefined) {
+      if (
+        receipt.commissionAmountAtomic !== "0" ||
+        receipt.protocolFeeAtomic !== "0" ||
+        receipt.referrerCreditAtomic !== "0"
+      ) {
+        errors.push("unattributed receipt must have zero commission amounts");
+      }
+      return { ok: errors.length === 0, errors };
+    }
+
+    const route = await this.options.routeRegistry.getRoute(receipt.routeId);
+    if (route === undefined) {
+      errors.push("route does not exist");
+      return { ok: errors.length === 0, errors };
+    }
+
+    if (route.campaignId !== receipt.campaignId) {
+      errors.push("route campaignId does not match receipt campaignId");
+    }
+    if (route.status !== "active") {
+      errors.push("route is not active");
+    }
+    if (
+      Date.parse(route.activatedAt) > Date.parse(receipt.issuedAt) ||
+      Date.parse(route.issuedAt) > Date.parse(receipt.issuedAt) ||
+      Date.parse(route.expiresAt) <= Date.parse(receipt.issuedAt)
+    ) {
+      errors.push("route is not active at receipt time");
+    }
+    if (route.resourceOrigin !== receipt.merchantOrigin) {
+      errors.push("route resourceOrigin does not match receipt merchantOrigin");
+    }
+    if (!routeCoversOperation(route.operationIds, receipt.operationId)) {
+      errors.push("route does not cover receipt operationId");
+    }
+
+    const routeVersions = await this.options.routeRegistry.listRouteVersions(
+      receipt.routeId
+    );
+    const matchingRouteVersion = routeVersions.find(
+      (routeVersion) => routeVersion.claimHash === receipt.referralClaimHash
+    );
+    if (matchingRouteVersion === undefined) {
+      errors.push("receipt referralClaimHash does not match route claim hash");
+    } else {
+      if (matchingRouteVersion.campaignVersionMin > receipt.campaignVersion) {
+        errors.push("route campaignVersionMin is greater than receipt campaignVersion");
+      }
+      expectReceiptField(
+        errors,
+        "payoutWallet",
+        receipt.payoutWallet,
+        matchingRouteVersion.payoutWallet
+      );
+    }
+    expectReceiptField(
+      errors,
+      "referrerWallet",
+      receipt.referrerWallet,
+      route.referrerWallet
+    );
+
+    if (version !== undefined) {
+      const selfReferral = evaluateSelfReferralPolicy({
+        allowSelfReferral: version.terms.allowSelfReferral,
+        payerWallet: receipt.payerWallet,
+        ...(receipt.referrerWallet === undefined
+          ? {}
+          : { referrerWallet: receipt.referrerWallet }),
+        ...(receipt.payoutWallet === undefined
+          ? {}
+          : { payoutWallet: receipt.payoutWallet }),
+        ...(merchant === undefined ? {} : { merchantOwnerWallet: merchant.ownerWallet })
+      });
+      if (!selfReferral.allowed) {
+        errors.push(`self-referral policy violation: ${selfReferral.reason}`);
+      }
+    }
+
+    return { ok: errors.length === 0, errors };
+  }
+}
+
+function expectReceiptField(
+  errors: string[],
+  label: string,
+  actual: number | string | undefined,
+  expected: number | string | undefined
+): void {
+  if (actual !== expected) {
+    errors.push(`${label} does not match campaign policy`);
+  }
+}
+
+function routeCoversOperation(
+  operationIds: RouteOperationScope,
+  operationId: string
+): boolean {
+  return operationIds.some((candidate) => candidate === "*" || candidate === operationId);
+}
+
 export interface ControlPlaneAppOptions {
   ingestor: ReceiptIngestor;
   merchantRegistry?: MerchantRegistry;
@@ -999,7 +1242,12 @@ export function createControlPlaneRuntime(
   const receiptStore = new PostgresReceiptIngestionStore(options.db);
   const outboxStore = new PostgresOutboxEventStore(options.db);
   const ingestor = new ReceiptIngestor(receiptStore, {
-    resolveMerchantPublicKey: createMerchantReceiptKeyResolver(merchantRegistry)
+    resolveMerchantPublicKey: createMerchantReceiptKeyResolver(merchantRegistry),
+    policyVerifier: new ControlPlaneReceiptPolicyVerifier({
+      merchantRegistry,
+      campaignRegistry,
+      routeRegistry
+    })
   });
   const authenticator =
     authPolicy === "disabled"
@@ -1631,7 +1879,7 @@ export function createMerchantRegistryRouter(
       }
       const body = requireJsonObject(req.body);
       const id = readOptionalString(body.id, "id");
-      const status = readOptionalMerchantStatus(body.status);
+      rejectPublicField(body, "status");
       const ownerWallet =
         readOptionalString(body.ownerWallet, "ownerWallet") ?? session?.wallet;
       if (ownerWallet === undefined) {
@@ -1648,8 +1896,7 @@ export function createMerchantRegistryRouter(
         slug: readRequiredString(body.slug, "slug"),
         displayName: readRequiredString(body.displayName, "displayName"),
         ownerWallet,
-        ...(id === undefined ? {} : { id }),
-        ...(status === undefined ? {} : { status })
+        ...(id === undefined ? {} : { id })
       });
       res.status(201).json({ merchant });
     } catch (error) {
@@ -1820,14 +2067,12 @@ export function createMerchantRegistryRouter(
       const verificationMethod = readOptionalOriginVerificationMethod(
         body.verificationMethod
       );
-      const status = readOptionalMerchantOriginStatus(body.status);
-      const verifiedAt = readOptionalString(body.verifiedAt, "verifiedAt");
+      rejectPublicField(body, "status");
+      rejectPublicField(body, "verifiedAt");
       const origin = await merchantRegistry.addOrigin({
         merchantId: req.params.merchantId,
         origin: readRequiredString(body.origin, "origin"),
-        ...(verificationMethod === undefined ? {} : { verificationMethod }),
-        ...(status === undefined ? {} : { status }),
-        ...(verifiedAt === undefined ? {} : { verifiedAt })
+        ...(verificationMethod === undefined ? {} : { verificationMethod })
       });
       res.status(201).json({ origin });
     } catch (error) {
@@ -2529,19 +2774,10 @@ function readOptionalString(value: unknown, label: string): string | undefined {
   return readRequiredString(value, label);
 }
 
-function readOptionalMerchantStatus(value: unknown): MerchantStatus | undefined {
-  if (value === undefined) {
-    return undefined;
+function rejectPublicField(body: Record<string, unknown>, field: string): void {
+  if (Object.prototype.hasOwnProperty.call(body, field)) {
+    throw new MerchantRegistryValidationError(`${field} is not accepted on this public endpoint`);
   }
-  if (
-    value === "pending" ||
-    value === "active" ||
-    value === "suspended" ||
-    value === "closed"
-  ) {
-    return value;
-  }
-  throw new MerchantRegistryValidationError("status must be a valid merchant status");
 }
 
 function readOptionalOriginVerificationMethod(
@@ -2556,23 +2792,6 @@ function readOptionalOriginVerificationMethod(
   throw new MerchantRegistryValidationError(
     "verificationMethod must be well_known or dns"
   );
-}
-
-function readOptionalMerchantOriginStatus(
-  value: unknown
-): MerchantOriginStatus | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-  if (
-    value === "pending" ||
-    value === "verified" ||
-    value === "failed" ||
-    value === "revoked"
-  ) {
-    return value;
-  }
-  throw new MerchantRegistryValidationError("status must be a valid origin status");
 }
 
 function readOptionalMerchantKeyAlgorithm(
