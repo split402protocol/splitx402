@@ -70,6 +70,45 @@ approval_decision: no-go
     });
   });
 
+  it("rejects malformed proof metadata and weak evidence references", () => {
+    const validation = validatePhase7StagingProof(
+      createPhase7StagingProofRecord({
+        proof_id: "phase7-staging-2026-06-26",
+        proof_date: "2026-02-31",
+        reviewers: "Split402 operators",
+        source_commit: "not-a-sha",
+        staging_environment: "staging-us",
+        control_plane_url: "control.staging.example",
+        dashboard_url: "https://dashboard.staging.example",
+        demo_merchant_url: "https://merchant.staging.example",
+        webhook_receiver_url: "https://webhook.staging.example",
+        agent_discovery_evidence: "agent-discovery.json",
+        paid_request_evidence: "attached: paid-suite.log",
+        receipt_verification_evidence: "attached: receipt-verification.json",
+        referrer_balance_evidence: "attached: referrer-balances.json",
+        dashboard_summary_evidence: "attached: dashboard-summary.json",
+        webhook_delivery_evidence: "attached: webhook-events.json",
+        payout_obligation_evidence: "attached: payout-obligations.json",
+        funding_balance_evidence: "attached: funding-balance.json",
+        mcp_bundle_evidence: "attached: mcp-bundle.json",
+        commands_run: "attached: commands.log",
+        approval_decision: "approved",
+      }),
+    );
+
+    expect(validation.approved).toBe(false);
+    expect(validation.invalidFields).toContain("proof_date must use YYYY-MM-DD");
+    expect(validation.invalidFields).toContain(
+      "source_commit must be a 7-40 character git SHA",
+    );
+    expect(validation.invalidFields).toContain(
+      "control_plane_url must be an http(s) URL",
+    );
+    expect(validation.invalidFields).toContain(
+      "agent_discovery_evidence must be an attached artifact or http(s) URL",
+    );
+  });
+
   it("lists staging proof commands before proof exists", () => {
     const report = createPhase7StagingStatusReport();
 
