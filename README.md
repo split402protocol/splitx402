@@ -396,20 +396,17 @@ $env:SPLIT402_TEST_DATABASE_URL="postgresql://split402:split402@localhost:5432/s
 corepack pnpm test:postgres
 ```
 
-Create a durable control-plane app backed by PostgreSQL:
+Run a durable control-plane app backed by PostgreSQL:
 
-```ts
-import { createControlPlaneRuntimeFromEnv } from "@split402/control-plane";
-
-const runtime = createControlPlaneRuntimeFromEnv();
-runtime.app.listen(process.env.PORT ?? 4020);
+```bash
+corepack pnpm control-plane
 ```
 
 The runtime reads `SPLIT402_DATABASE_URL` or `DATABASE_URL`, wires PostgreSQL
 merchant, campaign, route, auth, receipt, payout, and outbox stores, and defaults
 `SPLIT402_CONTROL_PLANE_AUTH_POLICY` to `required` for merchant mutations.
 
-Run the worker processes:
+Run the worker processes alongside it:
 
 ```bash
 corepack pnpm worker:chain
@@ -425,6 +422,13 @@ corepack pnpm dashboard
 For hosted staging, set `SPLIT402_DASHBOARD_VIEWER_TOKEN` so dashboard API
 routes require a viewer session cookie or `x-split402-dashboard-token` header
 while `/health` remains available for uptime probes.
+
+Launch the Phase 7 staging stack:
+
+```bash
+cp deploy/phase7-staging/phase7-staging.env.example deploy/phase7-staging/phase7-staging.env
+docker compose -f deploy/phase7-staging/compose.yaml up postgres control-plane dashboard
+```
 
 Prepare and check the Phase 7 staging proof:
 
@@ -545,6 +549,7 @@ The latest Devnet proof is recorded in
 - [Payout signer deployment runbook](docs/runbooks/payout-signer-deployment.md)
 - [Payout signer key rotation runbook](docs/runbooks/payout-signer-key-rotation.md)
 - [Payout signer observability runbook](docs/runbooks/payout-signer-observability.md)
+- [Phase 7 hosted staging runbook](docs/runbooks/phase7-hosted-staging.md)
 - [MVP build plan](docs/BUILD_PLAN.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Phase 0 status](docs/PHASE_0.md)

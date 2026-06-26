@@ -18,6 +18,8 @@ Implemented:
 - MCP-facing demo bundle at `@split402/mcp-demo`;
 - merchant/referrer operations dashboard at `@split402/dashboard`;
 - optional dashboard viewer session gate for hosted staging;
+- hosted-staging compose stack for control plane, dashboard, optional demo
+  merchant, and workers;
 - staging proof scaffold, status validator, template, and runbook;
 - merchant payout-obligation summary endpoint and dashboard view;
 - optional Solana RPC funding-balance provider for active payout wallets.
@@ -79,6 +81,13 @@ corepack pnpm dashboard
 
 Set `SPLIT402_DASHBOARD_VIEWER_TOKEN` before exposing the dashboard in hosted
 staging so Phase 7 evidence captures are not publicly readable.
+
+Launch the hosted-staging stack with:
+
+```bash
+cp deploy/phase7-staging/phase7-staging.env.example deploy/phase7-staging/phase7-staging.env
+docker compose -f deploy/phase7-staging/compose.yaml up postgres control-plane dashboard
+```
 
 ## Staging Proof
 

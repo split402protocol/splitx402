@@ -5,6 +5,10 @@ must show that an agent can discover a Split402 route, pay the x402 API, verify
 the Split402 receipt, and inspect referrer earnings without manual database
 work.
 
+For a repeatable local hosted-staging stack, start with
+[`phase7-hosted-staging.md`](phase7-hosted-staging.md), then return to this
+proof sequence.
+
 ## Commands
 
 ```bash
