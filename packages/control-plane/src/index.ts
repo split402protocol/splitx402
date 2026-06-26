@@ -86,9 +86,11 @@ import {
   createPayoutReconciliationItem,
   createSignedPayoutTransactionRecords,
   createPayoutPreview,
+  attachPayoutTransactionItemMappings,
   filterPayoutEligibleAccruals,
   isPayoutTransactionOutcomeUnknown,
-  summarizePayoutBatchFinality,
+  summarizePayoutBatchTransactionItemFinality,
+  verifyPayoutFinalizedTransfersBeforeLedgerClosure,
   isPayoutBatchConflictError,
   isPayoutBatchValidationError,
   isPayoutPreviewValidationError,
@@ -577,7 +579,16 @@ export class InMemoryReceiptIngestionStore
         `unknown payout batch: ${input.payoutBatchId}`
       );
     }
-    const records = createSignedPayoutTransactionRecords(input);
+    const batch = this.payoutBatchesById.get(input.payoutBatchId);
+    if (batch === undefined) {
+      throw new PayoutBatchConflictError(
+        `unknown payout batch: ${input.payoutBatchId}`
+      );
+    }
+    const records = attachPayoutTransactionItemMappings(
+      createSignedPayoutTransactionRecords(input),
+      batch
+    );
     for (const record of records) {
       if (this.payoutTransactionsById.has(record.id)) {
         throw new PayoutBatchConflictError(
@@ -732,13 +743,16 @@ export class InMemoryReceiptIngestionStore
     if (batch === undefined) {
       return;
     }
-    const rollup = summarizePayoutBatchFinality(
-      this.listPayoutTransactions(payoutBatchId)
-    );
+    const rollup = summarizePayoutBatchTransactionItemFinality({
+      batch,
+      transactions: this.listPayoutTransactions(payoutBatchId)
+    });
     if (rollup === undefined) {
       return;
     }
-    const itemStatus = rollup.itemStatus;
+    const updatedItemsById = new Map(
+      rollup.updatedItems.map((item) => [item.payoutItemId, item.status])
+    );
     this.payoutBatchesById.set(payoutBatchId, {
       ...batch,
       status: rollup.batchStatus,
@@ -749,19 +763,16 @@ export class InMemoryReceiptIngestionStore
         ? {}
         : { failureMessage: rollup.failureMessage }),
       updatedAt,
-      items:
-        itemStatus === undefined
-          ? batch.items
-          : batch.items.map((item) => ({
-              ...item,
-              status: itemStatus
-            }))
+      items: batch.items.map((item) => ({
+        ...item,
+        status: updatedItemsById.get(item.id) ?? item.status
+      }))
     });
   }
 
-  closeFinalizedPayoutBatchLedger(
+  async closeFinalizedPayoutBatchLedger(
     input: ClosePayoutBatchLedgerInput
-  ): LedgerTransaction | undefined {
+  ): Promise<LedgerTransaction | undefined> {
     const existing = this.payoutLedgerTransactionsByBatchId.get(input.payoutBatchId);
     if (existing !== undefined) {
       return existing;
@@ -770,6 +781,13 @@ export class InMemoryReceiptIngestionStore
     if (batch === undefined) {
       return undefined;
     }
+    await verifyPayoutFinalizedTransfersBeforeLedgerClosure({
+      batch,
+      transactions: this.listPayoutTransactions(batch.id),
+      ...(input.finalizedTransferVerifier === undefined
+        ? {}
+        : { verifier: input.finalizedTransferVerifier })
+    });
     const transaction = createPayoutFinalizationLedgerTransaction({
       batch,
       ...(input.now === undefined ? {} : { now: input.now }),

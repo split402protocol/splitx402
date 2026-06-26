@@ -113,7 +113,8 @@ function createSubmittedTransaction(signature: string): PayoutTransactionRecord 
     signedTransactionBase64: "AA==",
     status: "submitted",
     submittedAt: "2026-06-25T00:00:00.000Z",
-    createdAt: "2026-06-25T00:00:00.000Z"
+    createdAt: "2026-06-25T00:00:00.000Z",
+    items: []
   };
 }
 

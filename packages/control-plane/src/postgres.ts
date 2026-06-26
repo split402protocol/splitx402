@@ -105,6 +105,7 @@ import type {
   PayoutBatchStatus,
   PayoutItemRecord,
   PayoutItemStatus,
+  PayoutTransactionItemRecord,
   PayoutTransactionRecord,
   PayoutTransactionStatus,
   PayoutTransactionStore,
@@ -127,6 +128,7 @@ import type {
 } from "./payouts.js";
 import {
   PayoutBatchConflictError,
+  attachPayoutTransactionItemMappings,
   createMerchantObligationSummary,
   createPayoutFinalizationLedgerTransaction,
   createPayoutBatchPlan,
@@ -134,7 +136,8 @@ import {
   createReferrerBalanceSummary,
   createReferrerPayoutHistoryItems,
   createSignedPayoutTransactionRecords,
-  summarizePayoutBatchFinality
+  summarizePayoutBatchTransactionItemFinality,
+  verifyPayoutFinalizedTransfersBeforeLedgerClosure
 } from "./payouts.js";
 import {
   WEBHOOK_PAYOUT_CONFIRMED_EVENT_TYPE,
@@ -312,6 +315,14 @@ interface PayoutTransactionRow extends QueryResultRow {
   finalized_at: Date | string | null;
   error_json: unknown;
   created_at: Date | string;
+}
+
+interface PayoutTransactionItemRow extends QueryResultRow {
+  payout_transaction_id: string;
+  payout_item_id: string;
+  amount_atomic: string;
+  destination_wallet: string;
+  destination_token_account: string | null;
 }
 
 interface WalletAuthChallengeRow extends QueryResultRow {
@@ -592,12 +603,16 @@ export class PostgresReceiptIngestionStore
   async saveSignedPayoutTransactions(
     input: SaveSignedPayoutTransactionsInput
   ): Promise<PayoutTransactionRecord[]> {
-    const records = createSignedPayoutTransactionRecords(input);
-    if ((await this.getPayoutBatch(input.payoutBatchId)) === undefined) {
+    const batch = await this.getPayoutBatch(input.payoutBatchId);
+    if (batch === undefined) {
       throw new PayoutBatchConflictError(
         `unknown payout batch: ${input.payoutBatchId}`
       );
     }
+    const records = attachPayoutTransactionItemMappings(
+      createSignedPayoutTransactionRecords(input),
+      batch
+    );
     const existingRecords = await this.listPayoutTransactions(input.payoutBatchId);
     for (const record of records) {
       if (
@@ -615,6 +630,9 @@ export class PostgresReceiptIngestionStore
     await this.withTransaction(async (client) => {
       for (const record of records) {
         await insertPayoutTransaction(client, record);
+        for (const item of record.items) {
+          await insertPayoutTransactionItem(client, item);
+        }
       }
     });
     return records;
@@ -633,7 +651,10 @@ export class PostgresReceiptIngestionStore
         order by sequence, attempt, created_at, id`,
       [payoutBatchId]
     );
-    return result.rows.map(mapPayoutTransaction);
+    return mapPayoutTransactionsWithItems(
+      result.rows,
+      await this.listPayoutTransactionItems(result.rows.map((row) => row.id))
+    );
   }
 
   async listPayoutReconciliationItems(
@@ -808,7 +829,15 @@ export class PostgresReceiptIngestionStore
       if (row === undefined) {
         return undefined;
       }
-      const transaction = mapPayoutTransaction(row);
+      const transaction = (
+        await mapPayoutTransactionsWithItems(
+          [row],
+          await listPayoutTransactionItems(client, [row.id])
+        )
+      )[0];
+      if (transaction === undefined) {
+        return undefined;
+      }
       await rollUpPayoutBatchFinality(client, transaction.payoutBatchId, submittedAt);
       await this.insertPayoutLifecycleEventsIfBatchMatches(
         client,
@@ -863,7 +892,15 @@ export class PostgresReceiptIngestionStore
       if (row === undefined) {
         return undefined;
       }
-      const transaction = mapPayoutTransaction(row);
+      const transaction = (
+        await mapPayoutTransactionsWithItems(
+          [row],
+          await listPayoutTransactionItems(client, [row.id])
+        )
+      )[0];
+      if (transaction === undefined) {
+        return undefined;
+      }
       await rollUpPayoutBatchFinality(client, transaction.payoutBatchId, observedAt);
       if (lifecycleKind !== undefined) {
         await this.insertPayoutLifecycleEventsIfBatchMatches(
@@ -891,7 +928,21 @@ export class PostgresReceiptIngestionStore
       [id]
     );
     const row = result.rows[0];
-    return row === undefined ? undefined : mapPayoutTransaction(row);
+    if (row === undefined) {
+      return undefined;
+    }
+    return (
+      await mapPayoutTransactionsWithItems(
+        [row],
+      await this.listPayoutTransactionItems([row.id])
+      )
+    )[0];
+  }
+
+  private async listPayoutTransactionItems(
+    payoutTransactionIds: readonly string[]
+  ): Promise<PayoutTransactionItemRecord[]> {
+    return listPayoutTransactionItems(this.db, payoutTransactionIds);
   }
 
   async closeFinalizedPayoutBatchLedger(
@@ -908,6 +959,13 @@ export class PostgresReceiptIngestionStore
     if (batch === undefined) {
       return undefined;
     }
+    await verifyPayoutFinalizedTransfersBeforeLedgerClosure({
+      batch,
+      transactions: await this.listPayoutTransactions(batch.id),
+      ...(input.finalizedTransferVerifier === undefined
+        ? {}
+        : { verifier: input.finalizedTransferVerifier })
+    });
     const transaction = createPayoutFinalizationLedgerTransaction({
       batch,
       ...(input.now === undefined ? {} : { now: input.now }),
@@ -2883,6 +2941,45 @@ function insertPayoutTransaction(
   );
 }
 
+function insertPayoutTransactionItem(
+  client: PostgresQueryExecutor,
+  item: PayoutTransactionItemRecord
+): Promise<QueryResult> {
+  return client.query(
+    `insert into payout_transaction_items (
+       payout_transaction_id, payout_item_id, amount_atomic,
+       destination_wallet, destination_token_account
+     ) values (
+       $1, $2, $3, $4, $5
+     )`,
+    [
+      item.payoutTransactionId,
+      item.payoutItemId,
+      item.amountAtomic,
+      item.destinationWallet,
+      item.destinationTokenAccount ?? null
+    ]
+  );
+}
+
+async function listPayoutTransactionItems(
+  db: PostgresQueryExecutor,
+  payoutTransactionIds: readonly string[]
+): Promise<PayoutTransactionItemRecord[]> {
+  if (payoutTransactionIds.length === 0) {
+    return [];
+  }
+  const result = await db.query<PayoutTransactionItemRow>(
+    `select payout_transaction_id, payout_item_id, amount_atomic,
+            destination_wallet, destination_token_account
+       from payout_transaction_items
+      where payout_transaction_id = any($1)
+      order by payout_transaction_id, payout_item_id`,
+    [payoutTransactionIds]
+  );
+  return result.rows.map(mapPayoutTransactionItem);
+}
+
 async function rollUpPayoutBatchFinality(
   db: PostgresQueryExecutor,
   payoutBatchId: string,
@@ -2898,9 +2995,18 @@ async function rollUpPayoutBatchFinality(
       order by sequence, attempt, created_at, id`,
     [payoutBatchId]
   );
-  const rollup = summarizePayoutBatchFinality(
-    result.rows.map(mapPayoutTransaction)
+  const batch = await loadPayoutBatch(db, payoutBatchId);
+  if (batch === undefined) {
+    return;
+  }
+  const transactions = mapPayoutTransactionsWithItems(
+    result.rows,
+    await listPayoutTransactionItems(db, result.rows.map((row) => row.id))
   );
+  const rollup = summarizePayoutBatchTransactionItemFinality({
+    batch,
+    transactions
+  });
   if (rollup === undefined) {
     return;
   }
@@ -2919,12 +3025,12 @@ async function rollUpPayoutBatchFinality(
       updatedAt
     ]
   );
-  if (rollup.itemStatus !== undefined) {
+  for (const item of rollup.updatedItems) {
     await db.query(
       `update payout_items
           set status = $2
-        where payout_batch_id = $1`,
-      [payoutBatchId, rollup.itemStatus]
+        where id = $1`,
+      [item.payoutItemId, item.status]
     );
   }
 }
@@ -3368,7 +3474,39 @@ function mapPayoutTransaction(row: PayoutTransactionRow): PayoutTransactionRecor
       ? {}
       : { finalizedAt: toIsoString(row.finalized_at) }),
     ...(row.error_json === null ? {} : { error: parseOptionalJsonObject(row.error_json) }),
-    createdAt: toIsoString(row.created_at)
+    createdAt: toIsoString(row.created_at),
+    items: []
+  };
+}
+
+function mapPayoutTransactionsWithItems(
+  rows: readonly PayoutTransactionRow[],
+  itemRows: readonly PayoutTransactionItemRecord[]
+): PayoutTransactionRecord[] {
+  const itemsByTransactionId = new Map<string, PayoutTransactionItemRecord[]>();
+  for (const item of itemRows) {
+    itemsByTransactionId.set(item.payoutTransactionId, [
+      ...(itemsByTransactionId.get(item.payoutTransactionId) ?? []),
+      item
+    ]);
+  }
+  return rows.map((row) => ({
+    ...mapPayoutTransaction(row),
+    items: itemsByTransactionId.get(row.id) ?? []
+  }));
+}
+
+function mapPayoutTransactionItem(
+  row: PayoutTransactionItemRow
+): PayoutTransactionItemRecord {
+  return {
+    payoutTransactionId: row.payout_transaction_id,
+    payoutItemId: row.payout_item_id,
+    amountAtomic: row.amount_atomic,
+    destinationWallet: row.destination_wallet,
+    ...(row.destination_token_account === null
+      ? {}
+      : { destinationTokenAccount: row.destination_token_account })
   };
 }
 
