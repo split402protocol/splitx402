@@ -89,6 +89,15 @@ export interface PayoutBatchStore {
   getPayoutBatch(
     batchId: string
   ): Promise<PayoutBatchRecord | undefined> | PayoutBatchRecord | undefined;
+  releasePayoutBatchAllocations(
+    input: ReleasePayoutBatchAllocationsInput
+  ): Promise<PayoutBatchRecord | undefined> | PayoutBatchRecord | undefined;
+}
+
+export interface ReleasePayoutBatchAllocationsInput {
+  payoutBatchId: string;
+  reason: string;
+  now?: string;
 }
 
 export interface SaveSignedPayoutTransactionsInput {
@@ -711,6 +720,43 @@ export function isPayoutBatchConflictError(
   error: unknown
 ): error is PayoutBatchConflictError {
   return error instanceof PayoutBatchConflictError;
+}
+
+export function releasePayoutBatchAllocationsForBatch(input: {
+  batch: PayoutBatchRecord;
+  reason: string;
+  now?: string;
+}): PayoutBatchRecord {
+  const reason = assertNonEmptyString(input.reason, "reason");
+  const updatedAt = normalizeTimestamp(input.now ?? new Date().toISOString(), "now");
+  if (!isPayoutBatchAllocationReleaseAllowed(input.batch.status)) {
+    throw new PayoutBatchConflictError(
+      `payout batch status ${input.batch.status} cannot release allocations`
+    );
+  }
+  return {
+    ...input.batch,
+    status: "cancelled",
+    failureCode: "allocations_released",
+    failureMessage: reason,
+    updatedAt,
+    items: input.batch.items.map((item) => ({
+      ...item,
+      status: "released"
+    }))
+  };
+}
+
+export function isPayoutBatchAllocationReleaseAllowed(
+  status: PayoutBatchStatus
+): boolean {
+  return (
+    status === "draft" ||
+    status === "planned" ||
+    status === "signing" ||
+    status === "failed" ||
+    status === "cancelled"
+  );
 }
 
 export function createSignedPayoutTransactionRecords(

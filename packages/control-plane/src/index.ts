@@ -89,6 +89,7 @@ import {
   attachPayoutTransactionItemMappings,
   filterPayoutEligibleAccruals,
   isPayoutTransactionOutcomeUnknown,
+  releasePayoutBatchAllocationsForBatch,
   summarizePayoutBatchTransactionItemFinality,
   verifyPayoutFinalizedTransfersBeforeLedgerClosure,
   isPayoutBatchConflictError,
@@ -110,6 +111,7 @@ import {
   type PayoutReconciliationStore,
   type MerchantObligationViewStore,
   type ReferrerPayoutViewStore,
+  type ReleasePayoutBatchAllocationsInput,
   type SaveSignedPayoutTransactionsInput
 } from "./payouts.js";
 
@@ -569,6 +571,42 @@ export class InMemoryReceiptIngestionStore
 
   getPayoutBatch(batchId: string): PayoutBatchRecord | undefined {
     return this.payoutBatchesById.get(batchId);
+  }
+
+  releasePayoutBatchAllocations(
+    input: ReleasePayoutBatchAllocationsInput
+  ): PayoutBatchRecord | undefined {
+    const batch = this.payoutBatchesById.get(input.payoutBatchId);
+    if (batch === undefined) {
+      return undefined;
+    }
+    const released = releasePayoutBatchAllocationsForBatch({
+      batch,
+      reason: input.reason,
+      ...(input.now === undefined ? {} : { now: input.now })
+    });
+    const releasedAccrualIds = new Set(
+      released.items.flatMap((item) =>
+        item.allocations.map((allocation) => allocation.accrualId)
+      )
+    );
+    this.payoutBatchesById.set(released.id, released);
+    for (const snapshot of this.receiptsById.values()) {
+      if (
+        snapshot.accrual !== undefined &&
+        snapshot.accrual.status === "allocated" &&
+        releasedAccrualIds.has(snapshot.accrual.id)
+      ) {
+        this.save({
+          ...snapshot,
+          accrual: {
+            ...snapshot.accrual,
+            status: "available"
+          }
+        });
+      }
+    }
+    return released;
   }
 
   saveSignedPayoutTransactions(
@@ -1916,6 +1954,58 @@ export function createPayoutRouter(
       }
     }
   });
+
+  router.post(
+    "/v1/payout-batches/:batchId/release-allocations",
+    async (req, res, next) => {
+      try {
+        if (options.payoutBatchStore === undefined) {
+          res.status(500).json({
+            error: "internal_server_error",
+            message: "payout batch store is required"
+          });
+          return;
+        }
+        const batchId = readRouteParam(req.params.batchId, "batchId");
+        const batch = await options.payoutBatchStore.getPayoutBatch(batchId);
+        if (batch === undefined) {
+          res.status(404).json({
+            error: "not_found",
+            message: "payout batch was not found"
+          });
+          return;
+        }
+        const session = await requireMerchantOwnerForMerchantId(
+          req,
+          res,
+          options,
+          batch.merchantId
+        );
+        if (session === undefined && isMerchantAuthRequired(options)) {
+          return;
+        }
+        const body = readJsonObject(req.body) ?? {};
+        const now = readOptionalString(body.now, "now");
+        const released = await options.payoutBatchStore.releasePayoutBatchAllocations({
+          payoutBatchId: batch.id,
+          reason: readRequiredString(body.reason, "reason"),
+          ...(now === undefined ? {} : { now })
+        });
+        if (released === undefined) {
+          res.status(404).json({
+            error: "not_found",
+            message: "payout batch was not found"
+          });
+          return;
+        }
+        res.json({ batch: released });
+      } catch (error) {
+        if (!sendPayoutBatchError(res, error) && !sendMerchantRegistryError(res, error)) {
+          next(error);
+        }
+      }
+    }
+  );
 
   router.get("/v1/referrers/:referrerWallet/balances", async (req, res, next) => {
     try {

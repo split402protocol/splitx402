@@ -71,7 +71,7 @@ flowchart LR
 | Webhooks | Implemented for accepted-receipt and payout lifecycle events with signed delivery envelopes and retry/dead-letter handling. |
 | Merchant SDK reliability boundary | Implemented with cached campaign lookup, service-key rotation helpers, payment identifiers, operation digests, and merchant-local receipt outbox primitives. |
 | Dashboard and discovery | Implemented for public-alpha operations: reliability profiles, dashboard summaries, webhook feeds, referrer routes, balances, payouts, hosted-staging viewer sessions, and proof capture. |
-| Payout engine | In progress: preview, allocation, Solana transfer planning, simulation, signer policy, local-dev signer, remote signer client, signer appliance scaffold, signer deployment artifacts, signed-byte persistence, broadcast boundary, finality monitor, rollup, payout lifecycle events, unknown-outcome reconciliation queue, referrer payout views, and idempotent ledger closure are implemented. |
+| Payout engine | In progress: preview, allocation, safe allocation release, Solana transfer planning, simulation, signer policy, local-dev signer, remote signer client, signer appliance scaffold, signer deployment artifacts, signed-byte persistence, broadcast boundary, finality monitor, rollup, payout lifecycle events, unknown-outcome reconciliation queue, referrer payout views, and idempotent ledger closure are implemented. |
 | Atomic split settlement | Later research. The MVP does not split the original x402 transaction onchain. |
 | `$SPLIT` bonding | Later research after the USDC accrual-and-payout loop is production ready. |
 

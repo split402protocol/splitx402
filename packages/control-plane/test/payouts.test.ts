@@ -10,6 +10,7 @@ import {
   createReferrerPayoutHistoryItems,
   createSignedPayoutTransactionRecords,
   filterPayoutEligibleAccruals,
+  releasePayoutBatchAllocationsForBatch,
   summarizePayoutBatchTransactionItemFinality,
   summarizePayoutBatchFinality,
   type CommissionAccrual,
@@ -507,6 +508,48 @@ describe("payout batch finality rollup", () => {
         { payoutItemId: batch.items[1]!.id, status: "finalized" }
       ]
     });
+  });
+});
+
+describe("payout allocation release", () => {
+  it("cancels planned batches and marks items released", () => {
+    const released = releasePayoutBatchAllocationsForBatch({
+      batch: finalizedBatch({ status: "planned", itemStatus: "allocated" }),
+      reason: "signer policy failed",
+      now: "2026-06-24T00:11:00Z"
+    });
+
+    expect(released).toEqual(
+      expect.objectContaining({
+        status: "cancelled",
+        failureCode: "allocations_released",
+        failureMessage: "signer policy failed",
+        updatedAt: "2026-06-24T00:11:00.000Z"
+      })
+    );
+    expect(released.items.map((item) => item.status)).toEqual([
+      "released",
+      "released"
+    ]);
+  });
+
+  it("does not release submitted or outcome-unknown batches", () => {
+    expect(() =>
+      releasePayoutBatchAllocationsForBatch({
+        batch: finalizedBatch({ status: "submitted", itemStatus: "submitted" }),
+        reason: "manual release"
+      })
+    ).toThrow("payout batch status submitted cannot release allocations");
+
+    expect(() =>
+      releasePayoutBatchAllocationsForBatch({
+        batch: finalizedBatch({
+          status: "outcome_unknown",
+          itemStatus: "submitted"
+        }),
+        reason: "manual release"
+      })
+    ).toThrow("payout batch status outcome_unknown cannot release allocations");
   });
 });
 

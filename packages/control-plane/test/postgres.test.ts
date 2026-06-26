@@ -744,6 +744,97 @@ describe("PostgresReceiptIngestionStore", () => {
     ).rejects.toBeInstanceOf(PayoutBatchConflictError);
   });
 
+  it("releases planned payout allocations back to available", async () => {
+    const fixture = await createPostgresPayoutTransactionFixture();
+
+    const released = await fixture.store.releasePayoutBatchAllocations({
+      payoutBatchId: fixture.batch.id,
+      reason: "transaction bytes failed verification",
+      now: "2026-06-24T00:07:00Z"
+    });
+    const loaded = await fixture.store.getPayoutBatch(fixture.batch.id);
+
+    expect(released).toEqual(
+      expect.objectContaining({
+        id: fixture.batch.id,
+        status: "cancelled",
+        failureCode: "allocations_released",
+        failureMessage: "transaction bytes failed verification",
+        updatedAt: "2026-06-24T00:07:00.000Z"
+      })
+    );
+    expect(released?.items[0]?.status).toBe("released");
+    expect(loaded?.status).toBe("cancelled");
+    expect(loaded?.items[0]?.status).toBe("released");
+    await expect(
+      fixture.store.getByReceiptId(fixture.bundle.artifacts.receipt.receiptId)
+    ).resolves.toEqual(
+      expect.objectContaining({
+        accrual: expect.objectContaining({ status: "available" })
+      })
+    );
+    await expect(
+      fixture.store.listPayoutEligibleAccruals({
+        merchantId: fixture.bundle.artifacts.receipt.merchantId,
+        asset: fixture.bundle.artifacts.receipt.asset,
+        now: "2026-06-24T00:07:00Z"
+      })
+    ).resolves.toHaveLength(1);
+  });
+
+  it("does not release submitted or outcome-unknown allocations", async () => {
+    const submitted = await createPostgresPayoutTransactionFixture();
+    await submitted.store.markPayoutTransactionSubmitted({
+      id: submitted.transaction.id,
+      submittedAt: "2026-06-24T00:07:00Z",
+      expectedSignature: "expected_sig_0"
+    });
+
+    await expect(
+      submitted.store.releasePayoutBatchAllocations({
+        payoutBatchId: submitted.batch.id,
+        reason: "manual release",
+        now: "2026-06-24T00:08:00Z"
+      })
+    ).rejects.toBeInstanceOf(PayoutBatchConflictError);
+    await expect(
+      submitted.store.getByReceiptId(
+        submitted.bundle.artifacts.receipt.receiptId
+      )
+    ).resolves.toEqual(
+      expect.objectContaining({
+        accrual: expect.objectContaining({ status: "allocated" })
+      })
+    );
+
+    const unknown = await createPostgresPayoutTransactionFixture();
+    await unknown.store.markPayoutTransactionSubmitted({
+      id: unknown.transaction.id,
+      submittedAt: "2026-06-24T00:07:00Z",
+      expectedSignature: "expected_sig_0"
+    });
+    await unknown.store.markPayoutTransactionFinality({
+      id: unknown.transaction.id,
+      status: "outcome_unknown",
+      observedAt: "2026-06-24T00:08:00Z"
+    });
+
+    await expect(
+      unknown.store.releasePayoutBatchAllocations({
+        payoutBatchId: unknown.batch.id,
+        reason: "manual release",
+        now: "2026-06-24T00:09:00Z"
+      })
+    ).rejects.toBeInstanceOf(PayoutBatchConflictError);
+    await expect(
+      unknown.store.getByReceiptId(unknown.bundle.artifacts.receipt.receiptId)
+    ).resolves.toEqual(
+      expect.objectContaining({
+        accrual: expect.objectContaining({ status: "allocated" })
+      })
+    );
+  });
+
   it("emits idempotent payout finality lifecycle events", async () => {
     const confirmed = await createPostgresPayoutTransactionFixture();
     await confirmed.store.markPayoutTransactionSubmitted({
@@ -1913,8 +2004,22 @@ class FakePostgresClient implements PostgresTransactionClient {
       this.database.updatePayoutBatchRollup(values);
       return result([]);
     }
+    if (
+      normalized.startsWith("update payout_items") &&
+      normalized.includes("where payout_batch_id = $1")
+    ) {
+      this.database.releasePayoutItemsForBatch(values);
+      return result([]);
+    }
     if (normalized.startsWith("update payout_items")) {
       this.database.updatePayoutItemsStatus(values);
+      return result([]);
+    }
+    if (
+      normalized.startsWith("update commission_accruals ca") &&
+      normalized.includes("set status = 'available'")
+    ) {
+      this.database.releaseAccrualsForPayoutBatch(values);
       return result([]);
     }
     if (normalized.startsWith("update commission_accruals")) {
@@ -2412,6 +2517,25 @@ class FakePostgresDatabase {
     }
   }
 
+  releaseAccrualsForPayoutBatch(values: readonly unknown[]): void {
+    const batchId = readString(values[0]);
+    const itemIds = new Set(
+      this.payoutItems
+        .filter((item) => item.payout_batch_id === batchId)
+        .map((item) => item.id)
+    );
+    const accrualIds = new Set(
+      this.payoutAllocations
+        .filter((allocation) => itemIds.has(allocation.payout_item_id))
+        .map((allocation) => allocation.accrual_id)
+    );
+    for (const accrual of this.accruals) {
+      if (accrual.status === "allocated" && accrualIds.has(accrual.id)) {
+        accrual.status = "available";
+      }
+    }
+  }
+
   selectLedgerTransaction(values: readonly unknown[]): StoredLedgerTransactionRow[] {
     const sourceType = readString(values[0]);
     const sourceId = readString(values[1]);
@@ -2564,6 +2688,15 @@ class FakePostgresDatabase {
       throw Object.assign(new Error("duplicate key"), { code: "23505" });
     }
     this.payoutAllocations.push(row);
+  }
+
+  releasePayoutItemsForBatch(values: readonly unknown[]): void {
+    const batchId = readString(values[0]);
+    for (const item of this.payoutItems) {
+      if (item.payout_batch_id === batchId) {
+        item.status = "released";
+      }
+    }
   }
 
   insertPayoutTransaction(values: readonly unknown[]): void {
