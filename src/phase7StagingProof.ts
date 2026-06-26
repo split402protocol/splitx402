@@ -17,6 +17,7 @@ export const REQUIRED_PHASE7_STAGING_FIELDS = [
   "payout_obligation_evidence",
   "funding_balance_evidence",
   "mcp_bundle_evidence",
+  "artifact_manifest_evidence",
   "commands_run",
   "approval_decision",
 ] as const;
@@ -45,6 +46,7 @@ export const PHASE7_EVIDENCE_FIELDS = [
   "payout_obligation_evidence",
   "funding_balance_evidence",
   "mcp_bundle_evidence",
+  "artifact_manifest_evidence",
   "commands_run",
 ] as const satisfies readonly Phase7StagingProofField[];
 
@@ -68,6 +70,7 @@ const PHASE7_STAGING_PROOF_ENV_NAMES: Record<Phase7StagingProofField, string> = 
   payout_obligation_evidence: "SPLIT402_PHASE7_PAYOUT_OBLIGATION_EVIDENCE",
   funding_balance_evidence: "SPLIT402_PHASE7_FUNDING_BALANCE_EVIDENCE",
   mcp_bundle_evidence: "SPLIT402_PHASE7_MCP_BUNDLE_EVIDENCE",
+  artifact_manifest_evidence: "SPLIT402_PHASE7_ARTIFACT_MANIFEST_EVIDENCE",
   commands_run: "SPLIT402_PHASE7_COMMANDS_RUN",
   approval_decision: "SPLIT402_PHASE7_APPROVAL_DECISION",
   approval_notes: "SPLIT402_PHASE7_APPROVAL_NOTES",
@@ -103,6 +106,7 @@ export function createPhase7StagingProofRecord(
     `payout_obligation_evidence: ${values.payout_obligation_evidence ?? ""}`,
     `funding_balance_evidence: ${values.funding_balance_evidence ?? ""}`,
     `mcp_bundle_evidence: ${values.mcp_bundle_evidence ?? ""}`,
+    `artifact_manifest_evidence: ${values.artifact_manifest_evidence ?? ""}`,
     `commands_run: ${values.commands_run ?? ""}`,
     `approval_decision: ${values.approval_decision ?? "no-go"}`,
     `approval_notes: ${values.approval_notes ?? ""}`,

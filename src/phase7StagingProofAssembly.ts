@@ -14,6 +14,7 @@ export const PHASE7_STAGING_ATTACHMENT_FIELDS = [
   "payout_obligation_evidence",
   "funding_balance_evidence",
   "mcp_bundle_evidence",
+  "artifact_manifest_evidence",
   "commands_run",
 ] as const satisfies readonly Phase7StagingProofField[];
 

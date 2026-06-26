@@ -84,14 +84,15 @@ evidence:
 ```bash
 corepack pnpm phase7:staging:init
 corepack pnpm phase7:staging-proof > phase7-staging-proof.txt
+corepack pnpm phase7:staging:manifest phase7-staging-proof.txt > phase7-staging-evidence/artifact-manifest.json
 corepack pnpm phase7:staging:assemble > phase7-staging-proof.txt
 corepack pnpm phase7:staging:status phase7-staging-proof.txt
 ```
 
 The proof must attach evidence for route discovery, x402 payment, Split402
 receipt verification, referrer earnings, dashboard summary, webhook delivery,
-payout obligations, Solana RPC funding-balance coverage, and MCP bundle output
-from the same staging environment.
+payout obligations, Solana RPC funding-balance coverage, MCP bundle output, and
+artifact manifest hashes from the same staging environment.
 
 ## Remaining Phase 7 Work
 
