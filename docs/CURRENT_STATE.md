@@ -46,7 +46,7 @@ flowchart LR
 | Agent SDK | Implemented for offer inspection, claim creation, paid calls, and receipt verification. |
 | Merchant SDK | Implemented for campaign caching, service-key rotation helpers, payment identifiers, operation digests, and receipt outbox primitives. |
 | Control plane | Implemented foundation: receipt ingestion, merchant/campaign/route registries, wallet auth, PostgreSQL persistence, receipt economic-policy verification, pending-only public merchant/origin registration, outbox workers, chain verification, public merchant reliability profiles, merchant dashboard summaries, payout-obligation summaries with optional Solana RPC funding balances, webhook delivery feeds, referrer balances/routes, Bazaar-compatible route metadata, and signed webhooks for accepted receipts and payout lifecycle events. |
-| Payout engine | In progress: preview, allocation, Solana transfer planning, simulation, signer policy, local-dev signer, remote signer client, signer appliance scaffold, signer deployment and private-network artifacts, custody evidence gates, signed-byte persistence, broadcast boundary, finality monitor, rollup, lifecycle events, terminal accrual states for chain rejection and paid payout closure, unknown-outcome reconciliation queue, referrer payout views, and ledger closure are present. |
+| Payout engine | In progress: preview, allocation, safe allocation release, Solana transfer planning, simulation, signer policy, local-dev signer, remote signer client, signer appliance scaffold, signer deployment and private-network artifacts, custody evidence gates, signed-byte persistence, broadcast boundary, finality monitor, rollup, lifecycle events, terminal accrual states for chain rejection and paid payout closure, unknown-outcome reconciliation queue, referrer payout views, and ledger closure are present. |
 
 ## What Is Not Built Yet
 
@@ -65,10 +65,11 @@ flowchart LR
 ## Current Direction
 
 The near-term objective is the correctness-router sprint. Protocol fee wiring,
-self-referral semantics, receipt policy gates, and public approval boundaries
-are now implemented in the working branch. Next are payout safety, dashboard
-contracts, transaction-content verification, deployment-proof honesty, and then
-the router/MCP adoption layer.
+self-referral semantics, receipt policy gates, public approval boundaries,
+payout terminal states, signer byte verification, finalized transfer-content
+verification, transaction-to-item finality mapping, and safe allocation release
+are now implemented in the working branches. Next are dashboard contracts,
+deployment-proof honesty, and then the router/MCP adoption layer.
 After those checks are green, the next adoption layer is a static-provider
 Split402 router and a runnable MCP gateway that agents can use to discover,
 pay for, verify, and monetize paid tools. The hosted staging proof remains

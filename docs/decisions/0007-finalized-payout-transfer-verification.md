@@ -42,5 +42,7 @@ For Solana, `SolanaRpcPayoutFinalizedTransferVerifier` fetches finalized
 
 ## Non-Goals
 
-This decision does not implement payout retries or manual allocation release.
+This decision did not implement payout retries or manual allocation release.
+Safe pre-submission allocation release is covered separately in
+`0008-payout-allocation-release.md`.
 Those remain separate recovery paths.

@@ -124,7 +124,8 @@ import type {
   ReferrerPayoutHistoryItem,
   ReferrerPayoutViewInput,
   ReferrerPayoutViewStore,
-  ListReferrerPayoutHistoryInput
+  ListReferrerPayoutHistoryInput,
+  ReleasePayoutBatchAllocationsInput
 } from "./payouts.js";
 import {
   PayoutBatchConflictError,
@@ -136,6 +137,7 @@ import {
   createReferrerBalanceSummary,
   createReferrerPayoutHistoryItems,
   createSignedPayoutTransactionRecords,
+  releasePayoutBatchAllocationsForBatch,
   summarizePayoutBatchTransactionItemFinality,
   verifyPayoutFinalizedTransfersBeforeLedgerClosure
 } from "./payouts.js";
@@ -598,6 +600,24 @@ export class PostgresReceiptIngestionStore
 
   async getPayoutBatch(batchId: string): Promise<PayoutBatchRecord | undefined> {
     return loadPayoutBatch(this.db, batchId);
+  }
+
+  async releasePayoutBatchAllocations(
+    input: ReleasePayoutBatchAllocationsInput
+  ): Promise<PayoutBatchRecord | undefined> {
+    return this.withTransaction(async (client) => {
+      const batch = await loadPayoutBatch(client, input.payoutBatchId);
+      if (batch === undefined) {
+        return undefined;
+      }
+      const released = releasePayoutBatchAllocationsForBatch({
+        batch,
+        reason: input.reason,
+        ...(input.now === undefined ? {} : { now: input.now })
+      });
+      await markPayoutBatchAllocationsReleased(client, released);
+      return released;
+    });
   }
 
   async saveSignedPayoutTransactions(
@@ -2906,6 +2926,43 @@ async function markBatchAccrualsPaid(
       [accrualId]
     );
   }
+}
+
+async function markPayoutBatchAllocationsReleased(
+  client: PostgresQueryExecutor,
+  batch: PayoutBatchRecord
+): Promise<void> {
+  await client.query(
+    `update payout_batches
+        set status = $2,
+            failure_code = $3,
+            failure_message = $4,
+            updated_at = $5
+      where id = $1`,
+    [
+      batch.id,
+      batch.status,
+      batch.failureCode ?? null,
+      batch.failureMessage ?? null,
+      batch.updatedAt
+    ]
+  );
+  await client.query(
+    `update payout_items
+        set status = 'released'
+      where payout_batch_id = $1`,
+    [batch.id]
+  );
+  await client.query(
+    `update commission_accruals ca
+        set status = 'available'
+       from payout_allocations pa
+       join payout_items pi on pi.id = pa.payout_item_id
+      where ca.id = pa.accrual_id
+        and pi.payout_batch_id = $1
+        and ca.status = 'allocated'`,
+    [batch.id]
+  );
 }
 
 function insertPayoutTransaction(

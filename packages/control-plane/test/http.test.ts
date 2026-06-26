@@ -391,6 +391,95 @@ describe("control-plane HTTP API", () => {
     ).toHaveLength(0);
   });
 
+  it("releases planned payout batch allocations", async () => {
+    const { app, store, receipt, merchantRegistry } = createTestApp({
+      withMerchantRegistry: true,
+      withPayouts: true
+    });
+    if (merchantRegistry === undefined) {
+      throw new Error("expected merchant registry");
+    }
+    await request(app)
+      .post("/v1/merchants")
+      .send({
+        id: receipt.merchantId,
+        slug: "release-merchant",
+        displayName: "Release Merchant",
+        ownerWallet: receipt.payerWallet
+      })
+      .expect(201);
+    await request(app)
+      .post(`/v1/merchants/${receipt.merchantId}/payout-wallets`)
+      .send({
+        id: "mpw_ffffffffffffffffffffffffffffffff",
+        network: receipt.network,
+        wallet: receipt.payToWallet,
+        asset: receipt.asset,
+        signerReference: "kms:split402-devnet-payout"
+      })
+      .expect(201);
+    await request(app).post("/v1/receipts").send({ receipt }).expect(201);
+    const snapshot = store.getByReceiptId(receipt.receiptId);
+    if (snapshot?.accrual === undefined) {
+      throw new Error("expected receipt accrual");
+    }
+    store.save({
+      ...snapshot,
+      receipt: {
+        ...snapshot.receipt,
+        verificationState: "signature_verified"
+      },
+      accrual: {
+        ...snapshot.accrual,
+        status: "available",
+        availableAt: "2026-06-24T00:04:00.000Z"
+      }
+    });
+    const availableAccrual = store.getByReceiptId(receipt.receiptId)?.accrual;
+    if (availableAccrual === undefined) {
+      throw new Error("expected available accrual");
+    }
+    const batch = store.createPayoutBatch({
+      merchantId: receipt.merchantId,
+      payoutWalletId: "mpw_ffffffffffffffffffffffffffffffff",
+      network: receipt.network,
+      asset: receipt.asset,
+      accruals: [availableAccrual],
+      now: "2026-06-24T00:05:00Z"
+    });
+
+    const response = await request(app)
+      .post(`/v1/payout-batches/${batch.id}/release-allocations`)
+      .send({
+        reason: "signer policy failed",
+        now: "2026-06-24T00:06:00Z"
+      })
+      .expect(200);
+
+    expect(response.body.batch).toEqual(
+      expect.objectContaining({
+        id: batch.id,
+        status: "cancelled",
+        failureCode: "allocations_released",
+        failureMessage: "signer policy failed",
+        updatedAt: "2026-06-24T00:06:00.000Z"
+      })
+    );
+    expect(response.body.batch.items[0]).toEqual(
+      expect.objectContaining({ status: "released" })
+    );
+    expect(store.getByReceiptId(receipt.receiptId)?.accrual?.status).toBe(
+      "available"
+    );
+    expect(
+      store.listPayoutEligibleAccruals({
+        merchantId: receipt.merchantId,
+        asset: receipt.asset,
+        now: "2026-06-24T00:06:00Z"
+      })
+    ).toHaveLength(1);
+  });
+
   it("lists payout batches that need reconciliation", async () => {
     const { app, store, receipt, merchantRegistry } = createTestApp({
       withMerchantRegistry: true,
