@@ -83,6 +83,87 @@ describe("Split402 dashboard app", () => {
     ]);
   });
 
+  it("protects dashboard APIs when a viewer token is configured", async () => {
+    const calls: Array<{ url: string; authorization?: string }> = [];
+    const agent = request.agent(
+      createDashboardApp({
+        config: {
+          controlPlaneUrl: "https://control.example",
+          port: 4027,
+          viewerToken: "viewer-secret",
+          secureSessionCookie: false
+        },
+        fetch: fakeFetch(calls, {
+          dashboard: {
+            schema: "split402.merchant_dashboard_summary.v1"
+          }
+        })
+      }).app
+    );
+
+    await agent.get("/health").expect(200);
+    await agent.get("/api/config").expect(401);
+    await agent
+      .post("/api/session")
+      .send({ token: "wrong" })
+      .expect(401);
+
+    const session = await agent
+      .post("/api/session")
+      .send({ token: "viewer-secret" })
+      .expect(200);
+
+    const cookies = session.headers["set-cookie"];
+    expect(Array.isArray(cookies) ? cookies[0] : cookies).toContain(
+      "split402_dashboard_session="
+    );
+    await agent.get("/api/config").expect(200, {
+      controlPlaneUrl: "https://control.example",
+      configuredBearerToken: false,
+      viewerAuthRequired: true
+    });
+    await agent
+      .get("/api/merchants/mrc_1/dashboard-summary")
+      .set("Authorization", "Bearer caller-token")
+      .expect(200);
+
+    expect(calls).toEqual([
+      {
+        url: "https://control.example/v1/merchants/mrc_1/dashboard-summary",
+        authorization: "Bearer caller-token"
+      }
+    ]);
+  });
+
+  it("accepts the dashboard token header without forwarding it upstream", async () => {
+    const calls: Array<{ url: string; authorization?: string }> = [];
+    const { app } = createDashboardApp({
+      config: {
+        controlPlaneUrl: "https://control.example",
+        port: 4027,
+        viewerToken: "viewer-secret",
+        controlPlaneBearerToken: "control-token"
+      },
+      fetch: fakeFetch(calls, {
+        dashboard: {
+          schema: "split402.merchant_dashboard_summary.v1"
+        }
+      })
+    });
+
+    await request(app)
+      .get("/api/merchants/mrc_1/dashboard-summary")
+      .set("x-split402-dashboard-token", "viewer-secret")
+      .expect(200);
+
+    expect(calls).toEqual([
+      {
+        url: "https://control.example/v1/merchants/mrc_1/dashboard-summary",
+        authorization: "Bearer control-token"
+      }
+    ]);
+  });
+
   it("proxies merchant payout obligation reads with asset filters", async () => {
     const calls: Array<{ url: string; authorization?: string }> = [];
     const { app } = createDashboardApp({
@@ -122,6 +203,17 @@ describe("Split402 dashboard app", () => {
         SPLIT402_DASHBOARD_PORT: "4999"
       }).port
     ).toBe(4999);
+    expect(
+      readDashboardConfig({}, {
+        SPLIT402_DASHBOARD_VIEWER_TOKEN: "viewer-secret",
+        SPLIT402_DASHBOARD_SESSION_COOKIE_NAME: "split402_staging",
+        SPLIT402_DASHBOARD_SESSION_COOKIE_SECURE: "true"
+      })
+    ).toMatchObject({
+      viewerToken: "viewer-secret",
+      sessionCookieName: "split402_staging",
+      secureSessionCookie: true
+    });
   });
 });
 

@@ -422,6 +422,10 @@ Run the dashboard:
 corepack pnpm dashboard
 ```
 
+For hosted staging, set `SPLIT402_DASHBOARD_VIEWER_TOKEN` so dashboard API
+routes require a viewer session cookie or `x-split402-dashboard-token` header
+while `/health` remains available for uptime probes.
+
 Prepare and check the Phase 7 staging proof:
 
 ```bash
