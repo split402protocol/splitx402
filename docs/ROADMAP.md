@@ -19,8 +19,10 @@ views, payout reconciliation decision tooling, and idempotent payout ledger
 closure are present.
 
 The MVP still uses normal x402 settlement to the merchant and records a
-commission liability for later merchant-funded payout. Atomic split settlement and
-`$SPLIT` bonding remain later research.
+commission liability for later merchant-funded payout. Protocol fee is a
+percentage of the referral commission via `protocolFeeBpsOfCommission`, not a
+percentage of gross x402 payment. Atomic split settlement and `$SPLIT` bonding
+remain later research.
 
 ## Phase 0: Repository Setup
 
@@ -332,7 +334,9 @@ Deliverables:
 - public reliability profile;
 - route search;
 - Bazaar metadata integration;
-- MCP demo bundle and stdio gateway;
+- MCP demo bundle and narrow stdio gateway;
+- Split402 capability router;
+- adoption-grade runnable MCP gateway;
 - webhook management.
 
 Current slice:
@@ -346,7 +350,7 @@ Current slice:
   route status rollups.
 - merchant webhook delivery feed for pending, processing, delivered, and
   dead-letter webhook outbox events.
-- MCP-facing paid-tool demo bundle and stdio gateway with tool metadata, x402
+- MCP-facing paid-tool demo bundle and narrow stdio gateway with tool metadata, x402
   payment details, Split402 campaign metadata, expected referral economics, and
   proof commands.
 - merchant/referrer dashboard UI with a narrow control-plane read proxy for
@@ -363,6 +367,13 @@ Current slice:
   available, held, in-flight, paid, and outstanding commission liabilities.
 - optional Solana RPC funding-balance provider so obligation views can report
   covered and deficit status for active payout wallets.
+
+Pending Phase 7 adoption layer:
+
+- `@split402/router` with static providers, budget enforcement, deterministic
+  ranking, fallback, and receipt verification.
+- Runnable MCP gateway backed by the router. Do not claim full MCP compatibility
+  beyond the implemented interface.
 
 ## Later: Token Bonding And Atomic Settlement
 

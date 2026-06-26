@@ -33,7 +33,7 @@ export interface CampaignTerms {
   requiredAmountAtomic: string;
   payToWallet: string;
   commissionBps: number;
-  protocolFeeBps: number;
+  protocolFeeBpsOfCommission: number;
   commissionBase: CampaignCommissionBase;
   settlementMode: CampaignSettlementMode;
   attributionRequired: boolean;
@@ -77,6 +77,8 @@ export interface CampaignTermsInput {
   requiredAmountAtomic: string;
   payToWallet: string;
   commissionBps: number;
+  protocolFeeBpsOfCommission?: number;
+  /** @deprecated Use protocolFeeBpsOfCommission. */
   protocolFeeBps?: number;
   commissionBase?: CampaignCommissionBase;
   attributionRequired?: boolean;
@@ -412,7 +414,7 @@ export function createCampaignVersionRecord(
     ),
     payToWallet: assertBase58PublicKey(input.payToWallet, "payToWallet"),
     commissionBps: assertBasisPoints(input.commissionBps, "commissionBps"),
-    protocolFeeBps: assertBasisPoints(input.protocolFeeBps ?? 0, "protocolFeeBps"),
+    protocolFeeBpsOfCommission: readProtocolFeeBpsOfCommission(input),
     commissionBase: input.commissionBase ?? "required_amount",
     settlementMode: "accrual",
     attributionRequired: input.attributionRequired ?? false,
@@ -457,6 +459,30 @@ function assertCampaignOperations(
       ...(operation.inputSchema === undefined ? {} : { inputSchema: operation.inputSchema })
     };
   });
+}
+
+function readProtocolFeeBpsOfCommission(input: CampaignTermsInput): number {
+  const canonical =
+    input.protocolFeeBpsOfCommission === undefined
+      ? undefined
+      : assertBasisPoints(
+          input.protocolFeeBpsOfCommission,
+          "protocolFeeBpsOfCommission"
+        );
+  const deprecated =
+    input.protocolFeeBps === undefined
+      ? undefined
+      : assertBasisPoints(input.protocolFeeBps, "protocolFeeBps");
+  if (
+    canonical !== undefined &&
+    deprecated !== undefined &&
+    canonical !== deprecated
+  ) {
+    throw new CampaignRegistryValidationError(
+      "protocolFeeBps and protocolFeeBpsOfCommission must match when both are provided"
+    );
+  }
+  return canonical ?? deprecated ?? 0;
 }
 
 function assertSplit402Id(value: string, label: string): string {
