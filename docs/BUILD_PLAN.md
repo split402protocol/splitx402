@@ -442,8 +442,8 @@ Current slice:
 - hosted-staging compose stack with PostgreSQL, control plane, migration job,
   dashboard, optional demo merchant, and optional workers.
 - Phase 7 staging proof scaffold, hosted preflight collector, read collector,
-  artifact manifest validator, status validator, template, and runbooks for
-  hosted end-to-end evidence.
+  artifact manifest validator, funding-balance semantic validator, status
+  validator, template, and runbooks for hosted end-to-end evidence.
 - merchant payout-obligation summary endpoint and dashboard view for pending,
   available, held, in-flight, paid, and outstanding commission liabilities.
 - optional Solana RPC funding-balance provider so obligation views can report
