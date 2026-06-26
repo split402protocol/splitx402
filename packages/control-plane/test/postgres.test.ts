@@ -724,6 +724,14 @@ describe("PostgresReceiptIngestionStore", () => {
     expect(fakePool.database.ledgerTransactions).toHaveLength(2);
     expect(fakePool.database.ledgerEntries).toHaveLength(5);
     expect(fakePool.database.payoutTransactions).toHaveLength(1);
+    expect(fakePool.database.payoutTransactionItems).toEqual([
+      expect.objectContaining({
+        payout_transaction_id: saved[0]?.id,
+        payout_item_id: batch.items[0]?.id,
+        amount_atomic: bundle.artifacts.receipt.referrerCreditAtomic,
+        destination_wallet: bundle.artifacts.receipt.payoutWallet
+      })
+    ]);
     await expect(
       store.saveSignedPayoutTransactions({
         payoutBatchId: batch.id,
@@ -860,6 +868,55 @@ describe("PostgresReceiptIngestionStore", () => {
         asset: "other_asset"
       })
     ).resolves.toEqual([]);
+  });
+
+  it("gates payout ledger closure on finalized transfer verification", async () => {
+    const fixture = await createPostgresPayoutTransactionFixture();
+    await fixture.store.markPayoutTransactionFinality({
+      id: fixture.transaction.id,
+      status: "finalized",
+      observedAt: "2026-06-24T00:08:00Z"
+    });
+
+    await expect(
+      fixture.store.closeFinalizedPayoutBatchLedger({
+        payoutBatchId: fixture.batch.id,
+        now: "2026-06-24T00:09:00Z",
+        finalizedTransferVerifier: {
+          verifyFinalizedPayout: () => ({
+            ok: false,
+            errors: ["missing mapped transfer"]
+          })
+        }
+      })
+    ).rejects.toThrow("finalized payout transfer verification failed");
+
+    expect(fixture.fakePool.database.ledgerTransactions).toHaveLength(1);
+    await expect(
+      fixture.store.getByReceiptId(fixture.bundle.artifacts.receipt.receiptId)
+    ).resolves.toEqual(
+      expect.objectContaining({
+        accrual: expect.objectContaining({ status: "allocated" })
+      })
+    );
+
+    await expect(
+      fixture.store.closeFinalizedPayoutBatchLedger({
+        payoutBatchId: fixture.batch.id,
+        now: "2026-06-24T00:09:00Z",
+        finalizedTransferVerifier: {
+          verifyFinalizedPayout: ({ batch, transactions }) => ({
+            ok: batch.status === "finalized" && transactions.length === 1,
+            errors: []
+          })
+        }
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        sourceType: "payout_batch",
+        sourceId: fixture.batch.id
+      })
+    );
   });
 
   it("loads referrer balances and payout history from payout allocations", async () => {
@@ -1736,6 +1793,10 @@ class FakePostgresClient implements PostgresTransactionClient {
       this.database.insertPayoutTransaction(values);
       return result([]);
     }
+    if (normalized.startsWith("insert into payout_transaction_items")) {
+      this.database.insertPayoutTransactionItem(values);
+      return result([]);
+    }
     if (normalized.startsWith("insert into campaigns")) {
       this.database.insertCampaign(values);
       return result([]);
@@ -1932,6 +1993,11 @@ class FakePostgresClient implements PostgresTransactionClient {
         this.database.selectPayoutTransactions(normalized, values) as unknown as Row[]
       );
     }
+    if (normalized.includes("from payout_transaction_items")) {
+      return result(
+        this.database.selectPayoutTransactionItems(values[0]) as unknown as Row[]
+      );
+    }
     if (normalized.includes("from campaigns")) {
       return result(
         this.database.selectCampaign(normalized, values) as unknown as Row[]
@@ -1989,6 +2055,7 @@ class FakePostgresDatabase {
   payoutItems: StoredPayoutItemRow[] = [];
   payoutAllocations: StoredPayoutAllocationRow[] = [];
   payoutTransactions: StoredPayoutTransactionRow[] = [];
+  payoutTransactionItems: StoredPayoutTransactionItemRow[] = [];
   campaigns: StoredCampaignRow[] = [];
   campaignVersions: StoredCampaignVersionRow[] = [];
   campaignOperations: StoredCampaignOperationRow[] = [];
@@ -2530,6 +2597,26 @@ class FakePostgresDatabase {
     this.payoutTransactions.push(row);
   }
 
+  insertPayoutTransactionItem(values: readonly unknown[]): void {
+    const row: StoredPayoutTransactionItemRow = {
+      payout_transaction_id: readString(values[0]),
+      payout_item_id: readString(values[1]),
+      amount_atomic: readString(values[2]),
+      destination_wallet: readString(values[3]),
+      destination_token_account: readNullableString(values[4])
+    };
+    if (
+      this.payoutTransactionItems.some(
+        (item) =>
+          item.payout_transaction_id === row.payout_transaction_id &&
+          item.payout_item_id === row.payout_item_id
+      )
+    ) {
+      throw Object.assign(new Error("duplicate key"), { code: "23505" });
+    }
+    this.payoutTransactionItems.push(row);
+  }
+
   markPayoutTransactionSubmitted(
     values: readonly unknown[]
   ): StoredPayoutTransactionRow[] {
@@ -2582,10 +2669,10 @@ class FakePostgresDatabase {
   }
 
   updatePayoutItemsStatus(values: readonly unknown[]): void {
-    const payoutBatchId = readString(values[0]);
+    const payoutItemId = readString(values[0]);
     const status = readString(values[1]);
     for (const item of this.payoutItems) {
-      if (item.payout_batch_id === payoutBatchId) {
+      if (item.id === payoutItemId) {
         item.status = status;
       }
     }
@@ -2740,6 +2827,19 @@ class FakePostgresDatabase {
           left.attempt - right.attempt ||
           left.created_at.localeCompare(right.created_at) ||
           left.id.localeCompare(right.id)
+      );
+  }
+
+  selectPayoutTransactionItems(value: unknown): StoredPayoutTransactionItemRow[] {
+    const ids = Array.isArray(value)
+      ? value.map((item) => readString(item))
+      : [readString(value)];
+    return this.payoutTransactionItems
+      .filter((row) => ids.includes(row.payout_transaction_id))
+      .sort(
+        (left, right) =>
+          left.payout_transaction_id.localeCompare(right.payout_transaction_id) ||
+          left.payout_item_id.localeCompare(right.payout_item_id)
       );
   }
 
@@ -3299,6 +3399,14 @@ type StoredPayoutTransactionRow = QueryResultRow & {
   finalized_at: string | null;
   error_json: string | null;
   created_at: string;
+};
+
+type StoredPayoutTransactionItemRow = QueryResultRow & {
+  payout_transaction_id: string;
+  payout_item_id: string;
+  amount_atomic: string;
+  destination_wallet: string;
+  destination_token_account: string | null;
 };
 
 type StoredCampaignRow = QueryResultRow & {
