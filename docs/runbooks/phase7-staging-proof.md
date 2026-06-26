@@ -12,6 +12,8 @@ corepack pnpm phase7:staging-proof > phase7-staging-proof.txt
 corepack pnpm dashboard
 corepack pnpm demo:mcp-bundle
 corepack pnpm demo:paid-suite
+# Capture payout obligations with SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc
+# and attach covered/deficit funding evidence to funding_balance_evidence.
 corepack pnpm phase7:staging:status phase7-staging-proof.txt
 ```
 
@@ -25,6 +27,7 @@ flowchart LR
   Earnings["Referrer balances and payouts"]
   Dashboard["Dashboard summary"]
   Webhooks["Webhook delivery feed"]
+  Funding["Funding balance coverage"]
   Approval["Approved proof record"]
 
   Discovery --> Payment
@@ -32,7 +35,8 @@ flowchart LR
   Receipt --> Earnings
   Earnings --> Dashboard
   Dashboard --> Webhooks
-  Webhooks --> Approval
+  Webhooks --> Funding
+  Funding --> Approval
 ```
 
 Attach response captures or artifact paths for every field in
