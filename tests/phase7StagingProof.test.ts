@@ -257,6 +257,8 @@ funding_balance_evidence: funding.json
       encode(
         JSON.stringify({
           schema: "split402.phase7_hosted_staging_preflight.v1",
+          controlPlaneUrl: "https://control.staging.example",
+          dashboardUrl: "https://dashboard.staging.example",
           checks: [
             {
               name: "control_plane_health",
@@ -282,6 +284,12 @@ funding_balance_evidence: funding.json
               expectedStatus: 401,
               ok: false,
             },
+            {
+              name: "dashboard_config_with_viewer",
+              status: 200,
+              expectedStatus: 200,
+              ok: true,
+            },
           ],
         }),
       ),
@@ -305,6 +313,34 @@ funding_balance_evidence: funding.json
       status: "invalid",
       blockers: ["hosted_preflight_evidence has 1 failed checks"],
     });
+  });
+
+  it("blocks approved proof records when hosted preflight targets different URLs", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/hosted-preflight.json",
+      encode(
+        JSON.stringify({
+          schema: "split402.phase7_hosted_staging_preflight.v1",
+          controlPlaneUrl: "https://other-control.staging.example",
+          dashboardUrl: "https://dashboard.staging.example",
+          checks: createPassingHostedPreflightChecks(),
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.hostedPreflightStatus.blockers).toContain(
+      "hosted_preflight_evidence controlPlaneUrl does not match proof",
+    );
   });
 
   it("approves staged proof status when local artifacts match the manifest", () => {
@@ -386,32 +422,9 @@ function createManifestArtifacts(proofText: string): Map<string, Uint8Array> {
       encode(
         JSON.stringify({
           schema: "split402.phase7_hosted_staging_preflight.v1",
-          checks: [
-            {
-              name: "control_plane_health",
-              status: 200,
-              expectedStatus: 200,
-              ok: true,
-            },
-            {
-              name: "dashboard_health",
-              status: 200,
-              expectedStatus: 200,
-              ok: true,
-            },
-            {
-              name: "dashboard_session",
-              status: 200,
-              expectedStatus: 200,
-              ok: true,
-            },
-            {
-              name: "dashboard_config_without_viewer",
-              status: 401,
-              expectedStatus: 401,
-              ok: true,
-            },
-          ],
+          controlPlaneUrl: "https://control.staging.example",
+          dashboardUrl: "https://dashboard.staging.example",
+          checks: createPassingHostedPreflightChecks(),
         }),
       ),
     ],
@@ -439,6 +452,41 @@ function readTestArtifact(
     throw new Error(`missing artifact ${path}`);
   }
   return artifact;
+}
+
+function createPassingHostedPreflightChecks(): unknown[] {
+  return [
+    {
+      name: "control_plane_health",
+      status: 200,
+      expectedStatus: 200,
+      ok: true,
+    },
+    {
+      name: "dashboard_health",
+      status: 200,
+      expectedStatus: 200,
+      ok: true,
+    },
+    {
+      name: "dashboard_session",
+      status: 200,
+      expectedStatus: 200,
+      ok: true,
+    },
+    {
+      name: "dashboard_config_without_viewer",
+      status: 401,
+      expectedStatus: 401,
+      ok: true,
+    },
+    {
+      name: "dashboard_config_with_viewer",
+      status: 200,
+      expectedStatus: 200,
+      ok: true,
+    },
+  ];
 }
 
 function encode(value: string): Uint8Array {
