@@ -183,7 +183,7 @@ flowchart TB
 | `@split402/merchant-sdk` | Merchant helpers for campaign caching, service-key rotation, payment IDs, operation digests, and durable receipt outbox delivery. |
 | `@split402/demo-merchant` | Solana Devnet merchant API used to prove the x402 plus Split402 flow. |
 | `@split402/demo-agent` | Runnable buyer/agent harness for setup, preflight, offer inspection, and paid-suite proof runs. |
-| `@split402/mcp-demo` | MCP-facing paid-tool bundle describing the demo tool, x402 payment requirement, Split402 campaign metadata, receipt verification, and proof commands. |
+| `@split402/mcp-demo` | MCP-facing paid-tool bundle and stdio gateway describing the demo tool, x402 payment requirement, Split402 campaign metadata, receipt verification, and proof commands. |
 | `@split402/dashboard` | Merchant/referrer operations UI with a narrow read proxy for dashboard summaries, reliability profiles, webhook delivery, routes, balances, and payouts. |
 | `@split402/control-plane` | Receipt ingestion, auth, merchant/campaign/route registries, outbox workers, chain verification, accrual ledger, payout preview, allocation, transaction persistence, broadcast/finality boundaries, and payout ledger closure. |
 | `@split402/payout-signer` | Isolated payout signer appliance with HMAC request authentication, policy checks, Solana transaction signing, readiness/metrics endpoints, JSONL audit logging, and container deployment artifacts. |
@@ -484,6 +484,12 @@ corepack pnpm demo:preflight
 corepack pnpm demo:paid-suite
 ```
 
+Run the MCP stdio gateway for clients that want direct MCP tool discovery:
+
+```bash
+corepack pnpm demo:mcp-gateway
+```
+
 ## Receipt Ingestion Example
 
 ```ts
@@ -541,13 +547,14 @@ curl -X POST http://localhost:4020/v1/receipts \
 
 Split402 is in public alpha and actively in Phase 7: dashboard, discovery, and
 agent-facing demo packaging. The repository already contains the protocol core,
-x402 extension, demo path, MCP demo bundle, merchant/referrer dashboard UI,
-merchant SDK primitives, control-plane ingestion, durable PostgreSQL adapters,
-outbox workers, chain verification, payout-engine boundaries, merchant
-dashboard summaries, payout-obligation views with optional Solana RPC funding
-balances, route discovery, referrer views, webhook management, a hosted-staging
-compose stack, control-plane migration job, dashboard viewer session gate, and
-machine-checkable Phase 7 staging proof gates.
+x402 extension, demo path, MCP demo bundle and stdio gateway,
+merchant/referrer dashboard UI, merchant SDK primitives, control-plane
+ingestion, durable PostgreSQL adapters, outbox workers, chain verification,
+payout-engine boundaries, merchant dashboard summaries, payout-obligation views
+with optional Solana RPC funding balances, route discovery, referrer views,
+webhook management, a hosted-staging compose stack, control-plane migration job,
+dashboard viewer session gate, and machine-checkable Phase 7 staging proof
+gates.
 
 Phase 6 production hardening remains a launch gate:
 
