@@ -47,7 +47,9 @@ the evidence field that must be fixed. When a proof file path is supplied,
 `artifactStatuses` also verifies that local `attached:` artifact paths exist
 relative to the proof file directory, and `manifestStatus` verifies that local
 artifact sizes and SHA-256 hashes still match `artifact-manifest.json`. Remote
-`http(s)` artifact URLs are marked as remote references.
+`http(s)` artifact URLs are marked as remote references. `fundingBalanceStatus`
+parses the local funding-balance artifact and rejects unresolved funding so the
+proof shows whether each asset is covered or exactly how much is missing.
 
 ## Required Evidence
 
@@ -94,5 +96,10 @@ The validator requires:
 - `hosted_preflight_evidence` must be a local attached
   `hosted-preflight.json` artifact whose checks passed against the proof's
   control-plane and dashboard URLs.
+- `funding_balance_evidence` must be a local attached
+  `funding-balance.json` artifact containing a merchant obligation summary.
+  Each asset must report `covered` with `fundingDeficitAtomic: "0"` or
+  `deficit` with a positive `fundingDeficitAtomic`; `unknown` funding status
+  does not close the gate.
 - local `attached:` artifacts must match the generated artifact manifest when
   the manifest is also attached locally.

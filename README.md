@@ -470,7 +470,9 @@ The status check validates required proof fields, local attachment presence, and
 the attached artifact manifest hashes. It also verifies the hosted preflight
 artifact was captured against the same control-plane and dashboard URLs listed
 in the proof, including locked dashboard access without a viewer token and
-successful access with the viewer token.
+successful access with the viewer token. The funding-balance artifact is also
+parsed as a merchant obligation summary: every asset must report `covered` with
+zero deficit or `deficit` with a positive `fundingDeficitAtomic` value.
 
 Run the demo merchant and agent flows:
 
