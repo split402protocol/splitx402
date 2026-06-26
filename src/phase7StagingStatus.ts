@@ -81,6 +81,7 @@ export interface Phase7StagingStatusReport {
   artifactStatuses: Phase7StagingArtifactStatus[];
   manifestStatus: Phase7StagingManifestStatus;
   hostedPreflightStatus: Phase7HostedPreflightStatus;
+  fundingBalanceStatus: Phase7FundingBalanceStatus;
   validation?: Phase7StagingProofValidation;
   nextActions: string[];
 }
@@ -117,6 +118,11 @@ export interface Phase7HostedPreflightStatus {
   blockers: string[];
 }
 
+export interface Phase7FundingBalanceStatus {
+  status: "not_checked" | "not_applicable" | "valid" | "invalid";
+  blockers: string[];
+}
+
 export function createPhase7StagingStatusReport(
   proofText?: string,
   options: Phase7StagingStatusOptions = {},
@@ -126,14 +132,17 @@ export function createPhase7StagingStatusReport(
   const artifactStatuses = createArtifactStatuses(proofText, options);
   const manifestStatus = createManifestStatus(proofText, options);
   const hostedPreflightStatus = createHostedPreflightStatus(proofText, options);
+  const fundingBalanceStatus = createFundingBalanceStatus(proofText, options);
   const artifactBlockers = artifactStatuses.flatMap((status) => status.blockers);
   const manifestBlockers = manifestStatus.blockers;
   const hostedPreflightBlockers = hostedPreflightStatus.blockers;
+  const fundingBalanceBlockers = fundingBalanceStatus.blockers;
   const readyForPublicAlphaDemo =
     (validation?.approved ?? false) &&
     artifactBlockers.length === 0 &&
     manifestBlockers.length === 0 &&
-    hostedPreflightBlockers.length === 0;
+    hostedPreflightBlockers.length === 0 &&
+    fundingBalanceBlockers.length === 0;
 
   return {
     schema: "split402.phase7_staging_status.v1",
@@ -145,15 +154,18 @@ export function createPhase7StagingStatusReport(
       artifactStatuses,
       manifestBlockers,
       hostedPreflightBlockers,
+      fundingBalanceBlockers,
     ),
     artifactStatuses,
     manifestStatus,
     hostedPreflightStatus,
+    fundingBalanceStatus,
     validation,
     nextActions: createNextActions(validation, [
       ...artifactBlockers,
       ...manifestBlockers,
       ...hostedPreflightBlockers,
+      ...fundingBalanceBlockers,
     ]),
   };
 }
@@ -163,6 +175,7 @@ function createGateStatuses(
   artifactStatuses: readonly Phase7StagingArtifactStatus[],
   manifestBlockers: readonly string[],
   hostedPreflightBlockers: readonly string[],
+  fundingBalanceBlockers: readonly string[],
 ): Phase7StagingGateStatus[] {
   return PHASE7_STAGING_COMMANDS.map((command) => {
     if (validation === undefined) {
@@ -185,6 +198,7 @@ function createGateStatuses(
       artifactBlockers,
       manifestBlockers,
       hostedPreflightBlockers,
+      fundingBalanceBlockers,
     );
     if (validation.missingFields.includes(command.evidenceField)) {
       return {
@@ -232,12 +246,16 @@ function createGateArtifactBlockers(
   artifactBlockers: readonly string[],
   manifestBlockers: readonly string[],
   hostedPreflightBlockers: readonly string[],
+  fundingBalanceBlockers: readonly string[],
 ): string[] {
   if (evidenceField === "artifact_manifest_evidence") {
     return [...artifactBlockers, ...manifestBlockers];
   }
   if (evidenceField === "hosted_preflight_evidence") {
     return [...artifactBlockers, ...hostedPreflightBlockers];
+  }
+  if (evidenceField === "funding_balance_evidence") {
+    return [...artifactBlockers, ...fundingBalanceBlockers];
   }
   return [...artifactBlockers];
 }
@@ -459,6 +477,134 @@ function createHostedPreflightStatus(
     : { status: "invalid", blockers };
 }
 
+function createFundingBalanceStatus(
+  proofText: string | undefined,
+  options: Phase7StagingStatusOptions,
+): Phase7FundingBalanceStatus {
+  if (proofText === undefined) {
+    return { status: "not_checked", blockers: [] };
+  }
+
+  const fields = parsePhase7ProofRecord(proofText);
+  const reference = fields.get("funding_balance_evidence");
+  if (reference === undefined || reference.length === 0) {
+    return { status: "not_applicable", blockers: [] };
+  }
+  if (isHttpUrl(reference)) {
+    return {
+      status: "invalid",
+      blockers: [
+        "funding_balance_evidence must be an attached local artifact for status validation",
+      ],
+    };
+  }
+
+  const artifactPath = readAttachedArtifactPath(reference);
+  if (artifactPath === undefined) {
+    return { status: "not_applicable", blockers: [] };
+  }
+  if (options.artifactBaseDir === undefined || options.readArtifact === undefined) {
+    return { status: "not_checked", blockers: [] };
+  }
+
+  const resolvedPath = resolveArtifactPath(artifactPath, options);
+  const blockers: string[] = [];
+  let artifact: unknown;
+  try {
+    const artifactBytes = options.readArtifact(resolvedPath);
+    artifact = JSON.parse(new TextDecoder().decode(artifactBytes));
+  } catch (error) {
+    blockers.push(
+      `funding_balance_evidence artifact could not be read: ${formatError(error)}`,
+    );
+  }
+
+  if (artifact === undefined) {
+    return { status: "invalid", blockers };
+  }
+
+  const summary = readMerchantObligationSummary(artifact);
+  if (summary === undefined) {
+    blockers.push(
+      "funding_balance_evidence must contain a merchant obligation summary",
+    );
+    return { status: "invalid", blockers };
+  }
+  if (summary.schema !== "split402.merchant_obligation_summary.v1") {
+    blockers.push("funding_balance_evidence summary schema is invalid");
+  }
+  if (!Array.isArray(summary.assets)) {
+    blockers.push("funding_balance_evidence summary assets must be an array");
+    return { status: "invalid", blockers };
+  }
+  if (summary.assets.length === 0) {
+    blockers.push("funding_balance_evidence summary must include at least one asset");
+  }
+
+  let hasCoveredOrDeficit = false;
+  for (const [index, asset] of summary.assets.entries()) {
+    if (typeof asset !== "object" || asset === null) {
+      blockers.push(`funding_balance_evidence assets[${index}] is invalid`);
+      continue;
+    }
+    const record = asset as Record<string, unknown>;
+    const assetName =
+      typeof record.asset === "string" && record.asset.trim().length > 0
+        ? record.asset
+        : `assets[${index}]`;
+    const fundingStatus = record.fundingStatus;
+    if (fundingStatus === "unknown") {
+      blockers.push(
+        `funding_balance_evidence ${assetName} fundingStatus is unknown`,
+      );
+      continue;
+    }
+    if (fundingStatus !== "covered" && fundingStatus !== "deficit") {
+      blockers.push(
+        `funding_balance_evidence ${assetName} fundingStatus must be covered or deficit`,
+      );
+      continue;
+    }
+
+    hasCoveredOrDeficit = true;
+    const fundingAmount = readNonNegativeAtomicString(record.fundingAmountAtomic);
+    if (fundingAmount === undefined) {
+      blockers.push(
+        `funding_balance_evidence ${assetName} fundingAmountAtomic must be a non-negative atomic amount`,
+      );
+    }
+    const fundingDeficit = readNonNegativeAtomicString(
+      record.fundingDeficitAtomic,
+    );
+    if (fundingDeficit === undefined) {
+      blockers.push(
+        `funding_balance_evidence ${assetName} fundingDeficitAtomic must be a non-negative atomic amount`,
+      );
+      continue;
+    }
+    if (fundingStatus === "covered" && fundingDeficit !== 0n) {
+      blockers.push(
+        `funding_balance_evidence ${assetName} covered status must have zero deficit`,
+      );
+    }
+    if (fundingStatus === "deficit" && fundingDeficit <= 0n) {
+      blockers.push(
+        `funding_balance_evidence ${assetName} deficit status must report a positive deficit`,
+      );
+    }
+  }
+
+  if (!hasCoveredOrDeficit) {
+    blockers.push(
+      "funding_balance_evidence must include at least one asset with covered or deficit funding status",
+    );
+  }
+
+  return blockers.length === 0
+    ? { status: "valid", blockers: [] }
+    : { status: "invalid", blockers };
+}
+
 function createArtifactStatuses(
   proofText: string | undefined,
   options: Phase7StagingStatusOptions,
@@ -638,6 +784,32 @@ interface Phase7HostedPreflightCheck {
   status: number;
   expectedStatus: number;
   ok: boolean;
+}
+
+interface Phase7MerchantObligationSummaryArtifact {
+  schema?: unknown;
+  assets?: unknown;
+}
+
+function readMerchantObligationSummary(
+  artifact: unknown,
+): Phase7MerchantObligationSummaryArtifact | undefined {
+  if (typeof artifact !== "object" || artifact === null) {
+    return undefined;
+  }
+  const record = artifact as Record<string, unknown>;
+  const candidate = record.summary ?? artifact;
+  if (typeof candidate !== "object" || candidate === null) {
+    return undefined;
+  }
+  return candidate as Phase7MerchantObligationSummaryArtifact;
+}
+
+function readNonNegativeAtomicString(value: unknown): bigint | undefined {
+  if (typeof value !== "string" || !/^(0|[1-9]\d*)$/u.test(value)) {
+    return undefined;
+  }
+  return BigInt(value);
 }
 
 function isManifestEntry(value: unknown): value is Phase7ArtifactManifestEntry {

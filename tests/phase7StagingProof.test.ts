@@ -358,6 +358,97 @@ funding_balance_evidence: funding.json
       status: "valid",
       blockers: [],
     });
+    expect(report.fundingBalanceStatus).toEqual({
+      status: "valid",
+      blockers: [],
+    });
+  });
+
+  it("blocks staged proof status when funding balance evidence is unresolved", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/funding-balance.json",
+      encode(
+        JSON.stringify({
+          summary: {
+            schema: "split402.merchant_obligation_summary.v1",
+            merchantId: "mrc_001",
+            generatedAt: "2026-06-26T00:00:00.000Z",
+            assets: [
+              {
+                asset: "usdc-devnet",
+                fundingStatus: "unknown",
+                outstandingAmountAtomic: "1000",
+              },
+            ],
+          },
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.fundingBalanceStatus).toEqual({
+      status: "invalid",
+      blockers: [
+        "funding_balance_evidence usdc-devnet fundingStatus is unknown",
+        "funding_balance_evidence must include at least one asset with covered or deficit funding status",
+      ],
+    });
+    expect(report.gateStatuses).toContainEqual({
+      gate: "funding_balance",
+      evidenceField: "funding_balance_evidence",
+      status: "invalid",
+      blockers: [
+        "funding_balance_evidence usdc-devnet fundingStatus is unknown",
+        "funding_balance_evidence must include at least one asset with covered or deficit funding status",
+      ],
+    });
+  });
+
+  it("blocks staged proof status when deficit evidence omits the real deficit", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/funding-balance.json",
+      encode(
+        JSON.stringify({
+          summary: {
+            schema: "split402.merchant_obligation_summary.v1",
+            merchantId: "mrc_001",
+            generatedAt: "2026-06-26T00:00:00.000Z",
+            assets: [
+              {
+                asset: "usdc-devnet",
+                fundingStatus: "deficit",
+                fundingAmountAtomic: "900",
+                fundingDeficitAtomic: "0",
+                outstandingAmountAtomic: "1000",
+              },
+            ],
+          },
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.fundingBalanceStatus.blockers).toContain(
+      "funding_balance_evidence usdc-devnet deficit status must report a positive deficit",
+    );
   });
 
   it("blocks staged proof status when artifact manifest hashes are stale", () => {
@@ -407,7 +498,7 @@ function createManifestProof(): string {
     dashboard_summary_evidence: "https://artifacts.example/dashboard.json",
     webhook_delivery_evidence: "https://artifacts.example/webhooks.json",
     payout_obligation_evidence: "https://artifacts.example/obligations.json",
-    funding_balance_evidence: "https://artifacts.example/funding.json",
+    funding_balance_evidence: "attached: funding-balance.json",
     mcp_bundle_evidence: "https://artifacts.example/mcp.json",
     artifact_manifest_evidence: "attached: artifact-manifest.json",
     commands_run: "attached: commands.log",
@@ -429,6 +520,39 @@ function createManifestArtifacts(proofText: string): Map<string, Uint8Array> {
       ),
     ],
     ["evidence/paid-suite.log", encode("paid proof\n")],
+    [
+      "evidence/funding-balance.json",
+      encode(
+        JSON.stringify({
+          summary: {
+            schema: "split402.merchant_obligation_summary.v1",
+            merchantId: "mrc_001",
+            generatedAt: "2026-06-26T00:00:00.000Z",
+            assets: [
+              {
+                asset: "usdc-devnet",
+                fundingStatus: "covered",
+                fundingAmountAtomic: "1000",
+                fundingDeficitAtomic: "0",
+                pendingAmountAtomic: "0",
+                availableAmountAtomic: "1000",
+                heldAmountAtomic: "0",
+                inFlightAmountAtomic: "0",
+                paidAmountAtomic: "0",
+                outstandingAmountAtomic: "1000",
+                totalAccruedAmountAtomic: "1000",
+                accrualCount: 1,
+                pendingAccrualCount: 0,
+                availableAccrualCount: 1,
+                heldAccrualCount: 0,
+                inFlightAccrualCount: 0,
+                paidAccrualCount: 0,
+              },
+            ],
+          },
+        }),
+      ),
+    ],
     ["evidence/commands.log", encode("commands\n")],
   ]);
   const manifest = createPhase7StagingArtifactManifest(proofText, {

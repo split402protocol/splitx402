@@ -112,6 +112,8 @@ bundle output, and artifact manifest hashes from the same staging environment.
 The final status check verifies that local `attached:` artifacts still match the
 recorded manifest sizes and SHA-256 hashes, and that the hosted preflight checks
 passed against the same control-plane and dashboard URLs listed in the proof.
+It also validates the funding-balance artifact, requiring every asset to show a
+resolved `covered` or `deficit` state instead of unresolved funding.
 
 ## Remaining Phase 7 Work
 
@@ -122,7 +124,9 @@ passed against the same control-plane and dashboard URLs listed in the proof.
   route, pays through x402, receives a Split402 receipt, and sees referrer
   earnings without manual database work.
 - Run the Solana RPC funding-balance provider against hosted staging wallets and
-  attach covered/deficit evidence to the Phase 7 staging proof.
+  attach covered/deficit evidence to the Phase 7 staging proof, with zero
+  deficit for covered assets or a positive `fundingDeficitAtomic` for deficit
+  assets.
 - Package the MCP demo into a runnable MCP gateway if the demo needs direct
   client integration rather than a manifest/runbook bundle.
 
