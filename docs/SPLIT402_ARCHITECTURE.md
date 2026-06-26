@@ -40,6 +40,7 @@ demo merchant, demo agent, agent SDK, control plane, merchant SDK, ledger, outbo
 workers, chain verification, and the first payout-engine boundaries, including
 payout lifecycle outbox/webhook events, local-dev signer wiring, remote signer
 client wiring, signer deployment artifacts, machine-checkable custody review
-gates, an unknown-outcome reconciliation queue, and referrer payout views.
-Dashboard and discovery, `$SPLIT` route bonding, and `split-exact` atomic
-settlement remain later milestones.
+gates, an unknown-outcome reconciliation queue, referrer payout views, Phase 7
+dashboard/discovery surfaces, hosted-staging proof tooling, and dashboard
+viewer-session gating for evidence capture. `$SPLIT` route bonding and
+`split-exact` atomic settlement remain later milestones.

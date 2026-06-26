@@ -92,7 +92,10 @@ corepack pnpm phase7:staging:status phase7-staging-proof.txt
 ```
 
 The status command must pass before Phase 7 can be marked ready for public-alpha
-demo review.
+demo review. It verifies that the hosted preflight artifact was captured against
+the same control-plane and dashboard URLs listed in the proof, and that the
+dashboard is locked without the viewer token while accepting the viewer-token
+path.
 
 ## Shutdown
 
