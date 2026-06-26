@@ -1,6 +1,7 @@
 import { createSampleProtocolArtifacts } from "@split402/protocol";
 import {
   address,
+  appendTransactionMessageInstruction,
   compileTransaction,
   createKeyPairSignerFromPrivateKeyBytes,
   createTransactionMessage,
@@ -27,11 +28,14 @@ import {
   SolanaRpcPayoutTransactionBroadcaster,
   SolanaRpcPayoutTransactionSimulator,
   SolanaRpcReceiptVerifier,
+  verifySolanaPayoutTransactionBytesAgainstPlan,
   type SolanaRpcFetch
 } from "../src/index.js";
 import type {
   PayoutBatchRecord,
   PayoutTransactionRecord,
+  SolanaPayoutInstructionPlan,
+  SolanaPayoutPlannedTransaction,
   SolanaPayoutSignerPolicy,
   SolanaPayoutSimulationReport,
   SolanaPayoutTransactionPlan
@@ -264,12 +268,20 @@ describe("SolanaRpcPayoutTransactionSimulator", () => {
         simulationBody({ err: null, logs: ["ok 1"], unitsConsumed: 5 })
       ], requests)
     });
+    const firstTransactionBase64 = createUnsignedTransactionBase64(
+      plan.fundingWallet,
+      requiredTransaction(plan, 0)
+    );
+    const secondTransactionBase64 = createUnsignedTransactionBase64(
+      plan.fundingWallet,
+      requiredTransaction(plan, 1)
+    );
 
     const report = await simulator.simulate({
       plan,
       transactions: [
-        { index: 0, transactionBase64: "AQID" },
-        { index: 1, transactionBase64: "BAUG" }
+        { index: 0, transactionBase64: firstTransactionBase64 },
+        { index: 1, transactionBase64: secondTransactionBase64 }
       ]
     });
 
@@ -298,7 +310,7 @@ describe("SolanaRpcPayoutTransactionSimulator", () => {
       expect.objectContaining({
         method: "simulateTransaction",
         params: [
-          "AQID",
+          firstTransactionBase64,
           {
             commitment: "confirmed",
             encoding: "base64",
@@ -310,7 +322,7 @@ describe("SolanaRpcPayoutTransactionSimulator", () => {
       expect.objectContaining({
         method: "simulateTransaction",
         params: [
-          "BAUG",
+          secondTransactionBase64,
           {
             commitment: "confirmed",
             encoding: "base64",
@@ -352,7 +364,15 @@ describe("SolanaRpcPayoutTransactionSimulator", () => {
     await expect(
       simulator.simulate({
         plan,
-        transactions: [{ index: 0, transactionBase64: "AQID" }]
+        transactions: [
+          {
+            index: 0,
+            transactionBase64: createUnsignedTransactionBase64(
+              plan.fundingWallet,
+              requiredTransaction(plan, 0)
+            )
+          }
+        ]
       })
     ).resolves.toEqual(
       expect.objectContaining({
@@ -390,7 +410,15 @@ describe("SolanaRpcPayoutTransactionSimulator", () => {
 
     const report = await simulator.simulate({
       plan,
-      transactions: [{ index: 0, transactionBase64: "AQID" }]
+      transactions: [
+        {
+          index: 0,
+          transactionBase64: createUnsignedTransactionBase64(
+            plan.fundingWallet,
+            requiredTransaction(plan, 0)
+          )
+        }
+      ]
     });
 
     expect(report.status).toBe("failed");
@@ -434,6 +462,116 @@ describe("SolanaRpcPayoutTransactionSimulator", () => {
         ]
       })
     ).rejects.toThrow("duplicate serialized transaction");
+  });
+});
+
+describe("verifySolanaPayoutTransactionBytesAgainstPlan", () => {
+  it("accepts serialized transaction bytes that match the approved payout plan", async () => {
+    const receipt = createSampleProtocolArtifacts().artifacts.receipt;
+    const plan = await createSolanaPayoutTransactionPlan({
+      batch: payoutBatch(receipt, { destinationTokenAccount: receipt.payerWallet }),
+      fundingWallet: receipt.payToWallet,
+      sourceTokenAccount: receipt.payerWallet,
+      tokenDecimals: 6
+    });
+    const plannedTransaction = requiredTransaction(plan, 0);
+
+    expect(
+      verifySolanaPayoutTransactionBytesAgainstPlan({
+        transactionBase64: createUnsignedTransactionBase64(
+          plan.fundingWallet,
+          plannedTransaction
+        ),
+        plannedTransaction,
+        policy: signingPolicy(plan)
+      })
+    ).toEqual({ ok: true, errors: [] });
+  });
+
+  it("rejects changed destinations, amounts, mints, extra transfers, and unsupported instructions", async () => {
+    const receipt = createSampleProtocolArtifacts().artifacts.receipt;
+    const plan = await createSolanaPayoutTransactionPlan({
+      batch: payoutBatch(receipt, { destinationTokenAccount: receipt.payerWallet }),
+      fundingWallet: receipt.payToWallet,
+      sourceTokenAccount: receipt.payerWallet,
+      tokenDecimals: 6
+    });
+    const plannedTransaction = requiredTransaction(plan, 0);
+    const policy = signingPolicy(plan);
+
+    const verify = (
+      transactionBase64: string
+    ) =>
+      verifySolanaPayoutTransactionBytesAgainstPlan({
+        transactionBase64,
+        plannedTransaction,
+        policy
+      });
+
+    expect(
+      verify(
+        createUnsignedTransactionBase64(plan.fundingWallet, plannedTransaction, {
+          mutateTransfer: (instruction) => ({
+            ...instruction,
+            destination: receipt.referrerWallet ?? receipt.payerWallet
+          })
+        })
+      ).errors
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("transfer destination")
+      ])
+    );
+    expect(
+      verify(
+        createUnsignedTransactionBase64(plan.fundingWallet, plannedTransaction, {
+          mutateTransfer: (instruction) => ({
+            ...instruction,
+            amountAtomic: "1"
+          })
+        })
+      ).errors
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("transfer amount")
+      ])
+    );
+    expect(
+      verify(
+        createUnsignedTransactionBase64(plan.fundingWallet, plannedTransaction, {
+          mutateTransfer: (instruction) => ({
+            ...instruction,
+            mint: receipt.referrerWallet ?? receipt.payerWallet
+          })
+        })
+      ).errors
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("transfer mint")
+      ])
+    );
+    expect(
+      verify(
+        createUnsignedTransactionBase64(plan.fundingWallet, plannedTransaction, {
+          extraInstruction: requiredTransferInstruction(plannedTransaction)
+        })
+      ).errors
+    ).toEqual(
+      expect.arrayContaining([
+        "transaction instruction count does not match approved plan"
+      ])
+    );
+    expect(
+      verify(
+        createUnsignedTransactionBase64(plan.fundingWallet, plannedTransaction, {
+          replaceInstruction: unsupportedInstruction()
+        })
+      ).errors
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("token program")
+      ])
+    );
   });
 });
 
@@ -607,7 +745,10 @@ describe("local-dev Solana payout signer", () => {
       signerReference: "local-dev:payout-key",
       privateKeyBytes
     });
-    const transactionBase64 = createUnsignedTransactionBase64(signer.address);
+    const transactionBase64 = createUnsignedTransactionBase64(
+      signer.address,
+      requiredTransaction(plan, 0)
+    );
 
     const report = await payoutSigner.sign({
       plan,
@@ -704,6 +845,10 @@ describe("remote Solana payout signer", () => {
       sourceTokenAccount: receipt.payerWallet,
       tokenDecimals: 6
     });
+    const transactionBase64 = createUnsignedTransactionBase64(
+      plan.fundingWallet,
+      requiredTransaction(plan, 0)
+    );
     const signer = createRemoteSolanaPayoutSigner({
       policy: signingPolicy(plan, {
         signerReference: "kms:split402-devnet-payout",
@@ -737,7 +882,7 @@ describe("remote Solana payout signer", () => {
 
     const report = await signer.sign({
       plan,
-      transactions: [{ index: 0, transactionBase64: "AQID" }]
+      transactions: [{ index: 0, transactionBase64 }]
     });
 
     expect(report.signedTransactions).toEqual([
@@ -771,7 +916,7 @@ describe("remote Solana payout signer", () => {
         network: plan.network,
         signerReference: "kms:split402-devnet-payout",
         transactionIndex: 0,
-        transactionBase64: "AQID",
+        transactionBase64,
         amountAtomic: "3000",
         destinationAmountListHash: hashSolanaPayoutDestinationAmountList(plan),
         policy: expect.objectContaining({
@@ -790,6 +935,10 @@ describe("remote Solana payout signer", () => {
       sourceTokenAccount: receipt.payerWallet,
       tokenDecimals: 6
     });
+    const transactionBase64 = createUnsignedTransactionBase64(
+      plan.fundingWallet,
+      requiredTransaction(plan, 0)
+    );
     const signer = createRemoteSolanaPayoutSignerFromEnv({
       policy: signingPolicy(plan, {
         signerReference: "kms:env-payout-key",
@@ -814,7 +963,7 @@ describe("remote Solana payout signer", () => {
     await expect(
       signer.sign({
         plan,
-        transactions: [{ index: 0, transactionBase64: "AQID" }]
+        transactions: [{ index: 0, transactionBase64 }]
       })
     ).resolves.toEqual(
       expect.objectContaining({
@@ -831,6 +980,10 @@ describe("remote Solana payout signer", () => {
       sourceTokenAccount: receipt.payerWallet,
       tokenDecimals: 6
     });
+    const transactionBase64 = createUnsignedTransactionBase64(
+      plan.fundingWallet,
+      requiredTransaction(plan, 0)
+    );
 
     expect(() =>
       createRemoteSolanaPayoutSigner({
@@ -862,7 +1015,7 @@ describe("remote Solana payout signer", () => {
     await expect(
       signer.sign({
         plan,
-        transactions: [{ index: 0, transactionBase64: "AQID" }]
+        transactions: [{ index: 0, transactionBase64 }]
       })
     ).rejects.toThrow("remote payout signer returned mismatched transactionIndex");
   });
@@ -1573,21 +1726,128 @@ function signingPolicy(
   };
 }
 
-function createUnsignedTransactionBase64(feePayer: string): string {
-  return getBase64EncodedWireTransaction(
-    compileTransaction(
-      setTransactionMessageLifetimeUsingBlockhash(
-        {
-          blockhash: feePayer as Blockhash,
-          lastValidBlockHeight: 1n
-        },
-        setTransactionMessageFeePayer(
-          address(feePayer),
-          createTransactionMessage({ version: 0 })
-        )
-      )
+function requiredTransaction(
+  plan: SolanaPayoutTransactionPlan,
+  index: number
+): SolanaPayoutPlannedTransaction {
+  const transaction = plan.transactions[index];
+  if (transaction === undefined) {
+    throw new Error(`expected transaction ${index}`);
+  }
+  return transaction;
+}
+
+function requiredTransferInstruction(
+  plannedTransaction: SolanaPayoutPlannedTransaction
+): Extract<SolanaPayoutInstructionPlan, { kind: "transferChecked" }> {
+  const instruction = plannedTransaction.instructions.find(
+    (
+      candidate
+    ): candidate is Extract<SolanaPayoutInstructionPlan, { kind: "transferChecked" }> =>
+      candidate.kind === "transferChecked"
+  );
+  if (instruction === undefined) {
+    throw new Error("expected transferChecked instruction");
+  }
+  return instruction;
+}
+
+function createUnsignedTransactionBase64(
+  feePayer: string,
+  plannedTransaction: SolanaPayoutPlannedTransaction,
+  options: {
+    mutateTransfer?: (
+      instruction: Extract<SolanaPayoutInstructionPlan, { kind: "transferChecked" }>
+    ) => Extract<SolanaPayoutInstructionPlan, { kind: "transferChecked" }>;
+    extraInstruction?: SolanaPayoutInstructionPlan;
+    replaceInstruction?: SolanaPayoutInstructionPlan;
+  } = {}
+): string {
+  const message = setTransactionMessageLifetimeUsingBlockhash(
+    {
+      blockhash: feePayer as Blockhash,
+      lastValidBlockHeight: 1n
+    },
+    setTransactionMessageFeePayer(
+      address(feePayer),
+      createTransactionMessage({ version: 0 })
     )
   );
+  const instructions = plannedTransaction.instructions.map((instruction) => {
+    if (options.replaceInstruction !== undefined) {
+      return options.replaceInstruction;
+    }
+    if (instruction.kind === "transferChecked" && options.mutateTransfer !== undefined) {
+      return options.mutateTransfer(instruction);
+    }
+    return instruction;
+  });
+  if (options.extraInstruction !== undefined) {
+    instructions.push(options.extraInstruction);
+  }
+  let messageWithInstructions: unknown = message;
+  for (const instruction of instructions) {
+    messageWithInstructions = appendTransactionMessageInstruction(
+      toSolanaInstruction(instruction),
+      messageWithInstructions as Parameters<typeof appendTransactionMessageInstruction>[1]
+    );
+  }
+  return getBase64EncodedWireTransaction(
+    compileTransaction(messageWithInstructions as Parameters<typeof compileTransaction>[0])
+  );
+}
+
+function toSolanaInstruction(instruction: SolanaPayoutInstructionPlan) {
+  if (instruction.kind === "createAssociatedTokenIdempotent") {
+    return {
+      programAddress: address(instruction.programId),
+      accounts: [
+        { address: address(instruction.payer), role: 1 },
+        { address: address(instruction.associatedTokenAccount), role: 1 },
+        { address: address(instruction.owner), role: 0 },
+        { address: address(instruction.mint), role: 0 },
+        { address: address("11111111111111111111111111111111"), role: 0 },
+        { address: address(instruction.tokenProgramId), role: 0 }
+      ],
+      data: new Uint8Array([1])
+    };
+  }
+  return {
+    programAddress: address(instruction.programId),
+    accounts: [
+      { address: address(instruction.source), role: 1 },
+      { address: address(instruction.mint), role: 0 },
+      { address: address(instruction.destination), role: 1 },
+      { address: address(instruction.authority), role: 0 }
+    ],
+    data: transferCheckedData(instruction.amountAtomic, instruction.decimals)
+  };
+}
+
+function transferCheckedData(amountAtomic: string, decimals: number): Uint8Array {
+  const data = new Uint8Array(10);
+  data[0] = 12;
+  let amount = BigInt(amountAtomic);
+  for (let index = 0; index < 8; index += 1) {
+    data[index + 1] = Number(amount & 0xffn);
+    amount >>= 8n;
+  }
+  data[9] = decimals;
+  return data;
+}
+
+function unsupportedInstruction(): SolanaPayoutInstructionPlan {
+  return {
+    kind: "transferChecked",
+    programId: "11111111111111111111111111111111",
+    source: "So11111111111111111111111111111111111111112",
+    mint: "So11111111111111111111111111111111111111112",
+    destination: "So11111111111111111111111111111111111111112",
+    authority: "So11111111111111111111111111111111111111112",
+    amountAtomic: "1",
+    decimals: 0,
+    payoutItemId: "pit_unsupported"
+  };
 }
 
 function payoutTransaction(
