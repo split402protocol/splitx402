@@ -7,6 +7,7 @@ control_plane_url:
 dashboard_url:
 demo_merchant_url:
 webhook_receiver_url:
+hosted_preflight_evidence:
 agent_discovery_evidence:
 paid_request_evidence:
 receipt_verification_evidence:

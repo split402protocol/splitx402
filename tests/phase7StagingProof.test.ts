@@ -49,6 +49,7 @@ approval_decision: no-go
         dashboard_url: "https://dashboard.staging.example",
         demo_merchant_url: "https://merchant.staging.example",
         webhook_receiver_url: "https://webhook.staging.example",
+        hosted_preflight_evidence: "attached: hosted-preflight.json",
         agent_discovery_evidence: "attached: agent-discovery.json",
         paid_request_evidence: "attached: paid-suite.log",
         receipt_verification_evidence: "attached: receipt-verification.json",
@@ -84,6 +85,7 @@ approval_decision: no-go
         dashboard_url: "https://dashboard.staging.example",
         demo_merchant_url: "https://merchant.staging.example",
         webhook_receiver_url: "https://webhook.staging.example",
+        hosted_preflight_evidence: "attached: hosted-preflight.json",
         agent_discovery_evidence: "agent-discovery.json",
         paid_request_evidence: "attached: paid-suite.log",
         receipt_verification_evidence: "attached: receipt-verification.json",
@@ -199,6 +201,7 @@ funding_balance_evidence: funding.json
         dashboard_url: "https://dashboard.staging.example",
         demo_merchant_url: "https://merchant.staging.example",
         webhook_receiver_url: "https://webhook.staging.example",
+        hosted_preflight_evidence: "attached: hosted-preflight.json",
         agent_discovery_evidence: "https://artifacts.example/discovery.json",
         paid_request_evidence: "attached: paid-suite.log",
         receipt_verification_evidence: "attached: receipt-verification.json",
@@ -243,6 +246,64 @@ funding_balance_evidence: funding.json
       blockers: [
         "funding_balance_evidence artifact is missing: evidence/missing-funding-balance.json",
       ],
+    });
+  });
+
+  it("blocks approved proof records when hosted preflight checks failed", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/hosted-preflight.json",
+      encode(
+        JSON.stringify({
+          schema: "split402.phase7_hosted_staging_preflight.v1",
+          checks: [
+            {
+              name: "control_plane_health",
+              status: 200,
+              expectedStatus: 200,
+              ok: true,
+            },
+            {
+              name: "dashboard_health",
+              status: 200,
+              expectedStatus: 200,
+              ok: true,
+            },
+            {
+              name: "dashboard_session",
+              status: 200,
+              expectedStatus: 200,
+              ok: true,
+            },
+            {
+              name: "dashboard_config_without_viewer",
+              status: 200,
+              expectedStatus: 401,
+              ok: false,
+            },
+          ],
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.hostedPreflightStatus).toEqual({
+      status: "invalid",
+      blockers: ["hosted_preflight_evidence has 1 failed checks"],
+    });
+    expect(report.gateStatuses).toContainEqual({
+      gate: "hosted_staging_preflight",
+      evidenceField: "hosted_preflight_evidence",
+      status: "invalid",
+      blockers: ["hosted_preflight_evidence has 1 failed checks"],
     });
   });
 
@@ -302,6 +363,7 @@ function createManifestProof(): string {
     dashboard_url: "https://dashboard.staging.example",
     demo_merchant_url: "https://merchant.staging.example",
     webhook_receiver_url: "https://webhook.staging.example",
+    hosted_preflight_evidence: "attached: hosted-preflight.json",
     agent_discovery_evidence: "https://artifacts.example/discovery.json",
     paid_request_evidence: "attached: paid-suite.log",
     receipt_verification_evidence: "https://artifacts.example/receipt.json",
@@ -319,6 +381,40 @@ function createManifestProof(): string {
 
 function createManifestArtifacts(proofText: string): Map<string, Uint8Array> {
   const artifacts = new Map<string, Uint8Array>([
+    [
+      "evidence/hosted-preflight.json",
+      encode(
+        JSON.stringify({
+          schema: "split402.phase7_hosted_staging_preflight.v1",
+          checks: [
+            {
+              name: "control_plane_health",
+              status: 200,
+              expectedStatus: 200,
+              ok: true,
+            },
+            {
+              name: "dashboard_health",
+              status: 200,
+              expectedStatus: 200,
+              ok: true,
+            },
+            {
+              name: "dashboard_session",
+              status: 200,
+              expectedStatus: 200,
+              ok: true,
+            },
+            {
+              name: "dashboard_config_without_viewer",
+              status: 401,
+              expectedStatus: 401,
+              ok: true,
+            },
+          ],
+        }),
+      ),
+    ],
     ["evidence/paid-suite.log", encode("paid proof\n")],
     ["evidence/commands.log", encode("commands\n")],
   ]);
