@@ -46,3 +46,11 @@ Attach response captures or artifact paths for every field in
 `corepack pnpm phase7:staging:assemble`. Leave `approval_decision` as `no-go`
 until all attached evidence is from the same staging environment and source
 commit.
+
+The validator requires:
+
+- `proof_date` in `YYYY-MM-DD` format;
+- `source_commit` as a 7-40 character git SHA;
+- all URL fields as `http://` or `https://` URLs;
+- every evidence field as either `attached: <artifact-path>` or an `http(s)`
+  artifact URL.
