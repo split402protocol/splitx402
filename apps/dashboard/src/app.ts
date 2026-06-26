@@ -1,3 +1,5 @@
+import { createHash, timingSafeEqual } from "node:crypto";
+
 import express, { type Request, type Response } from "express";
 
 export interface DashboardConfig {
@@ -6,6 +8,9 @@ export interface DashboardConfig {
   defaultMerchantId?: string;
   defaultReferrerWallet?: string;
   controlPlaneBearerToken?: string;
+  viewerToken?: string;
+  sessionCookieName: string;
+  secureSessionCookie: boolean;
 }
 
 export interface DashboardAppOptions {
@@ -55,12 +60,55 @@ export function createDashboardApp(
     });
   });
 
+  app.get("/api/session", (req, res) => {
+    res.json({
+      required: config.viewerToken !== undefined,
+      authenticated: isDashboardViewerAuthenticated(req, config)
+    });
+  });
+
+  app.post("/api/session", (req, res) => {
+    if (config.viewerToken === undefined) {
+      res.json({ required: false, authenticated: true });
+      return;
+    }
+
+    const token = readTokenBody(req);
+    if (token === undefined || !safeEqual(token, config.viewerToken)) {
+      res.status(401).json({
+        error: "dashboard_auth_failed",
+        message: "Dashboard viewer token is invalid"
+      });
+      return;
+    }
+
+    setSessionCookie(res, config);
+    res.json({ required: true, authenticated: true });
+  });
+
+  app.post("/api/session/logout", (_req, res) => {
+    clearSessionCookie(res, config);
+    res.json({ required: config.viewerToken !== undefined, authenticated: false });
+  });
+
+  app.use("/api", (req, res, next) => {
+    if (isDashboardViewerAuthenticated(req, config)) {
+      next();
+      return;
+    }
+    res.status(401).json({
+      error: "dashboard_auth_required",
+      message: "Dashboard viewer session is required"
+    });
+  });
+
   app.get("/api/config", (_req, res) => {
     res.json({
       controlPlaneUrl: config.controlPlaneUrl,
       defaultMerchantId: config.defaultMerchantId,
       defaultReferrerWallet: config.defaultReferrerWallet,
-      configuredBearerToken: config.controlPlaneBearerToken !== undefined
+      configuredBearerToken: config.controlPlaneBearerToken !== undefined,
+      viewerAuthRequired: config.viewerToken !== undefined
     });
   });
 
@@ -160,6 +208,16 @@ export function readDashboardConfig(
   const controlPlaneBearerToken =
     overrides.controlPlaneBearerToken ??
     env.SPLIT402_DASHBOARD_CONTROL_PLANE_TOKEN;
+  const viewerToken =
+    overrides.viewerToken ?? env.SPLIT402_DASHBOARD_VIEWER_TOKEN;
+  const sessionCookieName =
+    overrides.sessionCookieName ??
+    env.SPLIT402_DASHBOARD_SESSION_COOKIE_NAME ??
+    "split402_dashboard_session";
+  const secureSessionCookie =
+    overrides.secureSessionCookie ??
+    readBoolean(env.SPLIT402_DASHBOARD_SESSION_COOKIE_SECURE) ??
+    env.NODE_ENV === "production";
   return {
     controlPlaneUrl,
     port,
@@ -177,7 +235,14 @@ export function readDashboardConfig(
       ? {}
       : {
           controlPlaneBearerToken
-        })
+        }),
+    ...(viewerToken === undefined
+      ? {}
+      : {
+          viewerToken
+        }),
+    sessionCookieName,
+    secureSessionCookie
   };
 }
 
@@ -267,6 +332,102 @@ function readPositiveInteger(
   return Number.parseInt(value, 10);
 }
 
+function readBoolean(value: string | undefined): boolean | undefined {
+  if (value === undefined || value.length === 0) {
+    return undefined;
+  }
+  if (value === "true") {
+    return true;
+  }
+  if (value === "false") {
+    return false;
+  }
+  throw new Error("boolean environment values must be true or false");
+}
+
+function isDashboardViewerAuthenticated(
+  req: Request,
+  config: DashboardConfig
+): boolean {
+  if (config.viewerToken === undefined) {
+    return true;
+  }
+
+  const headerToken = req.header("x-split402-dashboard-token");
+  if (headerToken !== undefined && safeEqual(headerToken, config.viewerToken)) {
+    return true;
+  }
+
+  const sessionHash = readCookie(req, config.sessionCookieName);
+  return (
+    sessionHash !== undefined &&
+    safeEqual(sessionHash, hashToken(config.viewerToken))
+  );
+}
+
+function readTokenBody(req: Request): string | undefined {
+  const body = req.body as { token?: unknown } | undefined;
+  return typeof body?.token === "string" && body.token.length > 0
+    ? body.token
+    : undefined;
+}
+
+function setSessionCookie(res: Response, config: DashboardConfig): void {
+  const attributes = [
+    `${config.sessionCookieName}=${hashToken(config.viewerToken ?? "")}`,
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Lax",
+    "Max-Age=28800"
+  ];
+  if (config.secureSessionCookie) {
+    attributes.push("Secure");
+  }
+  res.setHeader("Set-Cookie", attributes.join("; "));
+}
+
+function clearSessionCookie(res: Response, config: DashboardConfig): void {
+  const attributes = [
+    `${config.sessionCookieName}=`,
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Lax",
+    "Max-Age=0"
+  ];
+  if (config.secureSessionCookie) {
+    attributes.push("Secure");
+  }
+  res.setHeader("Set-Cookie", attributes.join("; "));
+}
+
+function readCookie(req: Request, name: string): string | undefined {
+  const cookieHeader = req.header("cookie");
+  if (cookieHeader === undefined) {
+    return undefined;
+  }
+  for (const part of cookieHeader.split(";")) {
+    const [rawName, ...rawValue] = part.trim().split("=");
+    if (rawName === name) {
+      const value = rawValue.join("=");
+      return value.length === 0 ? undefined : decodeURIComponent(value);
+    }
+  }
+  return undefined;
+}
+
+function hashToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+function safeEqual(left: string, right: string): boolean {
+  const leftBytes = Buffer.from(left);
+  const rightBytes = Buffer.from(right);
+  return (
+    leftBytes.byteLength === rightBytes.byteLength &&
+    timingSafeEqual(leftBytes, rightBytes)
+  );
+}
+
 const defaultFetch: DashboardFetch = async (url, init) => {
   const response = await fetch(url, init);
   return {
@@ -279,7 +440,8 @@ const defaultFetch: DashboardFetch = async (url, init) => {
 function renderDashboardHtml(config: DashboardConfig): string {
   const defaults = JSON.stringify({
     merchantId: config.defaultMerchantId ?? "",
-    referrerWallet: config.defaultReferrerWallet ?? ""
+    referrerWallet: config.defaultReferrerWallet ?? "",
+    authRequired: config.viewerToken !== undefined
   });
   return `<!doctype html>
 <html lang="en">
@@ -477,6 +639,26 @@ function renderDashboardHtml(config: DashboardConfig): string {
       text-align: center;
       padding: 14px;
     }
+    .auth-panel {
+      display: none;
+      padding: 18px 0 4px;
+    }
+    .auth-panel.is-visible {
+      display: grid;
+      gap: 12px;
+    }
+    .auth-form {
+      display: grid;
+      grid-template-columns: minmax(220px, 360px) auto;
+      gap: 10px;
+      align-items: end;
+    }
+    .auth-error {
+      color: var(--bad);
+      font-size: 13px;
+      font-weight: 700;
+      min-height: 18px;
+    }
     @media (max-width: 920px) {
       .controls { grid-template-columns: 1fr 1fr; }
       .span-3, .span-4, .span-6, .span-8 { grid-column: span 12; }
@@ -485,6 +667,7 @@ function renderDashboardHtml(config: DashboardConfig): string {
       .shell { width: min(100% - 20px, 1360px); }
       .topbar { align-items: flex-start; flex-direction: column; padding: 14px 0; }
       .controls { grid-template-columns: 1fr; }
+      .auth-form { grid-template-columns: 1fr; }
       .metric strong { font-size: 22px; }
     }
   </style>
@@ -503,6 +686,16 @@ function renderDashboardHtml(config: DashboardConfig): string {
     </div>
   </header>
   <main class="shell">
+    <section class="auth-panel" id="authPanel">
+      <form class="auth-form" id="authForm">
+        <label>Viewer Token
+          <input id="viewerToken" name="viewerToken" type="password" autocomplete="current-password">
+        </label>
+        <button type="submit" id="authButton">Sign in</button>
+      </form>
+      <p class="auth-error" id="authError"></p>
+    </section>
+
     <form class="controls" id="dashboardForm">
       <label>Merchant ID
         <input id="merchantId" name="merchantId" autocomplete="off">
@@ -602,6 +795,11 @@ function renderDashboardHtml(config: DashboardConfig): string {
     const form = document.querySelector("#dashboardForm");
     const refreshButton = document.querySelector("#refreshButton");
     const connectionStatus = document.querySelector("#connectionStatus");
+    const authPanel = document.querySelector("#authPanel");
+    const authForm = document.querySelector("#authForm");
+    const authButton = document.querySelector("#authButton");
+    const authError = document.querySelector("#authError");
+    const viewerTokenInput = document.querySelector("#viewerToken");
 
     merchantInput.value = defaults.merchantId;
     referrerInput.value = defaults.referrerWallet;
@@ -610,6 +808,61 @@ function renderDashboardHtml(config: DashboardConfig): string {
       event.preventDefault();
       await refreshDashboard();
     });
+
+    authForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      await createSession();
+    });
+
+    async function initializeDashboard() {
+      if (defaults.authRequired) {
+        const session = await loadJson("/api/session");
+        if (!session.authenticated) {
+          showAuthPanel(true);
+          return;
+        }
+      }
+      showAuthPanel(false);
+      if (merchantInput.value || referrerInput.value) {
+        await refreshDashboard();
+      }
+    }
+
+    async function createSession() {
+      authButton.disabled = true;
+      authError.textContent = "";
+      try {
+        const response = await fetch("/api/session", {
+          method: "POST",
+          headers: {
+            accept: "application/json",
+            "content-type": "application/json"
+          },
+          body: JSON.stringify({ token: viewerTokenInput.value })
+        });
+        const body = await response.json();
+        if (!response.ok || !body.authenticated) {
+          throw new Error(body.message || body.error || "Unable to sign in");
+        }
+        viewerTokenInput.value = "";
+        showAuthPanel(false);
+        if (merchantInput.value || referrerInput.value) {
+          await refreshDashboard();
+        }
+      } catch (error) {
+        authError.textContent = error instanceof Error ? error.message : String(error);
+      } finally {
+        authButton.disabled = false;
+      }
+    }
+
+    function showAuthPanel(isVisible) {
+      authPanel.className = isVisible ? "auth-panel is-visible" : "auth-panel";
+      form.hidden = isVisible;
+      document.querySelector(".grid").hidden = isVisible;
+      connectionStatus.textContent = isVisible ? "Locked" : "Idle";
+      connectionStatus.className = isVisible ? "status warn" : "status";
+    }
 
     async function refreshDashboard() {
       const merchantId = merchantInput.value.trim();
@@ -774,9 +1027,7 @@ function renderDashboardHtml(config: DashboardConfig): string {
       }
     }
 
-    if (merchantInput.value || referrerInput.value) {
-      refreshDashboard();
-    }
+    initializeDashboard();
   </script>
 </body>
 </html>`;

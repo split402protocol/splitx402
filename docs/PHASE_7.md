@@ -17,6 +17,7 @@ Implemented:
   dead-letter webhook outbox events;
 - MCP-facing demo bundle at `@split402/mcp-demo`;
 - merchant/referrer operations dashboard at `@split402/dashboard`;
+- optional dashboard viewer session gate for hosted staging;
 - staging proof scaffold, status validator, template, and runbook;
 - merchant payout-obligation summary endpoint and dashboard view;
 - optional Solana RPC funding-balance provider for active payout wallets.
@@ -75,6 +76,9 @@ Run it with:
 ```bash
 corepack pnpm dashboard
 ```
+
+Set `SPLIT402_DASHBOARD_VIEWER_TOKEN` before exposing the dashboard in hosted
+staging so Phase 7 evidence captures are not publicly readable.
 
 ## Staging Proof
 
