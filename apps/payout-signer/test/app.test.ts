@@ -2,6 +2,7 @@ import {
   compileTransaction,
   createKeyPairSignerFromPrivateKeyBytes,
   createTransactionMessage,
+  appendTransactionMessageInstruction,
   getBase64EncodedWireTransaction,
   getTransactionDecoder,
   address,
@@ -12,6 +13,8 @@ import {
 import {
   createSolanaPayoutTransactionPlan,
   hashSolanaPayoutDestinationAmountList,
+  type SolanaPayoutInstructionPlan,
+  type SolanaPayoutPlannedTransaction,
   type SolanaPayoutSignerPolicy
 } from "@split402/control-plane";
 import { createSampleProtocolArtifacts } from "@split402/protocol";
@@ -109,6 +112,36 @@ describe("payout signer app", () => {
       .set(signHeaders(tampered))
       .send(tampered)
       .expect(400);
+  });
+
+  it("rejects transaction bytes that do not match the approved plan", async () => {
+    const signer = await createKeyPairSignerFromPrivateKeyBytes(PRIVATE_KEY_BYTES);
+    const { app, body, plan, plannedTransaction } = await createFixture({
+      fundingWallet: signer.address
+    });
+    const tampered = {
+      ...body,
+      transactionBase64: createUnsignedTransactionBase64(
+        plan.fundingWallet,
+        plannedTransaction,
+        {
+          mutateTransfer: (instruction) => ({
+            ...instruction,
+            amountAtomic: "1"
+          })
+        }
+      )
+    };
+
+    const response = await request(app)
+      .post("/v1/solana/payouts/sign")
+      .set(signHeaders(tampered))
+      .send(tampered)
+      .expect(400);
+
+    expect(response.body.message).toContain(
+      "transaction bytes do not match approved payout plan"
+    );
   });
 
   it("supports active and retired HMAC auth keys for rotation", async () => {
@@ -483,7 +516,10 @@ async function createFixture(input: {
     destinationAmountListHash: hashSolanaPayoutDestinationAmountList(plan),
     transactionIndex: 0,
     amountAtomic: "3000",
-    transactionBase64: createUnsignedTransactionBase64(input.fundingWallet),
+    transactionBase64: createUnsignedTransactionBase64(
+      input.fundingWallet,
+      plannedTransaction
+    ),
     plannedTransaction,
     policy
   };
@@ -502,7 +538,7 @@ async function createFixture(input: {
     port: 4022,
     privateKeyBytes: PRIVATE_KEY_BYTES
   });
-  return { app, body };
+  return { app, body, plan, plannedTransaction };
 }
 
 function signHeaders(
@@ -523,19 +559,76 @@ function signHeaders(
   };
 }
 
-function createUnsignedTransactionBase64(feePayer: string): string {
-  return getBase64EncodedWireTransaction(
-    compileTransaction(
-      setTransactionMessageLifetimeUsingBlockhash(
-        {
-          blockhash: feePayer as Blockhash,
-          lastValidBlockHeight: 1n
-        },
-        setTransactionMessageFeePayer(
-          address(feePayer),
-          createTransactionMessage({ version: 0 })
-        )
-      )
+function createUnsignedTransactionBase64(
+  feePayer: string,
+  plannedTransaction: SolanaPayoutPlannedTransaction,
+  options: {
+    mutateTransfer?: (
+      instruction: Extract<SolanaPayoutInstructionPlan, { kind: "transferChecked" }>
+    ) => Extract<SolanaPayoutInstructionPlan, { kind: "transferChecked" }>;
+  } = {}
+): string {
+  const message = setTransactionMessageLifetimeUsingBlockhash(
+    {
+      blockhash: feePayer as Blockhash,
+      lastValidBlockHeight: 1n
+    },
+    setTransactionMessageFeePayer(
+      address(feePayer),
+      createTransactionMessage({ version: 0 })
     )
   );
+  let messageWithInstructions: unknown = message;
+  for (const instruction of plannedTransaction.instructions) {
+    const nextInstruction =
+      instruction.kind === "transferChecked" && options.mutateTransfer !== undefined
+        ? options.mutateTransfer(instruction)
+        : instruction;
+    messageWithInstructions = appendTransactionMessageInstruction(
+      toSolanaInstruction(nextInstruction),
+      messageWithInstructions as Parameters<typeof appendTransactionMessageInstruction>[1]
+    );
+  }
+  return getBase64EncodedWireTransaction(
+    compileTransaction(messageWithInstructions as Parameters<typeof compileTransaction>[0])
+  );
+}
+
+function toSolanaInstruction(instruction: SolanaPayoutInstructionPlan) {
+  if (instruction.kind === "createAssociatedTokenIdempotent") {
+    return {
+      programAddress: address(instruction.programId),
+      accounts: [
+        { address: address(instruction.payer), role: 1 },
+        { address: address(instruction.associatedTokenAccount), role: 1 },
+        { address: address(instruction.owner), role: 0 },
+        { address: address(instruction.mint), role: 0 },
+        { address: address("11111111111111111111111111111111"), role: 0 },
+        { address: address(instruction.tokenProgramId), role: 0 }
+      ],
+      data: new Uint8Array([1])
+    };
+  }
+  return {
+    programAddress: address(instruction.programId),
+    accounts: [
+      { address: address(instruction.source), role: 1 },
+      { address: address(instruction.mint), role: 0 },
+      { address: address(instruction.destination), role: 1 },
+      { address: address(instruction.authority), role: 0 }
+    ],
+    data: transferCheckedData(instruction.amountAtomic, instruction.decimals)
+  };
+}
+
+function transferCheckedData(amountAtomic: string, decimals: number): Uint8Array {
+  const data = new Uint8Array(10);
+  data[0] = 12;
+  let amount = BigInt(amountAtomic);
+  for (let index = 0; index < 8; index += 1) {
+    data[index + 1] = Number(amount & 0xffn);
+    amount >>= 8n;
+  }
+  data[9] = decimals;
+  return data;
 }

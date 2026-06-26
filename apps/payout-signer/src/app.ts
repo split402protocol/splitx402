@@ -8,6 +8,7 @@ import {
 } from "@solana/kit";
 import {
   hashSolanaPayoutDestinationAmountList,
+  verifySolanaPayoutTransactionBytesAgainstPlan,
   type SolanaPayoutInstructionPlan,
   type SolanaPayoutPlannedItem,
   type SolanaPayoutPlannedTransaction,
@@ -171,6 +172,7 @@ export function createPayoutSignerApp(config: PayoutSignerConfig): express.Expre
       ).keyId;
       signRequest = readRemotePayoutSignRequest(req.body);
       assertRemotePayoutSignRequest(signRequest, normalizedConfig);
+      assertRequestTransactionBytesMatchPlan(signRequest);
       const signer = await requireReadySigner(signerState);
       const transactionBytes = Buffer.from(signRequest.transactionBase64, "base64");
       const transaction = getTransactionDecoder().decode(transactionBytes);
@@ -721,6 +723,23 @@ function assertRemotePayoutSignRequest(
       403,
       "forbidden",
       "policy destination amount list hash mismatch"
+    );
+  }
+}
+
+function assertRequestTransactionBytesMatchPlan(
+  request: RemotePayoutSignRequest
+): void {
+  const verification = verifySolanaPayoutTransactionBytesAgainstPlan({
+    transactionBase64: request.transactionBase64,
+    plannedTransaction: request.plannedTransaction,
+    policy: request.policy
+  });
+  if (!verification.ok) {
+    throw new SignerHttpError(
+      400,
+      "invalid_request",
+      `transaction bytes do not match approved payout plan: ${verification.errors.join("; ")}`
     );
   }
 }
