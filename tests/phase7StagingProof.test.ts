@@ -119,6 +119,9 @@ approval_decision: no-go
     });
     expect(report.commands).toBe(PHASE7_STAGING_COMMANDS);
     expect(report.commands.map((item) => item.command)).toContain(
+      "corepack pnpm phase7:staging:init",
+    );
+    expect(report.commands.map((item) => item.command)).toContain(
       "corepack pnpm phase7:staging-proof",
     );
     expect(report.commands.map((item) => item.command)).toContain(
@@ -129,6 +132,9 @@ approval_decision: no-go
     );
     expect(report.gateStatuses.every((item) => item.status === "not_checked")).toBe(
       true,
+    );
+    expect(report.nextActions).toContain(
+      "Create the evidence workspace with corepack pnpm phase7:staging:init.",
     );
     expect(report.nextActions).toContain(
       "Generate a proof scaffold with corepack pnpm phase7:staging-proof.",

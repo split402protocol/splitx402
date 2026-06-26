@@ -425,6 +425,7 @@ corepack pnpm dashboard
 Prepare and check the Phase 7 staging proof:
 
 ```bash
+corepack pnpm phase7:staging:init
 corepack pnpm phase7:staging-proof > phase7-staging-proof.txt
 corepack pnpm phase7:staging:assemble > phase7-staging-proof.txt
 corepack pnpm phase7:staging:status phase7-staging-proof.txt

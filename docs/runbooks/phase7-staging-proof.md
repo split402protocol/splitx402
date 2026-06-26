@@ -8,6 +8,7 @@ work.
 ## Commands
 
 ```bash
+corepack pnpm phase7:staging:init
 corepack pnpm phase7:staging-proof > phase7-staging-proof.txt
 corepack pnpm dashboard
 corepack pnpm demo:mcp-bundle
@@ -17,6 +18,10 @@ corepack pnpm demo:paid-suite
 corepack pnpm phase7:staging:assemble > phase7-staging-proof.txt
 corepack pnpm phase7:staging:status phase7-staging-proof.txt
 ```
+
+`phase7:staging:init` creates a `phase7-staging-evidence/` directory README and
+`phase7-staging.env` attachment-path template. It does not create evidence
+artifact files; those must be captured from the hosted staging run.
 
 The status report includes `gateStatuses`; each gate is marked `ready`,
 `missing`, `placeholder`, `invalid`, or `not_checked` with blockers attached to

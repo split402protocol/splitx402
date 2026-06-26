@@ -82,6 +82,7 @@ Phase 7 now has a machine-checkable proof record for hosted end-to-end demo
 evidence:
 
 ```bash
+corepack pnpm phase7:staging:init
 corepack pnpm phase7:staging-proof > phase7-staging-proof.txt
 corepack pnpm phase7:staging:assemble > phase7-staging-proof.txt
 corepack pnpm phase7:staging:status phase7-staging-proof.txt
