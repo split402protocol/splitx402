@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 import express, { type Request, type Response } from "express";
 
@@ -11,11 +11,13 @@ export interface DashboardConfig {
   viewerToken?: string;
   sessionCookieName: string;
   secureSessionCookie: boolean;
+  sessionMaxAgeSeconds: number;
 }
 
 export interface DashboardAppOptions {
   config?: Partial<DashboardConfig>;
   fetch?: DashboardFetch;
+  now?: () => number;
 }
 
 export interface DashboardRuntime {
@@ -43,6 +45,7 @@ export function createDashboardApp(
 ): DashboardRuntime {
   const config = readDashboardConfig(options.config);
   const fetchJson = options.fetch ?? defaultFetch;
+  const now = options.now ?? Date.now;
   const app = express();
 
   app.disable("x-powered-by");
@@ -63,7 +66,8 @@ export function createDashboardApp(
   app.get("/api/session", (req, res) => {
     res.json({
       required: config.viewerToken !== undefined,
-      authenticated: isDashboardViewerAuthenticated(req, config)
+      authenticated: isDashboardViewerAuthenticated(req, config, now),
+      sessionMaxAgeSeconds: config.sessionMaxAgeSeconds
     });
   });
 
@@ -82,8 +86,8 @@ export function createDashboardApp(
       return;
     }
 
-    setSessionCookie(res, config);
-    res.json({ required: true, authenticated: true });
+    const expiresAt = setSessionCookie(res, config, now);
+    res.json({ required: true, authenticated: true, expiresAt });
   });
 
   app.post("/api/session/logout", (_req, res) => {
@@ -92,7 +96,7 @@ export function createDashboardApp(
   });
 
   app.use("/api", (req, res, next) => {
-    if (isDashboardViewerAuthenticated(req, config)) {
+    if (isDashboardViewerAuthenticated(req, config, now)) {
       next();
       return;
     }
@@ -108,7 +112,8 @@ export function createDashboardApp(
       defaultMerchantId: config.defaultMerchantId,
       defaultReferrerWallet: config.defaultReferrerWallet,
       configuredBearerToken: config.controlPlaneBearerToken !== undefined,
-      viewerAuthRequired: config.viewerToken !== undefined
+      viewerAuthRequired: config.viewerToken !== undefined,
+      sessionMaxAgeSeconds: config.sessionMaxAgeSeconds
     });
   });
 
@@ -218,6 +223,13 @@ export function readDashboardConfig(
     overrides.secureSessionCookie ??
     readBoolean(env.SPLIT402_DASHBOARD_SESSION_COOKIE_SECURE) ??
     env.NODE_ENV === "production";
+  const sessionMaxAgeSeconds =
+    overrides.sessionMaxAgeSeconds ??
+    readPositiveInteger(
+      env.SPLIT402_DASHBOARD_SESSION_MAX_AGE_SECONDS,
+      "SPLIT402_DASHBOARD_SESSION_MAX_AGE_SECONDS"
+    ) ??
+    28_800;
   return {
     controlPlaneUrl,
     port,
@@ -242,7 +254,8 @@ export function readDashboardConfig(
           viewerToken
         }),
     sessionCookieName,
-    secureSessionCookie
+    secureSessionCookie,
+    sessionMaxAgeSeconds
   };
 }
 
@@ -347,7 +360,8 @@ function readBoolean(value: string | undefined): boolean | undefined {
 
 function isDashboardViewerAuthenticated(
   req: Request,
-  config: DashboardConfig
+  config: DashboardConfig,
+  now: () => number = Date.now
 ): boolean {
   if (config.viewerToken === undefined) {
     return true;
@@ -361,7 +375,7 @@ function isDashboardViewerAuthenticated(
   const sessionHash = readCookie(req, config.sessionCookieName);
   return (
     sessionHash !== undefined &&
-    safeEqual(sessionHash, hashToken(config.viewerToken))
+    verifySessionCookieValue(sessionHash, config, now)
   );
 }
 
@@ -372,18 +386,29 @@ function readTokenBody(req: Request): string | undefined {
     : undefined;
 }
 
-function setSessionCookie(res: Response, config: DashboardConfig): void {
+function setSessionCookie(
+  res: Response,
+  config: DashboardConfig,
+  now: () => number
+): string {
+  const expiresAtSeconds =
+    Math.floor(now() / 1000) + config.sessionMaxAgeSeconds;
+  const expiresAtDate = new Date(expiresAtSeconds * 1000);
+  const expiresAt = expiresAtDate.toISOString();
+  const cookieValue = createSessionCookieValue(config, expiresAtSeconds);
   const attributes = [
-    `${config.sessionCookieName}=${hashToken(config.viewerToken ?? "")}`,
+    `${config.sessionCookieName}=${encodeURIComponent(cookieValue)}`,
     "Path=/",
     "HttpOnly",
     "SameSite=Lax",
-    "Max-Age=28800"
+    `Max-Age=${config.sessionMaxAgeSeconds}`,
+    `Expires=${expiresAtDate.toUTCString()}`
   ];
   if (config.secureSessionCookie) {
     attributes.push("Secure");
   }
   res.setHeader("Set-Cookie", attributes.join("; "));
+  return expiresAt;
 }
 
 function clearSessionCookie(res: Response, config: DashboardConfig): void {
@@ -415,8 +440,44 @@ function readCookie(req: Request, name: string): string | undefined {
   return undefined;
 }
 
-function hashToken(token: string): string {
-  return createHash("sha256").update(token).digest("hex");
+function createSessionCookieValue(
+  config: DashboardConfig,
+  expiresAtSeconds: number
+): string {
+  return `${expiresAtSeconds}.${signSessionCookie(config, expiresAtSeconds)}`;
+}
+
+function verifySessionCookieValue(
+  value: string,
+  config: DashboardConfig,
+  now: () => number
+): boolean {
+  const parts = value.split(".");
+  if (parts.length !== 2) {
+    return false;
+  }
+  const [expiresAtRaw, signature] = parts;
+  if (
+    expiresAtRaw === undefined ||
+    signature === undefined ||
+    !/^[1-9][0-9]*$/u.test(expiresAtRaw)
+  ) {
+    return false;
+  }
+  const expiresAtSeconds = Number.parseInt(expiresAtRaw, 10);
+  if (expiresAtSeconds <= Math.floor(now() / 1000)) {
+    return false;
+  }
+  return safeEqual(signature, signSessionCookie(config, expiresAtSeconds));
+}
+
+function signSessionCookie(
+  config: DashboardConfig,
+  expiresAtSeconds: number
+): string {
+  return createHmac("sha256", config.viewerToken ?? "")
+    .update(`${config.sessionCookieName}.${expiresAtSeconds}`)
+    .digest("hex");
 }
 
 function safeEqual(left: string, right: string): boolean {
