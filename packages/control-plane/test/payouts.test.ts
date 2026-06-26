@@ -590,6 +590,44 @@ describe("merchant obligation views", () => {
       ]
     });
   });
+
+  it("reports covered and deficit funding status when balances are supplied", () => {
+    const covered = createMerchantObligationSummary({
+      merchantId: "mrc_1",
+      now: NOW,
+      fundingBalances: [{ asset: "usdc_mint", amountAtomic: "250" }],
+      accruals: [
+        accrual({ id: "acr_available", amountAtomic: "200" })
+      ],
+      payoutBatches: []
+    });
+    const deficit = createMerchantObligationSummary({
+      merchantId: "mrc_1",
+      now: NOW,
+      fundingBalances: [{ asset: "usdc_mint", amountAtomic: "120" }],
+      accruals: [
+        accrual({ id: "acr_available", amountAtomic: "200" })
+      ],
+      payoutBatches: []
+    });
+
+    expect(covered.assets[0]).toEqual(
+      expect.objectContaining({
+        fundingStatus: "covered",
+        fundingAmountAtomic: "250",
+        fundingDeficitAtomic: "0",
+        outstandingAmountAtomic: "200"
+      })
+    );
+    expect(deficit.assets[0]).toEqual(
+      expect.objectContaining({
+        fundingStatus: "deficit",
+        fundingAmountAtomic: "120",
+        fundingDeficitAtomic: "80",
+        outstandingAmountAtomic: "200"
+      })
+    );
+  });
 });
 
 function accrual(overrides: Partial<CommissionAccrual> = {}): CommissionAccrual {

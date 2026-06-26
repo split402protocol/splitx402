@@ -44,6 +44,9 @@ SPLIT402_DASHBOARD_CONTROL_PLANE_TOKEN=...
 
 The dashboard forwards a caller-provided `Authorization` header when present.
 Otherwise it uses `SPLIT402_DASHBOARD_CONTROL_PLANE_TOKEN` if configured.
+Merchant payout obligations show `covered` or `deficit` when the control plane
+has `SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc`; otherwise funding status is
+reported as `unknown`.
 
 ## Status
 

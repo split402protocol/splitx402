@@ -18,7 +18,8 @@ Implemented:
 - MCP-facing demo bundle at `@split402/mcp-demo`;
 - merchant/referrer operations dashboard at `@split402/dashboard`;
 - staging proof scaffold, status validator, template, and runbook;
-- merchant payout-obligation summary endpoint and dashboard view.
+- merchant payout-obligation summary endpoint and dashboard view;
+- optional Solana RPC funding-balance provider for active payout wallets.
 
 ## MCP Demo Bundle
 
@@ -96,8 +97,8 @@ payout obligations, and MCP bundle output from the same staging environment.
 - Run and approve the hosted end-to-end staging proof where an agent discovers a
   route, pays through x402, receives a Split402 receipt, and sees referrer
   earnings without manual database work.
-- Add live merchant funding-balance integrations so payout-obligation views can
-  report covered or deficit status instead of `unknown`.
+- Run the Solana RPC funding-balance provider against hosted staging wallets and
+  attach covered/deficit evidence to the Phase 7 staging proof.
 - Package the MCP demo into a runnable MCP gateway if the demo needs direct
   client integration rather than a manifest/runbook bundle.
 

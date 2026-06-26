@@ -343,6 +343,7 @@ export interface MerchantObligationViewInput {
   merchantId: string;
   asset?: string;
   now?: string;
+  fundingBalances?: readonly PayoutFundingBalance[];
 }
 
 export interface MerchantObligationSummary {
@@ -355,6 +356,8 @@ export interface MerchantObligationSummary {
 export interface MerchantObligationAssetSummary {
   asset: string;
   fundingStatus: PayoutFundingStatus;
+  fundingAmountAtomic?: string;
+  fundingDeficitAtomic?: string;
   pendingAmountAtomic: string;
   availableAmountAtomic: string;
   heldAmountAtomic: string;
@@ -1039,6 +1042,7 @@ export function createMerchantObligationSummary(input: {
   payoutBatches: readonly PayoutBatchRecord[];
   asset?: string;
   now?: string;
+  fundingBalances?: readonly PayoutFundingBalance[];
 }): MerchantObligationSummary {
   const merchantId = assertNonEmptyString(input.merchantId, "merchantId");
   const generatedAt = normalizeTimestamp(
@@ -1046,6 +1050,7 @@ export function createMerchantObligationSummary(input: {
     "now"
   );
   const payoutIndex = buildPayoutAllocationIndex(input.payoutBatches);
+  const fundingByAsset = buildFundingBalanceMap(input.fundingBalances);
   const assetsByMint = new Map<
     string,
     {
@@ -1118,9 +1123,26 @@ export function createMerchantObligationSummary(input: {
         const outstanding =
           totals.pending + totals.available + totals.held + totals.inFlight;
         const total = outstanding + totals.paid;
+        const fundingAmount = fundingByAsset?.get(asset);
+        const fundingDeficit =
+          fundingAmount === undefined || fundingAmount >= outstanding
+            ? 0n
+            : outstanding - fundingAmount;
+        const fundingStatus: PayoutFundingStatus =
+          fundingAmount === undefined
+            ? "unknown"
+            : fundingDeficit === 0n
+              ? "covered"
+              : "deficit";
         return {
           asset,
-          fundingStatus: "unknown",
+          fundingStatus,
+          ...(fundingAmount === undefined
+            ? {}
+            : { fundingAmountAtomic: serializeAtomicAmount(fundingAmount) }),
+          ...(fundingAmount === undefined
+            ? {}
+            : { fundingDeficitAtomic: serializeAtomicAmount(fundingDeficit) }),
           pendingAmountAtomic: serializeAtomicAmount(totals.pending),
           availableAmountAtomic: serializeAtomicAmount(totals.available),
           heldAmountAtomic: serializeAtomicAmount(totals.held),

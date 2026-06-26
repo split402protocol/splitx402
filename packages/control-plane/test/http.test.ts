@@ -22,7 +22,9 @@ import {
   createControlPlaneApp,
   type CampaignVersionRecord,
   type CampaignTermsInput,
+  type MerchantFundingBalanceProvider,
   type OutboxEventRecord,
+  type PayoutFundingBalance,
   type PayoutFinalityMonitor,
   type PayoutReconciliationFinalityResult,
   type RouteDraft,
@@ -222,6 +224,81 @@ describe("control-plane HTTP API", () => {
             availableAccrualCount: 1
           })
         ]
+      })
+    );
+  });
+
+  it("includes live merchant funding balances in payout obligations", async () => {
+    const fundingProvider = new FakeMerchantFundingBalanceProvider([
+      { asset: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", amountAtomic: "2500" }
+    ]);
+    const { app, store, receipt, merchantRegistry } = createTestApp({
+      withMerchantRegistry: true,
+      withPayouts: true,
+      merchantFundingBalanceProvider: fundingProvider
+    });
+    if (merchantRegistry === undefined) {
+      throw new Error("expected merchant registry");
+    }
+    await request(app)
+      .post("/v1/merchants")
+      .send({
+        id: receipt.merchantId,
+        slug: "funding-merchant",
+        displayName: "Funding Merchant",
+        ownerWallet: receipt.payerWallet,
+        status: "active"
+      })
+      .expect(201);
+    await request(app)
+      .post(`/v1/merchants/${receipt.merchantId}/payout-wallets`)
+      .send({
+        id: "mpw_ffffffffffffffffffffffffffffffff",
+        network: receipt.network,
+        wallet: receipt.payToWallet,
+        asset: receipt.asset,
+        signerReference: "kms:split402-devnet-payout"
+      })
+      .expect(201);
+    await request(app).post("/v1/receipts").send({ receipt }).expect(201);
+    const snapshot = store.getByReceiptId(receipt.receiptId);
+    if (snapshot?.accrual === undefined) {
+      throw new Error("expected receipt accrual");
+    }
+    store.save({
+      ...snapshot,
+      receipt: {
+        ...snapshot.receipt,
+        verificationState: "signature_verified"
+      },
+      accrual: {
+        ...snapshot.accrual,
+        status: "available",
+        availableAt: "2026-06-24T00:04:00.000Z"
+      }
+    });
+
+    const response = await request(app)
+      .get(`/v1/merchants/${receipt.merchantId}/payout-obligations`)
+      .expect(200);
+
+    expect(fundingProvider.inputs).toEqual([
+      expect.objectContaining({
+        merchantId: receipt.merchantId,
+        payoutWallets: [
+          expect.objectContaining({
+            id: "mpw_ffffffffffffffffffffffffffffffff",
+            asset: receipt.asset
+          })
+        ]
+      })
+    ]);
+    expect(response.body.summary.assets[0]).toEqual(
+      expect.objectContaining({
+        fundingStatus: "covered",
+        fundingAmountAtomic: "2500",
+        fundingDeficitAtomic: "0",
+        outstandingAmountAtomic: "2000"
       })
     );
   });
@@ -1525,6 +1602,7 @@ function createTestApp(
     withCampaignRegistry?: boolean;
     withMerchantRegistry?: boolean;
     payoutFinalityMonitor?: PayoutFinalityMonitor;
+    merchantFundingBalanceProvider?: MerchantFundingBalanceProvider;
     webhookEventManagementStore?: WebhookEventManagementStore;
     withPayouts?: boolean;
     withRouteRegistry?: boolean;
@@ -1570,6 +1648,12 @@ function createTestApp(
             payoutTransactionStore: store,
             payoutReconciliationStore: store,
             merchantObligationViewStore: store,
+            ...(options.merchantFundingBalanceProvider === undefined
+              ? {}
+              : {
+                  merchantFundingBalanceProvider:
+                    options.merchantFundingBalanceProvider
+                }),
             referrerPayoutViewStore: store,
             ...(options.payoutFinalityMonitor === undefined
               ? {}
@@ -1606,6 +1690,19 @@ class FakeWebhookEventManagementStore implements WebhookEventManagementStore {
       )
       .filter((event) => input.status === undefined || event.status === input.status)
       .slice(0, input.limit ?? 50);
+  }
+}
+
+class FakeMerchantFundingBalanceProvider implements MerchantFundingBalanceProvider {
+  readonly inputs: Parameters<MerchantFundingBalanceProvider["getMerchantFundingBalances"]>[0][] = [];
+
+  constructor(private readonly balances: readonly PayoutFundingBalance[]) {}
+
+  getMerchantFundingBalances(
+    input: Parameters<MerchantFundingBalanceProvider["getMerchantFundingBalances"]>[0]
+  ): PayoutFundingBalance[] {
+    this.inputs.push(input);
+    return [...this.balances];
   }
 }
 

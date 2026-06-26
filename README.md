@@ -499,8 +499,8 @@ agent-facing demo packaging. The repository already contains the protocol core,
 x402 extension, demo path, MCP demo bundle, merchant/referrer dashboard UI,
 merchant SDK primitives, control-plane ingestion, durable PostgreSQL adapters,
 outbox workers, chain verification, payout-engine boundaries, merchant
-dashboard summaries, payout-obligation views, route discovery, referrer views,
-and webhook management.
+dashboard summaries, payout-obligation views with optional Solana RPC funding
+balances, route discovery, referrer views, and webhook management.
 
 Phase 6 production hardening remains a launch gate:
 

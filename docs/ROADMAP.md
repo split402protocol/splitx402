@@ -355,6 +355,8 @@ Current slice:
   hosted end-to-end evidence.
 - merchant payout-obligation summary endpoint and dashboard view for pending,
   available, held, in-flight, paid, and outstanding commission liabilities.
+- optional Solana RPC funding-balance provider so obligation views can report
+  covered and deficit status for active payout wallets.
 
 ## Later: Token Bonding And Atomic Settlement
 
