@@ -66,6 +66,11 @@ const PHASE7_STAGING_EVIDENCE_ARTIFACTS: readonly Phase7StagingEvidenceArtifact[
       purpose: "MCP demo bundle output for the paid tool card.",
     },
     {
+      field: "artifact_manifest_evidence",
+      fileName: "artifact-manifest.json",
+      purpose: "SHA-256 manifest for the reviewed local evidence files.",
+    },
+    {
       field: "commands_run",
       fileName: "commands.log",
       purpose: "Command transcript for the staging proof run.",

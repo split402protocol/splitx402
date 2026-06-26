@@ -15,6 +15,7 @@ describe("Phase 7 staging proof assembly", () => {
         payout_obligation_evidence: "evidence/payout-obligations.json",
         funding_balance_evidence: "evidence/funding-balance.json",
         mcp_bundle_evidence: "evidence/mcp-bundle.json",
+        artifact_manifest_evidence: "evidence/artifact-manifest.json",
         commands_run: "evidence/commands.log",
       },
       values: {
@@ -36,6 +37,9 @@ describe("Phase 7 staging proof assembly", () => {
     );
     expect(proof).toContain(
       "funding_balance_evidence: attached: evidence/funding-balance.json\n",
+    );
+    expect(proof).toContain(
+      "artifact_manifest_evidence: attached: evidence/artifact-manifest.json\n",
     );
     expect(proof).toContain("approval_decision: no-go\n");
   });

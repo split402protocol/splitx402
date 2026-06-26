@@ -37,6 +37,7 @@
     "phase7:staging-proof": "tsx src/phase7-staging-proof.ts",
     "phase7:staging:init": "tsx src/phase7-staging-init.ts",
     "phase7:staging:assemble": "tsx src/phase7-staging-assemble.ts",
+    "phase7:staging:manifest": "tsx src/phase7-staging-manifest.ts",
     "phase7:staging:status": "tsx src/phase7-staging-status.ts",
     "audit": "corepack pnpm audit --audit-level high",
     "dashboard": "corepack pnpm --filter @split402/dashboard dev",
