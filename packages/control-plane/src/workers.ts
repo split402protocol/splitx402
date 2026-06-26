@@ -157,6 +157,17 @@ export class ReceiptChainVerificationWorker
       };
     }
 
+    const rejected = await this.receiptStore.markReceiptChainRejected({
+      receiptId,
+      rejectedAt: now,
+      reason: verification.error
+    });
+    if (rejected === undefined) {
+      return this.deadLetter(
+        event,
+        `receipt disappeared during chain rejection: ${receiptId}`
+      );
+    }
     return this.deadLetter(event, verification.error);
   }
 

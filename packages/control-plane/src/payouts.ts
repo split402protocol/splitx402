@@ -1004,6 +1004,7 @@ export function createReferrerPayoutHistoryItems(input: {
   const items = input.accruals
     .filter((accrual) => accrual.referrerWallet === referrerWallet)
     .filter((accrual) => input.asset === undefined || accrual.asset === input.asset)
+    .filter((accrual) => accrual.status !== "rejected" && accrual.status !== "reversed")
     .map((accrual) => {
       const payout = payoutIndex.get(accrual.id);
       const status = readReferrerPayoutHistoryStatus(accrual, payout);
@@ -1071,6 +1072,8 @@ export function createMerchantObligationSummary(input: {
   for (const accrual of input.accruals) {
     if (
       accrual.merchantId !== merchantId ||
+      accrual.status === "rejected" ||
+      accrual.status === "reversed" ||
       (input.asset !== undefined && accrual.asset !== input.asset)
     ) {
       continue;
@@ -1217,6 +1220,9 @@ function readReferrerPayoutHistoryStatus(
     | undefined
 ): ReferrerPayoutHistoryStatus {
   if (payout?.item.status === "finalized") {
+    return "paid";
+  }
+  if (accrual.status === "paid") {
     return "paid";
   }
   if (accrual.status === "pending_chain_verification") {

@@ -364,6 +364,42 @@ describe("PostgresReceiptIngestionStore", () => {
     expect(replayed?.accrual?.availableAt).toBe("2026-06-24T00:04:00Z");
   });
 
+  it("marks rejected chain verification as a terminal rejected accrual", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const fakePool = new FakePostgresPool();
+    const store = new PostgresReceiptIngestionStore(fakePool);
+    const ingestor = new ReceiptIngestor(store, {
+      resolveMerchantPublicKey: () => bundle.keys.merchantPublicKey,
+      now: () => new Date("2026-06-24T00:02:00Z")
+    });
+    await ingestor.ingest({ receipt: bundle.artifacts.receipt, source: "merchant" });
+
+    const rejected = await store.markReceiptChainRejected({
+      receiptId: bundle.artifacts.receipt.receiptId,
+      rejectedAt: "2026-06-24T00:04:00Z",
+      reason: "settlement transfer did not match receipt"
+    });
+    const replayedConfirm = await store.markReceiptChainVerified({
+      receiptId: bundle.artifacts.receipt.receiptId,
+      verifiedAt: "2026-06-24T00:05:00Z"
+    });
+
+    expect(rejected?.receipt.verificationState).toBe("chain_rejected");
+    expect(rejected?.receipt.verificationReason).toBe(
+      "settlement transfer did not match receipt"
+    );
+    expect(rejected?.accrual?.status).toBe("rejected");
+    expect(replayedConfirm?.receipt.verificationState).toBe("chain_rejected");
+    expect(replayedConfirm?.accrual?.status).toBe("rejected");
+    await expect(
+      store.listPayoutEligibleAccruals({
+        merchantId: bundle.artifacts.receipt.merchantId,
+        asset: bundle.artifacts.receipt.asset,
+        now: "2026-06-24T00:05:00Z"
+      })
+    ).resolves.toEqual([]);
+  });
+
   it("persists payout batches and allocates selected accruals once", async () => {
     const bundle = createSampleProtocolArtifacts();
     const fakePool = new FakePostgresPool();
@@ -579,6 +615,11 @@ describe("PostgresReceiptIngestionStore", () => {
     );
     expect(repeatedLedgerClose?.id).toBe(ledgerClose?.id);
     expect(repeatedLedgerClose?.sourceType).toBe("payout_batch");
+    await expect(store.getByReceiptId(bundle.artifacts.receipt.receiptId)).resolves.toEqual(
+      expect.objectContaining({
+        accrual: expect.objectContaining({ status: "paid" })
+      })
+    );
     expect(fakePool.database.outboxEvents).toHaveLength(6);
     const payoutSubmittedEvent = findOutboxEvent(
       fakePool.database.outboxEvents,
@@ -1758,8 +1799,18 @@ class FakePostgresClient implements PostgresTransactionClient {
         this.database.revokeWalletAuthRefreshToken(values) as unknown as Row[]
       );
     }
-    if (normalized.startsWith("update payment_receipts")) {
+    if (
+      normalized.startsWith("update payment_receipts") &&
+      normalized.includes("verification_state = 'signature_verified'")
+    ) {
       this.database.markReceiptChainVerified(values);
+      return result([]);
+    }
+    if (
+      normalized.startsWith("update payment_receipts") &&
+      normalized.includes("verification_state = 'chain_rejected'")
+    ) {
+      this.database.markReceiptChainRejected(values);
       return result([]);
     }
     if (
@@ -1767,6 +1818,20 @@ class FakePostgresClient implements PostgresTransactionClient {
       normalized.includes("set status = 'allocated'")
     ) {
       return result(this.database.allocateAccrual(values) as unknown as Row[]);
+    }
+    if (
+      normalized.startsWith("update commission_accruals") &&
+      normalized.includes("set status = 'rejected'")
+    ) {
+      this.database.rejectAccrualForReceipt(values);
+      return result([]);
+    }
+    if (
+      normalized.startsWith("update commission_accruals") &&
+      normalized.includes("set status = 'paid'")
+    ) {
+      this.database.markAccrualPaid(values);
+      return result([]);
     }
     if (
       normalized.startsWith("update payout_transactions") &&
@@ -1955,8 +2020,9 @@ class FakePostgresDatabase {
       receipt_json: readString(values[11]),
       source: readString(values[12]),
       verification_state: readString(values[13]),
-      ingestion_state: readString(values[14]),
-      created_at: readString(values[15])
+      verification_reason: readNullableString(values[14]),
+      ingestion_state: readString(values[15]),
+      created_at: readString(values[16])
     });
   }
 
@@ -2230,6 +2296,18 @@ class FakePostgresDatabase {
       receipt.verification_state === "pending_chain_verification"
     ) {
       receipt.verification_state = "signature_verified";
+      receipt.verification_reason = null;
+    }
+  }
+
+  markReceiptChainRejected(values: readonly unknown[]): void {
+    const receipt = this.receipts.find((row) => row.id === readString(values[0]));
+    if (
+      receipt !== undefined &&
+      receipt.verification_state === "pending_chain_verification"
+    ) {
+      receipt.verification_state = "chain_rejected";
+      receipt.verification_reason = readString(values[1]);
     }
   }
 
@@ -2243,6 +2321,25 @@ class FakePostgresDatabase {
     ) {
       accrual.status = "available";
       accrual.available_at = readString(values[1]);
+    }
+  }
+
+  rejectAccrualForReceipt(values: readonly unknown[]): void {
+    const accrual = this.accruals.find(
+      (row) => row.receipt_id === readString(values[0])
+    );
+    if (
+      accrual !== undefined &&
+      accrual.status === "pending_chain_verification"
+    ) {
+      accrual.status = "rejected";
+    }
+  }
+
+  markAccrualPaid(values: readonly unknown[]): void {
+    const accrual = this.accruals.find((row) => row.id === readString(values[0]));
+    if (accrual !== undefined && accrual.status === "allocated") {
+      accrual.status = "paid";
     }
   }
 
@@ -3060,6 +3157,7 @@ type StoredReceiptRow = QueryResultRow & {
   receipt_json: string;
   source: string;
   verification_state: string;
+  verification_reason: string | null;
   ingestion_state: string;
   created_at: string;
 };
