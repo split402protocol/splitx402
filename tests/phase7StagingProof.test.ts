@@ -82,6 +82,9 @@ approval_decision: no-go
     expect(report.commands.map((item) => item.command)).toContain(
       "corepack pnpm phase7:staging-proof",
     );
+    expect(report.commands.map((item) => item.command)).toContain(
+      "corepack pnpm phase7:staging:assemble",
+    );
     expect(report.commands.map((item) => item.evidenceField)).toContain(
       "funding_balance_evidence",
     );

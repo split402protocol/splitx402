@@ -10,6 +10,11 @@ export const PHASE7_STAGING_COMMANDS = [
     evidenceField: "proof_id",
   },
   {
+    gate: "proof_assembly",
+    command: "corepack pnpm phase7:staging:assemble",
+    evidenceField: "commands_run",
+  },
+  {
     gate: "dashboard_smoke",
     command: "corepack pnpm dashboard",
     evidenceField: "dashboard_url",
@@ -75,7 +80,7 @@ function createNextActions(
     return [
       "Generate a proof scaffold with corepack pnpm phase7:staging-proof.",
       "Run the dashboard, MCP bundle, paid-suite, control-plane read checks, and funding-balance check against staging.",
-      "Attach response URLs, logs, or artifact paths to the proof record.",
+      "Attach response URLs, logs, or artifact paths with corepack pnpm phase7:staging:assemble.",
       "Run corepack pnpm phase7:staging:status <phase7-staging-proof.txt>.",
     ];
   }
