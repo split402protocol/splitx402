@@ -96,6 +96,9 @@ demo review. It verifies that the hosted preflight artifact was captured against
 the same control-plane and dashboard URLs listed in the proof, and that the
 dashboard is locked without the viewer token while accepting the viewer-token
 path.
+Run `corepack pnpm demo:mcp-gateway` from an MCP client stdio session when the
+review needs direct MCP tool discovery in addition to the captured bundle
+artifact.
 
 ## Shutdown
 

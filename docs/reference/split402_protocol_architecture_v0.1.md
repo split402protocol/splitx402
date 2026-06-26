@@ -2415,7 +2415,7 @@ Deliverables:
 - public merchant payment-reliability profile;
 - route search;
 - Bazaar metadata integration;
-- MCP demo bundle;
+- MCP demo bundle and stdio gateway;
 - webhook management.
 
 Exit criteria:
