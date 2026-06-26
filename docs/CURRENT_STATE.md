@@ -38,9 +38,10 @@ flowchart LR
 | Protocol primitives | Implemented: schemas, hashes, IDs, amount math, operation digests, signatures, and test vectors. |
 | x402 integration | Implemented: Split402 offers, referral claims, request digests, and receipts around standard x402 settlement. |
 | Demo path | Implemented for Solana Devnet paid-suite proof runs. |
-| MCP demo bundle | Implemented first Phase 7 slice: paid tool card, x402 payment metadata, Split402 campaign metadata, expected referral economics, and proof commands. |
-| Dashboard UI | Implemented first Phase 7 slice: merchant/referrer operations UI with a narrow read proxy for dashboard summary, reliability, payout obligations, webhook delivery, referrer routes, balances, and payouts. |
-| Phase 7 staging proof | Implemented proof scaffold, status validator, template, and runbook for hosted end-to-end evidence, including payout-obligation funding coverage. |
+| MCP demo bundle | Implemented public-alpha bundle: paid tool card, x402 payment metadata, Split402 campaign metadata, expected referral economics, and proof commands. |
+| Dashboard UI | Implemented public-alpha merchant/referrer operations UI with a narrow read proxy for dashboard summary, reliability, payout obligations, webhook delivery, referrer routes, balances, payouts, and an optional hosted-staging viewer session gate. |
+| Phase 7 hosted staging | Implemented compose stack for PostgreSQL, control plane, migration job, dashboard, optional demo merchant, and optional workers. |
+| Phase 7 staging proof | Implemented proof scaffold, assembly, status validator, hosted preflight collector, read collector, artifact manifest validation, template, and runbooks for hosted end-to-end evidence, including payout-obligation funding coverage. |
 | Agent SDK | Implemented for offer inspection, claim creation, paid calls, and receipt verification. |
 | Merchant SDK | Implemented for campaign caching, service-key rotation helpers, payment identifiers, operation digests, and receipt outbox primitives. |
 | Control plane | Implemented foundation: receipt ingestion, merchant/campaign/route registries, wallet auth, PostgreSQL persistence, outbox workers, chain verification, public merchant reliability profiles, merchant dashboard summaries, payout-obligation summaries with optional Solana RPC funding balances, webhook delivery feeds, referrer balances/routes, Bazaar-compatible route metadata, and signed webhooks for accepted receipts and payout lifecycle events. |
@@ -50,8 +51,8 @@ flowchart LR
 
 - The original x402 payment is not atomically split onchain in the MVP.
 - `$SPLIT` route bonding is not in the critical path yet.
-- The dashboard UI is a public-alpha operations surface, not a production-hosted
-  dashboard service yet.
+- The dashboard UI is a public-alpha operations surface with a hosted-staging
+  viewer gate, not a production mainnet dashboard service yet.
 - Mainnet production operation is not approved.
 - Phase 6 still needs completed staging deployment evidence and all pending
   custody gates in `docs/checklists/phase6-custody-review.md` before any mainnet
@@ -62,5 +63,6 @@ flowchart LR
 The near-term objective is to finish Phase 7 productization: a usable
 merchant/referrer dashboard, agent-demo packaging, and staging proof that an
 agent can discover, pay, and verify Split402 earnings without manual database
-work. The staging proof command surface now exists; the remaining gate is
-running it against a real hosted environment and approving the evidence.
+work. The hosted staging command surface now exists; the remaining gate is
+running it against a real hosted environment, collecting the required artifacts,
+and approving the evidence.

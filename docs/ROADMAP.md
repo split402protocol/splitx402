@@ -351,7 +351,11 @@ Current slice:
 - merchant/referrer dashboard UI with a narrow control-plane read proxy for
   summaries, reliability profiles, webhook delivery, routes, balances, and
   payouts.
-- Phase 7 staging proof scaffold, status validator, template, and runbook for
+- optional dashboard viewer session gate for hosted staging evidence captures.
+- hosted-staging compose stack with PostgreSQL, control plane, migration job,
+  dashboard, optional demo merchant, and optional workers.
+- Phase 7 staging proof scaffold, hosted preflight collector, read collector,
+  artifact manifest validator, status validator, template, and runbooks for
   hosted end-to-end evidence.
 - merchant payout-obligation summary endpoint and dashboard view for pending,
   available, held, in-flight, paid, and outstanding commission liabilities.
