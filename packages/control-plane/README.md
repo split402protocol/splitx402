@@ -142,11 +142,14 @@ corepack pnpm --filter @split402/control-plane test
 corepack pnpm --filter @split402/control-plane typecheck
 corepack pnpm --filter @split402/control-plane build
 corepack pnpm test:postgres
+corepack pnpm control-plane:migrate
 corepack pnpm control-plane
 corepack pnpm worker:chain
 corepack pnpm worker:webhook
 ```
 
+The migration entrypoint is `split402-control-plane-migrate`. Run it as a
+controlled release step before starting the HTTP server against a fresh database.
 The packaged HTTP entrypoint is `split402-control-plane`. It reads `PORT` or
 `SPLIT402_CONTROL_PLANE_PORT`, defaulting to `4021`.
 
