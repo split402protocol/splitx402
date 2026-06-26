@@ -2797,6 +2797,10 @@ function readReferralClaim(value: unknown): ReferralClaimV1 {
 
 function readCampaignTermsInput(body: Record<string, unknown>): CampaignTermsInput {
   const protocolFeeBps = readOptionalNumber(body.protocolFeeBps, "protocolFeeBps");
+  const protocolFeeBpsOfCommission = readOptionalNumber(
+    body.protocolFeeBpsOfCommission,
+    "protocolFeeBpsOfCommission"
+  );
   const commissionBase = readOptionalCampaignCommissionBase(body.commissionBase);
   const attributionRequired = readOptionalBoolean(
     body.attributionRequired,
@@ -2818,6 +2822,9 @@ function readCampaignTermsInput(body: Record<string, unknown>): CampaignTermsInp
     ),
     payToWallet: readRequiredString(body.payToWallet, "payToWallet"),
     commissionBps: readRequiredNumber(body.commissionBps, "commissionBps"),
+    ...(protocolFeeBpsOfCommission === undefined
+      ? {}
+      : { protocolFeeBpsOfCommission }),
     ...(protocolFeeBps === undefined ? {} : { protocolFeeBps }),
     ...(commissionBase === undefined ? {} : { commissionBase }),
     ...(attributionRequired === undefined ? {} : { attributionRequired }),

@@ -85,6 +85,7 @@ const NETWORK = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
 const ASSET = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const REQUIRED_AMOUNT_ATOMIC = "10000";
 const COMMISSION_BPS = 2000;
+const PROTOCOL_FEE_BPS_OF_COMMISSION = 1000;
 
 export function createSampleProtocolArtifacts(): SampleProtocolArtifacts {
   const merchantPublicKey = deriveEd25519PublicKey(MERCHANT_SEED);
@@ -105,6 +106,7 @@ export function createSampleProtocolArtifacts(): SampleProtocolArtifacts {
     requiredAmountAtomic: REQUIRED_AMOUNT_ATOMIC,
     payToWallet,
     commissionBps: COMMISSION_BPS,
+    protocolFeeBpsOfCommission: PROTOCOL_FEE_BPS_OF_COMMISSION,
     commissionBase: "required_amount",
     settlementMode: "accrual"
   };
@@ -151,6 +153,7 @@ export function createSampleProtocolArtifacts(): SampleProtocolArtifacts {
     requiredAmountAtomic: REQUIRED_AMOUNT_ATOMIC,
     payToWallet,
     commissionBps: COMMISSION_BPS,
+    protocolFeeBpsOfCommission: PROTOCOL_FEE_BPS_OF_COMMISSION,
     commissionBase: "required_amount",
     settlementMode: "accrual",
     attributionRequired: false,
@@ -204,7 +207,11 @@ export function createSampleProtocolArtifacts(): SampleProtocolArtifacts {
     buyerProof
   };
 
-  const commission = calculateCommission(parseAtomicAmount(REQUIRED_AMOUNT_ATOMIC), 2000n);
+  const commission = calculateCommission(
+    parseAtomicAmount(REQUIRED_AMOUNT_ATOMIC),
+    BigInt(COMMISSION_BPS),
+    BigInt(PROTOCOL_FEE_BPS_OF_COMMISSION)
+  );
   const unsignedReceipt = {
     protocolVersion: "0.1",
     receiptId: IDS.receiptId,
@@ -228,6 +235,7 @@ export function createSampleProtocolArtifacts(): SampleProtocolArtifacts {
     settledAmountAtomic: REQUIRED_AMOUNT_ATOMIC,
     settlementTxSignature: base58Encode(hexToBytes("aa".repeat(64))),
     commissionBps: COMMISSION_BPS,
+    protocolFeeBpsOfCommission: PROTOCOL_FEE_BPS_OF_COMMISSION,
     commissionBaseAtomic: REQUIRED_AMOUNT_ATOMIC,
     commissionAmountAtomic: serializeAtomicAmount(commission.commission),
     protocolFeeAtomic: serializeAtomicAmount(commission.protocolFee),
@@ -344,10 +352,10 @@ export function createTestVectorBundle(): ProtocolTestVectorBundle {
         name: "twenty-percent-usdc-micropayment",
         requiredAmountAtomic: REQUIRED_AMOUNT_ATOMIC,
         commissionBps: COMMISSION_BPS,
-        protocolFeeBpsOfCommission: 0,
+        protocolFeeBpsOfCommission: PROTOCOL_FEE_BPS_OF_COMMISSION,
         commissionAmountAtomic: "2000",
-        protocolFeeAtomic: "0",
-        referrerCreditAtomic: "2000"
+        protocolFeeAtomic: "200",
+        referrerCreditAtomic: "1800"
       },
       {
         name: "rounds-toward-zero",
@@ -419,4 +427,3 @@ function omitKeys<T extends Record<string, unknown>, K extends keyof T>(
   }
   return omitted;
 }
-

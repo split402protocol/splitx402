@@ -78,5 +78,30 @@ describe("protocol artifacts", () => {
     expect(result.errors).toContain("invalid receipt signature");
     expect(result.errors).toContain("commissionAmountAtomic does not match commissionBps");
   });
-});
 
+  it("rejects receipts with incorrect protocol fee or referrer credit", () => {
+    const wrongProtocolFee = structuredClone(bundle.artifacts.receipt);
+    wrongProtocolFee.protocolFeeAtomic = "0";
+    const wrongProtocolFeeResult = verifySplit402Receipt(
+      wrongProtocolFee,
+      bundle.keys.merchantPublicKey
+    );
+
+    expect(wrongProtocolFeeResult.ok).toBe(false);
+    expect(wrongProtocolFeeResult.errors).toContain(
+      "protocolFeeAtomic does not match protocol fee policy"
+    );
+
+    const wrongReferrerCredit = structuredClone(bundle.artifacts.receipt);
+    wrongReferrerCredit.referrerCreditAtomic = "2000";
+    const wrongReferrerCreditResult = verifySplit402Receipt(
+      wrongReferrerCredit,
+      bundle.keys.merchantPublicKey
+    );
+
+    expect(wrongReferrerCreditResult.ok).toBe(false);
+    expect(wrongReferrerCreditResult.errors).toContain(
+      "referrerCreditAtomic does not match commission minus protocol fee"
+    );
+  });
+});

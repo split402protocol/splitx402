@@ -137,7 +137,9 @@ describe("Split402 x402 extension", () => {
 
     expect(receipt.commissionBps).toBe(2000);
     expect(receipt.commissionAmountAtomic).toBe("2000");
-    expect(receipt.referrerCreditAtomic).toBe("2000");
+    expect(receipt.protocolFeeBpsOfCommission).toBe(1000);
+    expect(receipt.protocolFeeAtomic).toBe("200");
+    expect(receipt.referrerCreditAtomic).toBe("1800");
     expect(receipt.routeId).toBe(ROUTE_ID);
   });
 
@@ -168,7 +170,9 @@ describe("Split402 x402 extension", () => {
     });
 
     expect(receipt.commissionBps).toBe(0);
+    expect(receipt.protocolFeeBpsOfCommission).toBe(0);
     expect(receipt.commissionAmountAtomic).toBe("0");
+    expect(receipt.protocolFeeAtomic).toBe("0");
     expect(receipt.referrerCreditAtomic).toBe("0");
     expect(receipt.routeId).toBeUndefined();
   });
@@ -194,7 +198,8 @@ describe("Split402 x402 extension", () => {
     expect(receipts).toHaveLength(1);
     expect(receipt.commissionBps).toBe(2000);
     expect(receipt.commissionAmountAtomic).toBe("2000");
-    expect(receipt.referrerCreditAtomic).toBe("2000");
+    expect(receipt.protocolFeeAtomic).toBe("200");
+    expect(receipt.referrerCreditAtomic).toBe("1800");
     expect(receipt.routeId).toBe(ROUTE_ID);
     expect(verifySplit402Receipt(receipt, deriveEd25519PublicKey(MERCHANT_SEED))).toEqual({
       ok: true,
@@ -277,6 +282,8 @@ describe("Split402 x402 extension", () => {
     expect(receipt.campaignId).toBe(CAMPAIGN_ID);
     expect(receipt.operationId).toBe(OPERATION_ID);
     expect(receipt.commissionBps).toBe(2000);
+    expect(receipt.protocolFeeAtomic).toBe("200");
+    expect(receipt.referrerCreditAtomic).toBe("1800");
   });
 
   it("runs the server hook path and returns zero commission for an invalid claim", async () => {
@@ -300,6 +307,7 @@ describe("Split402 x402 extension", () => {
     expect(receipts).toHaveLength(1);
     expect(receipt.commissionBps).toBe(0);
     expect(receipt.commissionAmountAtomic).toBe("0");
+    expect(receipt.protocolFeeAtomic).toBe("0");
     expect(receipt.referrerCreditAtomic).toBe("0");
     expect(receipt.routeId).toBeUndefined();
     expect(verifySplit402Receipt(receipt, deriveEd25519PublicKey(MERCHANT_SEED))).toEqual({
@@ -307,9 +315,137 @@ describe("Split402 x402 extension", () => {
       errors: []
     });
   });
+
+  it("accepts referrers that use the same identity and payout wallet", async () => {
+    const receipts: Split402ReceiptV1[] = [];
+    const extension = createServerExtension(receipts);
+    const offer = await advertiseOffer(extension);
+    const referrer = deriveEd25519PublicKey(REFERRER_SEED);
+    const paymentPayload = await createClientPaymentPayload(
+      offer,
+      createClaim({ referrerWallet: referrer, payoutWallet: referrer })
+    );
+
+    const verifyResult = await extension.hooks?.onBeforeVerify?.(
+      routeDeclaration(),
+      verifyContext(paymentPayload)
+    );
+    expect(verifyResult).toBeUndefined();
+
+    const settlementExtension = await extension.enrichSettlementResponse?.(
+      routeDeclaration(),
+      settleContext(paymentPayload)
+    );
+    const receipt = extractReceipt(settlementExtension);
+
+    expect(receipt.referrerWallet).toBe(referrer);
+    expect(receipt.payoutWallet).toBe(referrer);
+    expect(receipt.referrerCreditAtomic).toBe("1800");
+  });
+
+  it("sets zero commission when payer is the referrer and self-referral is disabled", async () => {
+    const offer = createOffer();
+    const claim = createClaim({ referrerWallet: PAYER });
+    const attribution: ValidatedSplit402Attribution = {
+      offer,
+      paymentId: "pay_00000000000000000000000000000004",
+      requestDigest: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      referralClaim: claim,
+      claimStatus: "valid",
+      claimErrors: []
+    };
+
+    const receipt = buildReceipt({
+      attribution,
+      campaign: campaign(),
+      merchantId: MERCHANT_ID,
+      merchantOrigin: "http://localhost:4021",
+      requirement: requirement(),
+      settlement: {
+        payer: PAYER,
+        transaction: "demo-tx",
+        network: NETWORK,
+        amount: AMOUNT
+      },
+      kid: "kid_demo",
+      now: new Date("2026-06-24T00:00:00Z")
+    });
+
+    expect(receipt.commissionBps).toBe(0);
+    expect(receipt.protocolFeeBpsOfCommission).toBe(0);
+    expect(receipt.referrerCreditAtomic).toBe("0");
+    expect(receipt.routeId).toBeUndefined();
+  });
+
+  it("sets zero commission when payer is the payout wallet and self-referral is disabled", () => {
+    const offer = createOffer();
+    const claim = createClaim({ payoutWallet: PAYER });
+    const attribution: ValidatedSplit402Attribution = {
+      offer,
+      paymentId: "pay_00000000000000000000000000000004",
+      requestDigest: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      referralClaim: claim,
+      claimStatus: "valid",
+      claimErrors: []
+    };
+
+    const receipt = buildReceipt({
+      attribution,
+      campaign: campaign(),
+      merchantId: MERCHANT_ID,
+      merchantOrigin: "http://localhost:4021",
+      requirement: requirement(),
+      settlement: {
+        payer: PAYER,
+        transaction: "demo-tx",
+        network: NETWORK,
+        amount: AMOUNT
+      },
+      kid: "kid_demo",
+      now: new Date("2026-06-24T00:00:00Z")
+    });
+
+    expect(receipt.commissionBps).toBe(0);
+    expect(receipt.protocolFeeAtomic).toBe("0");
+    expect(receipt.referrerCreditAtomic).toBe("0");
+    expect(receipt.routeId).toBeUndefined();
+  });
+
+  it("allows self-referral earnings only when the offer allows self-referral", () => {
+    const offer = createOffer({ allowSelfReferral: true });
+    const claim = createClaim({ payoutWallet: PAYER });
+    const attribution: ValidatedSplit402Attribution = {
+      offer,
+      paymentId: "pay_00000000000000000000000000000004",
+      requestDigest: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      referralClaim: claim,
+      claimStatus: "valid",
+      claimErrors: []
+    };
+
+    const receipt = buildReceipt({
+      attribution,
+      campaign: campaign(),
+      merchantId: MERCHANT_ID,
+      merchantOrigin: "http://localhost:4021",
+      requirement: requirement(),
+      settlement: {
+        payer: PAYER,
+        transaction: "demo-tx",
+        network: NETWORK,
+        amount: AMOUNT
+      },
+      kid: "kid_demo",
+      now: new Date("2026-06-24T00:00:00Z")
+    });
+
+    expect(receipt.commissionBps).toBe(2000);
+    expect(receipt.referrerCreditAtomic).toBe("1800");
+    expect(receipt.payoutWallet).toBe(PAYER);
+  });
 });
 
-function createOffer(): Split402OfferV1 {
+function createOffer(input: { allowSelfReferral?: boolean } = {}): Split402OfferV1 {
   const campaignConfig = campaign();
   const unsigned = {
     protocolVersion: "0.1",
@@ -324,10 +460,11 @@ function createOffer(): Split402OfferV1 {
     requiredAmountAtomic: AMOUNT,
     payToWallet: PAY_TO,
     commissionBps: 2000,
+    protocolFeeBpsOfCommission: 1000,
     commissionBase: "required_amount",
     settlementMode: "accrual",
     attributionRequired: false,
-    allowSelfReferral: false,
+    allowSelfReferral: input.allowSelfReferral ?? false,
     offerNonce: "ofn_00000000000000000000000000000006",
     issuedAt: "2026-06-24T00:00:00Z",
     validUntil: "2099-06-24T00:00:00Z",
@@ -337,15 +474,17 @@ function createOffer(): Split402OfferV1 {
   return { ...unsigned, signature: signature.signature };
 }
 
-function createClaim(): ReferralClaimV1 {
-  const referrer = deriveEd25519PublicKey(REFERRER_SEED);
+function createClaim(
+  input: { referrerWallet?: string; payoutWallet?: string } = {}
+): ReferralClaimV1 {
+  const referrer = input.referrerWallet ?? deriveEd25519PublicKey(REFERRER_SEED);
   const unsigned = {
     version: "1",
     routeId: ROUTE_ID,
     campaignId: CAMPAIGN_ID,
     campaignVersionMin: 1,
     referrerWallet: referrer,
-    payoutWallet: deriveEd25519PublicKey(PAYOUT_SEED),
+    payoutWallet: input.payoutWallet ?? deriveEd25519PublicKey(PAYOUT_SEED),
     resourceOrigin: "http://localhost:4021",
     operationIds: [OPERATION_ID],
     issuedAt: "2026-06-24T00:00:00Z",
@@ -371,9 +510,11 @@ function campaign(): Split402CampaignConfig {
     campaignTermsHash: hashProtocolObject({
       campaignId: CAMPAIGN_ID,
       operationId: OPERATION_ID,
-      commissionBps: 2000
+      commissionBps: 2000,
+      protocolFeeBpsOfCommission: 1000
     }),
     commissionBps: 2000,
+    protocolFeeBpsOfCommission: 1000,
     attributionRequired: false,
     allowSelfReferral: false
   };

@@ -3,10 +3,10 @@
     "name": "twenty-percent-usdc-micropayment",
     "requiredAmountAtomic": "10000",
     "commissionBps": 2000,
-    "protocolFeeBpsOfCommission": 0,
+    "protocolFeeBpsOfCommission": 1000,
     "commissionAmountAtomic": "2000",
-    "protocolFeeAtomic": "0",
-    "referrerCreditAtomic": "2000"
+    "protocolFeeAtomic": "200",
+    "referrerCreditAtomic": "1800"
   },
   {
     "name": "rounds-toward-zero",

@@ -10,6 +10,7 @@ import {
   Split402OfferV1Schema,
   ReferralClaimV1Schema,
   signEd25519Message,
+  evaluateSelfReferralPolicy,
   verifyReferralClaimObject,
   verifySplit402OfferObject,
   buildOfferSigningBytes,
@@ -41,6 +42,7 @@ export interface Split402CampaignConfig {
   campaignVersion: number;
   campaignTermsHash: `sha256:${string}`;
   commissionBps: number;
+  protocolFeeBpsOfCommission: number;
   attributionRequired: boolean;
   allowSelfReferral: boolean;
 }
@@ -257,8 +259,25 @@ export function buildReceipt(input: {
   const hasValidClaim =
     input.attribution.claimStatus === "valid" &&
     input.attribution.referralClaim !== undefined;
-  const commissionBps = hasValidClaim ? offer.commissionBps : 0;
-  const commission = calculateCommission(requiredAmount, BigInt(commissionBps));
+  const claim = input.attribution.referralClaim;
+  const selfReferral = hasValidClaim
+    ? evaluateSelfReferralPolicy({
+        allowSelfReferral: offer.allowSelfReferral,
+        payerWallet: requiredString(input.settlement.payer, "settlement payer"),
+        ...(claim?.referrerWallet === undefined
+          ? {}
+          : { referrerWallet: claim.referrerWallet }),
+        ...(claim?.payoutWallet === undefined ? {} : { payoutWallet: claim.payoutWallet })
+      })
+    : { allowed: true };
+  const commissionBps = hasValidClaim && selfReferral.allowed ? offer.commissionBps : 0;
+  const protocolFeeBpsOfCommission =
+    hasValidClaim && selfReferral.allowed ? offer.protocolFeeBpsOfCommission : 0;
+  const commission = calculateCommission(
+    requiredAmount,
+    BigInt(commissionBps),
+    BigInt(protocolFeeBpsOfCommission)
+  );
   const timestamp = toRfc3339Utc(input.now);
 
   const receipt: Omit<Split402ReceiptV1, "signature"> = {
@@ -283,6 +302,7 @@ export function buildReceipt(input: {
       "settlement transaction"
     ),
     commissionBps,
+    protocolFeeBpsOfCommission,
     commissionBaseAtomic: offer.requiredAmountAtomic,
     commissionAmountAtomic: serializeAtomicAmount(commission.commission),
     protocolFeeAtomic: serializeAtomicAmount(commission.protocolFee),
@@ -295,8 +315,7 @@ export function buildReceipt(input: {
     kid: input.kid
   };
 
-  const claim = input.attribution.referralClaim;
-  if (hasValidClaim && claim !== undefined) {
+  if (hasValidClaim && selfReferral.allowed && claim !== undefined) {
     receipt.routeId = claim.routeId;
     receipt.referralClaimHash = hashProtocolObject(claim);
     receipt.referrerWallet = claim.referrerWallet;
@@ -331,6 +350,7 @@ function buildOffer(input: {
     requiredAmountAtomic: input.requirement.amount,
     payToWallet: input.requirement.payTo,
     commissionBps: input.campaign.commissionBps,
+    protocolFeeBpsOfCommission: input.campaign.protocolFeeBpsOfCommission,
     commissionBase: "required_amount",
     settlementMode: "accrual",
     attributionRequired: input.campaign.attributionRequired,
@@ -499,9 +519,6 @@ function validateClaimAgainstOffer(
   if (Date.parse(claim.expiresAt) < now.getTime()) {
     errors.push("claim is expired");
   }
-  if (!offer.allowSelfReferral && claim.referrerWallet === claim.payoutWallet) {
-    errors.push("self referral is not allowed for this offer");
-  }
   return errors;
 }
 
@@ -616,6 +633,7 @@ function pickOfferFields(info: Record<string, unknown>): Record<string, unknown>
     requiredAmountAtomic: info.requiredAmountAtomic,
     payToWallet: info.payToWallet,
     commissionBps: info.commissionBps,
+    protocolFeeBpsOfCommission: info.protocolFeeBpsOfCommission,
     commissionBase: info.commissionBase,
     settlementMode: info.settlementMode,
     attributionRequired: info.attributionRequired,

@@ -7,6 +7,7 @@ import {
   calculateOperationDigest,
   canonicalizeProtocolObject,
   createPrefixedId,
+  evaluateSelfReferralPolicy,
   hashProtocolObject,
   parseAtomicAmount,
   serializeAtomicAmount
@@ -40,11 +41,60 @@ describe("protocol primitives", () => {
       protocolFee: 0n,
       referrerCredit: 2000n
     });
+    expect(calculateCommission(10000n, 2000n, 1000n)).toEqual({
+      commission: 2000n,
+      protocolFee: 200n,
+      referrerCredit: 1800n
+    });
     expect(calculateCommission(3n, 3333n)).toEqual({
       commission: 0n,
       protocolFee: 0n,
       referrerCredit: 0n
     });
+  });
+
+  it("evaluates self-referral policy by payer and merchant identity", () => {
+    expect(
+      evaluateSelfReferralPolicy({
+        allowSelfReferral: false,
+        payerWallet: "payer",
+        referrerWallet: "referrer",
+        payoutWallet: "referrer"
+      })
+    ).toEqual({ allowed: true });
+    expect(
+      evaluateSelfReferralPolicy({
+        allowSelfReferral: false,
+        payerWallet: "referrer",
+        referrerWallet: "referrer",
+        payoutWallet: "payout"
+      })
+    ).toEqual({ allowed: false, reason: "payer_is_referrer" });
+    expect(
+      evaluateSelfReferralPolicy({
+        allowSelfReferral: false,
+        payerWallet: "payout",
+        referrerWallet: "referrer",
+        payoutWallet: "payout"
+      })
+    ).toEqual({ allowed: false, reason: "payer_is_payout_wallet" });
+    expect(
+      evaluateSelfReferralPolicy({
+        allowSelfReferral: false,
+        payerWallet: "payer",
+        referrerWallet: "owner",
+        payoutWallet: "payout",
+        merchantOwnerWallet: "owner"
+      })
+    ).toEqual({ allowed: false, reason: "merchant_owner_is_referrer" });
+    expect(
+      evaluateSelfReferralPolicy({
+        allowSelfReferral: true,
+        payerWallet: "referrer",
+        referrerWallet: "referrer",
+        payoutWallet: "payout"
+      })
+    ).toEqual({ allowed: true });
   });
 
   it("creates IDs with at least 128 bits of entropy", () => {
@@ -68,4 +118,3 @@ describe("protocol primitives", () => {
     expect(digest).toMatch(/^sha256:[0-9a-f]{64}$/u);
   });
 });
-

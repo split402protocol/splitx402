@@ -98,7 +98,7 @@ describe("control-plane HTTP API", () => {
     expect(response.body.accrual).toEqual(
       expect.objectContaining({
         receiptId: receipt.receiptId,
-        amountAtomic: "2000"
+        amountAtomic: receipt.referrerCreditAtomic
       })
     );
     expect(store.listAccruals()).toHaveLength(1);
@@ -150,19 +150,19 @@ describe("control-plane HTTP API", () => {
       expect.objectContaining({
         merchantId: receipt.merchantId,
         eligibleAccrualCount: 1,
-        totalAmountAtomicByAsset: { [receipt.asset]: "2000" }
+        totalAmountAtomicByAsset: { [receipt.asset]: receipt.referrerCreditAtomic }
       })
     );
     expect(response.body.preview.batches).toEqual([
       expect.objectContaining({
         asset: receipt.asset,
-        totalAmountAtomic: "2000",
+        totalAmountAtomic: receipt.referrerCreditAtomic,
         fundingStatus: "deficit",
-        fundingDeficitAtomic: "1000",
+        fundingDeficitAtomic: "800",
         items: [
           expect.objectContaining({
             destinationWallet: receipt.payoutWallet,
-            amountAtomic: "2000",
+            amountAtomic: receipt.referrerCreditAtomic,
             accrualIds: [snapshot.accrual.id]
           })
         ]
@@ -218,9 +218,9 @@ describe("control-plane HTTP API", () => {
           expect.objectContaining({
             asset: receipt.asset,
             fundingStatus: "unknown",
-            availableAmountAtomic: "2000",
-            outstandingAmountAtomic: "2000",
-            totalAccruedAmountAtomic: "2000",
+            availableAmountAtomic: receipt.referrerCreditAtomic,
+            outstandingAmountAtomic: receipt.referrerCreditAtomic,
+            totalAccruedAmountAtomic: receipt.referrerCreditAtomic,
             availableAccrualCount: 1
           })
         ]
@@ -298,7 +298,7 @@ describe("control-plane HTTP API", () => {
         fundingStatus: "covered",
         fundingAmountAtomic: "2500",
         fundingDeficitAtomic: "0",
-        outstandingAmountAtomic: "2000"
+        outstandingAmountAtomic: receipt.referrerCreditAtomic
       })
     );
   });
@@ -364,7 +364,7 @@ describe("control-plane HTTP API", () => {
         network: receipt.network,
         asset: receipt.asset,
         status: "planned",
-        totalAmountAtomic: "2000",
+        totalAmountAtomic: receipt.referrerCreditAtomic,
         itemCount: 1,
         accrualCount: 1
       })
@@ -372,12 +372,12 @@ describe("control-plane HTTP API", () => {
     expect(response.body.batch.items).toEqual([
       expect.objectContaining({
         destinationWallet: receipt.payoutWallet,
-        amountAtomic: "2000",
+        amountAtomic: receipt.referrerCreditAtomic,
         status: "allocated",
         allocations: [
           expect.objectContaining({
             accrualId: snapshot.accrual.id,
-            amountAtomic: "2000"
+            amountAtomic: receipt.referrerCreditAtomic
           })
         ]
       })
@@ -705,8 +705,8 @@ describe("control-plane HTTP API", () => {
             availableAmountAtomic: "0",
             heldAmountAtomic: "0",
             inFlightAmountAtomic: "0",
-            paidAmountAtomic: "2000",
-            totalEarnedAmountAtomic: "2000"
+            paidAmountAtomic: receipt.referrerCreditAtomic,
+            totalEarnedAmountAtomic: receipt.referrerCreditAtomic
           }
         ]
       })
@@ -717,7 +717,7 @@ describe("control-plane HTTP API", () => {
         receiptId: receipt.receiptId,
         referrerWallet: receipt.referrerWallet,
         payoutWallet: receipt.payoutWallet,
-        amountAtomic: "2000",
+        amountAtomic: receipt.referrerCreditAtomic,
         status: "paid",
         payoutBatchId: batch.id,
         payoutStatus: "finalized"

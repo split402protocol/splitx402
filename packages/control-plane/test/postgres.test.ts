@@ -85,7 +85,7 @@ describe("PostgresReceiptIngestionStore", () => {
     expect(loaded?.accrual).toEqual(
       expect.objectContaining({
         receiptId: bundle.artifacts.receipt.receiptId,
-        amountAtomic: "2000"
+        amountAtomic: bundle.artifacts.receipt.referrerCreditAtomic
       })
     );
     expect(loaded?.ledgerTransaction?.entries).toHaveLength(3);
@@ -394,12 +394,14 @@ describe("PostgresReceiptIngestionStore", () => {
     const loaded = await store.getPayoutBatch(batch.id);
 
     expect(batch.status).toBe("planned");
-    expect(batch.totalAmountAtomic).toBe("2000");
+    expect(batch.totalAmountAtomic).toBe(
+      bundle.artifacts.receipt.referrerCreditAtomic
+    );
     expect(batch.items[0]?.allocations).toEqual([
       {
         payoutItemId: "pit_ffffffffffffffffffffffffffffffff",
         accrualId: verified.accrual.id,
-        amountAtomic: "2000"
+        amountAtomic: bundle.artifacts.receipt.referrerCreditAtomic
       }
     ]);
     expect(loaded).toEqual(batch);
@@ -449,7 +451,9 @@ describe("PostgresReceiptIngestionStore", () => {
       limit: 1
     });
 
-    expect(batch.totalAmountAtomic).toBe("2000");
+    expect(batch.totalAmountAtomic).toBe(
+      bundle.artifacts.receipt.referrerCreditAtomic
+    );
     expect(batch.accrualCount).toBe(1);
     expect(fakePool.database.accruals[0]?.status).toBe("allocated");
     expect(fakePool.client.commands).toContainEqual(
@@ -563,12 +567,12 @@ describe("PostgresReceiptIngestionStore", () => {
           expect.objectContaining({
             accountType: "merchant_commission_liability",
             accountReference: bundle.artifacts.receipt.merchantId,
-            amountAtomic: "2000"
+            amountAtomic: bundle.artifacts.receipt.referrerCreditAtomic
           }),
           expect.objectContaining({
             accountType: "referrer_payable",
             accountReference: bundle.artifacts.receipt.payoutWallet,
-            amountAtomic: "-2000"
+            amountAtomic: `-${bundle.artifacts.receipt.referrerCreditAtomic}`
           })
         ]
       })
@@ -605,7 +609,7 @@ describe("PostgresReceiptIngestionStore", () => {
         asset: bundle.artifacts.receipt.asset,
         status: "submitted",
         transactionStatus: "submitted",
-        totalAmountAtomic: "2000",
+        totalAmountAtomic: bundle.artifacts.receipt.referrerCreditAtomic,
         expectedSignature: "expected_sig_0",
         submittedAt: "2026-06-24T00:07:00.000Z",
         occurredAt: "2026-06-24T00:07:00.000Z"
@@ -649,7 +653,7 @@ describe("PostgresReceiptIngestionStore", () => {
         network: bundle.artifacts.receipt.network,
         asset: bundle.artifacts.receipt.asset,
         status: "finalized",
-        totalAmountAtomic: "2000",
+        totalAmountAtomic: bundle.artifacts.receipt.referrerCreditAtomic,
         itemCount: 1,
         accrualCount: 1,
         ledgerTransactionId: ledgerClose?.id,
@@ -658,7 +662,7 @@ describe("PostgresReceiptIngestionStore", () => {
           expect.objectContaining({
             payoutItemId: batch.items[0]?.id,
             destinationWallet: bundle.artifacts.receipt.payoutWallet,
-            amountAtomic: "2000",
+            amountAtomic: bundle.artifacts.receipt.referrerCreditAtomic,
             status: "finalized",
             accrualIds: [verified.accrual.id]
           })
@@ -845,8 +849,9 @@ describe("PostgresReceiptIngestionStore", () => {
         availableAmountAtomic: "0",
         heldAmountAtomic: "0",
         inFlightAmountAtomic: "0",
-        paidAmountAtomic: "2000",
-        totalEarnedAmountAtomic: "2000"
+        paidAmountAtomic: fixture.bundle.artifacts.receipt.referrerCreditAtomic,
+        totalEarnedAmountAtomic:
+          fixture.bundle.artifacts.receipt.referrerCreditAtomic
       }
     ]);
     expect(history).toEqual([
@@ -876,9 +881,11 @@ describe("PostgresReceiptIngestionStore", () => {
       expect.objectContaining({
         asset: fixture.bundle.artifacts.receipt.asset,
         fundingStatus: "unknown",
-        inFlightAmountAtomic: "2000",
-        outstandingAmountAtomic: "2000",
-        totalAccruedAmountAtomic: "2000",
+        inFlightAmountAtomic: fixture.bundle.artifacts.receipt.referrerCreditAtomic,
+        outstandingAmountAtomic:
+          fixture.bundle.artifacts.receipt.referrerCreditAtomic,
+        totalAccruedAmountAtomic:
+          fixture.bundle.artifacts.receipt.referrerCreditAtomic,
         inFlightAccrualCount: 1
       })
     ]);

@@ -2333,7 +2333,7 @@ function insertCampaignVersion(
       version.terms.network,
       version.terms.asset,
       version.terms.commissionBps,
-      version.terms.protocolFeeBps,
+      version.terms.protocolFeeBpsOfCommission,
       version.terms.payoutThresholdAtomic,
       version.terms.startsAt,
       version.terms.endsAt,
@@ -3735,7 +3735,10 @@ function parseCampaignTermsJson(value: unknown): CampaignTerms {
     ),
     payToWallet: readJsonString(terms.payToWallet, "payToWallet"),
     commissionBps: readJsonNumber(terms.commissionBps, "commissionBps"),
-    protocolFeeBps: readJsonNumber(terms.protocolFeeBps, "protocolFeeBps"),
+    protocolFeeBpsOfCommission: readJsonNumber(
+      terms.protocolFeeBpsOfCommission ?? terms.protocolFeeBps,
+      "protocolFeeBpsOfCommission"
+    ),
     commissionBase: readLiteral(
       terms.commissionBase,
       "required_amount",

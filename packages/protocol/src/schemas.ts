@@ -66,6 +66,7 @@ export const Split402OfferV1Schema = z
     requiredAmountAtomic: AtomicAmountStringSchema,
     payToWallet: Base58PublicKeySchema,
     commissionBps: z.number().int().min(0).max(10_000),
+    protocolFeeBpsOfCommission: z.number().int().min(0).max(10_000),
     commissionBase: z.literal("required_amount"),
     settlementMode: z.literal("accrual"),
     attributionRequired: z.boolean(),
@@ -121,6 +122,7 @@ export const Split402ReceiptV1Schema = z
     settledAmountAtomic: AtomicAmountStringSchema.optional(),
     settlementTxSignature: z.string().min(1),
     commissionBps: z.number().int().min(0).max(10_000),
+    protocolFeeBpsOfCommission: z.number().int().min(0).max(10_000),
     commissionBaseAtomic: AtomicAmountStringSchema,
     commissionAmountAtomic: AtomicAmountStringSchema,
     protocolFeeAtomic: AtomicAmountStringSchema,
@@ -159,4 +161,3 @@ export type Split402OfferV1 = z.infer<typeof Split402OfferV1Schema>;
 export type Split402AttributionV1 = z.infer<typeof Split402AttributionV1Schema>;
 export type Split402ReceiptV1 = z.infer<typeof Split402ReceiptV1Schema>;
 export type BuyerProofV1 = z.infer<typeof BuyerProofV1Schema>;
-
