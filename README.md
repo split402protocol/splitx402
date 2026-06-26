@@ -399,6 +399,7 @@ corepack pnpm test:postgres
 Run a durable control-plane app backed by PostgreSQL:
 
 ```bash
+corepack pnpm control-plane:migrate
 corepack pnpm control-plane
 ```
 
