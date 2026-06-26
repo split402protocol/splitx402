@@ -1119,7 +1119,8 @@ describe("SolanaRpcPayoutTransactionBroadcaster", () => {
       sequence: 0,
       attempt: 1,
       status: "planned",
-      createdAt: "2026-06-24T00:00:00.000Z"
+      createdAt: "2026-06-24T00:00:00.000Z",
+      items: []
     };
 
     await expect(
@@ -1853,7 +1854,7 @@ function unsupportedInstruction(): SolanaPayoutInstructionPlan {
 function payoutTransaction(
   overrides: Partial<PayoutTransactionRecord> = {}
 ): PayoutTransactionRecord {
-  return {
+  const transaction: PayoutTransactionRecord = {
     id: "ptx_ffffffffffffffffffffffffffffffff",
     payoutBatchId: "pbt_ffffffffffffffffffffffffffffffff",
     sequence: 0,
@@ -1862,7 +1863,12 @@ function payoutTransaction(
     expectedSignature: "sig_0",
     status: "signed",
     createdAt: "2026-06-24T00:00:00.000Z",
-    ...overrides
+    items: []
+  };
+  return {
+    ...transaction,
+    ...overrides,
+    items: overrides.items ?? transaction.items
   };
 }
 

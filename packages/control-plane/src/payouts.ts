@@ -106,6 +106,14 @@ export interface SaveSignedPayoutTransactionInput {
   lastValidBlockHeight?: number;
   signedTransactionBase64: string;
   expectedSignature?: string;
+  items?: readonly SaveSignedPayoutTransactionItemInput[];
+}
+
+export interface SaveSignedPayoutTransactionItemInput {
+  payoutItemId: string;
+  amountAtomic: string;
+  destinationWallet: string;
+  destinationTokenAccount?: string;
 }
 
 export interface MarkPayoutTransactionSubmittedInput {
@@ -148,12 +156,46 @@ export interface ClosePayoutBatchLedgerInput {
   now?: string;
   transactionId?: string;
   entryIdFactory?: () => string;
+  finalizedTransferVerifier?: PayoutFinalizedTransferVerifier;
 }
 
 export interface PayoutLedgerClosureStore {
   closeFinalizedPayoutBatchLedger(
     input: ClosePayoutBatchLedgerInput
   ): Promise<LedgerTransaction | undefined> | LedgerTransaction | undefined;
+}
+
+export interface PayoutFinalizedTransferVerifier {
+  verifyFinalizedPayout(input: {
+    batch: PayoutBatchRecord;
+    transactions: PayoutTransactionRecord[];
+  }):
+    | Promise<PayoutFinalizedTransferVerificationResult>
+    | PayoutFinalizedTransferVerificationResult;
+}
+
+export interface PayoutFinalizedTransferVerificationResult {
+  ok: boolean;
+  errors: string[];
+}
+
+export async function verifyPayoutFinalizedTransfersBeforeLedgerClosure(input: {
+  batch: PayoutBatchRecord;
+  transactions: PayoutTransactionRecord[];
+  verifier?: PayoutFinalizedTransferVerifier;
+}): Promise<void> {
+  if (input.verifier === undefined) {
+    return;
+  }
+  const result = await input.verifier.verifyFinalizedPayout({
+    batch: input.batch,
+    transactions: input.transactions
+  });
+  if (!result.ok) {
+    throw new PayoutBatchValidationError(
+      `finalized payout transfer verification failed: ${result.errors.join("; ")}`
+    );
+  }
 }
 
 export interface PayoutFundingBalance {
@@ -256,6 +298,15 @@ export interface PayoutTransactionRecord {
   finalizedAt?: string;
   error?: Record<string, unknown>;
   createdAt: string;
+  items: PayoutTransactionItemRecord[];
+}
+
+export interface PayoutTransactionItemRecord {
+  payoutTransactionId: string;
+  payoutItemId: string;
+  amountAtomic: string;
+  destinationWallet: string;
+  destinationTokenAccount?: string;
 }
 
 export interface ListPayoutReconciliationItemsInput {
@@ -709,11 +760,12 @@ export function createSignedPayoutTransactionRecords(
         expectedSignatures.add(expectedSignature);
       }
 
+      const id = assertSplit402Id(
+        transaction.id ?? idFactory(),
+        "payout transaction id"
+      );
       return {
-        id: assertSplit402Id(
-          transaction.id ?? idFactory(),
-          "payout transaction id"
-        ),
+        id,
         payoutBatchId,
         sequence,
         attempt,
@@ -739,9 +791,95 @@ export function createSignedPayoutTransactionRecords(
         ),
         ...(expectedSignature === undefined ? {} : { expectedSignature }),
         status: "signed" as const,
-        createdAt
+        createdAt,
+        items: readSignedPayoutTransactionItems(
+          transaction.items,
+          id
+        )
       };
     });
+}
+
+export function attachPayoutTransactionItemMappings(
+  transactions: readonly PayoutTransactionRecord[],
+  batch: PayoutBatchRecord
+): PayoutTransactionRecord[] {
+  if (transactions.length === 0) {
+    return [];
+  }
+  const batchItemsById = new Map(batch.items.map((item) => [item.id, item]));
+  const defaultAllItems =
+    transactions.length === 1 && transactions[0]?.items.length === 0;
+  const sequenceByPayoutItemId = new Map<string, number>();
+  return transactions.map((transaction) => {
+    const rawItems = defaultAllItems
+      ? batch.items.map((item) => ({
+          payoutTransactionId: transaction.id,
+          payoutItemId: item.id,
+          amountAtomic: item.amountAtomic,
+          destinationWallet: item.destinationWallet,
+          ...(item.destinationTokenAccount === undefined
+            ? {}
+            : { destinationTokenAccount: item.destinationTokenAccount })
+        }))
+      : transaction.items;
+    if (rawItems.length === 0) {
+      throw new PayoutBatchValidationError(
+        "payout transaction item mappings are required"
+      );
+    }
+    const seenInTransaction = new Set<string>();
+    const items = rawItems.map((mapping) => {
+      const payoutItem = batchItemsById.get(mapping.payoutItemId);
+      if (payoutItem === undefined) {
+        throw new PayoutBatchValidationError(
+          `payout transaction references unknown payout item: ${mapping.payoutItemId}`
+        );
+      }
+      if (seenInTransaction.has(mapping.payoutItemId)) {
+        throw new PayoutBatchValidationError(
+          `duplicate payout item mapping: ${mapping.payoutItemId}`
+        );
+      }
+      seenInTransaction.add(mapping.payoutItemId);
+      const existingSequence = sequenceByPayoutItemId.get(mapping.payoutItemId);
+      if (
+        existingSequence !== undefined &&
+        existingSequence !== transaction.sequence
+      ) {
+        throw new PayoutBatchValidationError(
+          `payout item is mapped to multiple transaction sequences: ${mapping.payoutItemId}`
+        );
+      }
+      sequenceByPayoutItemId.set(mapping.payoutItemId, transaction.sequence);
+      if (mapping.amountAtomic !== payoutItem.amountAtomic) {
+        throw new PayoutBatchValidationError(
+          `payout transaction item amount mismatch: ${mapping.payoutItemId}`
+        );
+      }
+      if (mapping.destinationWallet !== payoutItem.destinationWallet) {
+        throw new PayoutBatchValidationError(
+          `payout transaction item destination wallet mismatch: ${mapping.payoutItemId}`
+        );
+      }
+      if (
+        (mapping.destinationTokenAccount ?? undefined) !==
+        (payoutItem.destinationTokenAccount ?? undefined)
+      ) {
+        throw new PayoutBatchValidationError(
+          `payout transaction item destination token account mismatch: ${mapping.payoutItemId}`
+        );
+      }
+      return {
+        ...mapping,
+        payoutTransactionId: transaction.id
+      };
+    });
+    return {
+      ...transaction,
+      items
+    };
+  });
 }
 
 export function summarizePayoutBatchFinality(
@@ -818,6 +956,105 @@ export function summarizePayoutBatchFinality(
     };
   }
   return undefined;
+}
+
+export interface PayoutBatchItemStatusUpdate {
+  payoutItemId: string;
+  status: PayoutItemStatus;
+}
+
+export interface PayoutBatchTransactionItemRollup {
+  batchStatus: PayoutBatchStatus;
+  updatedItems: PayoutBatchItemStatusUpdate[];
+  failureCode?: string;
+  failureMessage?: string;
+}
+
+export function summarizePayoutBatchTransactionItemFinality(input: {
+  batch: PayoutBatchRecord;
+  transactions: readonly PayoutTransactionRecord[];
+}): PayoutBatchTransactionItemRollup | undefined {
+  if (input.transactions.length === 0) {
+    return undefined;
+  }
+  const activeTransactions = latestAttemptBySequence(input.transactions);
+  const itemStatusById = new Map(
+    input.batch.items.map((item) => [item.id, item.status])
+  );
+  let failureCode: string | undefined;
+  let failureMessage: string | undefined;
+
+  for (const transaction of activeTransactions) {
+    if (transaction.status === "failed" && failureCode === undefined) {
+      failureCode = "payout_transaction_failed";
+      failureMessage = readPayoutTransactionFailureMessage(transaction);
+    }
+    if (transaction.status === "expired" && failureCode === undefined) {
+      failureCode = "payout_transaction_expired";
+      failureMessage = `payout transaction expired before safe finality: ${transaction.id}`;
+    }
+    if (transaction.status === "outcome_unknown" && failureCode === undefined) {
+      failureCode = "payout_transaction_outcome_unknown";
+      failureMessage = `payout transaction outcome is unknown: ${transaction.id}`;
+    }
+    const itemStatus = payoutItemStatusForTransactionStatus(transaction.status);
+    if (itemStatus === undefined) {
+      continue;
+    }
+    for (const item of transaction.items) {
+      if (itemStatusById.has(item.payoutItemId)) {
+        itemStatusById.set(item.payoutItemId, itemStatus);
+      }
+    }
+  }
+
+  const nextItemStatuses = input.batch.items.map(
+    (item) => itemStatusById.get(item.id) ?? item.status
+  );
+  const terminalFailure = activeTransactions.find((transaction) =>
+    ["failed", "expired", "outcome_unknown"].includes(transaction.status)
+  );
+  let batchStatus: PayoutBatchStatus;
+  if (terminalFailure?.status === "failed") {
+    batchStatus = "failed";
+  } else if (
+    terminalFailure?.status === "expired" ||
+    terminalFailure?.status === "outcome_unknown"
+  ) {
+    batchStatus = "outcome_unknown";
+  } else if (nextItemStatuses.every((status) => status === "finalized")) {
+    batchStatus = "finalized";
+  } else if (
+    nextItemStatuses.length > 0 &&
+    nextItemStatuses.every(
+      (status) => status === "confirmed" || status === "finalized"
+    )
+  ) {
+    batchStatus = "confirmed";
+  } else if (
+    nextItemStatuses.some((status) =>
+      ["submitted", "confirmed", "finalized"].includes(status)
+    )
+  ) {
+    batchStatus = "submitted";
+  } else {
+    batchStatus = "signing";
+  }
+
+  return {
+    batchStatus,
+    updatedItems: input.batch.items
+      .map((item) => ({
+        payoutItemId: item.id,
+        status: itemStatusById.get(item.id) ?? item.status
+      }))
+      .filter((item) => {
+        const existing = input.batch.items.find((batchItem) => batchItem.id === item.payoutItemId);
+        return existing !== undefined && existing.status !== item.status;
+      }),
+    ...(failureCode === undefined ? {} : { failureCode }),
+    ...(failureMessage === undefined ? {} : { failureMessage })
+  };
 }
 
 export function createPayoutFinalizationLedgerTransaction(
@@ -1471,6 +1708,82 @@ function assertPositiveInteger(value: number, label: string): number {
     throw new PayoutBatchValidationError(`${label} must be a positive integer`);
   }
   return value;
+}
+
+function readSignedPayoutTransactionItems(
+  items: readonly SaveSignedPayoutTransactionItemInput[] | undefined,
+  payoutTransactionId: string
+): PayoutTransactionItemRecord[] {
+  if (items === undefined) {
+    return [];
+  }
+  return items.map((item) => ({
+    payoutTransactionId,
+    payoutItemId: assertSplit402Id(
+      item.payoutItemId,
+      "payout transaction payoutItemId"
+    ),
+    amountAtomic: readPositiveAtomicAmount(
+      item.amountAtomic,
+      "payout transaction item amountAtomic"
+    ).toString(),
+    destinationWallet: assertNonEmptyString(
+      item.destinationWallet,
+      "payout transaction item destinationWallet"
+    ),
+    ...(item.destinationTokenAccount === undefined
+      ? {}
+      : {
+          destinationTokenAccount: assertNonEmptyString(
+            item.destinationTokenAccount,
+            "payout transaction item destinationTokenAccount"
+          )
+        })
+  }));
+}
+
+function latestAttemptBySequence(
+  transactions: readonly PayoutTransactionRecord[]
+): PayoutTransactionRecord[] {
+  const bySequence = new Map<number, PayoutTransactionRecord>();
+  for (const transaction of transactions) {
+    const existing = bySequence.get(transaction.sequence);
+    if (
+      existing === undefined ||
+      transaction.attempt > existing.attempt ||
+      (transaction.attempt === existing.attempt &&
+        transaction.createdAt.localeCompare(existing.createdAt) > 0)
+    ) {
+      bySequence.set(transaction.sequence, transaction);
+    }
+  }
+  return Array.from(bySequence.values()).sort(
+    (left, right) =>
+      left.sequence - right.sequence ||
+      left.attempt - right.attempt ||
+      left.createdAt.localeCompare(right.createdAt) ||
+      left.id.localeCompare(right.id)
+  );
+}
+
+function payoutItemStatusForTransactionStatus(
+  status: PayoutTransactionStatus
+): PayoutItemStatus | undefined {
+  switch (status) {
+    case "submitted":
+      return "submitted";
+    case "confirmed":
+      return "confirmed";
+    case "finalized":
+      return "finalized";
+    case "failed":
+      return "failed";
+    case "planned":
+    case "signed":
+    case "expired":
+    case "outcome_unknown":
+      return undefined;
+  }
 }
 
 function normalizeTimestamp(value: string, label: string): string {
