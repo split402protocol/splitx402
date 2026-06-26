@@ -127,6 +127,9 @@ approval_decision: no-go
       "corepack pnpm phase7:staging-proof",
     );
     expect(report.commands.map((item) => item.command)).toContain(
+      "corepack pnpm phase7:staging:collect-reads",
+    );
+    expect(report.commands.map((item) => item.command)).toContain(
       "corepack pnpm phase7:staging:assemble",
     );
     expect(report.commands.map((item) => item.command)).toContain(
