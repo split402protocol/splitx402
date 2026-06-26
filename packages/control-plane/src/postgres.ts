@@ -88,6 +88,7 @@ import type {
   ReceiptIngestionSnapshot,
   ReceiptIngestionStore,
   ReceiptChainVerificationStore,
+  MarkReceiptChainRejectedInput,
   MarkReceiptChainVerifiedInput,
   ReceiptRecord,
   ReceiptVerificationState,
@@ -170,6 +171,7 @@ interface PaymentReceiptRow extends QueryResultRow {
   receipt_json: unknown;
   source: string;
   verification_state: string;
+  verification_reason: string | null;
   ingestion_state: string;
   created_at: Date | string;
 }
@@ -487,7 +489,8 @@ export class PostgresReceiptIngestionStore
     await this.withTransaction(async (client) => {
       await client.query(
         `update payment_receipts
-            set verification_state = 'signature_verified'
+            set verification_state = 'signature_verified',
+                verification_reason = null
           where id = $1
             and verification_state = 'pending_chain_verification'`,
         [input.receiptId]
@@ -499,6 +502,29 @@ export class PostgresReceiptIngestionStore
           where receipt_id = $1
             and status = 'pending_chain_verification'`,
         [input.receiptId, input.verifiedAt]
+      );
+    });
+    return this.getByReceiptId(input.receiptId);
+  }
+
+  async markReceiptChainRejected(
+    input: MarkReceiptChainRejectedInput
+  ): Promise<ReceiptIngestionSnapshot | undefined> {
+    await this.withTransaction(async (client) => {
+      await client.query(
+        `update payment_receipts
+            set verification_state = 'chain_rejected',
+                verification_reason = $2
+          where id = $1
+            and verification_state = 'pending_chain_verification'`,
+        [input.receiptId, input.reason]
+      );
+      await client.query(
+        `update commission_accruals
+            set status = 'rejected'
+          where receipt_id = $1
+            and status = 'pending_chain_verification'`,
+        [input.receiptId]
       );
     });
     return this.getByReceiptId(input.receiptId);
@@ -897,6 +923,7 @@ export class PostgresReceiptIngestionStore
       for (const entry of transaction.entries) {
         await insertLedgerEntry(client, entry);
       }
+      await markBatchAccrualsPaid(client, batch);
       await insertOutboxEvent(
         client,
         this.createPayoutFinalizedEvent(batch, transaction)
@@ -934,7 +961,8 @@ export class PostgresReceiptIngestionStore
     values: readonly unknown[]
   ): Promise<ReceiptIngestionSnapshot | undefined> {
     const receiptResult = await this.db.query<PaymentReceiptRow>(
-      `select id, receipt_hash, receipt_json, source, verification_state, ingestion_state, created_at
+      `select id, receipt_hash, receipt_json, source, verification_state,
+              verification_reason, ingestion_state, created_at
          from payment_receipts
         where ${whereClause}
         limit 1`,
@@ -2548,9 +2576,10 @@ function insertReceipt(
     `insert into payment_receipts (
        id, receipt_hash, merchant_id, campaign_id, campaign_version, payment_id,
        settlement_tx_signature, network, asset_mint, payer_wallet, pay_to_wallet,
-       receipt_json, source, verification_state, ingestion_state, created_at
+       receipt_json, source, verification_state, verification_reason,
+       ingestion_state, created_at
      ) values (
-       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14, $15, $16
+       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14, $15, $16, $17
      )`,
     [
       receiptRecord.id,
@@ -2567,6 +2596,7 @@ function insertReceipt(
       JSON.stringify(receiptRecord.receipt),
       receiptRecord.source,
       receiptRecord.verificationState,
+      receiptRecord.verificationReason ?? null,
       receiptRecord.ingestionState,
       receiptRecord.createdAt
     ]
@@ -2802,6 +2832,24 @@ function insertPayoutAllocation(
       allocation.amountAtomic
     ]
   );
+}
+
+async function markBatchAccrualsPaid(
+  client: PostgresQueryExecutor,
+  batch: PayoutBatchRecord
+): Promise<void> {
+  const finalizedAccrualIds = batch.items
+    .filter((item) => item.status === "finalized")
+    .flatMap((item) => item.allocations.map((allocation) => allocation.accrualId));
+  for (const accrualId of finalizedAccrualIds) {
+    await client.query(
+      `update commission_accruals
+          set status = 'paid'
+        where id = $1
+          and status = 'allocated'`,
+      [accrualId]
+    );
+  }
 }
 
 function insertPayoutTransaction(
@@ -3176,6 +3224,9 @@ function mapReceiptRecord(row: PaymentReceiptRow): ReceiptRecord {
     receipt: parsedReceipt,
     source: readReceiptSource(row.source),
     verificationState: readReceiptVerificationState(row.verification_state),
+    ...(row.verification_reason === null
+      ? {}
+      : { verificationReason: row.verification_reason }),
     ingestionState: readIngestionState(row.ingestion_state),
     createdAt: toIsoString(row.created_at)
   };
@@ -3371,7 +3422,11 @@ function readReceiptSource(value: string): ReceiptIngestSource {
 }
 
 function readReceiptVerificationState(value: string): ReceiptVerificationState {
-  if (value === "signature_verified" || value === "pending_chain_verification") {
+  if (
+    value === "signature_verified" ||
+    value === "pending_chain_verification" ||
+    value === "chain_rejected"
+  ) {
     return value;
   }
   throw new Error(`unsupported receipt verification state: ${value}`);
@@ -3389,7 +3444,10 @@ function readAccrualStatus(value: string): AccrualStatus {
     value === "pending_chain_verification" ||
     value === "available" ||
     value === "held" ||
-    value === "allocated"
+    value === "allocated" ||
+    value === "paid" ||
+    value === "rejected" ||
+    value === "reversed"
   ) {
     return value;
   }
