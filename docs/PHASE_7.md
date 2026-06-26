@@ -17,7 +17,8 @@ Implemented:
   dead-letter webhook outbox events;
 - MCP-facing demo bundle and stdio gateway at `@split402/mcp-demo`;
 - merchant/referrer operations dashboard at `@split402/dashboard`;
-- optional dashboard viewer session gate for hosted staging;
+- optional dashboard viewer gate with signed, expiring session cookies for
+  hosted staging;
 - hosted-staging compose stack for control plane, dashboard, optional demo
   merchant, migration job, and workers;
 - staging proof scaffold, hosted preflight collector, read collector, artifact
@@ -121,8 +122,8 @@ resolved `covered` or `deficit` state instead of unresolved funding.
 ## Remaining Phase 7 Work
 
 - Expand the dashboard from public-alpha operations UI into a production
-  multi-tenant merchant/referrer service with hardened auth, session lifecycle,
-  tenant isolation, and deployment config.
+  multi-tenant merchant/referrer service with hardened auth, tenant isolation,
+  and deployment config.
 - Run and approve the hosted end-to-end staging proof where an agent discovers a
   route, pays through x402, receives a Split402 receipt, and sees referrer
   earnings without manual database work.
