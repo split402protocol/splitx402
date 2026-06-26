@@ -142,9 +142,13 @@ corepack pnpm --filter @split402/control-plane test
 corepack pnpm --filter @split402/control-plane typecheck
 corepack pnpm --filter @split402/control-plane build
 corepack pnpm test:postgres
+corepack pnpm control-plane
 corepack pnpm worker:chain
 corepack pnpm worker:webhook
 ```
+
+The packaged HTTP entrypoint is `split402-control-plane`. It reads `PORT` or
+`SPLIT402_CONTROL_PLANE_PORT`, defaulting to `4021`.
 
 ## Local-Dev Payout Signer
 
