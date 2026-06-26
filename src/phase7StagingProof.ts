@@ -28,6 +28,26 @@ export type Phase7StagingProofValues = Partial<
   Record<Phase7StagingProofField, string>
 >;
 
+const PHASE7_URL_FIELDS = [
+  "control_plane_url",
+  "dashboard_url",
+  "demo_merchant_url",
+  "webhook_receiver_url",
+] as const satisfies readonly Phase7StagingProofField[];
+
+const PHASE7_EVIDENCE_FIELDS = [
+  "agent_discovery_evidence",
+  "paid_request_evidence",
+  "receipt_verification_evidence",
+  "referrer_balance_evidence",
+  "dashboard_summary_evidence",
+  "webhook_delivery_evidence",
+  "payout_obligation_evidence",
+  "funding_balance_evidence",
+  "mcp_bundle_evidence",
+  "commands_run",
+] as const satisfies readonly Phase7StagingProofField[];
+
 const PHASE7_STAGING_PROOF_ENV_NAMES: Record<Phase7StagingProofField, string> = {
   proof_id: "SPLIT402_PHASE7_PROOF_ID",
   proof_date: "SPLIT402_PHASE7_PROOF_DATE",
@@ -109,6 +129,8 @@ export function validatePhase7StagingProof(
   );
   const invalidFields: string[] = [];
   const approvalDecision = fields.get("approval_decision");
+  const proofDate = fields.get("proof_date");
+  const sourceCommit = fields.get("source_commit");
 
   if (
     approvalDecision !== undefined &&
@@ -122,6 +144,32 @@ export function validatePhase7StagingProof(
     invalidFields.push(
       "approval_decision must be approved before Phase 7 staging proof can close",
     );
+  }
+  if (
+    proofDate !== undefined &&
+    proofDate.length > 0 &&
+    !isIsoDate(proofDate)
+  ) {
+    invalidFields.push("proof_date must use YYYY-MM-DD");
+  }
+  if (
+    sourceCommit !== undefined &&
+    sourceCommit.length > 0 &&
+    !/^[0-9a-f]{7,40}$/u.test(sourceCommit)
+  ) {
+    invalidFields.push("source_commit must be a 7-40 character git SHA");
+  }
+  for (const field of PHASE7_URL_FIELDS) {
+    const value = fields.get(field);
+    if (value !== undefined && value.length > 0 && !isHttpUrl(value)) {
+      invalidFields.push(`${field} must be an http(s) URL`);
+    }
+  }
+  for (const field of PHASE7_EVIDENCE_FIELDS) {
+    const value = fields.get(field);
+    if (value !== undefined && value.length > 0 && !isEvidenceReference(value)) {
+      invalidFields.push(`${field} must be an attached artifact or http(s) URL`);
+    }
   }
 
   return {
@@ -161,5 +209,39 @@ function isPlaceholder(value: string | undefined): boolean {
     value === "pending" ||
     value.startsWith("<") ||
     value.includes("...")
+  );
+}
+
+function isIsoDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value);
+  if (match === null) {
+    return false;
+  }
+  const [, year, month, day] = match;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return (
+    date.getUTCFullYear() === Number(year) &&
+    date.getUTCMonth() + 1 === Number(month) &&
+    date.getUTCDate() === Number(day)
+  );
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function isEvidenceReference(value: string): boolean {
+  if (isHttpUrl(value)) {
+    return true;
+  }
+  const attachedPrefix = "attached:";
+  return (
+    value.startsWith(attachedPrefix) &&
+    value.slice(attachedPrefix.length).trim().length > 0
   );
 }
