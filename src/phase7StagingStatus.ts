@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import {
   PHASE7_EVIDENCE_FIELDS,
   type Phase7StagingProofValidation,
@@ -72,6 +74,7 @@ export interface Phase7StagingStatusReport {
   commands: typeof PHASE7_STAGING_COMMANDS;
   gateStatuses: Phase7StagingGateStatus[];
   artifactStatuses: Phase7StagingArtifactStatus[];
+  manifestStatus: Phase7StagingManifestStatus;
   validation?: Phase7StagingProofValidation;
   nextActions: string[];
 }
@@ -86,6 +89,7 @@ export interface Phase7StagingGateStatus {
 export interface Phase7StagingStatusOptions {
   artifactBaseDir?: string;
   artifactExists?: (path: string) => boolean;
+  readArtifact?: (path: string) => Uint8Array;
   resolveArtifactPath?: (path: string, baseDir: string) => string;
 }
 
@@ -97,6 +101,11 @@ export interface Phase7StagingArtifactStatus {
   blockers: string[];
 }
 
+export interface Phase7StagingManifestStatus {
+  status: "not_checked" | "not_applicable" | "valid" | "invalid";
+  blockers: string[];
+}
+
 export function createPhase7StagingStatusReport(
   proofText?: string,
   options: Phase7StagingStatusOptions = {},
@@ -104,25 +113,38 @@ export function createPhase7StagingStatusReport(
   const validation =
     proofText === undefined ? undefined : validatePhase7StagingProof(proofText);
   const artifactStatuses = createArtifactStatuses(proofText, options);
+  const manifestStatus = createManifestStatus(proofText, options);
   const artifactBlockers = artifactStatuses.flatMap((status) => status.blockers);
+  const manifestBlockers = manifestStatus.blockers;
   const readyForPublicAlphaDemo =
-    (validation?.approved ?? false) && artifactBlockers.length === 0;
+    (validation?.approved ?? false) &&
+    artifactBlockers.length === 0 &&
+    manifestBlockers.length === 0;
 
   return {
     schema: "split402.phase7_staging_status.v1",
     readyForPublicAlphaDemo,
     proofChecked: validation !== undefined,
     commands: PHASE7_STAGING_COMMANDS,
-    gateStatuses: createGateStatuses(validation, artifactStatuses),
+    gateStatuses: createGateStatuses(
+      validation,
+      artifactStatuses,
+      manifestBlockers,
+    ),
     artifactStatuses,
+    manifestStatus,
     validation,
-    nextActions: createNextActions(validation, artifactBlockers),
+    nextActions: createNextActions(validation, [
+      ...artifactBlockers,
+      ...manifestBlockers,
+    ]),
   };
 }
 
 function createGateStatuses(
   validation: Phase7StagingProofValidation | undefined,
   artifactStatuses: readonly Phase7StagingArtifactStatus[],
+  manifestBlockers: readonly string[],
 ): Phase7StagingGateStatus[] {
   return PHASE7_STAGING_COMMANDS.map((command) => {
     if (validation === undefined) {
@@ -140,6 +162,10 @@ function createGateStatuses(
     const artifactBlockers = artifactStatuses
       .filter((status) => status.evidenceField === command.evidenceField)
       .flatMap((status) => status.blockers);
+    const gateArtifactBlockers =
+      command.evidenceField === "artifact_manifest_evidence"
+        ? [...artifactBlockers, ...manifestBlockers]
+        : artifactBlockers;
     if (validation.missingFields.includes(command.evidenceField)) {
       return {
         gate: command.gate,
@@ -164,12 +190,12 @@ function createGateStatuses(
         blockers: invalidBlockers,
       };
     }
-    if (artifactBlockers.length > 0) {
+    if (gateArtifactBlockers.length > 0) {
       return {
         gate: command.gate,
         evidenceField: command.evidenceField,
         status: "invalid",
-        blockers: artifactBlockers,
+        blockers: gateArtifactBlockers,
       };
     }
     return {
@@ -179,6 +205,118 @@ function createGateStatuses(
       blockers: [],
     };
   });
+}
+
+function createManifestStatus(
+  proofText: string | undefined,
+  options: Phase7StagingStatusOptions,
+): Phase7StagingManifestStatus {
+  if (proofText === undefined) {
+    return { status: "not_checked", blockers: [] };
+  }
+
+  const fields = parsePhase7ProofRecord(proofText);
+  const manifestReference = fields.get("artifact_manifest_evidence");
+  if (manifestReference === undefined || manifestReference.length === 0) {
+    return { status: "not_applicable", blockers: [] };
+  }
+  if (isHttpUrl(manifestReference)) {
+    return { status: "not_checked", blockers: [] };
+  }
+
+  const manifestArtifactPath = readAttachedArtifactPath(manifestReference);
+  if (manifestArtifactPath === undefined) {
+    return { status: "not_applicable", blockers: [] };
+  }
+  if (options.artifactBaseDir === undefined || options.readArtifact === undefined) {
+    return { status: "not_checked", blockers: [] };
+  }
+
+  const manifestPath = resolveArtifactPath(manifestArtifactPath, options);
+  const blockers: string[] = [];
+  let manifest: Phase7ArtifactManifest | undefined;
+  try {
+    const manifestBytes = options.readArtifact(manifestPath);
+    manifest = JSON.parse(
+      new TextDecoder().decode(manifestBytes),
+    ) as Phase7ArtifactManifest;
+  } catch (error) {
+    blockers.push(
+      `artifact_manifest_evidence artifact could not be read: ${formatError(error)}`,
+    );
+  }
+
+  if (manifest === undefined) {
+    return { status: "invalid", blockers };
+  }
+  if (manifest.schema !== "split402.phase7_artifact_manifest.v1") {
+    blockers.push("artifact_manifest_evidence schema is invalid");
+  }
+  if (!Array.isArray(manifest.artifacts)) {
+    blockers.push("artifact_manifest_evidence artifacts must be an array");
+    return { status: "invalid", blockers };
+  }
+
+  const manifestEntries = new Map<string, Phase7ArtifactManifestEntry>();
+  for (const entry of manifest.artifacts) {
+    if (isManifestEntry(entry)) {
+      manifestEntries.set(entry.evidenceField, entry);
+    }
+  }
+  if (manifestEntries.has("artifact_manifest_evidence")) {
+    blockers.push("artifact_manifest_evidence must not list itself");
+  }
+
+  for (const field of PHASE7_EVIDENCE_FIELDS) {
+    if (field === "artifact_manifest_evidence") {
+      continue;
+    }
+    const reference = fields.get(field);
+    if (reference === undefined || reference.length === 0) {
+      continue;
+    }
+
+    const entry = manifestEntries.get(field);
+    if (entry === undefined) {
+      blockers.push(`${field} is missing from artifact manifest`);
+      continue;
+    }
+    if (entry.reference !== reference) {
+      blockers.push(`${field} manifest reference does not match proof`);
+    }
+    if (isHttpUrl(reference)) {
+      if (entry.kind !== "remote") {
+        blockers.push(`${field} manifest entry must be remote`);
+      }
+      continue;
+    }
+
+    const artifactPath = readAttachedArtifactPath(reference);
+    if (artifactPath === undefined) {
+      continue;
+    }
+    if (entry.kind !== "local") {
+      blockers.push(`${field} manifest entry must be local`);
+      continue;
+    }
+    const resolvedPath = resolveArtifactPath(artifactPath, options);
+    try {
+      const artifactBytes = options.readArtifact(resolvedPath);
+      const artifactSha256 = sha256(artifactBytes);
+      if (entry.sha256 !== artifactSha256) {
+        blockers.push(`${field} artifact hash does not match manifest`);
+      }
+      if (entry.sizeBytes !== artifactBytes.byteLength) {
+        blockers.push(`${field} artifact size does not match manifest`);
+      }
+    } catch (error) {
+      blockers.push(`${field} artifact could not be read: ${formatError(error)}`);
+    }
+  }
+
+  return blockers.length === 0
+    ? { status: "valid", blockers: [] }
+    : { status: "invalid", blockers };
 }
 
 function createArtifactStatuses(
@@ -316,4 +454,38 @@ function isHttpUrl(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+interface Phase7ArtifactManifest {
+  schema?: unknown;
+  artifacts?: unknown;
+}
+
+interface Phase7ArtifactManifestEntry {
+  evidenceField: string;
+  reference: string;
+  kind: "local" | "remote";
+  artifactPath?: string;
+  sizeBytes?: number;
+  sha256?: string;
+}
+
+function isManifestEntry(value: unknown): value is Phase7ArtifactManifestEntry {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.evidenceField === "string" &&
+    typeof record.reference === "string" &&
+    (record.kind === "local" || record.kind === "remote")
+  );
+}
+
+function sha256(bytes: Uint8Array): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+function formatError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { createPhase7StagingArtifactManifest } from "../src/phase7StagingArtifactManifest.js";
 import {
   createPhase7StagingProofRecord,
   validatePhase7StagingProof,
@@ -238,4 +239,106 @@ funding_balance_evidence: funding.json
       ],
     });
   });
+
+  it("approves staged proof status when local artifacts match the manifest", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(true);
+    expect(report.manifestStatus).toEqual({
+      status: "valid",
+      blockers: [],
+    });
+  });
+
+  it("blocks staged proof status when artifact manifest hashes are stale", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set("evidence/paid-suite.log", encode("tampered proof\n"));
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.manifestStatus.status).toBe("invalid");
+    expect(report.manifestStatus.blockers).toContain(
+      "paid_request_evidence artifact hash does not match manifest",
+    );
+    expect(report.gateStatuses).toContainEqual({
+      gate: "artifact_manifest",
+      evidenceField: "artifact_manifest_evidence",
+      status: "invalid",
+      blockers: expect.arrayContaining([
+        "paid_request_evidence artifact hash does not match manifest",
+      ]),
+    });
+  });
 });
+
+function createManifestProof(): string {
+  return createPhase7StagingProofRecord({
+    proof_id: "phase7-staging-2026-06-26",
+    proof_date: "2026-06-26",
+    reviewers: "Split402 operators",
+    source_commit: "fd88024",
+    staging_environment: "staging-us",
+    control_plane_url: "https://control.staging.example",
+    dashboard_url: "https://dashboard.staging.example",
+    demo_merchant_url: "https://merchant.staging.example",
+    webhook_receiver_url: "https://webhook.staging.example",
+    agent_discovery_evidence: "https://artifacts.example/discovery.json",
+    paid_request_evidence: "attached: paid-suite.log",
+    receipt_verification_evidence: "https://artifacts.example/receipt.json",
+    referrer_balance_evidence: "https://artifacts.example/balances.json",
+    dashboard_summary_evidence: "https://artifacts.example/dashboard.json",
+    webhook_delivery_evidence: "https://artifacts.example/webhooks.json",
+    payout_obligation_evidence: "https://artifacts.example/obligations.json",
+    funding_balance_evidence: "https://artifacts.example/funding.json",
+    mcp_bundle_evidence: "https://artifacts.example/mcp.json",
+    artifact_manifest_evidence: "attached: artifact-manifest.json",
+    commands_run: "attached: commands.log",
+    approval_decision: "approved",
+  });
+}
+
+function createManifestArtifacts(proofText: string): Map<string, Uint8Array> {
+  const artifacts = new Map<string, Uint8Array>([
+    ["evidence/paid-suite.log", encode("paid proof\n")],
+    ["evidence/commands.log", encode("commands\n")],
+  ]);
+  const manifest = createPhase7StagingArtifactManifest(proofText, {
+    artifactBaseDir: "evidence",
+    readArtifact: (path) => readTestArtifact(artifacts, path),
+    resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+  });
+  artifacts.set(
+    "evidence/artifact-manifest.json",
+    encode(JSON.stringify(manifest, null, 2)),
+  );
+  return artifacts;
+}
+
+function readTestArtifact(
+  artifacts: ReadonlyMap<string, Uint8Array>,
+  path: string,
+): Uint8Array {
+  const artifact = artifacts.get(path);
+  if (artifact === undefined) {
+    throw new Error(`missing artifact ${path}`);
+  }
+  return artifact;
+}
+
+function encode(value: string): Uint8Array {
+  return new TextEncoder().encode(value);
+}

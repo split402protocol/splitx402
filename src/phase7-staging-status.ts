@@ -21,6 +21,7 @@ const report = createPhase7StagingStatusReport(proofText, {
     : {
         artifactBaseDir,
         artifactExists: existsSync,
+        readArtifact: (artifactPath) => readFileSync(artifactPath),
         resolveArtifactPath: (artifactPath, baseDir) =>
           isAbsolute(artifactPath) ? artifactPath : resolve(baseDir, artifactPath),
       }),

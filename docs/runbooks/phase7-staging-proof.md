@@ -36,8 +36,9 @@ The status report includes `gateStatuses`; each gate is marked `ready`,
 `missing`, `placeholder`, `invalid`, or `not_checked` with blockers attached to
 the evidence field that must be fixed. When a proof file path is supplied,
 `artifactStatuses` also verifies that local `attached:` artifact paths exist
-relative to the proof file directory. Remote `http(s)` artifact URLs are marked
-as remote references.
+relative to the proof file directory, and `manifestStatus` verifies that local
+artifact sizes and SHA-256 hashes still match `artifact-manifest.json`. Remote
+`http(s)` artifact URLs are marked as remote references.
 
 ## Required Evidence
 
@@ -79,3 +80,5 @@ The validator requires:
 - local `attached:` artifact paths must exist when
   `corepack pnpm phase7:staging:status <phase7-staging-proof.txt>` checks a
   proof file.
+- local `attached:` artifacts must match the generated artifact manifest when
+  the manifest is also attached locally.

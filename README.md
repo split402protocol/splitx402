@@ -433,6 +433,9 @@ corepack pnpm phase7:staging:assemble > phase7-staging-proof.txt
 corepack pnpm phase7:staging:status phase7-staging-proof.txt
 ```
 
+The status check validates required proof fields, local attachment presence, and
+the attached artifact manifest hashes before Phase 7 can be marked demo-ready.
+
 Run the demo merchant and agent flows:
 
 ```bash
