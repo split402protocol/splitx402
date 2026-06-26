@@ -704,6 +704,8 @@ function renderDashboardHtml(config: DashboardConfig): string {
       renderTable("#obligationTable", assets, [
         "asset",
         "fundingStatus",
+        "fundingAmountAtomic",
+        "fundingDeficitAtomic",
         "outstandingAmountAtomic",
         "availableAmountAtomic",
         "inFlightAmountAtomic",

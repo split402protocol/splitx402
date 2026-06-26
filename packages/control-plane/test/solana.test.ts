@@ -22,6 +22,7 @@ import {
   SOLANA_TOKEN_PROGRAM_ID,
   SOLANA_TOKEN_2022_PROGRAM_ID,
   SolanaPolicyEnforcedPayoutSigner,
+  SolanaRpcMerchantFundingBalanceProvider,
   SolanaRpcPayoutTransactionFinalityMonitor,
   SolanaRpcPayoutTransactionBroadcaster,
   SolanaRpcPayoutTransactionSimulator,
@@ -143,6 +144,105 @@ describe("createSolanaPayoutTransactionPlan", () => {
         tokenDecimals: 300
       })
     ).rejects.toThrow("tokenDecimals must be an integer between 0 and 255");
+  });
+});
+
+describe("SolanaRpcMerchantFundingBalanceProvider", () => {
+  it("reads associated token balances for active merchant payout wallets", async () => {
+    const receipt = createSampleProtocolArtifacts().artifacts.receipt;
+    const requests: unknown[] = [];
+    const provider = new SolanaRpcMerchantFundingBalanceProvider({
+      rpcUrl: "https://api.devnet.solana.com",
+      fetch: createFetch(
+        {
+          jsonrpc: "2.0",
+          id: "split402-funding-balance",
+          result: {
+            value: {
+              amount: "2500",
+              decimals: 6,
+              uiAmount: 0.0025,
+              uiAmountString: "0.0025"
+            }
+          }
+        },
+        requests
+      )
+    });
+
+    const balances = await provider.getMerchantFundingBalances({
+      merchantId: receipt.merchantId,
+      payoutWallets: [
+        {
+          id: "mpw_ffffffffffffffffffffffffffffffff",
+          merchantId: receipt.merchantId,
+          network: receipt.network,
+          wallet: receipt.payToWallet,
+          asset: receipt.asset,
+          signerReference: "kms:split402-devnet-payout",
+          status: "active",
+          createdAt: "2026-06-24T00:00:00Z"
+        }
+      ]
+    });
+
+    expect(balances).toEqual([
+      {
+        asset: receipt.asset,
+        amountAtomic: "2500",
+        fundingWallet: receipt.payToWallet
+      }
+    ]);
+    expect(requests).toEqual([
+      expect.objectContaining({
+        method: "getTokenAccountBalance",
+        params: [
+          expect.any(String),
+          {
+            commitment: "confirmed"
+          }
+        ]
+      })
+    ]);
+  });
+
+  it("treats missing token accounts as zero balance", async () => {
+    const receipt = createSampleProtocolArtifacts().artifacts.receipt;
+    const provider = new SolanaRpcMerchantFundingBalanceProvider({
+      rpcUrl: "https://api.devnet.solana.com",
+      fetch: createFetch({
+        jsonrpc: "2.0",
+        id: "split402-funding-balance",
+        error: {
+          code: -32602,
+          message: "could not find account"
+        }
+      })
+    });
+
+    await expect(
+      provider.getMerchantFundingBalances({
+        merchantId: receipt.merchantId,
+        payoutWallets: [
+          {
+            id: "mpw_ffffffffffffffffffffffffffffffff",
+            merchantId: receipt.merchantId,
+            network: receipt.network,
+            wallet: receipt.payToWallet,
+            asset: receipt.asset,
+            signerReference: "kms:split402-devnet-payout",
+            status: "active",
+            createdAt: "2026-06-24T00:00:00Z"
+          }
+        ]
+      })
+    ).resolves.toEqual([
+      {
+        asset: receipt.asset,
+        amountAtomic: "0",
+        fundingWallet: receipt.payToWallet
+      }
+    ]);
   });
 });
 
