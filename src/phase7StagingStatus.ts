@@ -404,6 +404,24 @@ function createHostedPreflightStatus(
   if (preflight.schema !== "split402.phase7_hosted_staging_preflight.v1") {
     blockers.push("hosted_preflight_evidence schema is invalid");
   }
+  const proofControlPlaneUrl = fields.get("control_plane_url");
+  const proofDashboardUrl = fields.get("dashboard_url");
+  if (typeof preflight.controlPlaneUrl !== "string") {
+    blockers.push("hosted_preflight_evidence controlPlaneUrl is missing");
+  } else if (
+    proofControlPlaneUrl !== undefined &&
+    normalizeHttpUrl(preflight.controlPlaneUrl) !== normalizeHttpUrl(proofControlPlaneUrl)
+  ) {
+    blockers.push("hosted_preflight_evidence controlPlaneUrl does not match proof");
+  }
+  if (typeof preflight.dashboardUrl !== "string") {
+    blockers.push("hosted_preflight_evidence dashboardUrl is missing");
+  } else if (
+    proofDashboardUrl !== undefined &&
+    normalizeHttpUrl(preflight.dashboardUrl) !== normalizeHttpUrl(proofDashboardUrl)
+  ) {
+    blockers.push("hosted_preflight_evidence dashboardUrl does not match proof");
+  }
   if (!Array.isArray(preflight.checks)) {
     blockers.push("hosted_preflight_evidence checks must be an array");
     return { status: "invalid", blockers };
@@ -429,6 +447,7 @@ function createHostedPreflightStatus(
     "dashboard_health",
     "dashboard_session",
     "dashboard_config_without_viewer",
+    "dashboard_config_with_viewer",
   ]) {
     if (!checkNames.has(requiredCheck)) {
       blockers.push(`hosted_preflight_evidence missing ${requiredCheck}`);
@@ -578,6 +597,21 @@ function isHttpUrl(value: string): boolean {
   }
 }
 
+function normalizeHttpUrl(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return undefined;
+    }
+    return url.toString().replace(/\/$/u, "");
+  } catch {
+    return undefined;
+  }
+}
+
 interface Phase7ArtifactManifest {
   schema?: unknown;
   artifacts?: unknown;
@@ -594,6 +628,8 @@ interface Phase7ArtifactManifestEntry {
 
 interface Phase7HostedPreflightArtifact {
   schema?: unknown;
+  controlPlaneUrl?: unknown;
+  dashboardUrl?: unknown;
   checks?: unknown;
 }
 

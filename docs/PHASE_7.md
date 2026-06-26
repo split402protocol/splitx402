@@ -110,7 +110,7 @@ webhook delivery, payout obligations, Solana RPC funding-balance coverage, MCP
 bundle output, and artifact manifest hashes from the same staging environment.
 The final status check verifies that local `attached:` artifacts still match the
 recorded manifest sizes and SHA-256 hashes, and that the hosted preflight checks
-passed.
+passed against the same control-plane and dashboard URLs listed in the proof.
 
 ## Remaining Phase 7 Work
 

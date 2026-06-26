@@ -34,8 +34,9 @@ referrer routes, referrer balances, dashboard summary, webhook delivery, payout
 obligations, and funding-balance coverage using the staging merchant and
 referrer environment variables.
 `phase7:hosted:preflight` captures `hosted-preflight.json` with control-plane
-health, dashboard health, dashboard session state, and dashboard viewer-token
-checks before the payment proof run.
+health, dashboard health, dashboard session state, locked dashboard access
+without a viewer token, and successful dashboard access with the viewer token
+before the payment proof run.
 `phase7:staging:manifest` records SHA-256 hashes for local attached artifacts
 and remote references for URL-based artifacts. Generate it after the evidence
 files exist and before the final assemble/status check.
@@ -91,6 +92,7 @@ The validator requires:
   `corepack pnpm phase7:staging:status <phase7-staging-proof.txt>` checks a
   proof file.
 - `hosted_preflight_evidence` must be a local attached
-  `hosted-preflight.json` artifact whose checks passed.
+  `hosted-preflight.json` artifact whose checks passed against the proof's
+  control-plane and dashboard URLs.
 - local `attached:` artifacts must match the generated artifact manifest when
   the manifest is also attached locally.
