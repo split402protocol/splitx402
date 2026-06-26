@@ -68,6 +68,7 @@ flowchart LR
 | Chain verification | Implemented as an outbox-driven Solana JSON-RPC worker for settlement signature and transfer checks. |
 | Webhooks | Implemented for accepted-receipt and payout lifecycle events with signed delivery envelopes and retry/dead-letter handling. |
 | Merchant SDK reliability boundary | Implemented with cached campaign lookup, service-key rotation helpers, payment identifiers, operation digests, and merchant-local receipt outbox primitives. |
+| Dashboard and discovery | Implemented for public-alpha operations: reliability profiles, dashboard summaries, webhook feeds, referrer routes, balances, payouts, hosted-staging viewer sessions, and proof capture. |
 | Payout engine | In progress: preview, allocation, Solana transfer planning, simulation, signer policy, local-dev signer, remote signer client, signer appliance scaffold, signer deployment artifacts, signed-byte persistence, broadcast boundary, finality monitor, rollup, payout lifecycle events, unknown-outcome reconciliation queue, referrer payout views, and idempotent ledger closure are implemented. |
 | Atomic split settlement | Later research. The MVP does not split the original x402 transaction onchain. |
 | `$SPLIT` bonding | Later research after the USDC accrual-and-payout loop is production ready. |
@@ -431,6 +432,28 @@ cp deploy/phase7-staging/phase7-staging.env.example deploy/phase7-staging/phase7
 docker compose -f deploy/phase7-staging/compose.yaml up postgres control-plane dashboard
 ```
 
+Phase 7 proof flow:
+
+```mermaid
+flowchart LR
+  Stack["Hosted staging stack"]
+  Migrate["Migration job"]
+  Preflight["Hosted preflight artifact"]
+  Reads["Control-plane read artifacts"]
+  Paid["Paid agent suite"]
+  Manifest["Artifact manifest hashes"]
+  Status["Machine status gate"]
+  Review["Launch review"]
+
+  Stack --> Migrate
+  Migrate --> Preflight
+  Preflight --> Reads
+  Reads --> Paid
+  Paid --> Manifest
+  Manifest --> Status
+  Status --> Review
+```
+
 Prepare and check the Phase 7 staging proof:
 
 ```bash
@@ -444,7 +467,10 @@ corepack pnpm phase7:staging:status phase7-staging-proof.txt
 ```
 
 The status check validates required proof fields, local attachment presence, and
-the attached artifact manifest hashes before Phase 7 can be marked demo-ready.
+the attached artifact manifest hashes. It also verifies the hosted preflight
+artifact was captured against the same control-plane and dashboard URLs listed
+in the proof, including locked dashboard access without a viewer token and
+successful access with the viewer token.
 
 Run the demo merchant and agent flows:
 
@@ -517,7 +543,9 @@ x402 extension, demo path, MCP demo bundle, merchant/referrer dashboard UI,
 merchant SDK primitives, control-plane ingestion, durable PostgreSQL adapters,
 outbox workers, chain verification, payout-engine boundaries, merchant
 dashboard summaries, payout-obligation views with optional Solana RPC funding
-balances, route discovery, referrer views, and webhook management.
+balances, route discovery, referrer views, webhook management, a hosted-staging
+compose stack, control-plane migration job, dashboard viewer session gate, and
+machine-checkable Phase 7 staging proof gates.
 
 Phase 6 production hardening remains a launch gate:
 

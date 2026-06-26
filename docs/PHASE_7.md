@@ -19,8 +19,9 @@ Implemented:
 - merchant/referrer operations dashboard at `@split402/dashboard`;
 - optional dashboard viewer session gate for hosted staging;
 - hosted-staging compose stack for control plane, dashboard, optional demo
-  merchant, and workers;
-- staging proof scaffold, status validator, template, and runbook;
+  merchant, migration job, and workers;
+- staging proof scaffold, hosted preflight collector, read collector, artifact
+  manifest validator, status validator, template, and runbooks;
 - merchant payout-obligation summary endpoint and dashboard view;
 - optional Solana RPC funding-balance provider for active payout wallets.
 
@@ -114,8 +115,9 @@ passed against the same control-plane and dashboard URLs listed in the proof.
 
 ## Remaining Phase 7 Work
 
-- Expand the dashboard from public-alpha operations UI into a production hosted
-  merchant/referrer service with hardened auth, sessions, and deployment config.
+- Expand the dashboard from public-alpha operations UI into a production
+  multi-tenant merchant/referrer service with hardened auth, session lifecycle,
+  tenant isolation, and deployment config.
 - Run and approve the hosted end-to-end staging proof where an agent discovers a
   route, pays through x402, receives a Split402 receipt, and sees referrer
   earnings without manual database work.
