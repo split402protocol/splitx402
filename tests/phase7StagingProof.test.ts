@@ -20,6 +20,7 @@ describe("Phase 7 staging proof", () => {
     expect(record).toContain("proof_date: 2026-06-26");
     expect(record).toContain("approval_decision: no-go");
     expect(record).toContain("dashboard_summary_evidence:");
+    expect(record).toContain("funding_balance_evidence:");
   });
 
   it("reports missing and placeholder fields", () => {
@@ -54,6 +55,7 @@ approval_decision: no-go
         dashboard_summary_evidence: "attached: dashboard-summary.json",
         webhook_delivery_evidence: "attached: webhook-events.json",
         payout_obligation_evidence: "attached: payout-obligations.json",
+        funding_balance_evidence: "attached: funding-balance.json",
         mcp_bundle_evidence: "attached: mcp-bundle.json",
         commands_run: "attached: commands.log",
         approval_decision: "approved",
@@ -79,6 +81,9 @@ approval_decision: no-go
     expect(report.commands).toBe(PHASE7_STAGING_COMMANDS);
     expect(report.commands.map((item) => item.command)).toContain(
       "corepack pnpm phase7:staging-proof",
+    );
+    expect(report.commands.map((item) => item.evidenceField)).toContain(
+      "funding_balance_evidence",
     );
     expect(report.nextActions).toContain(
       "Generate a proof scaffold with corepack pnpm phase7:staging-proof.",

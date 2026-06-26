@@ -31,6 +31,12 @@ export const PHASE7_STAGING_COMMANDS = [
     evidenceField: "dashboard_summary_evidence",
   },
   {
+    gate: "funding_balance",
+    command:
+      "run the payout-obligations read with SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc and attach covered/deficit evidence",
+    evidenceField: "funding_balance_evidence",
+  },
+  {
     gate: "proof_validation",
     command: "corepack pnpm phase7:staging:status <phase7-staging-proof.txt>",
     evidenceField: "approval_decision",
@@ -68,7 +74,7 @@ function createNextActions(
   if (validation === undefined) {
     return [
       "Generate a proof scaffold with corepack pnpm phase7:staging-proof.",
-      "Run the dashboard, MCP bundle, paid-suite, and control-plane read checks against staging.",
+      "Run the dashboard, MCP bundle, paid-suite, control-plane read checks, and funding-balance check against staging.",
       "Attach response URLs, logs, or artifact paths to the proof record.",
       "Run corepack pnpm phase7:staging:status <phase7-staging-proof.txt>.",
     ];

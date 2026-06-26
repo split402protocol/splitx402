@@ -14,6 +14,7 @@ referrer_balance_evidence:
 dashboard_summary_evidence:
 webhook_delivery_evidence:
 payout_obligation_evidence:
+funding_balance_evidence:
 mcp_bundle_evidence:
 commands_run:
 approval_decision: no-go

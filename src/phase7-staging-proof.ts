@@ -22,6 +22,8 @@ const values = {
     process.env.SPLIT402_PHASE7_WEBHOOK_DELIVERY_EVIDENCE,
   payout_obligation_evidence:
     process.env.SPLIT402_PHASE7_PAYOUT_OBLIGATION_EVIDENCE,
+  funding_balance_evidence:
+    process.env.SPLIT402_PHASE7_FUNDING_BALANCE_EVIDENCE,
   mcp_bundle_evidence: process.env.SPLIT402_PHASE7_MCP_BUNDLE_EVIDENCE,
   commands_run: process.env.SPLIT402_PHASE7_COMMANDS_RUN,
   approval_decision: process.env.SPLIT402_PHASE7_APPROVAL_DECISION,
