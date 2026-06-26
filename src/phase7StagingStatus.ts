@@ -53,8 +53,16 @@ export interface Phase7StagingStatusReport {
   readyForPublicAlphaDemo: boolean;
   proofChecked: boolean;
   commands: typeof PHASE7_STAGING_COMMANDS;
+  gateStatuses: Phase7StagingGateStatus[];
   validation?: Phase7StagingProofValidation;
   nextActions: string[];
+}
+
+export interface Phase7StagingGateStatus {
+  gate: (typeof PHASE7_STAGING_COMMANDS)[number]["gate"];
+  evidenceField: (typeof PHASE7_STAGING_COMMANDS)[number]["evidenceField"];
+  status: "not_checked" | "ready" | "missing" | "placeholder" | "invalid";
+  blockers: string[];
 }
 
 export function createPhase7StagingStatusReport(
@@ -68,9 +76,59 @@ export function createPhase7StagingStatusReport(
     readyForPublicAlphaDemo: validation?.approved ?? false,
     proofChecked: validation !== undefined,
     commands: PHASE7_STAGING_COMMANDS,
+    gateStatuses: createGateStatuses(validation),
     validation,
     nextActions: createNextActions(validation),
   };
+}
+
+function createGateStatuses(
+  validation: Phase7StagingProofValidation | undefined,
+): Phase7StagingGateStatus[] {
+  return PHASE7_STAGING_COMMANDS.map((command) => {
+    if (validation === undefined) {
+      return {
+        gate: command.gate,
+        evidenceField: command.evidenceField,
+        status: "not_checked",
+        blockers: [],
+      };
+    }
+
+    const invalidBlockers = validation.invalidFields.filter((field) =>
+      field.startsWith(`${command.evidenceField} `),
+    );
+    if (validation.missingFields.includes(command.evidenceField)) {
+      return {
+        gate: command.gate,
+        evidenceField: command.evidenceField,
+        status: "missing",
+        blockers: [`${command.evidenceField} is missing`],
+      };
+    }
+    if (validation.placeholderFields.includes(command.evidenceField)) {
+      return {
+        gate: command.gate,
+        evidenceField: command.evidenceField,
+        status: "placeholder",
+        blockers: [`${command.evidenceField} is a placeholder`],
+      };
+    }
+    if (invalidBlockers.length > 0) {
+      return {
+        gate: command.gate,
+        evidenceField: command.evidenceField,
+        status: "invalid",
+        blockers: invalidBlockers,
+      };
+    }
+    return {
+      gate: command.gate,
+      evidenceField: command.evidenceField,
+      status: "ready",
+      blockers: [],
+    };
+  });
 }
 
 function createNextActions(
