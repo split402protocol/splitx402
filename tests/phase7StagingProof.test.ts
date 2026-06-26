@@ -127,8 +127,42 @@ approval_decision: no-go
     expect(report.commands.map((item) => item.evidenceField)).toContain(
       "funding_balance_evidence",
     );
+    expect(report.gateStatuses.every((item) => item.status === "not_checked")).toBe(
+      true,
+    );
     expect(report.nextActions).toContain(
       "Generate a proof scaffold with corepack pnpm phase7:staging-proof.",
     );
+  });
+
+  it("reports gate-level blockers for incomplete proof evidence", () => {
+    const report = createPhase7StagingStatusReport(`proof_id: pending
+proof_date: 2026-06-26
+approval_decision: no-go
+funding_balance_evidence: funding.json
+`);
+
+    expect(report.proofChecked).toBe(true);
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.gateStatuses).toContainEqual({
+      gate: "proof_scaffold",
+      evidenceField: "proof_id",
+      status: "placeholder",
+      blockers: ["proof_id is a placeholder"],
+    });
+    expect(report.gateStatuses).toContainEqual({
+      gate: "funding_balance",
+      evidenceField: "funding_balance_evidence",
+      status: "invalid",
+      blockers: [
+        "funding_balance_evidence must be an attached artifact or http(s) URL",
+      ],
+    });
+    expect(report.gateStatuses).toContainEqual({
+      gate: "mcp_bundle",
+      evidenceField: "mcp_bundle_evidence",
+      status: "missing",
+      blockers: ["mcp_bundle_evidence is missing"],
+    });
   });
 });

@@ -18,6 +18,10 @@ corepack pnpm phase7:staging:assemble > phase7-staging-proof.txt
 corepack pnpm phase7:staging:status phase7-staging-proof.txt
 ```
 
+The status report includes `gateStatuses`; each gate is marked `ready`,
+`missing`, `placeholder`, `invalid`, or `not_checked` with blockers attached to
+the evidence field that must be fixed.
+
 ## Required Evidence
 
 ```mermaid
