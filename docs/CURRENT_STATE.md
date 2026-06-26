@@ -16,7 +16,7 @@ flowchart LR
   Protocol["Protocol core"]
   Demo["x402 demo flow"]
   SDKs["Agent and merchant SDKs"]
-  Mcp["MCP demo bundle"]
+  Mcp["MCP demo bundle and gateway"]
   Dashboard["Dashboard UI"]
   Control["Control plane"]
   Verification["Chain verification"]
@@ -38,7 +38,7 @@ flowchart LR
 | Protocol primitives | Implemented: schemas, hashes, IDs, amount math, operation digests, signatures, and test vectors. |
 | x402 integration | Implemented: Split402 offers, referral claims, request digests, and receipts around standard x402 settlement. |
 | Demo path | Implemented for Solana Devnet paid-suite proof runs. |
-| MCP demo bundle | Implemented public-alpha bundle: paid tool card, x402 payment metadata, Split402 campaign metadata, expected referral economics, and proof commands. |
+| MCP demo bundle and gateway | Implemented public-alpha bundle and stdio gateway: paid tool card, x402 payment metadata, Split402 campaign metadata, expected referral economics, MCP `tools/list`, MCP `tools/call`, and proof commands. |
 | Dashboard UI | Implemented public-alpha merchant/referrer operations UI with a narrow read proxy for dashboard summary, reliability, payout obligations, webhook delivery, referrer routes, balances, payouts, and an optional hosted-staging viewer session gate. |
 | Phase 7 hosted staging | Implemented compose stack for PostgreSQL, control plane, migration job, dashboard, optional demo merchant, and optional workers. |
 | Phase 7 staging proof | Implemented proof scaffold, assembly, status validator, hosted preflight collector, read collector, artifact manifest validation, funding-balance semantic validation, template, and runbooks for hosted end-to-end evidence, including payout-obligation funding coverage. |
@@ -61,7 +61,7 @@ flowchart LR
 ## Current Direction
 
 The near-term objective is to finish Phase 7 productization: a usable
-merchant/referrer dashboard, agent-demo packaging, and staging proof that an
+merchant/referrer dashboard, agent-demo gateway packaging, and staging proof that an
 agent can discover, pay, and verify Split402 earnings without manual database
 work. The hosted staging command surface now exists; the remaining gate is
 running it against a real hosted environment, collecting the required artifacts,

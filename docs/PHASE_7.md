@@ -15,7 +15,7 @@ Implemented:
   route status;
 - merchant webhook delivery feed for pending, processing, delivered, and
   dead-letter webhook outbox events;
-- MCP-facing demo bundle at `@split402/mcp-demo`;
+- MCP-facing demo bundle and stdio gateway at `@split402/mcp-demo`;
 - merchant/referrer operations dashboard at `@split402/dashboard`;
 - optional dashboard viewer session gate for hosted staging;
 - hosted-staging compose stack for control plane, dashboard, optional demo
@@ -50,6 +50,9 @@ Run it with:
 ```bash
 corepack pnpm demo:mcp-bundle
 ```
+
+Run `corepack pnpm demo:mcp-gateway` when an MCP client needs direct stdio
+tool discovery for the demo.
 
 ## Dashboard UI
 
@@ -127,8 +130,6 @@ resolved `covered` or `deficit` state instead of unresolved funding.
   attach covered/deficit evidence to the Phase 7 staging proof, with zero
   deficit for covered assets or a positive `fundingDeficitAtomic` for deficit
   assets.
-- Package the MCP demo into a runnable MCP gateway if the demo needs direct
-  client integration rather than a manifest/runbook bundle.
 
 ## Current Position
 

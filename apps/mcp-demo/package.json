@@ -8,6 +8,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "bundle": "tsx src/bundle.ts",
+    "gateway": "tsx src/gateway.ts",
     "lint": "eslint .",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"

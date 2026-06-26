@@ -420,7 +420,7 @@ Deliverables:
 - public merchant payment-reliability profile;
 - route search;
 - Bazaar metadata integration;
-- MCP demo bundle;
+- MCP demo bundle and stdio gateway;
 - webhook management.
 
 Current slice:
@@ -433,8 +433,9 @@ Current slice:
   route status rollups.
 - merchant webhook delivery feed for pending, processing, delivered, and
   dead-letter webhook outbox events.
-- MCP-facing paid-tool demo bundle with tool metadata, x402 payment details,
-  Split402 campaign metadata, expected referral economics, and proof commands.
+- MCP-facing paid-tool demo bundle and stdio gateway with tool metadata, x402
+  payment details, Split402 campaign metadata, expected referral economics, and
+  proof commands.
 - merchant/referrer dashboard UI with a narrow control-plane read proxy for
   summaries, reliability profiles, webhook delivery, routes, balances, and
   payouts.

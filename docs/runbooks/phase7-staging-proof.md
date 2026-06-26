@@ -40,6 +40,9 @@ before the payment proof run.
 `phase7:staging:manifest` records SHA-256 hashes for local attached artifacts
 and remote references for URL-based artifacts. Generate it after the evidence
 files exist and before the final assemble/status check.
+Run `corepack pnpm demo:mcp-gateway` from an MCP client stdio session if the
+staging proof needs live MCP tool discovery in addition to the stable
+`mcp-bundle.json` evidence.
 
 The status report includes `gateStatuses`; each gate is marked `ready`,
 `missing`, `placeholder`, `invalid`, or `not_checked` with blockers attached to
