@@ -14,6 +14,7 @@ corepack pnpm demo:mcp-bundle
 corepack pnpm demo:paid-suite
 # Capture payout obligations with SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc
 # and attach covered/deficit funding evidence to funding_balance_evidence.
+corepack pnpm phase7:staging:assemble > phase7-staging-proof.txt
 corepack pnpm phase7:staging:status phase7-staging-proof.txt
 ```
 
@@ -40,6 +41,8 @@ flowchart LR
 ```
 
 Attach response captures or artifact paths for every field in
-`docs/templates/phase7-staging-proof.txt`. Leave `approval_decision` as `no-go`
+`docs/templates/phase7-staging-proof.txt`, or set the
+`SPLIT402_PHASE7_ASSEMBLE_*` attachment variables and run
+`corepack pnpm phase7:staging:assemble`. Leave `approval_decision` as `no-go`
 until all attached evidence is from the same staging environment and source
 commit.

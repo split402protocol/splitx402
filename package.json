@@ -35,6 +35,7 @@
     "phase6:signer-smoke": "tsx src/phase6-signer-smoke.ts",
     "phase6:signer-policy": "tsx src/phase6-signer-policy.ts",
     "phase7:staging-proof": "tsx src/phase7-staging-proof.ts",
+    "phase7:staging:assemble": "tsx src/phase7-staging-assemble.ts",
     "phase7:staging:status": "tsx src/phase7-staging-status.ts",
     "audit": "corepack pnpm audit --audit-level high",
     "dashboard": "corepack pnpm --filter @split402/dashboard dev",
