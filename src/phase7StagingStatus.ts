@@ -7,6 +7,11 @@ import {
 
 export const PHASE7_STAGING_COMMANDS = [
   {
+    gate: "evidence_workspace",
+    command: "corepack pnpm phase7:staging:init",
+    evidenceField: "commands_run",
+  },
+  {
     gate: "proof_scaffold",
     command: "corepack pnpm phase7:staging-proof",
     evidenceField: "proof_id",
@@ -243,6 +248,7 @@ function createNextActions(
 ): string[] {
   if (validation === undefined) {
     return [
+      "Create the evidence workspace with corepack pnpm phase7:staging:init.",
       "Generate a proof scaffold with corepack pnpm phase7:staging-proof.",
       "Run the dashboard, MCP bundle, paid-suite, control-plane read checks, and funding-balance check against staging.",
       "Attach response URLs, logs, or artifact paths with corepack pnpm phase7:staging:assemble.",
