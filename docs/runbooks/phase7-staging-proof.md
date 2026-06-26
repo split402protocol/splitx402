@@ -10,6 +10,7 @@ work.
 ```bash
 corepack pnpm phase7:staging:init
 corepack pnpm phase7:staging-proof > phase7-staging-proof.txt
+corepack pnpm phase7:staging:collect-reads
 corepack pnpm dashboard
 corepack pnpm demo:mcp-bundle
 corepack pnpm demo:paid-suite
@@ -23,6 +24,10 @@ corepack pnpm phase7:staging:status phase7-staging-proof.txt
 `phase7:staging:init` creates a `phase7-staging-evidence/` directory README and
 `phase7-staging.env` attachment-path template. It does not create evidence
 artifact files; those must be captured from the hosted staging run.
+`phase7:staging:collect-reads` captures the control-plane read evidence for
+referrer routes, referrer balances, dashboard summary, webhook delivery, payout
+obligations, and funding-balance coverage using the staging merchant and
+referrer environment variables.
 `phase7:staging:manifest` records SHA-256 hashes for local attached artifacts
 and remote references for URL-based artifacts. Generate it after the evidence
 files exist and before the final assemble/status check.
