@@ -17,10 +17,12 @@ import type {
   ReceiptChainVerifier
 } from "./workers.js";
 import type {
+  PayoutFundingBalance,
   PayoutBatchRecord,
   PayoutItemRecord,
   PayoutTransactionRecord
 } from "./payouts.js";
+import type { MerchantPayoutWalletRecord } from "./merchants.js";
 
 type LocalDevSolanaKeyPair = Awaited<
   ReturnType<typeof createKeyPairSignerFromPrivateKeyBytes>
@@ -128,6 +130,14 @@ export interface SolanaRpcPayoutTransactionSimulatorOptions {
   replaceRecentBlockhash?: boolean;
 }
 
+export interface SolanaRpcMerchantFundingBalanceProviderOptions {
+  rpcUrl?: string;
+  rpcUrls?: string[];
+  commitment?: SolanaRpcCommitment;
+  fetch?: SolanaRpcFetch;
+  tokenProgramId?: string;
+}
+
 export interface SimulateSolanaPayoutTransactionPlanInput {
   plan: SolanaPayoutTransactionPlan;
   transactions: readonly SolanaSerializedPayoutTransaction[];
@@ -154,6 +164,95 @@ export interface SolanaPayoutSimulationTransactionResult {
   error?: string;
   logs?: string[];
   unitsConsumed?: number;
+}
+
+export class SolanaRpcMerchantFundingBalanceProvider {
+  constructor(
+    private readonly options: SolanaRpcMerchantFundingBalanceProviderOptions
+  ) {}
+
+  async getMerchantFundingBalances(input: {
+    merchantId: string;
+    payoutWallets: readonly MerchantPayoutWalletRecord[];
+  }): Promise<PayoutFundingBalance[]> {
+    const balances: PayoutFundingBalance[] = [];
+    for (const wallet of input.payoutWallets) {
+      if (!wallet.network.startsWith("solana:")) {
+        continue;
+      }
+      const sourceTokenAccount = await deriveAssociatedTokenAccount({
+        owner: wallet.wallet,
+        mint: wallet.asset,
+        tokenProgramId: this.options.tokenProgramId ?? SOLANA_TOKEN_PROGRAM_ID
+      });
+      const amountAtomic = await this.getTokenAccountBalance(sourceTokenAccount);
+      balances.push({
+        asset: wallet.asset,
+        amountAtomic,
+        fundingWallet: wallet.wallet
+      });
+    }
+    return balances;
+  }
+
+  private async getTokenAccountBalance(tokenAccount: string): Promise<string> {
+    let lastError: unknown;
+    for (const rpcUrl of this.rpcUrls()) {
+      try {
+        const response = await this.fetch()(rpcUrl, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: "split402-funding-balance",
+            method: "getTokenAccountBalance",
+            params: [
+              tokenAccount,
+              {
+                commitment: this.options.commitment ?? "confirmed"
+              }
+            ]
+          })
+        });
+        if (!response.ok) {
+          lastError = new Error(`Solana RPC returned HTTP ${response.status}`);
+          continue;
+        }
+        const body = await response.json();
+        const rpcError = readRpcError(body);
+        if (rpcError !== undefined) {
+          if (rpcError.includes("could not find account")) {
+            return "0";
+          }
+          lastError = new Error(`Solana RPC returned error: ${rpcError}`);
+          continue;
+        }
+        return readTokenAccountBalanceAmount(body);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError instanceof Error
+      ? lastError
+      : new Error("Solana RPC funding balance lookup failed");
+  }
+
+  private fetch(): SolanaRpcFetch {
+    return this.options.fetch ?? fetch;
+  }
+
+  private rpcUrls(): string[] {
+    const urls = [
+      ...(this.options.rpcUrl === undefined ? [] : [this.options.rpcUrl]),
+      ...(this.options.rpcUrls ?? [])
+    ];
+    if (urls.length === 0) {
+      throw new Error("Solana RPC URL is required");
+    }
+    return urls;
+  }
 }
 
 export interface SolanaPayoutSignerPolicy {
@@ -2124,6 +2223,12 @@ function readSignatureStatus(body: unknown): SolanaSignatureStatus | null {
   };
 }
 
+function readTokenAccountBalanceAmount(body: unknown): string {
+  const result = readRecord(readRecord(body).result);
+  const value = readRecord(result.value);
+  return assertNumericString(value.amount, "getTokenAccountBalance.result.value.amount");
+}
+
 function readConfirmedTransaction(body: unknown): SolanaConfirmedTransaction | null {
   const result = readRecord(body).result;
   if (result === null) {
@@ -2465,6 +2570,13 @@ function readOptionalInteger(value: unknown, label: string): number | undefined 
 function assertNonEmptyString(value: string, label: string): string {
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new Error(`${label} must be a non-empty string`);
+  }
+  return value;
+}
+
+function assertNumericString(value: unknown, label: string): string {
+  if (typeof value !== "string" || !isAtomicAmount(value)) {
+    throw new Error(`${label} must be an unsigned integer string`);
   }
   return value;
 }

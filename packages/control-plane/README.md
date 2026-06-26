@@ -132,6 +132,8 @@ GET  /v1/referrers/:referrerWallet/routes
 - idempotent payout-batch ledger closure for finalized payouts;
 - payout submitted, confirmed, finalized, failed, and outcome-unknown internal
   and webhook outbox events.
+- optional Solana RPC merchant funding-balance provider for covered/deficit
+  payout-obligation status.
 
 ## Commands
 

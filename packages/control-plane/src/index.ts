@@ -43,6 +43,7 @@ import {
   type MerchantKeyPurpose,
   type MerchantOriginStatus,
   type MerchantOriginVerificationMethod,
+  type MerchantPayoutWalletRecord,
   type MerchantPayoutWalletStatus,
   type MerchantRegistry,
   type MerchantStatus
@@ -55,7 +56,10 @@ import {
   type RouteRegistry,
   type RouteStatus
 } from "./routes.js";
-import { SolanaRpcPayoutTransactionFinalityMonitor } from "./solana.js";
+import {
+  SolanaRpcMerchantFundingBalanceProvider,
+  SolanaRpcPayoutTransactionFinalityMonitor
+} from "./solana.js";
 import {
   WEBHOOK_PAYOUT_CONFIRMED_EVENT_TYPE,
   WEBHOOK_PAYOUT_FAILED_EVENT_TYPE,
@@ -241,6 +245,13 @@ export interface WebhookEventManagementStore {
   listWebhookEvents(
     input: ListWebhookEventsInput
   ): Promise<OutboxEventRecord[]> | OutboxEventRecord[];
+}
+
+export interface MerchantFundingBalanceProvider {
+  getMerchantFundingBalances(input: {
+    merchantId: string;
+    payoutWallets: readonly MerchantPayoutWalletRecord[];
+  }): Promise<PayoutFundingBalance[]> | PayoutFundingBalance[];
 }
 
 export interface MarkReceiptChainVerifiedInput {
@@ -895,6 +906,7 @@ export interface ControlPlaneAppOptions {
   payoutTransactionStore?: PayoutTransactionStore;
   payoutReconciliationStore?: PayoutReconciliationStore;
   merchantObligationViewStore?: MerchantObligationViewStore;
+  merchantFundingBalanceProvider?: MerchantFundingBalanceProvider;
   referrerPayoutViewStore?: ReferrerPayoutViewStore;
   webhookEventManagementStore?: WebhookEventManagementStore;
   payoutFinalityMonitor?: PayoutFinalityMonitor;
@@ -952,6 +964,7 @@ export interface CreateControlPlaneRuntimeOptions {
   authPolicy?: ControlPlaneRuntimeAuthPolicy;
   close?: () => Promise<void> | void;
   jsonLimit?: string;
+  merchantFundingBalanceProvider?: MerchantFundingBalanceProvider;
   payoutFinalityMonitor?: PayoutFinalityMonitor;
   walletAuth?: WalletAuthenticatorOptions;
 }
@@ -1005,6 +1018,11 @@ export function createControlPlaneRuntime(
     payoutTransactionStore: receiptStore,
     payoutReconciliationStore: receiptStore,
     merchantObligationViewStore: receiptStore,
+    ...(options.merchantFundingBalanceProvider === undefined
+      ? {}
+      : {
+          merchantFundingBalanceProvider: options.merchantFundingBalanceProvider
+        }),
     referrerPayoutViewStore: receiptStore,
     webhookEventManagementStore: outboxStore,
     ...(options.payoutFinalityMonitor === undefined
@@ -1051,6 +1069,10 @@ export function createControlPlaneRuntimeFromEnv(
     ...(env.SPLIT402_CONTROL_PLANE_JSON_LIMIT === undefined
       ? {}
       : { jsonLimit: env.SPLIT402_CONTROL_PLANE_JSON_LIMIT }),
+    ...(() => {
+      const provider = createRuntimeMerchantFundingBalanceProvider(env);
+      return provider === undefined ? {} : { merchantFundingBalanceProvider: provider };
+    })(),
     payoutFinalityMonitor: createRuntimePayoutFinalityMonitor(env),
     walletAuth: {
       ...readWalletAuthEnvOptions(env),
@@ -1229,6 +1251,7 @@ export function createPayoutRouter(
     | "payoutTransactionStore"
     | "payoutReconciliationStore"
     | "merchantObligationViewStore"
+    | "merchantFundingBalanceProvider"
     | "referrerPayoutViewStore"
     | "payoutFinalityMonitor"
   > = {}
@@ -1317,10 +1340,15 @@ export function createPayoutRouter(
       }
 
       const asset = readOptionalString(req.query.asset, "asset");
+      const fundingBalances =
+        options.merchantFundingBalanceProvider === undefined
+          ? undefined
+          : await readMerchantFundingBalances(options, merchantId);
       const summary =
         await options.merchantObligationViewStore.getMerchantObligationSummary({
           merchantId,
-          ...(asset === undefined ? {} : { asset })
+          ...(asset === undefined ? {} : { asset }),
+          ...(fundingBalances === undefined ? {} : { fundingBalances })
         });
       res.json({ summary });
     } catch (error) {
@@ -3149,6 +3177,33 @@ function createRuntimePayoutFinalityMonitor(
   });
 }
 
+function createRuntimeMerchantFundingBalanceProvider(
+  env: NodeJS.ProcessEnv
+): MerchantFundingBalanceProvider | undefined {
+  if (env.SPLIT402_FUNDING_BALANCE_PROVIDER !== "solana-rpc") {
+    return undefined;
+  }
+  const rpcUrls = readOptionalRpcUrlList(
+    env.SPLIT402_FUNDING_BALANCE_SOLANA_RPC_URLS ??
+      env.SPLIT402_CHAIN_WORKER_SOLANA_RPC_URLS
+  );
+  const rpcUrl =
+    readOptionalNonEmptyEnv(
+      env.SPLIT402_FUNDING_BALANCE_SOLANA_RPC_URL
+    ) ??
+    readOptionalNonEmptyEnv(env.SPLIT402_CHAIN_WORKER_SOLANA_RPC_URL) ??
+    rpcUrls[0] ??
+    "https://api.devnet.solana.com";
+  const tokenProgramId = readOptionalNonEmptyEnv(
+    env.SPLIT402_FUNDING_BALANCE_TOKEN_PROGRAM_ID
+  );
+  return new SolanaRpcMerchantFundingBalanceProvider({
+    rpcUrl,
+    ...(rpcUrls.length === 0 ? {} : { rpcUrls }),
+    ...(tokenProgramId === undefined ? {} : { tokenProgramId })
+  });
+}
+
 function readOptionalNonEmptyEnv(value: string | undefined): string | undefined {
   if (value === undefined || value.trim().length === 0) {
     return undefined;
@@ -3381,6 +3436,33 @@ async function requireMerchantOwnerForMerchantId(
     return undefined;
   }
   return session;
+}
+
+async function readMerchantFundingBalances(
+  options: Pick<
+    ControlPlaneAppOptions,
+    "merchantFundingBalanceProvider" | "merchantRegistry"
+  >,
+  merchantId: string
+): Promise<PayoutFundingBalance[]> {
+  if (options.merchantFundingBalanceProvider === undefined) {
+    return [];
+  }
+  if (options.merchantRegistry === undefined) {
+    throw new MerchantRegistryValidationError(
+      "merchant registry is required for funding balance lookup"
+    );
+  }
+  const profile = await options.merchantRegistry.getMerchantProfile(merchantId);
+  if (profile === undefined) {
+    throw new MerchantRegistryValidationError("merchant not found");
+  }
+  return await options.merchantFundingBalanceProvider.getMerchantFundingBalances({
+    merchantId,
+    payoutWallets: profile.payoutWallets.filter(
+      (wallet) => wallet.status === "active"
+    )
+  });
 }
 
 function readBearerAccessToken(req: Request): string | undefined {
