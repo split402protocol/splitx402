@@ -10,6 +10,7 @@ production custody.
 flowchart LR
   Operator["Operator"]
   Dashboard["Dashboard with viewer session"]
+  Migrate["Migration job"]
   Control["Control plane"]
   Postgres[("PostgreSQL")]
   Merchant["Demo merchant"]
@@ -17,6 +18,7 @@ flowchart LR
   WebhookWorker["Webhook worker"]
 
   Operator --> Dashboard
+  Migrate --> Postgres
   Dashboard --> Control
   Merchant --> Control
   Control --> Postgres
@@ -40,6 +42,10 @@ Launch the control plane and dashboard:
 ```bash
 docker compose -f deploy/phase7-staging/compose.yaml up postgres control-plane dashboard
 ```
+
+The `migrate` service runs `corepack pnpm control-plane:migrate` once before the
+control plane starts. Save its JSON output if the launch review asks for schema
+migration evidence.
 
 Add the demo merchant and workers when the staging wallets and webhook receiver
 are ready:
