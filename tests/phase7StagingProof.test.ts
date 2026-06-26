@@ -131,6 +131,9 @@ approval_decision: no-go
       "corepack pnpm phase7:staging:collect-reads",
     );
     expect(report.commands.map((item) => item.command)).toContain(
+      "corepack pnpm phase7:hosted:preflight",
+    );
+    expect(report.commands.map((item) => item.command)).toContain(
       "corepack pnpm phase7:staging:assemble",
     );
     expect(report.commands.map((item) => item.command)).toContain(
@@ -147,6 +150,9 @@ approval_decision: no-go
     );
     expect(report.nextActions).toContain(
       "Generate a proof scaffold with corepack pnpm phase7:staging-proof.",
+    );
+    expect(report.nextActions).toContain(
+      "Run the hosted staging preflight with corepack pnpm phase7:hosted:preflight.",
     );
   });
 

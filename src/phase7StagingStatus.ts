@@ -24,6 +24,11 @@ export const PHASE7_STAGING_COMMANDS = [
     evidenceField: "dashboard_summary_evidence",
   },
   {
+    gate: "hosted_staging_preflight",
+    command: "corepack pnpm phase7:hosted:preflight",
+    evidenceField: "commands_run",
+  },
+  {
     gate: "proof_assembly",
     command: "corepack pnpm phase7:staging:assemble",
     evidenceField: "commands_run",
@@ -399,6 +404,7 @@ function createNextActions(
       "Create the evidence workspace with corepack pnpm phase7:staging:init.",
       "Generate a proof scaffold with corepack pnpm phase7:staging-proof.",
       "Run the dashboard, MCP bundle, paid-suite, control-plane read checks, and funding-balance check against staging.",
+      "Run the hosted staging preflight with corepack pnpm phase7:hosted:preflight.",
       "Capture read API evidence with corepack pnpm phase7:staging:collect-reads.",
       "Generate artifact hashes with corepack pnpm phase7:staging:manifest <phase7-staging-proof.txt>.",
       "Attach response URLs, logs, or artifact paths with corepack pnpm phase7:staging:assemble.",
