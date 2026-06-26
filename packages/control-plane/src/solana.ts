@@ -21,6 +21,8 @@ import type {
   ReceiptChainVerifier
 } from "./workers.js";
 import type {
+  PayoutFinalizedTransferVerifier,
+  PayoutFinalizedTransferVerificationResult,
   PayoutFundingBalance,
   PayoutBatchRecord,
   PayoutItemRecord,
@@ -419,6 +421,16 @@ export interface SolanaRpcPayoutTransactionFinalityMonitorOptions {
   retryDelayMs?: number;
   unknownOutcomeAfterMs?: number;
   now?: () => Date;
+}
+
+export interface SolanaRpcPayoutFinalizedTransferVerifierOptions {
+  rpcUrl?: string;
+  rpcUrls?: string[];
+  network: string;
+  fundingWallet: string;
+  sourceTokenAccount: string;
+  tokenProgramId?: string;
+  fetch?: SolanaRpcFetch;
 }
 
 export interface MonitorSolanaPayoutTransactionInput {
@@ -1373,6 +1385,163 @@ export class SolanaRpcPayoutTransactionFinalityMonitor {
 
   private now(): Date {
     return this.options.now?.() ?? new Date();
+  }
+
+  private fetch(): SolanaRpcFetch {
+    return this.options.fetch ?? fetch;
+  }
+
+  private rpcUrls(): string[] {
+    const urls = [
+      ...(this.options.rpcUrl === undefined ? [] : [this.options.rpcUrl]),
+      ...(this.options.rpcUrls ?? [])
+    ];
+    return Array.from(
+      new Set(urls.map((url) => url.trim()).filter((url) => url.length > 0))
+    );
+  }
+}
+
+export class SolanaRpcPayoutFinalizedTransferVerifier
+  implements PayoutFinalizedTransferVerifier {
+  constructor(
+    private readonly options: SolanaRpcPayoutFinalizedTransferVerifierOptions
+  ) {}
+
+  async verifyFinalizedPayout(input: {
+    batch: PayoutBatchRecord;
+    transactions: PayoutTransactionRecord[];
+  }): Promise<PayoutFinalizedTransferVerificationResult> {
+    const setupErrors = this.validateBatch(input.batch);
+    if (setupErrors.length > 0) {
+      return { ok: false, errors: setupErrors };
+    }
+
+    const errors: string[] = [];
+    for (const transaction of input.transactions) {
+      errors.push(
+        ...(await this.verifyTransaction(input.batch, transaction))
+      );
+    }
+    return {
+      ok: errors.length === 0,
+      errors
+    };
+  }
+
+  private validateBatch(batch: PayoutBatchRecord): string[] {
+    const errors: string[] = [];
+    if (batch.network !== this.options.network) {
+      errors.push(
+        `payout batch network ${batch.network} does not match verifier network ${this.options.network}`
+      );
+    }
+    if (batch.status !== "finalized") {
+      errors.push("payout batch must be finalized before transfer verification");
+    }
+    try {
+      assertSolanaAddress(this.options.fundingWallet, "fundingWallet");
+      assertSolanaAddress(this.options.sourceTokenAccount, "sourceTokenAccount");
+      assertSupportedTokenProgramId(
+        this.options.tokenProgramId ?? SOLANA_TOKEN_PROGRAM_ID
+      );
+    } catch (error) {
+      errors.push(readErrorMessage(error));
+    }
+    return errors;
+  }
+
+  private async verifyTransaction(
+    batch: PayoutBatchRecord,
+    transaction: PayoutTransactionRecord
+  ): Promise<string[]> {
+    const errors: string[] = [];
+    if (transaction.status !== "finalized") {
+      errors.push(`payout transaction ${transaction.id} is not finalized`);
+    }
+    const signature = transaction.expectedSignature;
+    if (signature === undefined) {
+      errors.push(`payout transaction ${transaction.id} is missing expectedSignature`);
+      return errors;
+    }
+    if (transaction.items.length === 0) {
+      errors.push(`payout transaction ${transaction.id} has no mapped payout items`);
+      return errors;
+    }
+
+    const response = await this.requestFinalizedTransaction(signature);
+    if (response.transaction === undefined) {
+      errors.push(...response.errors);
+      return errors;
+    }
+
+    const confirmed = response.transaction;
+    if (!confirmed.signatures.includes(signature)) {
+      errors.push(`finalized transaction ${signature} does not include expected signature`);
+    }
+    if (confirmed.metaErr !== null) {
+      errors.push(`finalized transaction ${signature} failed: ${JSON.stringify(confirmed.metaErr)}`);
+    }
+    errors.push(
+      ...(await verifyFinalizedPayoutTransfersForTransaction({
+        batch,
+        transaction,
+        confirmed,
+        fundingWallet: this.options.fundingWallet,
+        sourceTokenAccount: this.options.sourceTokenAccount,
+        tokenProgramId: this.options.tokenProgramId ?? SOLANA_TOKEN_PROGRAM_ID
+      }))
+    );
+    return errors.map((error) => `${transaction.id}: ${error}`);
+  }
+
+  private async requestFinalizedTransaction(
+    signature: string
+  ): Promise<{ transaction?: SolanaConfirmedTransaction; errors: string[] }> {
+    const errors: string[] = [];
+    for (const rpcUrl of this.rpcUrls()) {
+      try {
+        const response = await this.fetch()(rpcUrl, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: "split402-payout-finalized-transfer-verification",
+            method: "getTransaction",
+            params: [
+              signature,
+              {
+                commitment: "finalized",
+                encoding: "jsonParsed",
+                maxSupportedTransactionVersion: 0
+              }
+            ]
+          })
+        });
+        if (!response.ok) {
+          errors.push(`Solana RPC ${rpcUrl} returned HTTP ${response.status}`);
+          continue;
+        }
+        const body = await response.json();
+        const rpcError = readRpcError(body);
+        if (rpcError !== undefined) {
+          errors.push(`Solana RPC ${rpcUrl} returned error: ${rpcError}`);
+          continue;
+        }
+        const transaction = readConfirmedTransaction(body);
+        if (transaction === null) {
+          errors.push(`finalized transaction details not found: ${signature}`);
+          continue;
+        }
+        return { transaction, errors: [] };
+      } catch (error) {
+        errors.push(`Solana RPC finalized transaction lookup failed: ${readErrorMessage(error)}`);
+      }
+    }
+    if (errors.length === 0) {
+      errors.push("no Solana RPC URLs configured");
+    }
+    return { errors };
   }
 
   private fetch(): SolanaRpcFetch {
@@ -2763,6 +2932,95 @@ async function verifyReceiptTransaction(
     error:
       "settlement transaction does not contain a matching token transfer for receipt asset, payTo wallet, payer wallet, and amount"
   };
+}
+
+async function verifyFinalizedPayoutTransfersForTransaction(input: {
+  batch: PayoutBatchRecord;
+  transaction: PayoutTransactionRecord;
+  confirmed: SolanaConfirmedTransaction;
+  fundingWallet: string;
+  sourceTokenAccount: string;
+  tokenProgramId: string;
+}): Promise<string[]> {
+  const errors: string[] = [];
+  const expectedItems = input.transaction.items;
+  const matchedItemIds = new Set<string>();
+  const payoutTransfers = input.confirmed.transfers.filter(
+    (transfer) =>
+      transfer.mint === input.batch.asset &&
+      transfer.source === input.sourceTokenAccount &&
+      transfer.authority === input.fundingWallet
+  );
+
+  for (const transfer of payoutTransfers) {
+    if (transfer.programId !== input.tokenProgramId) {
+      errors.push("finalized transfer token program does not match funding policy");
+      continue;
+    }
+    const item = expectedItems.find(
+      (candidate) =>
+        !matchedItemIds.has(candidate.payoutItemId) &&
+        candidate.amountAtomic === transfer.amount &&
+        (candidate.destinationTokenAccount === undefined ||
+          candidate.destinationTokenAccount === transfer.destination)
+    );
+    if (item === undefined) {
+      errors.push(
+        `extra payout transfer from funding account to ${transfer.destination} for ${transfer.amount}`
+      );
+      continue;
+    }
+    matchedItemIds.add(item.payoutItemId);
+    if (
+      !(await transferRecipientMatchesPayoutItem({
+        transfer,
+        item,
+        tokenAccounts: input.confirmed.tokenAccounts,
+        mint: input.batch.asset,
+        tokenProgramId: input.tokenProgramId
+      }))
+    ) {
+      errors.push(
+        `recipient owner does not match payout item destination wallet: ${item.payoutItemId}`
+      );
+    }
+  }
+
+  for (const item of expectedItems) {
+    if (!matchedItemIds.has(item.payoutItemId)) {
+      errors.push(`missing finalized payout transfer for item ${item.payoutItemId}`);
+    }
+  }
+
+  return errors;
+}
+
+async function transferRecipientMatchesPayoutItem(input: {
+  transfer: SolanaTokenTransfer;
+  item: PayoutTransactionRecord["items"][number];
+  tokenAccounts: Map<string, SolanaTokenAccountEvidence>;
+  mint: string;
+  tokenProgramId: string;
+}): Promise<boolean> {
+  if (
+    input.item.destinationTokenAccount !== undefined &&
+    input.transfer.destination !== input.item.destinationTokenAccount
+  ) {
+    return false;
+  }
+  const destination = input.tokenAccounts.get(input.transfer.destination);
+  const ownerMatches = destination?.owner === input.item.destinationWallet;
+  const mintMatches = destination?.mint === undefined || destination.mint === input.mint;
+  const programMatches =
+    destination?.programId === undefined ||
+    destination.programId === input.transfer.programId;
+  const ataMatches = await isAssociatedTokenAccount({
+    account: input.transfer.destination,
+    owner: input.item.destinationWallet,
+    mint: input.mint,
+    tokenProgramId: input.tokenProgramId
+  });
+  return mintMatches && programMatches && (ownerMatches || ataMatches);
 }
 
 async function transferSatisfiesReceipt(

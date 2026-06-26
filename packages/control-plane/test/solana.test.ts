@@ -25,6 +25,7 @@ import {
   SolanaPolicyEnforcedPayoutSigner,
   SolanaRpcMerchantFundingBalanceProvider,
   SolanaRpcPayoutTransactionFinalityMonitor,
+  SolanaRpcPayoutFinalizedTransferVerifier,
   SolanaRpcPayoutTransactionBroadcaster,
   SolanaRpcPayoutTransactionSimulator,
   SolanaRpcReceiptVerifier,
@@ -1276,6 +1277,72 @@ describe("SolanaRpcPayoutTransactionFinalityMonitor", () => {
   });
 });
 
+describe("SolanaRpcPayoutFinalizedTransferVerifier", () => {
+  it("accepts finalized payout transactions with exact mapped transfers", async () => {
+    const fixture = payoutFinalizedTransferFixture();
+    const requests: unknown[] = [];
+    const verifier = new SolanaRpcPayoutFinalizedTransferVerifier({
+      rpcUrl: "https://api.devnet.solana.com",
+      network: fixture.batch.network,
+      fundingWallet: fixture.fundingWallet,
+      sourceTokenAccount: fixture.sourceTokenAccount,
+      fetch: createFetch(
+        payoutFinalizedTransactionBody(fixture),
+        requests
+      )
+    });
+
+    await expect(
+      verifier.verifyFinalizedPayout({
+        batch: fixture.batch,
+        transactions: [fixture.transaction]
+      })
+    ).resolves.toEqual({ ok: true, errors: [] });
+    expect(requests).toEqual([
+      expect.objectContaining({
+        method: "getTransaction",
+        params: [
+          fixture.transaction.expectedSignature,
+          expect.objectContaining({
+            commitment: "finalized",
+            encoding: "jsonParsed"
+          })
+        ]
+      })
+    ]);
+  });
+
+  it("rejects wrong destinations, missing transfers, extra transfers, and failed transactions", async () => {
+    const fixture = payoutFinalizedTransferFixture();
+
+    await expectPayoutTransferVerificationError(
+      fixture,
+      payoutFinalizedTransactionBody(fixture, {
+        destination: fixture.sourceTokenAccount,
+        destinationOwner: fixture.fundingWallet
+      }),
+      "missing finalized payout transfer"
+    );
+    await expectPayoutTransferVerificationError(
+      fixture,
+      payoutFinalizedTransactionBody(fixture, { omitTransfer: true }),
+      "missing finalized payout transfer"
+    );
+    await expectPayoutTransferVerificationError(
+      fixture,
+      payoutFinalizedTransactionBody(fixture, { includeExtraTransfer: true }),
+      "extra payout transfer"
+    );
+    await expectPayoutTransferVerificationError(
+      fixture,
+      payoutFinalizedTransactionBody(fixture, {
+        metaErr: { InstructionError: [0, "InsufficientFunds"] }
+      }),
+      "failed"
+    );
+  });
+});
+
 describe("SolanaRpcReceiptVerifier", () => {
   it("confirms receipts when the settlement signature and token transfer match", async () => {
     const receipt = createSampleProtocolArtifacts().artifacts.receipt;
@@ -1695,6 +1762,205 @@ function simulationBody(input: {
       }
     }
   };
+}
+
+interface PayoutFinalizedTransferFixture {
+  batch: PayoutBatchRecord;
+  transaction: PayoutTransactionRecord;
+  fundingWallet: string;
+  sourceTokenAccount: string;
+}
+
+interface PayoutFinalizedTransactionBodyOverrides {
+  amount?: string;
+  destination?: string;
+  destinationOwner?: string;
+  includeExtraTransfer?: boolean;
+  metaErr?: unknown;
+  omitTransfer?: boolean;
+}
+
+function payoutFinalizedTransferFixture(): PayoutFinalizedTransferFixture {
+  const receipt = createSampleProtocolArtifacts().artifacts.receipt;
+  if (receipt.payoutWallet === undefined) {
+    throw new Error("sample receipt must include a payout wallet");
+  }
+  const fundingWallet = receipt.payToWallet;
+  const sourceTokenAccount = SAMPLE_PAY_TO_ASSOCIATED_TOKEN_ACCOUNT;
+  const destinationTokenAccount = receipt.payerWallet;
+  const batch: PayoutBatchRecord = {
+    id: "pbt_ffffffffffffffffffffffffffffffff",
+    merchantId: receipt.merchantId,
+    payoutWalletId: "mpw_ffffffffffffffffffffffffffffffff",
+    network: receipt.network,
+    asset: receipt.asset,
+    status: "finalized",
+    totalAmountAtomic: "1000",
+    itemCount: 1,
+    accrualCount: 1,
+    createdAt: "2026-06-24T00:05:00.000Z",
+    updatedAt: "2026-06-24T00:08:00.000Z",
+    items: [
+      {
+        id: "pit_11111111111111111111111111111111",
+        payoutBatchId: "pbt_ffffffffffffffffffffffffffffffff",
+        destinationWallet: receipt.payoutWallet,
+        destinationTokenAccount,
+        amountAtomic: "1000",
+        status: "finalized",
+        createdAt: "2026-06-24T00:05:00.000Z",
+        allocations: [
+          {
+            payoutItemId: "pit_11111111111111111111111111111111",
+            accrualId: "acr_11111111111111111111111111111111",
+            amountAtomic: "1000"
+          }
+        ]
+      }
+    ]
+  };
+  const transaction = payoutTransaction({
+    payoutBatchId: batch.id,
+    status: "finalized",
+    expectedSignature: "sig_0",
+    finalizedAt: "2026-06-24T00:08:00.000Z",
+    items: [
+      {
+        payoutTransactionId: "ptx_ffffffffffffffffffffffffffffffff",
+        payoutItemId: batch.items[0]!.id,
+        amountAtomic: "1000",
+        destinationWallet: receipt.payoutWallet,
+        destinationTokenAccount
+      }
+    ]
+  });
+  return { batch, transaction, fundingWallet, sourceTokenAccount };
+}
+
+function payoutFinalizedTransactionBody(
+  fixture: PayoutFinalizedTransferFixture,
+  overrides: PayoutFinalizedTransactionBodyOverrides = {}
+): Record<string, unknown> {
+  const item = fixture.transaction.items[0];
+  if (item === undefined) {
+    throw new Error("expected mapped payout item");
+  }
+  const destination =
+    overrides.destination ?? item.destinationTokenAccount ?? fixture.sourceTokenAccount;
+  const amount = overrides.amount ?? item.amountAtomic;
+  const instruction = parsedTransferInstruction({
+    source: fixture.sourceTokenAccount,
+    mint: fixture.batch.asset,
+    destination,
+    authority: fixture.fundingWallet,
+    amount
+  });
+  const instructions = [
+    ...(overrides.omitTransfer === true ? [] : [instruction]),
+    ...(overrides.includeExtraTransfer === true
+      ? [
+          parsedTransferInstruction({
+            source: fixture.sourceTokenAccount,
+            mint: fixture.batch.asset,
+            destination: fixture.fundingWallet,
+            authority: fixture.fundingWallet,
+            amount: "1"
+          })
+        ]
+      : [])
+  ];
+  return {
+    jsonrpc: "2.0",
+    id: "split402-payout-finalized-transfer-verification",
+    result: {
+      slot: 1,
+      blockTime: 1,
+      version: 0,
+      meta: {
+        err: overrides.metaErr ?? null,
+        preTokenBalances: [],
+        postTokenBalances: [
+          {
+            accountIndex: 1,
+            mint: fixture.batch.asset,
+            owner: overrides.destinationOwner ?? item.destinationWallet,
+            programId: TOKEN_PROGRAM_ID,
+            uiTokenAmount: {
+              amount,
+              decimals: 6,
+              uiAmount: null,
+              uiAmountString: "0"
+            }
+          }
+        ],
+        innerInstructions: []
+      },
+      transaction: {
+        signatures: [fixture.transaction.expectedSignature],
+        message: {
+          accountKeys: [
+            fixture.fundingWallet,
+            destination,
+            fixture.sourceTokenAccount
+          ],
+          instructions
+        }
+      }
+    }
+  };
+}
+
+function parsedTransferInstruction(input: {
+  source: string;
+  mint: string;
+  destination: string;
+  authority: string;
+  amount: string;
+}): Record<string, unknown> {
+  return {
+    programId: TOKEN_PROGRAM_ID,
+    parsed: {
+      type: "transferChecked",
+      info: {
+        source: input.source,
+        mint: input.mint,
+        destination: input.destination,
+        authority: input.authority,
+        tokenAmount: {
+          amount: input.amount,
+          decimals: 6,
+          uiAmount: null,
+          uiAmountString: "0"
+        }
+      }
+    }
+  };
+}
+
+async function expectPayoutTransferVerificationError(
+  fixture: PayoutFinalizedTransferFixture,
+  body: Record<string, unknown>,
+  message: string
+): Promise<void> {
+  const verifier = new SolanaRpcPayoutFinalizedTransferVerifier({
+    rpcUrl: "https://api.devnet.solana.com",
+    network: fixture.batch.network,
+    fundingWallet: fixture.fundingWallet,
+    sourceTokenAccount: fixture.sourceTokenAccount,
+    fetch: createFetch(body)
+  });
+
+  await expect(
+    verifier.verifyFinalizedPayout({
+      batch: fixture.batch,
+      transactions: [fixture.transaction]
+    })
+  ).resolves.toEqual(
+    expect.objectContaining({
+      ok: false,
+      errors: expect.arrayContaining([expect.stringContaining(message)])
+    })
+  );
 }
 
 function successfulSimulationReport(

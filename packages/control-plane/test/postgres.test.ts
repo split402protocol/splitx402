@@ -560,10 +560,12 @@ describe("PostgresReceiptIngestionStore", () => {
       entryIdFactory: sequence([
         "lde_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "lde_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-      ])
+      ]),
+      finalizedTransferVerifier: approvingFinalizedTransferVerifier()
     });
     const repeatedLedgerClose = await store.closeFinalizedPayoutBatchLedger({
-      payoutBatchId: batch.id
+      payoutBatchId: batch.id,
+      finalizedTransferVerifier: approvingFinalizedTransferVerifier()
     });
 
     expect(saved).toHaveLength(1);
@@ -3644,6 +3646,12 @@ function sequence(values: string[]): () => string {
       throw new Error("sequence exhausted");
     }
     return value;
+  };
+}
+
+function approvingFinalizedTransferVerifier() {
+  return {
+    verifyFinalizedPayout: () => ({ ok: true, errors: [] })
   };
 }
 

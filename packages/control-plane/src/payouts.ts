@@ -156,7 +156,7 @@ export interface ClosePayoutBatchLedgerInput {
   now?: string;
   transactionId?: string;
   entryIdFactory?: () => string;
-  finalizedTransferVerifier?: PayoutFinalizedTransferVerifier;
+  finalizedTransferVerifier: PayoutFinalizedTransferVerifier;
 }
 
 export interface PayoutLedgerClosureStore {
@@ -182,11 +182,8 @@ export interface PayoutFinalizedTransferVerificationResult {
 export async function verifyPayoutFinalizedTransfersBeforeLedgerClosure(input: {
   batch: PayoutBatchRecord;
   transactions: PayoutTransactionRecord[];
-  verifier?: PayoutFinalizedTransferVerifier;
+  verifier: PayoutFinalizedTransferVerifier;
 }): Promise<void> {
-  if (input.verifier === undefined) {
-    return;
-  }
   const result = await input.verifier.verifyFinalizedPayout({
     batch: input.batch,
     transactions: input.transactions
