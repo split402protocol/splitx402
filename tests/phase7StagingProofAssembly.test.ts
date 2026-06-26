@@ -6,6 +6,7 @@ describe("Phase 7 staging proof assembly", () => {
   it("assembles proof values from artifact attachments", () => {
     const proof = assemblePhase7StagingProof({
       attachments: {
+        hosted_preflight_evidence: "evidence/hosted-preflight.json",
         agent_discovery_evidence: "evidence/agent-discovery.json",
         paid_request_evidence: "evidence/paid-suite.log",
         receipt_verification_evidence: "evidence/receipt.json",
@@ -32,6 +33,9 @@ describe("Phase 7 staging proof assembly", () => {
     });
 
     expect(proof).toContain("proof_id: phase7-staging-001\n");
+    expect(proof).toContain(
+      "hosted_preflight_evidence: attached: evidence/hosted-preflight.json\n",
+    );
     expect(proof).toContain(
       "agent_discovery_evidence: attached: evidence/agent-discovery.json\n",
     );

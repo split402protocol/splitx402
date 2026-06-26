@@ -15,6 +15,9 @@ describe("Phase 7 staging evidence workspace", () => {
       PHASE7_STAGING_ATTACHMENT_FIELDS,
     );
     expect(workspace.envText).toContain(
+      "SPLIT402_PHASE7_ASSEMBLE_HOSTED_PREFLIGHT_EVIDENCE=evidence/phase7/hosted-preflight.json",
+    );
+    expect(workspace.envText).toContain(
       "SPLIT402_PHASE7_ASSEMBLE_AGENT_DISCOVERY_EVIDENCE=evidence/phase7/agent-discovery.json",
     );
     expect(workspace.envText).toContain(
@@ -32,6 +35,7 @@ describe("Phase 7 staging evidence workspace", () => {
     const workspace = createPhase7StagingEvidenceWorkspace();
 
     expect(workspace.readmeText).toContain("# Phase 7 Staging Evidence");
+    expect(workspace.readmeText).toContain("hosted-preflight.json");
     expect(workspace.readmeText).toContain("funding-balance.json");
     expect(workspace.readmeText).toContain("artifact-manifest.json");
     expect(workspace.readmeText).toContain(

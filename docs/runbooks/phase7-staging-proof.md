@@ -52,6 +52,7 @@ artifact sizes and SHA-256 hashes still match `artifact-manifest.json`. Remote
 
 ```mermaid
 flowchart LR
+  Preflight["Hosted preflight"]
   Discovery["Agent route discovery"]
   Payment["x402 paid request"]
   Receipt["Split402 receipt verification"]
@@ -61,6 +62,7 @@ flowchart LR
   Funding["Funding balance coverage"]
   Approval["Approved proof record"]
 
+  Preflight --> Discovery
   Discovery --> Payment
   Payment --> Receipt
   Receipt --> Earnings
@@ -88,5 +90,7 @@ The validator requires:
 - local `attached:` artifact paths must exist when
   `corepack pnpm phase7:staging:status <phase7-staging-proof.txt>` checks a
   proof file.
+- `hosted_preflight_evidence` must be a local attached
+  `hosted-preflight.json` artifact whose checks passed.
 - local `attached:` artifacts must match the generated artifact manifest when
   the manifest is also attached locally.

@@ -21,6 +21,11 @@ export interface Phase7StagingEvidenceWorkspace {
 const PHASE7_STAGING_EVIDENCE_ARTIFACTS: readonly Phase7StagingEvidenceArtifact[] =
   [
     {
+      field: "hosted_preflight_evidence",
+      fileName: "hosted-preflight.json",
+      purpose: "Hosted stack preflight proving health and dashboard viewer gate.",
+    },
+    {
       field: "agent_discovery_evidence",
       fileName: "agent-discovery.json",
       purpose: "Route discovery response observed by the agent or MCP client.",

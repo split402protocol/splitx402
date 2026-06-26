@@ -8,6 +8,7 @@ export const REQUIRED_PHASE7_STAGING_FIELDS = [
   "dashboard_url",
   "demo_merchant_url",
   "webhook_receiver_url",
+  "hosted_preflight_evidence",
   "agent_discovery_evidence",
   "paid_request_evidence",
   "receipt_verification_evidence",
@@ -37,6 +38,7 @@ const PHASE7_URL_FIELDS = [
 ] as const satisfies readonly Phase7StagingProofField[];
 
 export const PHASE7_EVIDENCE_FIELDS = [
+  "hosted_preflight_evidence",
   "agent_discovery_evidence",
   "paid_request_evidence",
   "receipt_verification_evidence",
@@ -60,6 +62,7 @@ const PHASE7_STAGING_PROOF_ENV_NAMES: Record<Phase7StagingProofField, string> = 
   dashboard_url: "SPLIT402_PHASE7_DASHBOARD_URL",
   demo_merchant_url: "SPLIT402_PHASE7_DEMO_MERCHANT_URL",
   webhook_receiver_url: "SPLIT402_PHASE7_WEBHOOK_RECEIVER_URL",
+  hosted_preflight_evidence: "SPLIT402_PHASE7_HOSTED_PREFLIGHT_EVIDENCE",
   agent_discovery_evidence: "SPLIT402_PHASE7_AGENT_DISCOVERY_EVIDENCE",
   paid_request_evidence: "SPLIT402_PHASE7_PAID_REQUEST_EVIDENCE",
   receipt_verification_evidence:
@@ -97,6 +100,7 @@ export function createPhase7StagingProofRecord(
     `dashboard_url: ${values.dashboard_url ?? ""}`,
     `demo_merchant_url: ${values.demo_merchant_url ?? ""}`,
     `webhook_receiver_url: ${values.webhook_receiver_url ?? ""}`,
+    `hosted_preflight_evidence: ${values.hosted_preflight_evidence ?? ""}`,
     `agent_discovery_evidence: ${values.agent_discovery_evidence ?? ""}`,
     `paid_request_evidence: ${values.paid_request_evidence ?? ""}`,
     `receipt_verification_evidence: ${values.receipt_verification_evidence ?? ""}`,

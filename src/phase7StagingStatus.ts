@@ -26,7 +26,7 @@ export const PHASE7_STAGING_COMMANDS = [
   {
     gate: "hosted_staging_preflight",
     command: "corepack pnpm phase7:hosted:preflight",
-    evidenceField: "commands_run",
+    evidenceField: "hosted_preflight_evidence",
   },
   {
     gate: "proof_assembly",
@@ -80,6 +80,7 @@ export interface Phase7StagingStatusReport {
   gateStatuses: Phase7StagingGateStatus[];
   artifactStatuses: Phase7StagingArtifactStatus[];
   manifestStatus: Phase7StagingManifestStatus;
+  hostedPreflightStatus: Phase7HostedPreflightStatus;
   validation?: Phase7StagingProofValidation;
   nextActions: string[];
 }
@@ -111,6 +112,11 @@ export interface Phase7StagingManifestStatus {
   blockers: string[];
 }
 
+export interface Phase7HostedPreflightStatus {
+  status: "not_checked" | "not_applicable" | "valid" | "invalid";
+  blockers: string[];
+}
+
 export function createPhase7StagingStatusReport(
   proofText?: string,
   options: Phase7StagingStatusOptions = {},
@@ -119,12 +125,15 @@ export function createPhase7StagingStatusReport(
     proofText === undefined ? undefined : validatePhase7StagingProof(proofText);
   const artifactStatuses = createArtifactStatuses(proofText, options);
   const manifestStatus = createManifestStatus(proofText, options);
+  const hostedPreflightStatus = createHostedPreflightStatus(proofText, options);
   const artifactBlockers = artifactStatuses.flatMap((status) => status.blockers);
   const manifestBlockers = manifestStatus.blockers;
+  const hostedPreflightBlockers = hostedPreflightStatus.blockers;
   const readyForPublicAlphaDemo =
     (validation?.approved ?? false) &&
     artifactBlockers.length === 0 &&
-    manifestBlockers.length === 0;
+    manifestBlockers.length === 0 &&
+    hostedPreflightBlockers.length === 0;
 
   return {
     schema: "split402.phase7_staging_status.v1",
@@ -135,13 +144,16 @@ export function createPhase7StagingStatusReport(
       validation,
       artifactStatuses,
       manifestBlockers,
+      hostedPreflightBlockers,
     ),
     artifactStatuses,
     manifestStatus,
+    hostedPreflightStatus,
     validation,
     nextActions: createNextActions(validation, [
       ...artifactBlockers,
       ...manifestBlockers,
+      ...hostedPreflightBlockers,
     ]),
   };
 }
@@ -150,6 +162,7 @@ function createGateStatuses(
   validation: Phase7StagingProofValidation | undefined,
   artifactStatuses: readonly Phase7StagingArtifactStatus[],
   manifestBlockers: readonly string[],
+  hostedPreflightBlockers: readonly string[],
 ): Phase7StagingGateStatus[] {
   return PHASE7_STAGING_COMMANDS.map((command) => {
     if (validation === undefined) {
@@ -167,10 +180,12 @@ function createGateStatuses(
     const artifactBlockers = artifactStatuses
       .filter((status) => status.evidenceField === command.evidenceField)
       .flatMap((status) => status.blockers);
-    const gateArtifactBlockers =
-      command.evidenceField === "artifact_manifest_evidence"
-        ? [...artifactBlockers, ...manifestBlockers]
-        : artifactBlockers;
+    const gateArtifactBlockers = createGateArtifactBlockers(
+      command.evidenceField,
+      artifactBlockers,
+      manifestBlockers,
+      hostedPreflightBlockers,
+    );
     if (validation.missingFields.includes(command.evidenceField)) {
       return {
         gate: command.gate,
@@ -210,6 +225,21 @@ function createGateStatuses(
       blockers: [],
     };
   });
+}
+
+function createGateArtifactBlockers(
+  evidenceField: Phase7StagingGateStatus["evidenceField"],
+  artifactBlockers: readonly string[],
+  manifestBlockers: readonly string[],
+  hostedPreflightBlockers: readonly string[],
+): string[] {
+  if (evidenceField === "artifact_manifest_evidence") {
+    return [...artifactBlockers, ...manifestBlockers];
+  }
+  if (evidenceField === "hosted_preflight_evidence") {
+    return [...artifactBlockers, ...hostedPreflightBlockers];
+  }
+  return [...artifactBlockers];
 }
 
 function createManifestStatus(
@@ -316,6 +346,92 @@ function createManifestStatus(
       }
     } catch (error) {
       blockers.push(`${field} artifact could not be read: ${formatError(error)}`);
+    }
+  }
+
+  return blockers.length === 0
+    ? { status: "valid", blockers: [] }
+    : { status: "invalid", blockers };
+}
+
+function createHostedPreflightStatus(
+  proofText: string | undefined,
+  options: Phase7StagingStatusOptions,
+): Phase7HostedPreflightStatus {
+  if (proofText === undefined) {
+    return { status: "not_checked", blockers: [] };
+  }
+
+  const fields = parsePhase7ProofRecord(proofText);
+  const reference = fields.get("hosted_preflight_evidence");
+  if (reference === undefined || reference.length === 0) {
+    return { status: "not_applicable", blockers: [] };
+  }
+  if (isHttpUrl(reference)) {
+    return {
+      status: "invalid",
+      blockers: [
+        "hosted_preflight_evidence must be an attached local artifact for status validation",
+      ],
+    };
+  }
+
+  const artifactPath = readAttachedArtifactPath(reference);
+  if (artifactPath === undefined) {
+    return { status: "not_applicable", blockers: [] };
+  }
+  if (options.artifactBaseDir === undefined || options.readArtifact === undefined) {
+    return { status: "not_checked", blockers: [] };
+  }
+
+  const resolvedPath = resolveArtifactPath(artifactPath, options);
+  const blockers: string[] = [];
+  let preflight: Phase7HostedPreflightArtifact | undefined;
+  try {
+    const artifactBytes = options.readArtifact(resolvedPath);
+    preflight = JSON.parse(
+      new TextDecoder().decode(artifactBytes),
+    ) as Phase7HostedPreflightArtifact;
+  } catch (error) {
+    blockers.push(
+      `hosted_preflight_evidence artifact could not be read: ${formatError(error)}`,
+    );
+  }
+
+  if (preflight === undefined) {
+    return { status: "invalid", blockers };
+  }
+  if (preflight.schema !== "split402.phase7_hosted_staging_preflight.v1") {
+    blockers.push("hosted_preflight_evidence schema is invalid");
+  }
+  if (!Array.isArray(preflight.checks)) {
+    blockers.push("hosted_preflight_evidence checks must be an array");
+    return { status: "invalid", blockers };
+  }
+  const failedChecks = preflight.checks.filter(
+    (check) =>
+      !isHostedPreflightCheck(check) ||
+      check.ok !== true ||
+      check.status !== check.expectedStatus,
+  );
+  if (failedChecks.length > 0) {
+    blockers.push(
+      `hosted_preflight_evidence has ${failedChecks.length} failed checks`,
+    );
+  }
+  const checkNames = new Set(
+    preflight.checks
+      .filter(isHostedPreflightCheck)
+      .map((check) => check.name),
+  );
+  for (const requiredCheck of [
+    "control_plane_health",
+    "dashboard_health",
+    "dashboard_session",
+    "dashboard_config_without_viewer",
+  ]) {
+    if (!checkNames.has(requiredCheck)) {
+      blockers.push(`hosted_preflight_evidence missing ${requiredCheck}`);
     }
   }
 
@@ -476,6 +592,18 @@ interface Phase7ArtifactManifestEntry {
   sha256?: string;
 }
 
+interface Phase7HostedPreflightArtifact {
+  schema?: unknown;
+  checks?: unknown;
+}
+
+interface Phase7HostedPreflightCheck {
+  name: string;
+  status: number;
+  expectedStatus: number;
+  ok: boolean;
+}
+
 function isManifestEntry(value: unknown): value is Phase7ArtifactManifestEntry {
   if (typeof value !== "object" || value === null) {
     return false;
@@ -485,6 +613,21 @@ function isManifestEntry(value: unknown): value is Phase7ArtifactManifestEntry {
     typeof record.evidenceField === "string" &&
     typeof record.reference === "string" &&
     (record.kind === "local" || record.kind === "remote")
+  );
+}
+
+function isHostedPreflightCheck(
+  value: unknown,
+): value is Phase7HostedPreflightCheck {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.name === "string" &&
+    typeof record.status === "number" &&
+    typeof record.expectedStatus === "number" &&
+    typeof record.ok === "boolean"
   );
 }
 
