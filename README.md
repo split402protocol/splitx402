@@ -10,9 +10,11 @@
 
 Split402 lets an agent pay a merchant through a normal x402 USDC flow and attach
 a signed referral claim to that paid request. If the merchant campaign says the
-referral earns 10 percent, Split402 records that 10 percent as a payable
-commission to the referrer's payout wallet, verifies the underlying settlement,
-and later moves eligible commissions into merchant-funded payout batches.
+referral earns 10 percent, Split402 records that commission as a payable to the
+referrer's payout wallet, verifies the underlying settlement, and later moves
+eligible commissions into merchant-funded payout batches. Campaigns may also set
+a protocol fee as a percentage of the referral commission, not as a percentage of
+the gross buyer payment.
 
 The important money model is simple:
 
@@ -79,14 +81,18 @@ flowchart LR
 flowchart LR
   Pay["Agent pays 1.00 USDC"]
   Gross["x402 settles 1.00 USDC to merchant"]
-  Terms["Campaign commission: 1000 bps"]
-  Liability["Split402 records 0.10 USDC payable"]
+  Terms["Campaign commission: 2000 bps"]
+  Fee["Protocol fee: 1000 bps of commission"]
+  Liability["Split402 records 0.18 USDC referrer payable"]
+  ProtocolFee["Split402 records 0.02 USDC protocol payable"]
   Verify["Chain verification marks accrual available"]
-  Batch["Payout batch sends 0.10 USDC later"]
+  Batch["Payout batch sends 0.18 USDC later"]
 
   Pay --> Gross
   Gross --> Terms
-  Terms --> Liability
+  Terms --> Fee
+  Fee --> Liability
+  Fee --> ProtocolFee
   Liability --> Verify
   Verify --> Batch
 ```
@@ -95,14 +101,19 @@ flowchart LR
 | --- | --- |
 | API price | `1.00 USDC` |
 | x402 settlement | `1.00 USDC` paid to the merchant |
-| Campaign commission | `1000` bps, equal to 10 percent |
-| Split402 accrual | `0.10 USDC` owed to the referrer |
+| Campaign commission | `2000` bps, equal to `0.20 USDC` |
+| Protocol fee | `1000` bps of commission, equal to `0.02 USDC` |
+| Split402 accrual | `0.18 USDC` owed to the referrer |
 | Payout source | Merchant-controlled USDC payout wallet |
 | Payout timing | Later, after verification, eligibility, allocation, and finality checks |
 
 This is why Split402 is different from an atomic onchain splitter today: it does
 not redirect part of the buyer's x402 payment in the MVP. It makes the referral
 commission auditable, idempotent, and payable after settlement.
+
+Self-referral policy is evaluated against the settled payer and, where known, the
+merchant owner. A referrer may use the same wallet for identity and payout; that
+alone is not treated as self-referral.
 
 ## End-To-End Sequence
 
