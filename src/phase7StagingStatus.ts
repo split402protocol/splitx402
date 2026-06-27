@@ -91,6 +91,7 @@ export interface Phase7StagingStatusReport {
   fundingBalanceStatus: Phase7FundingBalanceStatus;
   mcpBundleStatus: Phase7McpBundleStatus;
   mcpGatewayStatus: Phase7McpGatewayStatus;
+  commandEvidenceStatus: Phase7CommandEvidenceStatus;
   validation?: Phase7StagingProofValidation;
   nextActions: string[];
 }
@@ -152,6 +153,11 @@ export interface Phase7McpGatewayStatus {
   blockers: string[];
 }
 
+export interface Phase7CommandEvidenceStatus {
+  status: "not_checked" | "not_applicable" | "valid" | "invalid";
+  blockers: string[];
+}
+
 export function createPhase7StagingStatusReport(
   proofText?: string,
   options: Phase7StagingStatusOptions = {},
@@ -166,6 +172,7 @@ export function createPhase7StagingStatusReport(
   const fundingBalanceStatus = createFundingBalanceStatus(proofText, options);
   const mcpBundleStatus = createMcpBundleStatus(proofText, options);
   const mcpGatewayStatus = createMcpGatewayStatus(proofText, options);
+  const commandEvidenceStatus = createCommandEvidenceStatus(proofText, options);
   const artifactBlockers = artifactStatuses.flatMap((status) => status.blockers);
   const manifestBlockers = manifestStatus.blockers;
   const hostedPreflightBlockers = hostedPreflightStatus.blockers;
@@ -174,6 +181,7 @@ export function createPhase7StagingStatusReport(
   const fundingBalanceBlockers = fundingBalanceStatus.blockers;
   const mcpBundleBlockers = mcpBundleStatus.blockers;
   const mcpGatewayBlockers = mcpGatewayStatus.blockers;
+  const commandEvidenceBlockers = commandEvidenceStatus.blockers;
   const readyForPublicAlphaDemo =
     (validation?.approved ?? false) &&
     artifactBlockers.length === 0 &&
@@ -183,7 +191,8 @@ export function createPhase7StagingStatusReport(
     paidRequestBlockers.length === 0 &&
     fundingBalanceBlockers.length === 0 &&
     mcpBundleBlockers.length === 0 &&
-    mcpGatewayBlockers.length === 0;
+    mcpGatewayBlockers.length === 0 &&
+    commandEvidenceBlockers.length === 0;
 
   return {
     schema: "split402.phase7_staging_status.v1",
@@ -200,6 +209,7 @@ export function createPhase7StagingStatusReport(
       fundingBalanceBlockers,
       mcpBundleBlockers,
       mcpGatewayBlockers,
+      commandEvidenceBlockers,
     ),
     artifactStatuses,
     manifestStatus,
@@ -209,6 +219,7 @@ export function createPhase7StagingStatusReport(
     fundingBalanceStatus,
     mcpBundleStatus,
     mcpGatewayStatus,
+    commandEvidenceStatus,
     validation,
     nextActions: createNextActions(validation, [
       ...artifactBlockers,
@@ -219,6 +230,7 @@ export function createPhase7StagingStatusReport(
       ...fundingBalanceBlockers,
       ...mcpBundleBlockers,
       ...mcpGatewayBlockers,
+      ...commandEvidenceBlockers,
     ]),
   };
 }
@@ -233,6 +245,7 @@ function createGateStatuses(
   fundingBalanceBlockers: readonly string[],
   mcpBundleBlockers: readonly string[],
   mcpGatewayBlockers: readonly string[],
+  commandEvidenceBlockers: readonly string[],
 ): Phase7StagingGateStatus[] {
   return PHASE7_STAGING_COMMANDS.map((command) => {
     if (validation === undefined) {
@@ -260,6 +273,7 @@ function createGateStatuses(
       fundingBalanceBlockers,
       mcpBundleBlockers,
       mcpGatewayBlockers,
+      commandEvidenceBlockers,
     );
     if (validation.missingFields.includes(command.evidenceField)) {
       return {
@@ -312,6 +326,7 @@ function createGateArtifactBlockers(
   fundingBalanceBlockers: readonly string[],
   mcpBundleBlockers: readonly string[],
   mcpGatewayBlockers: readonly string[],
+  commandEvidenceBlockers: readonly string[],
 ): string[] {
   if (evidenceField === "artifact_manifest_evidence") {
     return [...artifactBlockers, ...manifestBlockers];
@@ -339,6 +354,9 @@ function createGateArtifactBlockers(
   }
   if (evidenceField === "mcp_gateway_evidence") {
     return [...artifactBlockers, ...mcpGatewayBlockers];
+  }
+  if (evidenceField === "commands_run") {
+    return [...artifactBlockers, ...commandEvidenceBlockers];
   }
   return [...artifactBlockers];
 }
@@ -1467,6 +1485,79 @@ function createMcpGatewayStatus(
     : { status: "invalid", blockers };
 }
 
+const PHASE7_REQUIRED_COMMAND_EVIDENCE = [
+  "corepack pnpm phase7:staging:init",
+  "corepack pnpm phase7:staging-proof",
+  "corepack pnpm phase7:hosted:preflight",
+  "corepack pnpm phase7:staging:collect-reads",
+  "corepack pnpm phase7:staging:collect-mcp-gateway",
+  "corepack pnpm demo:mcp-bundle",
+  "corepack pnpm demo:paid-suite",
+  "corepack pnpm phase7:staging:manifest",
+  "corepack pnpm phase7:staging:assemble",
+  "corepack pnpm phase7:staging:status",
+  "corepack pnpm lint",
+  "corepack pnpm typecheck",
+  "corepack pnpm test",
+  "corepack pnpm build",
+  "corepack pnpm vectors:check",
+  "corepack pnpm audit --audit-level high",
+] as const;
+
+function createCommandEvidenceStatus(
+  proofText: string | undefined,
+  options: Phase7StagingStatusOptions,
+): Phase7CommandEvidenceStatus {
+  if (proofText === undefined) {
+    return { status: "not_checked", blockers: [] };
+  }
+
+  const fields = parsePhase7ProofRecord(proofText);
+  const reference = fields.get("commands_run");
+  if (reference === undefined || reference.length === 0) {
+    return { status: "not_applicable", blockers: [] };
+  }
+  if (isHttpUrl(reference)) {
+    return {
+      status: "invalid",
+      blockers: [
+        "commands_run must be an attached local artifact for status validation",
+      ],
+    };
+  }
+
+  const artifactPath = readAttachedArtifactPath(reference);
+  if (artifactPath === undefined) {
+    return { status: "not_applicable", blockers: [] };
+  }
+  if (options.artifactBaseDir === undefined || options.readArtifact === undefined) {
+    return { status: "not_checked", blockers: [] };
+  }
+
+  const blockers: string[] = [];
+  const text = readTextArtifact("commands_run", artifactPath, options, blockers);
+  if (text === undefined) {
+    return { status: "invalid", blockers };
+  }
+  validateCommandEvidence(text, blockers);
+  return blockers.length === 0
+    ? { status: "valid", blockers: [] }
+    : { status: "invalid", blockers };
+}
+
+function validateCommandEvidence(text: string, blockers: string[]): void {
+  const normalizedText = normalizeCommandText(text);
+  if (normalizedText.trim().length === 0) {
+    blockers.push("commands_run artifact is empty");
+    return;
+  }
+  for (const command of PHASE7_REQUIRED_COMMAND_EVIDENCE) {
+    if (!normalizedText.includes(normalizeCommandText(command))) {
+      blockers.push(`commands_run missing required command: ${command}`);
+    }
+  }
+}
+
 function parseMcpGatewayTranscript(
   text: string,
   blockers: string[],
@@ -2008,6 +2099,10 @@ function readPositiveInteger(value: unknown): number | undefined {
   return Number.isInteger(value) && typeof value === "number" && value > 0
     ? value
     : undefined;
+}
+
+function normalizeCommandText(value: string): string {
+  return value.replace(/\s+/gu, " ").trim();
 }
 
 function isManifestEntry(value: unknown): value is Phase7ArtifactManifestEntry {

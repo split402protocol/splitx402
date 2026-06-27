@@ -84,7 +84,8 @@ const PHASE7_STAGING_EVIDENCE_ARTIFACTS: readonly Phase7StagingEvidenceArtifact[
     {
       field: "commands_run",
       fileName: "commands.log",
-      purpose: "Command transcript for the staging proof run.",
+      purpose:
+        "Command transcript containing Phase 7 evidence commands and the full validation suite.",
     },
   ];
 
