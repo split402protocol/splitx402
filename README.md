@@ -476,18 +476,18 @@ corepack pnpm phase7:staging-proof > phase7-staging-proof.txt
 corepack pnpm phase7:hosted:preflight
 corepack pnpm phase7:staging:collect-reads
 corepack pnpm phase7:staging:collect-mcp-gateway
+corepack pnpm demo:mcp-bundle > phase7-staging-evidence/mcp-bundle.json
+corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log
+corepack pnpm phase7:staging:derive-receipt-verification
 corepack pnpm phase7:staging:manifest phase7-staging-proof.txt > phase7-staging-evidence/artifact-manifest.json
 corepack pnpm phase7:staging:assemble > phase7-staging-proof.txt
 corepack pnpm phase7:staging:status phase7-staging-proof.txt
 ```
 
 The status check validates required proof fields, local attachment presence, and
-the attached artifact manifest hashes. It also verifies the hosted preflight
-artifact was captured against the same control-plane and dashboard URLs listed
-in the proof, including locked dashboard access without a viewer token and
-successful access with the viewer token. The funding-balance artifact is also
-parsed as a merchant obligation summary: every asset must report `covered` with
-zero deficit or `deficit` with a positive `fundingDeficitAtomic` value.
+the local attached artifact manifest hashes. It also parses hosted preflight,
+read API evidence, paid-suite receipt verification, MCP bundle/gateway evidence,
+command evidence, and funding-balance coverage before the proof can close.
 
 Run the demo merchant and agent flows:
 
