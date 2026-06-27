@@ -16,6 +16,7 @@ import {
 
 const sample = createSampleProtocolArtifacts();
 const receipt = sample.artifacts.receipt;
+const referralClaim = sample.artifacts.referralClaim;
 const merchantPublicKey = sample.keys.merchantPublicKey;
 
 describe("Split402Router", () => {
@@ -236,6 +237,101 @@ describe("Split402Router", () => {
         })
       ]
     });
+  });
+
+  it("accepts receipts that match the supplied referral claim", async () => {
+    const router = new Split402Router({
+      providers: [provider()],
+      executor: executorReturning(receipt)
+    });
+
+    const result = await router.execute({
+      capability: "solana.wallet-risk",
+      input: { wallet: "wallet_1" },
+      budget: {
+        network: receipt.network,
+        asset: receipt.asset,
+        maxAmountAtomic: receipt.requiredAmountAtomic
+      },
+      referralClaim,
+      maxAttempts: 1
+    });
+
+    expect(result.receipt.referralClaimHash).toBe(receipt.referralClaimHash);
+  });
+
+  it("rejects receipts whose attribution does not match the supplied referral claim", async () => {
+    const cases: Array<{
+      name: string;
+      returnedReceipt: Split402ReceiptV1;
+      expectedError: string;
+    }> = [
+      {
+        name: "route id",
+        returnedReceipt: {
+          ...receipt,
+          routeId: "rte_ffffffffffffffffffffffffffffffff"
+        },
+        expectedError: "receipt routeId does not match referralClaim routeId"
+      },
+      {
+        name: "claim hash",
+        returnedReceipt: {
+          ...receipt,
+          referralClaimHash:
+            "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        },
+        expectedError: "receipt referralClaimHash does not match referralClaim"
+      },
+      {
+        name: "referrer wallet",
+        returnedReceipt: {
+          ...receipt,
+          referrerWallet: sample.keys.payerWallet
+        },
+        expectedError:
+          "receipt referrerWallet does not match referralClaim referrerWallet"
+      },
+      {
+        name: "payout wallet",
+        returnedReceipt: {
+          ...receipt,
+          payoutWallet: sample.keys.payerWallet
+        },
+        expectedError:
+          "receipt payoutWallet does not match referralClaim payoutWallet"
+      }
+    ];
+
+    for (const testCase of cases) {
+      const router = new Split402Router({
+        providers: [provider({ providerId: `provider-${testCase.name}` })],
+        executor: executorReturning(testCase.returnedReceipt),
+        verifyReceipts: false
+      });
+
+      await expect(
+        router.execute({
+          capability: "solana.wallet-risk",
+          input: { wallet: "wallet_1" },
+          budget: {
+            network: receipt.network,
+            asset: receipt.asset,
+            maxAmountAtomic: receipt.requiredAmountAtomic
+          },
+          referralClaim,
+          maxAttempts: 1
+        })
+      ).rejects.toMatchObject({
+        code: "execution_failed",
+        attempts: [
+          expect.objectContaining({
+            retryable: true,
+            error: expect.stringContaining(testCase.expectedError)
+          })
+        ]
+      });
+    }
   });
 });
 
