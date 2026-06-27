@@ -1,6 +1,7 @@
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 
+import { createSvmSignerFromBase58 } from "@split402/agent-sdk";
 import {
   buildReceiptSigningBytes,
   calculateCommission,
@@ -143,9 +144,19 @@ export async function createMcpGatewayContextFromEnv(
     ...(operationId === undefined ? {} : { operationId }),
     ...(limit === undefined ? {} : { limit })
   });
+  const signerSecret =
+    readOptionalEnvString(env.SPLIT402_MCP_SVM_PRIVATE_KEY) ??
+    readOptionalEnvString(env.SVM_PRIVATE_KEY);
+  const signer =
+    signerSecret === undefined
+      ? undefined
+      : await createSvmSignerFromBase58(signerSecret);
   return createMcpGatewayContext(
     bundle,
-    new Split402Router({ providers }),
+    new Split402Router({
+      providers,
+      ...(signer === undefined ? {} : { signer })
+    }),
     "router-live-agent-sdk"
   );
 }
