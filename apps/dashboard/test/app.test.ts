@@ -41,6 +41,7 @@ describe("Split402 dashboard app", () => {
     expect(response.text).toContain("renderPayouts(payouts?.items ?? [])");
     expect(response.text).toContain("value?.assets");
     expect(response.text).toContain("availableAmountAtomic");
+    expect(response.text).not.toContain("availableAtomic");
   });
 
   it("proxies merchant dashboard reads to the configured control plane", async () => {
@@ -209,6 +210,83 @@ describe("Split402 dashboard app", () => {
     expect(calls).toEqual([
       {
         url: "https://control.example/v1/merchants/mrc_1/payout-obligations?asset=usdc_mint",
+        authorization: "Bearer configured-token"
+      }
+    ]);
+  });
+
+  it("proxies referrer balance and payout reads using canonical response shapes", async () => {
+    const calls: Array<{ url: string; authorization?: string }> = [];
+    const { app } = createDashboardApp({
+      config: {
+        controlPlaneUrl: "https://control.example",
+        port: 4027,
+        controlPlaneBearerToken: "configured-token"
+      },
+      fetch: async (url, init) => {
+        calls.push({
+          url,
+          ...(init?.headers?.authorization === undefined
+            ? {}
+            : { authorization: init.headers.authorization })
+        });
+        if (url.endsWith("/balances")) {
+          return jsonResponse({
+            summary: {
+              referrerWallet: "wallet_1",
+              assets: [
+                {
+                  asset: "usdc-devnet",
+                  availableAmountAtomic: "1800"
+                }
+              ]
+            }
+          });
+        }
+        return jsonResponse({
+          items: [
+            {
+              batchId: "pbt_1",
+              status: "paid",
+              amountAtomic: "1800"
+            }
+          ]
+        });
+      }
+    });
+
+    await request(app)
+      .get("/api/referrers/wallet_1/balances")
+      .expect(200, {
+        summary: {
+          referrerWallet: "wallet_1",
+          assets: [
+            {
+              asset: "usdc-devnet",
+              availableAmountAtomic: "1800"
+            }
+          ]
+        }
+      });
+    await request(app)
+      .get("/api/referrers/wallet_1/payouts?limit=25&ignored=yes")
+      .expect(200, {
+        items: [
+          {
+            batchId: "pbt_1",
+            status: "paid",
+            amountAtomic: "1800"
+          }
+        ]
+      });
+
+    expect(calls).toEqual([
+      {
+        url: "https://control.example/v1/referrers/wallet_1/balances",
+        authorization: "Bearer configured-token"
+      },
+      {
+        url: "https://control.example/v1/referrers/wallet_1/payouts?limit=25",
         authorization: "Bearer configured-token"
       }
     ]);

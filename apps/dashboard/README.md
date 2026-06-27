@@ -57,6 +57,20 @@ Merchant payout obligations show `covered` or `deficit` when the control plane
 has `SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc`; otherwise funding status is
 reported as `unknown`.
 
+## Control-Plane Contracts
+
+The dashboard intentionally mirrors the current control-plane read response
+shapes instead of inventing dashboard-specific wrappers:
+
+| Dashboard read | Control-plane response |
+| --- | --- |
+| `GET /api/referrers/:wallet/balances` | `{ summary }`, where `summary.assets[]` carries per-asset `availableAmountAtomic`, `pendingAmountAtomic`, `heldAmountAtomic`, `inFlightAmountAtomic`, `paidAmountAtomic`, and `totalEarnedAmountAtomic`. |
+| `GET /api/referrers/:wallet/payouts` | `{ items }`, where each item is a payout-history row. |
+| `GET /api/merchants/:merchantId/payout-obligations` | `{ summary }`, where `summary.assets[]` carries outstanding, available, in-flight, paid, funding, and deficit fields by asset. |
+
+The browser renders balances from `summary.assets[]` by asset and renders payout
+history from `items`; it does not expect legacy flat balance fields.
+
 ## Status
 
 Phase 7 public-alpha UI. It is a merchant/referrer operations surface for local
