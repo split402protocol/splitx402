@@ -69,6 +69,10 @@ describe("repository presentation", () => {
       ".github/workflows/codeql.yml",
       "utf8",
     );
+    const secretScanWorkflow = readFileSync(
+      ".github/workflows/secret-scan.yml",
+      "utf8",
+    );
     const dependabotConfig = readFileSync(".github/dependabot.yml", "utf8");
 
     expect(ciWorkflow).toContain("corepack pnpm lint");
@@ -83,8 +87,39 @@ describe("repository presentation", () => {
     expect(codeqlWorkflow).toContain("github/codeql-action/init@v3");
     expect(codeqlWorkflow).toContain("javascript-typescript");
 
+    expect(secretScanWorkflow).toContain("gitleaks/gitleaks-action@v2.3.9");
+    expect(secretScanWorkflow).toContain("fetch-depth: 0");
+    expect(secretScanWorkflow).toContain("GITHUB_TOKEN");
+
     expect(dependabotConfig).toContain('package-ecosystem: "github-actions"');
     expect(dependabotConfig).toContain('package-ecosystem: "npm"');
+  });
+
+  it("keeps README status badges aligned with GitHub validation workflows", () => {
+    const readme = readFileSync("README.md", "utf8");
+
+    expect(readme).toContain("actions/workflows/ci.yml/badge.svg");
+    expect(readme).toContain("actions/workflows/codeql.yml/badge.svg");
+    expect(readme).toContain("actions/workflows/secret-scan.yml/badge.svg");
+  });
+
+  it("keeps README lifecycle and API docs aligned with payout hardening", () => {
+    const readme = readFileSync("README.md", "utf8");
+
+    expect(readme).toContain(
+      "PendingChainVerification --> Rejected: settlement rejected",
+    );
+    expect(readme).toContain("Allocated --> Released: safe allocation release");
+    expect(readme).toContain("Finalized --> Paid: payout ledger closes once");
+    expect(readme).toContain(
+      "POST /v1/payout-batches/:batchId/release-allocations",
+    );
+    expect(readme).toContain(
+      'Transactions[("payout_transactions / payout_transaction_items")]',
+    );
+    expect(readme).not.toContain(
+      "PendingChainVerification --> DeadLetter: verifier exhausted",
+    );
   });
 });
 
