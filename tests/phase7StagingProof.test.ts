@@ -676,6 +676,34 @@ funding_balance_evidence: funding.json
     });
   });
 
+  it("blocks staged proof status when MCP gateway tools/list omits router tools", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          tools: ["split402.execute"],
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence tools/list missing split402.searchCapabilities",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence tools/list missing split402.getReceipt",
+    );
+  });
+
   it("blocks staged proof status when MCP execution evidence has no receipt lookup", () => {
     const proofText = createManifestProof();
     const artifacts = createManifestArtifacts(proofText);
@@ -1208,9 +1236,14 @@ function createValidCommandsLog(): string {
 }
 
 function createValidMcpGatewayTranscript(
-  options: { includeReceiptLookup?: boolean } = {},
+  options: { includeReceiptLookup?: boolean; tools?: string[] } = {},
 ): string {
   const includeReceiptLookup = options.includeReceiptLookup ?? true;
+  const tools = options.tools ?? [
+    "split402.searchCapabilities",
+    "split402.execute",
+    "split402.getReceipt",
+  ];
   const receiptId = "rcp_00000000000000000000000000000005";
   const lines = [
     {
@@ -1234,7 +1267,7 @@ function createValidMcpGatewayTranscript(
       message: {
         jsonrpc: "2.0",
         id: "tools",
-        result: { tools: [{ name: "split402.execute" }] },
+        result: { tools: tools.map((name) => ({ name })) },
       },
     },
     {

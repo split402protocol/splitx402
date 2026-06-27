@@ -161,9 +161,11 @@ The validator requires:
   retained amount.
 - `mcp_gateway_evidence` must be a local attached `mcp-gateway.jsonl`
   transcript containing initialize, tools/list, and
-  `split402.searchCapabilities` request/response pairs. When the transcript
-  includes `split402.execute`, it must also include a matching
-  `split402.getReceipt` response for the returned receipt id.
+  `split402.searchCapabilities` request/response pairs. The tools/list response
+  must advertise `split402.searchCapabilities`, `split402.execute`, and
+  `split402.getReceipt`. When the transcript includes `split402.execute`, it
+  must also include a matching `split402.getReceipt` response for the returned
+  receipt id.
 - `artifact_manifest_evidence` must be a local attached
   `artifact-manifest.json` artifact. Local `attached:` artifacts must match the
   generated manifest.
