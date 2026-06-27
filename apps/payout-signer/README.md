@@ -141,7 +141,7 @@ docker run --rm -p 4022:4022 \
 
 The Kubernetes starter manifest lives at
 [`deploy/payout-signer/kubernetes.yaml`](../../deploy/payout-signer/kubernetes.yaml).
-Replace the placeholder image tag, signer reference, network, funding wallet,
+Replace the placeholder image digest, signer reference, network, funding wallet,
 auth key ring, and key material before applying it.
 
 ## Status
