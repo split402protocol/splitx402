@@ -43,6 +43,13 @@ describe("Phase 7 staging evidence workspace", () => {
     expect(workspace.readmeText).toContain("mcp-gateway.jsonl");
     expect(workspace.readmeText).toContain("artifact-manifest.json");
     expect(workspace.readmeText).toContain(
+      "corepack pnpm phase7:staging:collect-mcp-gateway",
+    );
+    expect(workspace.readmeText).toContain(
+      "corepack pnpm phase7:staging:derive-receipt-verification",
+    );
+    expect(workspace.readmeText).toContain("lint, typecheck, test, build");
+    expect(workspace.readmeText).toContain(
       "Do not create\nplaceholder artifact files",
     );
     expect(workspace.artifacts.every((artifact) => artifact.fileName.length > 0)).toBe(
