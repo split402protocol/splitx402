@@ -1653,6 +1653,7 @@ function validateMcpGatewayTranscript(
     (message) => readToolCallName(message) === "split402.execute",
   );
   if (executeRequest === undefined) {
+    blockers.push("mcp_gateway_evidence missing split402.execute request");
     return;
   }
 

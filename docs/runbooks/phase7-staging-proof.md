@@ -36,14 +36,13 @@ referrer routes, referrer balances, dashboard summary, webhook delivery, payout
 obligations, and funding-balance coverage using the staging merchant and
 referrer environment variables.
 `phase7:staging:collect-mcp-gateway` captures `mcp-gateway.jsonl` by sending
-`initialize`, `tools/list`, and `split402.searchCapabilities` requests through
-the MCP gateway. In default demo mode it also captures `split402.execute` and
-`split402.getReceipt`, including provider used, amount paid, receipt id,
-receipt verification status, and referrer credit. Set
-`SPLIT402_MCP_CONTROL_PLANE_URL` and, when needed, `SPLIT402_MCP_CAPABILITY` so
-the transcript proves hosted route discovery. Hosted/live execution is opt-in
-with `SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1` because it requires live x402 buyer
-configuration.
+`initialize`, `tools/list`, `split402.searchCapabilities`, `split402.execute`,
+and `split402.getReceipt` requests through the MCP gateway. The transcript must
+include provider used, amount paid, receipt id, receipt verification status, and
+referrer credit. Default demo mode captures the full flow automatically. When
+`SPLIT402_MCP_CONTROL_PLANE_URL` is set for hosted route discovery, also set
+`SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1` and provide the live x402 buyer
+configuration required by the router-backed execution path.
 `phase7:hosted:preflight` captures `hosted-preflight.json` with control-plane
 health, dashboard health, dashboard session state, locked dashboard access
 without a viewer token, and successful dashboard access with the viewer token
@@ -58,8 +57,8 @@ and remote references for URL-based artifacts. Attach the generated
 against a remote manifest URL. Generate it after the evidence files exist and
 before the final assemble/status check.
 The MCP gateway transcript is attached as `mcp_gateway_evidence`; it proves
-gateway discovery and, in demo or explicitly opted-in live mode, execution plus
-receipt lookup in addition to the stable `mcp-bundle.json` evidence.
+gateway discovery, execution, and receipt lookup in addition to the stable
+`mcp-bundle.json` evidence.
 Attach `mcp-bundle.json` locally as `mcp_bundle_evidence`; the status checker
 parses it to verify the paid MCP tool, x402 price, Split402 campaign metadata,
 protocol fee basis points, and expected referral economics.
@@ -163,9 +162,9 @@ The validator requires:
   transcript containing initialize, tools/list, and
   `split402.searchCapabilities` request/response pairs. The tools/list response
   must advertise `split402.searchCapabilities`, `split402.execute`, and
-  `split402.getReceipt`. When the transcript includes `split402.execute`, it
-  must also include a matching `split402.getReceipt` response for the returned
-  receipt id.
+  `split402.getReceipt`. The transcript must include `split402.execute` with
+  provider id, amount paid, verified receipt status, referrer credit, and a
+  matching `split402.getReceipt` response for the returned receipt id.
 - `artifact_manifest_evidence` must be a local attached
   `artifact-manifest.json` artifact. Local `attached:` artifacts must match the
   generated manifest.
