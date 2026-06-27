@@ -48,8 +48,10 @@ health, dashboard health, dashboard session state, locked dashboard access
 without a viewer token, and successful dashboard access with the viewer token
 before the payment proof run.
 `phase7:staging:manifest` records SHA-256 hashes for local attached artifacts
-and remote references for URL-based artifacts. Generate it after the evidence
-files exist and before the final assemble/status check.
+and remote references for URL-based artifacts. Attach the generated
+`artifact-manifest.json` locally; the status checker will not close the proof
+against a remote manifest URL. Generate it after the evidence files exist and
+before the final assemble/status check.
 The MCP gateway transcript is attached as `mcp_gateway_evidence`; it proves
 gateway discovery and, in demo or explicitly opted-in live mode, execution plus
 receipt lookup in addition to the stable `mcp-bundle.json` evidence.
@@ -63,7 +65,9 @@ the evidence field that must be fixed. When a proof file path is supplied,
 `artifactStatuses` also verifies that local `attached:` artifact paths exist
 relative to the proof file directory, and `manifestStatus` verifies that local
 artifact sizes and SHA-256 hashes still match `artifact-manifest.json`. Remote
-`http(s)` artifact URLs are marked as remote references. `controlPlaneReadStatus`
+`http(s)` artifact URLs are marked as remote references, except for evidence
+fields that require local machine parsing and the artifact manifest itself.
+`controlPlaneReadStatus`
 parses the local read-API artifacts and rejects empty route discovery, zero
 referrer earnings, empty dashboard activity, missing delivered webhooks, or
 missing payout obligations. `paidRequestStatus` parses the local paid-suite log
@@ -155,5 +159,6 @@ The validator requires:
   `split402.searchCapabilities` request/response pairs. When the transcript
   includes `split402.execute`, it must also include a matching
   `split402.getReceipt` response for the returned receipt id.
-- local `attached:` artifacts must match the generated artifact manifest when
-  the manifest is also attached locally.
+- `artifact_manifest_evidence` must be a local attached
+  `artifact-manifest.json` artifact. Local `attached:` artifacts must match the
+  generated manifest.

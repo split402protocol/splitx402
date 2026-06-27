@@ -119,8 +119,9 @@ webhook delivery, payout obligations, Solana RPC funding-balance coverage, MCP
 bundle output, MCP gateway transcript evidence, and artifact manifest hashes
 from the same staging environment.
 The final status check verifies that local `attached:` artifacts still match the
-recorded manifest sizes and SHA-256 hashes, and that the hosted preflight checks
-passed against the same control-plane and dashboard URLs listed in the proof.
+recorded local manifest sizes and SHA-256 hashes, and that the hosted preflight
+checks passed against the same control-plane and dashboard URLs listed in the
+proof.
 It also validates the control-plane read artifacts so route discovery, referrer
 earnings, dashboard summary, webhook delivery, and payout obligations must be
 present and non-empty. The paid-suite log and receipt-verification JSON are

@@ -482,6 +482,57 @@ funding_balance_evidence: funding.json
     );
   });
 
+  it("blocks staged proof status when artifact manifest evidence is remote", () => {
+    const proofText = createPhase7StagingProofRecord({
+      proof_id: "phase7-staging-2026-06-26",
+      proof_date: "2026-06-26",
+      reviewers: "Split402 operators",
+      source_commit: "fd88024",
+      staging_environment: "staging-us",
+      control_plane_url: "https://control.staging.example",
+      dashboard_url: "https://dashboard.staging.example",
+      demo_merchant_url: "https://merchant.staging.example",
+      webhook_receiver_url: "https://webhook.staging.example",
+      hosted_preflight_evidence: "attached: hosted-preflight.json",
+      agent_discovery_evidence: "attached: agent-discovery.json",
+      paid_request_evidence: "attached: paid-suite.log",
+      receipt_verification_evidence: "attached: receipt-verification.json",
+      referrer_balance_evidence: "attached: referrer-balances.json",
+      dashboard_summary_evidence: "attached: dashboard-summary.json",
+      webhook_delivery_evidence: "attached: webhook-events.json",
+      payout_obligation_evidence: "attached: payout-obligations.json",
+      funding_balance_evidence: "attached: funding-balance.json",
+      mcp_bundle_evidence: "attached: mcp-bundle.json",
+      mcp_gateway_evidence: "attached: mcp-gateway.jsonl",
+      artifact_manifest_evidence: "https://artifacts.example/artifact-manifest.json",
+      commands_run: "attached: commands.log",
+      approval_decision: "approved",
+    });
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: () => true,
+      readArtifact: (path) => readTestArtifact(createManifestArtifacts(createManifestProof()), path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.manifestStatus).toEqual({
+      status: "invalid",
+      blockers: [
+        "artifact_manifest_evidence must be an attached local artifact for status validation",
+      ],
+    });
+    expect(report.gateStatuses).toContainEqual({
+      gate: "artifact_manifest",
+      evidenceField: "artifact_manifest_evidence",
+      status: "invalid",
+      blockers: [
+        "artifact_manifest_evidence must be an attached local artifact for status validation",
+      ],
+    });
+  });
+
   it("blocks staged proof status when control-plane read evidence is empty", () => {
     const proofText = createManifestProof();
     const artifacts = createManifestArtifacts(proofText);
