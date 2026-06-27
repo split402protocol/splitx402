@@ -1610,6 +1610,28 @@ function validateMcpGatewayTranscript(
     blockers.push("mcp_gateway_evidence missing tools/list request");
   } else if (findResponse(lines, toolsRequest.message.id) === undefined) {
     blockers.push("mcp_gateway_evidence missing tools/list response");
+  } else {
+    const tools = readResultArray(
+      findResponse(lines, toolsRequest.message.id),
+      "tools",
+    );
+    const toolNames = new Set(
+      (tools ?? [])
+        .map(readRecord)
+        .map((tool) => tool?.name)
+        .filter((name): name is string => typeof name === "string"),
+    );
+    for (const requiredTool of [
+      "split402.searchCapabilities",
+      "split402.execute",
+      "split402.getReceipt",
+    ]) {
+      if (!toolNames.has(requiredTool)) {
+        blockers.push(
+          `mcp_gateway_evidence tools/list missing ${requiredTool}`,
+        );
+      }
+    }
   }
 
   const searchRequest = findRequest(
@@ -2047,6 +2069,15 @@ function readStructuredArray(
 ): unknown[] | undefined {
   const structuredContent = readStructuredContent(response);
   const value = structuredContent?.[key];
+  return Array.isArray(value) ? value : undefined;
+}
+
+function readResultArray(
+  response: McpGatewayTranscriptLine | undefined,
+  key: string,
+): unknown[] | undefined {
+  const result = readRecord(response?.message.result);
+  const value = result?.[key];
   return Array.isArray(value) ? value : undefined;
 }
 
