@@ -19,6 +19,10 @@ try {
   });
 
   console.log(JSON.stringify(report, null, 2));
+  if (!report.proofReady) {
+    console.error(report.blockers.join("\n"));
+    process.exitCode = 1;
+  }
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
   console.error(

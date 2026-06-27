@@ -19,6 +19,8 @@ export interface Phase7McpGatewayEvidenceReport {
   artifactPath: string;
   executionMode: "router-demo-mock" | "router-live-agent-sdk";
   capability: string;
+  proofReady: boolean;
+  blockers: string[];
   executionCaptured: boolean;
   receiptLookupCaptured: boolean;
   requestCount: number;
@@ -74,6 +76,7 @@ export async function collectPhase7McpGatewayEvidence(
   let responseCount = 0;
   let executionCaptured = false;
   let receiptLookupCaptured = false;
+  const blockers: string[] = [];
   for (const request of requests) {
     transcript.push({ direction: "request", message: request });
     const response = await handleMcpGatewayLineAsync(
@@ -108,6 +111,11 @@ export async function collectPhase7McpGatewayEvidence(
       responseCount += 1;
       transcript.push({ direction: "response", message: executeResponse });
       executionCaptured = executeResponse.error === undefined;
+      if (executeResponse.error !== undefined) {
+        blockers.push(
+          `split402.execute failed: ${executeResponse.error.message}`,
+        );
+      }
       const receiptId = readReceiptId(executeResponse);
       if (receiptId !== undefined) {
         const receiptRequest: JsonRpcRequest = {
@@ -128,9 +136,24 @@ export async function collectPhase7McpGatewayEvidence(
           responseCount += 1;
           transcript.push({ direction: "response", message: receiptResponse });
           receiptLookupCaptured = receiptResponse.error === undefined;
+          if (receiptResponse.error !== undefined) {
+            blockers.push(
+              `split402.getReceipt failed: ${receiptResponse.error.message}`,
+            );
+          }
         }
       }
     }
+  } else {
+    blockers.push(
+      "mcp_gateway_evidence requires split402.execute; set SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 for hosted mode",
+    );
+  }
+  if (!executionCaptured) {
+    blockers.push("mcp_gateway_evidence did not capture successful split402.execute");
+  }
+  if (!receiptLookupCaptured) {
+    blockers.push("mcp_gateway_evidence did not capture successful split402.getReceipt");
   }
 
   const artifactPath = joinPath(input, "mcp-gateway.jsonl");
@@ -145,6 +168,8 @@ export async function collectPhase7McpGatewayEvidence(
     artifactPath,
     executionMode: context.executionMode,
     capability,
+    proofReady: blockers.length === 0,
+    blockers,
     executionCaptured,
     receiptLookupCaptured,
     requestCount: transcript.filter((line) => line.direction === "request").length,
