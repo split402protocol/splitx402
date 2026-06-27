@@ -14,7 +14,9 @@ import {
 } from "@split402/protocol";
 import {
   Split402Router,
+  Split402ControlPlaneDiscoveryClient,
   type Split402CapabilityProvider,
+  type Split402DiscoveryFetch,
   type Split402RouterExecuteResult,
   type Split402RouterExecutor
 } from "@split402/router";
@@ -64,6 +66,13 @@ export interface McpGatewayContext {
   bundle: McpDemoBundle;
   router: Split402Router;
   receipts: Map<string, Split402ReceiptV1>;
+  executionMode: "router-demo-mock" | "router-live-agent-sdk";
+}
+
+export interface McpGatewayRuntimeOptions {
+  bundle?: McpDemoBundle;
+  env?: NodeJS.ProcessEnv;
+  fetch?: Split402DiscoveryFetch;
 }
 
 export function handleMcpGatewayLine(
@@ -91,12 +100,52 @@ export async function handleMcpGatewayLineAsync(
 export function createMcpGatewayContext(
   bundle: McpDemoBundle = createMcpDemoBundle(),
   router: Split402Router = createMcpDemoRouter(bundle),
+  executionMode: McpGatewayContext["executionMode"] = "router-demo-mock",
 ): McpGatewayContext {
   return {
     bundle,
     router,
-    receipts: new Map()
+    receipts: new Map(),
+    executionMode
   };
+}
+
+export async function createMcpGatewayContextFromEnv(
+  options: McpGatewayRuntimeOptions = {}
+): Promise<McpGatewayContext> {
+  const env = options.env ?? process.env;
+  const bundle = options.bundle ?? createMcpDemoBundle();
+  const controlPlaneUrl = readOptionalEnvString(
+    env.SPLIT402_MCP_CONTROL_PLANE_URL
+  );
+  if (controlPlaneUrl === undefined) {
+    return createMcpGatewayContext(bundle);
+  }
+
+  const capabilityOverride = readOptionalEnvString(env.SPLIT402_MCP_CAPABILITY);
+  const bearerToken = readOptionalEnvString(env.SPLIT402_MCP_CONTROL_PLANE_TOKEN);
+  const discovery = new Split402ControlPlaneDiscoveryClient({
+    controlPlaneUrl,
+    ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+    ...(bearerToken === undefined ? {} : { bearerToken }),
+    ...(capabilityOverride === undefined
+      ? {}
+      : { capabilityMapper: () => capabilityOverride })
+  });
+  const resourceOrigin = readOptionalEnvString(env.SPLIT402_MCP_RESOURCE_ORIGIN);
+  const operationId = readOptionalEnvString(env.SPLIT402_MCP_OPERATION_ID);
+  const limit = readOptionalPositiveInteger(env.SPLIT402_MCP_DISCOVERY_LIMIT);
+  const providers = await discovery.discoverProviders({
+    ...(capabilityOverride === undefined ? {} : { capability: capabilityOverride }),
+    ...(resourceOrigin === undefined ? {} : { resourceOrigin }),
+    ...(operationId === undefined ? {} : { operationId }),
+    ...(limit === undefined ? {} : { limit })
+  });
+  return createMcpGatewayContext(
+    bundle,
+    new Split402Router({ providers }),
+    "router-live-agent-sdk"
+  );
 }
 
 export function createMcpDemoRouter(
@@ -157,7 +206,7 @@ export async function runMcpGateway(
   input = process.stdin,
   output = process.stdout,
 ): Promise<void> {
-  const context = createMcpGatewayContext();
+  const context = await createMcpGatewayContextFromEnv();
   const reader = createInterface({
     input,
     crlfDelay: Number.POSITIVE_INFINITY,
@@ -315,7 +364,7 @@ async function handleRouterExecuteTool(
         : {})
     });
     context.receipts.set(result.receipt.receiptId, result.receipt);
-    return createRouterExecuteResponse(id, result);
+    return createRouterExecuteResponse(id, result, context.executionMode);
   } catch (error) {
     return createErrorResponse(id, -32000, errorMessage(error));
   }
@@ -383,10 +432,11 @@ function createToolResultResponse(
 function createRouterExecuteResponse(
   id: string | number | null,
   result: Split402RouterExecuteResult,
+  executionMode: McpGatewayContext["executionMode"],
 ): McpGatewayResponse {
   return createToolResultResponse(id, {
     status: "executed",
-    executionMode: "router-demo-mock",
+    executionMode,
     providerId: result.providerId,
     capability: result.capability,
     amountPaidAtomic: result.receipt.requiredAmountAtomic,
@@ -428,7 +478,7 @@ function routerToolCards() {
   return [
     {
       name: "split402.searchCapabilities",
-      description: "Search the demo Split402 router's static paid-tool providers.",
+      description: "Search the Split402 router's paid-tool providers.",
       inputSchema: {
         type: "object",
         properties: {
@@ -648,6 +698,21 @@ function readGatewayContext(
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function readOptionalEnvString(value: string | undefined): string | undefined {
+  return value === undefined || value.trim().length === 0
+    ? undefined
+    : value.trim();
+}
+
+function readOptionalPositiveInteger(value: string | undefined): number | undefined {
+  const normalized = readOptionalEnvString(value);
+  if (normalized === undefined) {
+    return undefined;
+  }
+  const parsed = Number.parseInt(normalized, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

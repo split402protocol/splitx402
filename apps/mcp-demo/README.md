@@ -56,6 +56,30 @@ merchant-signed demo receipt so agents can exercise discovery, execution result
 shape, and receipt verification without a live funded buyer wallet. It is not a
 claim of production MCP hosting or mainnet-ready payment execution.
 
+### Control-Plane Discovery Mode
+
+Set `SPLIT402_MCP_CONTROL_PLANE_URL` to let the gateway build its router from
+active Split402 routes exposed by the control plane:
+
+```bash
+SPLIT402_MCP_CONTROL_PLANE_URL=https://control.staging.example \
+SPLIT402_MCP_CONTROL_PLANE_TOKEN=... \
+SPLIT402_MCP_CAPABILITY=solana.wallet-risk \
+corepack pnpm demo:mcp-gateway
+```
+
+Optional filters:
+
+- `SPLIT402_MCP_RESOURCE_ORIGIN`
+- `SPLIT402_MCP_OPERATION_ID`
+- `SPLIT402_MCP_DISCOVERY_LIMIT`
+
+In this mode `split402.searchCapabilities` uses active control-plane routes and
+their Bazaar resource projections. `split402.execute` uses the router's normal
+agent SDK executor and therefore still requires the surrounding live x402 buyer
+configuration to be valid. This remains a public-alpha gateway path, not a
+production hosted MCP service.
+
 ## Proof Commands
 
 ```bash
@@ -72,4 +96,6 @@ proof needs direct MCP tool discovery.
 
 Phase 7 public-alpha bundle and stdio gateway for agent-facing tooling. It is
 not a production hosted MCP service. The default `split402.execute` path is a
-router demo mode, not a live x402 payment.
+router demo mode, not a live x402 payment. Control-plane discovery mode can list
+real active route providers and uses the router's agent SDK executor for live
+execution attempts.

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
+import type { Split402DiscoveryFetch, Split402DiscoveryFetchResponse } from "@split402/router";
 
 import {
   createMcpGatewayContext,
+  createMcpGatewayContextFromEnv,
   createWalletRiskToolResult,
   handleMcpGatewayLine,
   handleMcpGatewayLineAsync
@@ -200,6 +202,62 @@ describe("MCP demo gateway", () => {
     });
   });
 
+  it("can build the gateway router from control-plane discovery", async () => {
+    const calls: string[] = [];
+    const bundle = createMcpDemoBundle({
+      merchantOrigin: "https://merchant.example",
+      generatedAt: "2026-06-26T00:00:00.000Z"
+    });
+    const context = await createMcpGatewayContextFromEnv({
+      bundle,
+      env: {
+        SPLIT402_MCP_CONTROL_PLANE_URL: "https://control.example",
+        SPLIT402_MCP_CONTROL_PLANE_TOKEN: "control-token",
+        SPLIT402_MCP_CAPABILITY: "solana.wallet-risk",
+        SPLIT402_MCP_DISCOVERY_LIMIT: "10"
+      },
+      fetch: mcpControlPlaneFetch(calls, bundle)
+    });
+
+    const response = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "search-discovered",
+        method: "tools/call",
+        params: {
+          name: "split402.searchCapabilities",
+          arguments: {
+            capability: "solana.wallet-risk"
+          }
+        }
+      }),
+      context
+    );
+
+    expect(context.executionMode).toBe("router-live-agent-sdk");
+    expect(response).toMatchObject({
+      result: {
+        structuredContent: {
+          capabilities: [
+            expect.objectContaining({
+              providerId: "rte_discovered:wallet-risk-score",
+              capability: "solana.wallet-risk",
+              merchantOrigin: "https://merchant.example",
+              amountAtomic: "10000"
+            })
+          ]
+        },
+        isError: false
+      }
+    });
+    expect(calls).toEqual([
+      "https://control.example/v1/routes/search?status=active&limit=10",
+      "https://control.example/v1/routes/rte_discovered/bazaar-resources",
+      "https://control.example/v1/campaigns/cmp_00000000000000000000000000000002",
+      "https://control.example/v1/merchants/mrc_00000000000000000000000000000001"
+    ]);
+  });
+
   it("executes through the router gateway and stores receipts for lookup", async () => {
     const context = createMcpGatewayContext(
       createMcpDemoBundle({
@@ -309,3 +367,83 @@ describe("MCP demo gateway", () => {
     });
   });
 });
+
+function mcpControlPlaneFetch(
+  calls: string[],
+  bundle: ReturnType<typeof createMcpDemoBundle>
+): Split402DiscoveryFetch {
+  return async (url, init) => {
+    expect(init?.headers?.authorization).toBe("Bearer control-token");
+    calls.push(url);
+    const parsed = new URL(url);
+    if (parsed.pathname === "/v1/routes/search") {
+      return mcpJsonResponse({
+        routes: [{ id: "rte_discovered", campaignId: bundle.mcp.tools[0].split402.campaignId }]
+      });
+    }
+    if (parsed.pathname === "/v1/routes/rte_discovered/bazaar-resources") {
+      return mcpJsonResponse({
+        resources: [
+          {
+            schema: "split402.bazaar_resource.v1",
+            resource: `${bundle.merchant.origin}/v1/risk`,
+            type: "http",
+            x402Version: 2,
+            accepts: [
+              {
+                scheme: "exact",
+                network: bundle.mcp.tools[0].x402.network,
+                amount: bundle.mcp.tools[0].x402.amountAtomic,
+                asset: bundle.mcp.tools[0].x402.asset,
+                payTo: "merchant-pay-to-wallet"
+              }
+            ],
+            metadata: {
+              method: "POST",
+              operationId: bundle.mcp.tools[0].split402.operationId,
+              split402: {
+                routeId: "rte_discovered",
+                campaignId: bundle.mcp.tools[0].split402.campaignId,
+                referrerWallet: "referrer-wallet",
+                payoutWallet: "payout-wallet"
+              }
+            }
+          }
+        ]
+      });
+    }
+    if (parsed.pathname === `/v1/campaigns/${bundle.mcp.tools[0].split402.campaignId}`) {
+      return mcpJsonResponse({
+        campaign: {
+          merchantId: bundle.merchant.merchantId,
+          current: { merchantKid: "kid_mcp_demo_1" }
+        }
+      });
+    }
+    if (parsed.pathname === `/v1/merchants/${bundle.merchant.merchantId}`) {
+      return mcpJsonResponse({
+        merchant: {
+          keys: [
+            {
+              kid: "kid_mcp_demo_1",
+              publicKey: bundle.merchant.servicePublicKey,
+              purpose: "offer_receipt",
+              validFrom: "2026-06-24T00:00:00.000Z"
+            }
+          ]
+        }
+      });
+    }
+    return mcpJsonResponse({}, 404);
+  };
+}
+
+function mcpJsonResponse(
+  body: unknown,
+  status = 200
+): Split402DiscoveryFetchResponse {
+  return {
+    status,
+    text: async () => JSON.stringify(body)
+  };
+}
