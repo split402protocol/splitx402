@@ -103,7 +103,11 @@ path.
 Attach `phase7-staging-evidence/mcp-gateway.jsonl` as `mcp_gateway_evidence`.
 The collector runs the gateway with JSON-RPC `initialize`, `tools/list`, and
 `split402.searchCapabilities` requests. Set `SPLIT402_MCP_CONTROL_PLANE_URL` for
-hosted route discovery.
+hosted route discovery. Leave hosted execution disabled unless the same staging
+run has live x402 buyer configuration; when that is ready, set
+`SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1`, `SPLIT402_MCP_WALLET`, and
+`SPLIT402_MCP_MAX_AMOUNT_ATOMIC` to also capture `split402.execute` and
+`split402.getReceipt`.
 
 ## Shutdown
 

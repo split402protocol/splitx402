@@ -74,7 +74,7 @@ const PHASE7_STAGING_EVIDENCE_ARTIFACTS: readonly Phase7StagingEvidenceArtifact[
       field: "mcp_gateway_evidence",
       fileName: "mcp-gateway.jsonl",
       purpose:
-        "MCP gateway stdio transcript showing router-backed discovery or execution.",
+        "MCP gateway stdio transcript showing router-backed discovery, execution, or receipt lookup.",
     },
     {
       field: "artifact_manifest_evidence",
