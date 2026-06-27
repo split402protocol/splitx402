@@ -56,6 +56,31 @@ merchant-signed demo receipt so agents can exercise discovery, execution result
 shape, and receipt verification without a live funded buyer wallet. It is not a
 claim of production MCP hosting or mainnet-ready payment execution.
 
+Example `tools/call` request:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "execute-1",
+  "method": "tools/call",
+  "params": {
+    "name": "split402.execute",
+    "arguments": {
+      "capability": "solana.wallet-risk",
+      "input": {
+        "wallet": "wallet-address"
+      },
+      "budget": {
+        "maxAmountAtomic": "50000"
+      }
+    }
+  }
+}
+```
+
+When `network` or `asset` are omitted from `budget`, the gateway defaults them
+from the selected provider and still enforces `maxAmountAtomic`.
+
 ### Control-Plane Discovery Mode
 
 Set `SPLIT402_MCP_CONTROL_PLANE_URL` to let the gateway build its router from

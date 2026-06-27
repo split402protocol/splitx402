@@ -503,7 +503,7 @@ function routerToolCards() {
               asset: { type: "string" },
               maxAmountAtomic: { type: "string" }
             },
-            required: ["network", "asset", "maxAmountAtomic"],
+            required: ["maxAmountAtomic"],
             additionalProperties: false
           },
           maxAttempts: { type: "number" }
@@ -647,11 +647,17 @@ function readBudget(
     return { message: "budget must be an object" };
   }
   const record = value as Record<string, unknown>;
-  const network = readRequiredStringArgument(record.network, "budget.network");
+  const network =
+    record.network === undefined
+      ? provider.network
+      : readRequiredStringArgument(record.network, "budget.network");
   if (typeof network !== "string") {
     return network;
   }
-  const asset = readRequiredStringArgument(record.asset, "budget.asset");
+  const asset =
+    record.asset === undefined
+      ? provider.asset
+      : readRequiredStringArgument(record.asset, "budget.asset");
   if (typeof asset !== "string") {
     return asset;
   }

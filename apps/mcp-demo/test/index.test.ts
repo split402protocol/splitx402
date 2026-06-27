@@ -90,6 +90,13 @@ describe("MCP demo gateway", () => {
       "split402.getReceipt"
     ]);
     expect(result.tools[0]?.inputSchema?.required).toEqual(["wallet"]);
+    expect(result.tools[2]?.inputSchema).toMatchObject({
+      properties: {
+        budget: {
+          required: ["maxAmountAtomic"]
+        }
+      }
+    });
   });
 
   it("returns x402 and Split402 payment context for tool calls", () => {
@@ -277,8 +284,6 @@ describe("MCP demo gateway", () => {
               wallet: "wallet-123"
             },
             budget: {
-              network: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
-              asset: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
               maxAmountAtomic: "10000"
             }
           }
@@ -334,6 +339,46 @@ describe("MCP demo gateway", () => {
           })
         },
         isError: false
+      }
+    });
+  });
+
+  it("rejects router execution when an optional budget asset override is unsupported", async () => {
+    const context = createMcpGatewayContext(
+      createMcpDemoBundle({
+        generatedAt: "2026-06-26T00:00:00.000Z"
+      })
+    );
+
+    const response = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "execute-wrong-asset",
+        method: "tools/call",
+        params: {
+          name: "split402.execute",
+          arguments: {
+            capability: "solana.wallet-risk",
+            input: {
+              wallet: "wallet-123"
+            },
+            budget: {
+              asset: "wrong-asset",
+              maxAmountAtomic: "10000"
+            }
+          }
+        }
+      }),
+      context
+    );
+
+    expect(response).toEqual({
+      jsonrpc: "2.0",
+      id: "execute-wrong-asset",
+      error: {
+        code: -32000,
+        message:
+          "no providers support solana.wallet-risk on solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1/wrong-asset"
       }
     });
   });
