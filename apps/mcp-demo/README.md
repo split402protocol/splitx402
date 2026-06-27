@@ -107,6 +107,7 @@ active Split402 routes exposed by the control plane:
 SPLIT402_MCP_CONTROL_PLANE_URL=https://control.staging.example \
 SPLIT402_MCP_CONTROL_PLANE_TOKEN=... \
 SPLIT402_MCP_CAPABILITY=solana.wallet-risk \
+SPLIT402_MCP_SVM_PRIVATE_KEY=<funded-buyer-key-base58> \
 corepack pnpm demo:mcp-gateway
 ```
 
@@ -119,8 +120,10 @@ Optional filters:
 In this mode `split402.searchCapabilities` uses active control-plane routes and
 their Bazaar resource projections. `split402.execute` uses the router's normal
 agent SDK executor and therefore still requires the surrounding live x402 buyer
-configuration to be valid. This remains a public-alpha gateway path, not a
-production hosted MCP service.
+configuration to be valid. Set `SPLIT402_MCP_SVM_PRIVATE_KEY` to a funded
+Solana buyer key encoded as base58 bytes, or use the existing demo-agent
+`SVM_PRIVATE_KEY` environment variable. This remains a public-alpha gateway
+path, not a production hosted MCP service.
 
 ## Proof Commands
 

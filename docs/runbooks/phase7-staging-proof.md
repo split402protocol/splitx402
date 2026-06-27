@@ -41,8 +41,9 @@ and `split402.getReceipt` requests through the MCP gateway. The transcript must
 include provider used, amount paid, receipt id, receipt verification status, and
 referrer credit. Default demo mode captures the full flow automatically. When
 `SPLIT402_MCP_CONTROL_PLANE_URL` is set for hosted route discovery, also set
-`SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1` and provide the live x402 buyer
-configuration required by the router-backed execution path.
+`SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1` plus a funded buyer key in
+`SPLIT402_MCP_SVM_PRIVATE_KEY` or `SVM_PRIVATE_KEY` for the router-backed x402
+execution path.
 `phase7:hosted:preflight` captures `hosted-preflight.json` with control-plane
 health, dashboard health, dashboard session state, locked dashboard access
 without a viewer token, and successful dashboard access with the viewer token
