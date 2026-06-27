@@ -90,6 +90,7 @@ SPLIT402_MCP_CAPABILITY=solana.wallet-risk \
 SPLIT402_MCP_SVM_PRIVATE_KEY="$SVM_PRIVATE_KEY" \
 SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 \
 corepack pnpm phase7:staging:collect-mcp-gateway
+corepack pnpm demo:mcp-gateway:smoke
 corepack pnpm demo:mcp-bundle > phase7-staging-evidence/mcp-bundle.json
 corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log
 corepack pnpm phase7:staging:derive-receipt-verification
@@ -112,6 +113,10 @@ hosted route discovery. Phase 7 proof closure also requires
 has live x402 buyer configuration. Set `SPLIT402_MCP_SVM_PRIVATE_KEY` or
 `SVM_PRIVATE_KEY` to the funded buyer key, and set `SPLIT402_MCP_WALLET` and
 `SPLIT402_MCP_MAX_AMOUNT_ATOMIC` for the execution input and budget.
+The collector JSON report should echo the provider id, paid amount, receipt id,
+receipt verification status, and referrer credit from the executed router call.
+Run `corepack pnpm demo:mcp-gateway:smoke` as a deterministic local gateway
+contract check alongside the hosted transcript.
 
 ## Shutdown
 
