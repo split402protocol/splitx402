@@ -68,9 +68,11 @@ parses the local read-API artifacts and rejects empty route discovery, zero
 referrer earnings, empty dashboard activity, missing delivered webhooks, or
 missing payout obligations. `paidRequestStatus` parses the local paid-suite log
 and receipt-verification JSON so the x402 paid request and Split402 receipt
-verification gates cannot close on placeholder output. `fundingBalanceStatus`
-parses the local funding-balance artifact and rejects unresolved funding so the
-proof shows whether each asset is covered or exactly how much is missing.
+verification gates cannot close on placeholder output. `commandEvidenceStatus`
+parses `commands.log` and requires the Phase 7 collection commands plus the
+full validation suite. `fundingBalanceStatus` parses the local funding-balance
+artifact and rejects unresolved funding so the proof shows whether each asset is
+covered or exactly how much is missing.
 
 ## Required Evidence
 
@@ -132,6 +134,11 @@ The validator requires:
 - `receipt_verification_evidence` must be a local attached JSON artifact that
   names the verified receipt id and reports a verified Split402 receipt with no
   errors.
+- `commands_run` must be a local attached command transcript containing the
+  Phase 7 staging collection/status commands and the validation commands:
+  `corepack pnpm lint`, `corepack pnpm typecheck`, `corepack pnpm test`,
+  `corepack pnpm build`, `corepack pnpm vectors:check`, and
+  `corepack pnpm audit --audit-level high`.
 - `funding_balance_evidence` must be a local attached
   `funding-balance.json` artifact containing a merchant obligation summary.
   Each asset must report `covered` with `fundingDeficitAtomic: "0"` or
