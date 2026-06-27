@@ -392,6 +392,10 @@ funding_balance_evidence: funding.json
       status: "valid",
       blockers: [],
     });
+    expect(report.commandEvidenceStatus).toEqual({
+      status: "valid",
+      blockers: [],
+    });
   });
 
   it("blocks staged proof status when paid-suite evidence did not pass", () => {
@@ -443,6 +447,38 @@ funding_balance_evidence: funding.json
     );
     expect(report.paidRequestStatus.blockers).toContain(
       "paid_request_evidence validReceipt.commissionBps must be positive",
+    );
+  });
+
+  it("blocks staged proof status when command evidence omits required validation", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/commands.log",
+      encode(
+        [
+          "corepack pnpm phase7:staging:init",
+          "corepack pnpm phase7:staging-proof > phase7-staging-proof.txt",
+          "corepack pnpm demo:paid-suite",
+          "corepack pnpm phase7:staging:status phase7-staging-proof.txt",
+          "",
+        ].join("\n"),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.commandEvidenceStatus.blockers).toContain(
+      "commands_run missing required command: corepack pnpm lint",
+    );
+    expect(report.commandEvidenceStatus.blockers).toContain(
+      "commands_run missing required command: corepack pnpm audit --audit-level high",
     );
   });
 
@@ -885,7 +921,7 @@ function createManifestArtifacts(proofText: string): Map<string, Uint8Array> {
       "evidence/funding-balance.json",
       encode(JSON.stringify(createValidPayoutObligations())),
     ],
-    ["evidence/commands.log", encode("commands\n")],
+    ["evidence/commands.log", encode(createValidCommandsLog())],
   ]);
   const manifest = createPhase7StagingArtifactManifest(proofText, {
     artifactBaseDir: "evidence",
@@ -1093,6 +1129,28 @@ function createValidPaidSuiteLog(): string {
       null,
       2,
     ),
+    "",
+  ].join("\n");
+}
+
+function createValidCommandsLog(): string {
+  return [
+    "$ corepack pnpm phase7:staging:init",
+    "$ corepack pnpm phase7:staging-proof > phase7-staging-proof.txt",
+    "$ corepack pnpm phase7:hosted:preflight",
+    "$ corepack pnpm phase7:staging:collect-reads",
+    "$ corepack pnpm phase7:staging:collect-mcp-gateway",
+    "$ corepack pnpm demo:mcp-bundle > phase7-staging-evidence/mcp-bundle.json",
+    "$ corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log",
+    "$ corepack pnpm phase7:staging:manifest phase7-staging-proof.txt > phase7-staging-evidence/artifact-manifest.json",
+    "$ corepack pnpm phase7:staging:assemble > phase7-staging-proof.txt",
+    "$ corepack pnpm phase7:staging:status phase7-staging-proof.txt",
+    "$ corepack pnpm lint",
+    "$ corepack pnpm typecheck",
+    "$ corepack pnpm test",
+    "$ corepack pnpm build",
+    "$ corepack pnpm vectors:check",
+    "$ corepack pnpm audit --audit-level high",
     "",
   ].join("\n");
 }
