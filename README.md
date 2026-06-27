@@ -479,6 +479,7 @@ corepack pnpm phase7:staging-proof > phase7-staging-proof.txt
 corepack pnpm phase7:hosted:preflight
 corepack pnpm phase7:staging:collect-reads
 corepack pnpm phase7:staging:collect-mcp-gateway
+corepack pnpm demo:mcp-gateway:smoke
 corepack pnpm demo:mcp-bundle > phase7-staging-evidence/mcp-bundle.json
 corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log
 corepack pnpm phase7:staging:derive-receipt-verification
@@ -506,6 +507,12 @@ Run the MCP stdio gateway for clients that want direct MCP tool discovery:
 
 ```bash
 corepack pnpm demo:mcp-gateway
+```
+
+Run the deterministic gateway smoke proof:
+
+```bash
+corepack pnpm demo:mcp-gateway:smoke
 ```
 
 ## Receipt Ingestion Example

@@ -150,6 +150,9 @@ approval_decision: no-go
     expect(report.commands.map((item) => item.evidenceField)).toContain(
       "mcp_gateway_evidence",
     );
+    expect(report.commands.map((item) => item.command)).toContain(
+      "corepack pnpm demo:mcp-gateway:smoke",
+    );
     expect(report.gateStatuses.every((item) => item.status === "not_checked")).toBe(
       true,
     );
@@ -1244,6 +1247,7 @@ function createValidCommandsLog(): string {
     "$ corepack pnpm phase7:hosted:preflight",
     "$ corepack pnpm phase7:staging:collect-reads",
     "$ corepack pnpm phase7:staging:collect-mcp-gateway",
+    "$ corepack pnpm demo:mcp-gateway:smoke",
     "$ corepack pnpm demo:mcp-bundle > phase7-staging-evidence/mcp-bundle.json",
     "$ corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log",
     "$ corepack pnpm phase7:staging:derive-receipt-verification",
