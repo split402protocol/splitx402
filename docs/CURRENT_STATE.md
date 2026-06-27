@@ -17,6 +17,7 @@ flowchart LR
   Protocol["Protocol core"]
   Demo["x402 demo flow"]
   SDKs["Agent and merchant SDKs"]
+  Router["Router alpha"]
   Mcp["MCP demo bundle and gateway"]
   Dashboard["Dashboard UI"]
   Control["Control plane"]
@@ -25,10 +26,12 @@ flowchart LR
 
   Protocol --> Demo
   Protocol --> SDKs
+  Protocol --> Router
   Demo --> Control
   Demo --> Mcp
   SDKs --> Control
   SDKs --> Mcp
+  SDKs --> Router
   Control --> Dashboard
   Control --> Verification
   Verification --> Payouts
@@ -39,7 +42,8 @@ flowchart LR
 | Protocol primitives | Implemented: schemas, hashes, IDs, amount math, operation digests, signatures, and test vectors. |
 | x402 integration | Implemented: Split402 offers, referral claims, request digests, and receipts around standard x402 settlement. |
 | Demo path | Implemented for Solana Devnet paid-suite proof runs. |
-| MCP demo bundle and gateway | Implemented public-alpha demo bundle and narrow stdio gateway: paid tool card, x402 payment metadata, Split402 campaign metadata, expected referral economics, MCP `tools/list`, MCP `tools/call`, and proof commands. A full capability router and adoption-grade MCP gateway remain next work. |
+| Router alpha | Implemented public-alpha static-provider router with capability search, budget filtering, deterministic ranking, retry/fallback, and fail-closed receipt verification. |
+| MCP demo bundle and gateway | Implemented public-alpha demo bundle and narrow stdio gateway: paid tool card, x402 payment metadata, Split402 campaign metadata, expected referral economics, MCP `tools/list`, MCP `tools/call`, and proof commands. A router-backed adoption-grade MCP gateway remains next work. |
 | Dashboard UI | Implemented public-alpha merchant/referrer operations UI with a narrow read proxy for dashboard summary, reliability, payout obligations, webhook delivery, referrer routes, balances, payouts, and an optional hosted-staging viewer gate with signed, expiring session cookies. |
 | Phase 7 hosted staging | Implemented compose stack for PostgreSQL, control plane, migration job, dashboard, optional demo merchant, and optional workers. |
 | Phase 7 staging proof | Implemented proof scaffold, assembly, status validator, hosted preflight collector, read collector, artifact manifest validation, funding-balance semantic validation, template, and runbooks for hosted end-to-end evidence, including payout-obligation funding coverage. |
@@ -68,10 +72,8 @@ The near-term objective is the correctness-router sprint. Protocol fee wiring,
 self-referral semantics, receipt policy gates, public approval boundaries,
 payout terminal states, signer byte verification, finalized transfer-content
 verification, transaction-to-item finality mapping, and safe allocation release
-are now implemented in the working branches. Next are dashboard contracts,
-deployment-proof honesty, and then the router/MCP adoption layer.
-After those checks are green, the next adoption layer is a static-provider
-Split402 router and a runnable MCP gateway that agents can use to discover,
-pay for, verify, and monetize paid tools. The hosted staging proof remains
-`no-go` until a real hosted environment supplies all required evidence from the
-same source commit.
+are now implemented in the working branches. The static-provider router alpha is
+also implemented. Next are dashboard contracts, deployment-proof honesty, and a
+router-backed MCP gateway that agents can use to discover, pay for, verify, and
+monetize paid tools. The hosted staging proof remains `no-go` until a real
+hosted environment supplies all required evidence from the same source commit.
