@@ -2,17 +2,13 @@
 
 This plan follows the Split402 protocol architecture v0.1 spec and the current
 `split402protocol/splitx402` implementation. The project is not changing names
-or directions: **Split402** is the protocol/product, and `ffff` is only the
-historical first implementation reference.
+or directions: **Split402** is the protocol/product and this repository is the
+canonical public implementation.
 
 Canonical sources:
 
 - [`docs/reference/split402_protocol_architecture_v0.1.md`](reference/split402_protocol_architecture_v0.1.md)
 - [`split402protocol/splitx402`](https://github.com/split402protocol/splitx402)
-
-Historical implementation reference:
-
-- [`splitx402/ffff`](https://github.com/splitx402/ffff)
 
 ## Current Implementation Snapshot
 
@@ -42,15 +38,15 @@ until this loop works end to end and produces real paid API usage.
 
 ## Repository Phase 0: Setup And Direction
 
-Status: complete, with earlier Base/EVM assumptions superseded by the architecture
-baseline decision.
+Status: complete, with the earliest Base/EVM assumptions superseded by the
+architecture baseline decision.
 
 Deliverables:
 
 - GitHub repository setup;
 - initial security/contribution templates;
 - initial architecture notes;
-- `splitx402/ffff` reviewed as the implementation baseline.
+- architecture baseline reviewed and adopted for the implementation plan.
 
 Exit criteria:
 
@@ -63,7 +59,7 @@ Exit criteria:
 Status: implemented as a transitional slice.
 
 Purpose: keep a minimal x402-shaped HTTP host available while this repository
-ports the real Split402 protocol packages from the historical baseline.
+lands the full Split402 protocol packages.
 
 Deliverables:
 
@@ -89,8 +85,8 @@ Exit criteria:
 
 Status: implemented.
 
-Goal: implement the architecture spec's Milestone 0, using `ffff` as the compatibility
-baseline for deterministic protocol artifacts.
+Goal: implement the architecture spec's Milestone 0 as the compatibility baseline
+for deterministic protocol artifacts.
 
 Deliverables:
 
@@ -109,8 +105,7 @@ Deliverables:
 
 Exit criteria:
 
-- offline code can create and verify the protocol artifacts currently covered by
-  `ffff`;
+- offline code can create and verify the canonical protocol artifacts;
 - test vectors are deterministic across repeated runs;
 - monetary code contains no floating-point accounting;
 - root CI runs service and protocol checks together.
@@ -119,7 +114,7 @@ Exit criteria:
 
 Status: implemented with a recorded Devnet proof.
 
-Goal: port and evolve the `ffff` merchant demo into a Solana/x402 Split402 demo.
+Goal: build the Solana/x402 Split402 merchant demo.
 
 Deliverables:
 
@@ -133,17 +128,17 @@ Deliverables:
 
 Current slice:
 
-- port `@split402/x402-extension` from `ffff`;
-- port `@split402/express` from `ffff`;
+- implement `@split402/x402-extension`;
+- implement `@split402/express`;
 - preserve client-side attribution enrichment behavior;
 - preserve resource-server offer and receipt hooks;
 - preserve request-context capture for operation digest inputs;
-- port `apps/demo-merchant` from `ffff`;
+- implement `apps/demo-merchant`;
 - expose health, discovery, debug receipts, and paid risk-score route;
-- port `@split402/agent-sdk` from `ffff`;
+- implement `@split402/agent-sdk`;
 - expose buyer-side offer inspection, referral-claim creation, paid JSON call, and
   receipt verification helpers;
-- port `apps/demo-agent` from `ffff`;
+- implement `apps/demo-agent`;
 - expose buyer setup, token setup, offer inspection, preflight, and paid-suite demo
   scripts;
 - support a separate disposable fee payer for demo mint setup;
