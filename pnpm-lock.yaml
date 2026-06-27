@@ -173,6 +173,9 @@ importers:
 
   apps/mcp-demo:
     dependencies:
+      '@split402/agent-sdk':
+        specifier: workspace:*
+        version: link:../../packages/agent-sdk
       '@split402/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
