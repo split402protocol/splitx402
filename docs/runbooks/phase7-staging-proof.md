@@ -18,6 +18,11 @@ corepack pnpm phase7:hosted:preflight
 corepack pnpm phase7:staging:collect-reads
 corepack pnpm dashboard
 corepack pnpm demo:mcp-bundle
+# Capture stdio output from demo:mcp-gateway into mcp-gateway.jsonl.
+printf '{"jsonrpc":"2.0","id":"tools","method":"tools/list"}\n' \
+  | SPLIT402_MCP_CONTROL_PLANE_URL=<control-plane-url> \
+    SPLIT402_MCP_CAPABILITY=solana.wallet-risk \
+    corepack pnpm demo:mcp-gateway > phase7-staging-evidence/mcp-gateway.jsonl
 corepack pnpm demo:paid-suite
 # Capture payout obligations with SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc
 # and attach covered/deficit funding evidence to funding_balance_evidence.
@@ -40,8 +45,10 @@ before the payment proof run.
 `phase7:staging:manifest` records SHA-256 hashes for local attached artifacts
 and remote references for URL-based artifacts. Generate it after the evidence
 files exist and before the final assemble/status check.
-Run `corepack pnpm demo:mcp-gateway` from an MCP client stdio session if the
-staging proof needs live MCP tool discovery in addition to the stable
+Run `corepack pnpm demo:mcp-gateway` from an MCP client stdio session and attach
+the transcript as `mcp_gateway_evidence`. Set
+`SPLIT402_MCP_CONTROL_PLANE_URL` and, when needed, `SPLIT402_MCP_CAPABILITY` so
+the transcript proves hosted route discovery in addition to the stable
 `mcp-bundle.json` evidence.
 
 The status report includes `gateStatuses`; each gate is marked `ready`,
@@ -66,6 +73,7 @@ flowchart LR
   Dashboard["Dashboard summary"]
   Webhooks["Webhook delivery feed"]
   Funding["Funding balance coverage"]
+  Mcp["MCP gateway discovery"]
   Approval["Approved proof record"]
 
   Preflight --> Discovery
@@ -75,7 +83,8 @@ flowchart LR
   Earnings --> Dashboard
   Dashboard --> Webhooks
   Webhooks --> Funding
-  Funding --> Approval
+  Funding --> Mcp
+  Mcp --> Approval
 ```
 
 Attach response captures or artifact paths for every field in

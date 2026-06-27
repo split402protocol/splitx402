@@ -49,6 +49,12 @@ export const PHASE7_STAGING_COMMANDS = [
     evidenceField: "mcp_bundle_evidence",
   },
   {
+    gate: "mcp_gateway",
+    command:
+      "corepack pnpm demo:mcp-gateway with SPLIT402_MCP_CONTROL_PLANE_URL for hosted route discovery",
+    evidenceField: "mcp_gateway_evidence",
+  },
+  {
     gate: "agent_paid_suite",
     command: "corepack pnpm demo:paid-suite",
     evidenceField: "paid_request_evidence",
@@ -685,6 +691,7 @@ function createNextActions(
       "Create the evidence workspace with corepack pnpm phase7:staging:init.",
       "Generate a proof scaffold with corepack pnpm phase7:staging-proof.",
       "Run the dashboard, MCP bundle, paid-suite, control-plane read checks, and funding-balance check against staging.",
+      "Capture MCP gateway discovery or execution evidence with corepack pnpm demo:mcp-gateway.",
       "Run the hosted staging preflight with corepack pnpm phase7:hosted:preflight.",
       "Capture read API evidence with corepack pnpm phase7:staging:collect-reads.",
       "Generate artifact hashes with corepack pnpm phase7:staging:manifest <phase7-staging-proof.txt>.",

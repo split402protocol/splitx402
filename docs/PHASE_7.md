@@ -15,7 +15,8 @@ Implemented:
   route status;
 - merchant webhook delivery feed for pending, processing, delivered, and
   dead-letter webhook outbox events;
-- MCP-facing demo bundle and stdio gateway at `@split402/mcp-demo`;
+- MCP-facing demo bundle and stdio gateway at `@split402/mcp-demo`, including
+  optional control-plane route discovery mode for hosted staging;
 - merchant/referrer operations dashboard at `@split402/dashboard`;
 - optional dashboard viewer gate with signed, expiring session cookies for
   hosted staging;
@@ -53,7 +54,8 @@ corepack pnpm demo:mcp-bundle
 ```
 
 Run `corepack pnpm demo:mcp-gateway` when an MCP client needs direct stdio
-tool discovery for the demo.
+tool discovery for the demo. Set `SPLIT402_MCP_CONTROL_PLANE_URL` to capture
+hosted route discovery through the control plane.
 
 ## Dashboard UI
 
@@ -112,7 +114,8 @@ corepack pnpm phase7:staging:status phase7-staging-proof.txt
 The proof must attach evidence for hosted preflight, route discovery, x402
 payment, Split402 receipt verification, referrer earnings, dashboard summary,
 webhook delivery, payout obligations, Solana RPC funding-balance coverage, MCP
-bundle output, and artifact manifest hashes from the same staging environment.
+bundle output, MCP gateway transcript evidence, and artifact manifest hashes
+from the same staging environment.
 The final status check verifies that local `attached:` artifacts still match the
 recorded manifest sizes and SHA-256 hashes, and that the hosted preflight checks
 passed against the same control-plane and dashboard URLs listed in the proof.

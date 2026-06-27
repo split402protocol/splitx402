@@ -22,6 +22,7 @@ describe("Phase 7 staging proof", () => {
     expect(record).toContain("approval_decision: no-go");
     expect(record).toContain("dashboard_summary_evidence:");
     expect(record).toContain("funding_balance_evidence:");
+    expect(record).toContain("mcp_gateway_evidence:");
   });
 
   it("reports missing and placeholder fields", () => {
@@ -59,6 +60,7 @@ approval_decision: no-go
         payout_obligation_evidence: "attached: payout-obligations.json",
         funding_balance_evidence: "attached: funding-balance.json",
         mcp_bundle_evidence: "attached: mcp-bundle.json",
+        mcp_gateway_evidence: "attached: mcp-gateway.jsonl",
         artifact_manifest_evidence: "attached: artifact-manifest.json",
         commands_run: "attached: commands.log",
         approval_decision: "approved",
@@ -95,6 +97,7 @@ approval_decision: no-go
         payout_obligation_evidence: "attached: payout-obligations.json",
         funding_balance_evidence: "attached: funding-balance.json",
         mcp_bundle_evidence: "attached: mcp-bundle.json",
+        mcp_gateway_evidence: "attached: mcp-gateway.jsonl",
         artifact_manifest_evidence: "attached: artifact-manifest.json",
         commands_run: "attached: commands.log",
         approval_decision: "approved",
@@ -144,6 +147,9 @@ approval_decision: no-go
     expect(report.commands.map((item) => item.evidenceField)).toContain(
       "funding_balance_evidence",
     );
+    expect(report.commands.map((item) => item.evidenceField)).toContain(
+      "mcp_gateway_evidence",
+    );
     expect(report.gateStatuses.every((item) => item.status === "not_checked")).toBe(
       true,
     );
@@ -187,6 +193,12 @@ funding_balance_evidence: funding.json
       status: "missing",
       blockers: ["mcp_bundle_evidence is missing"],
     });
+    expect(report.gateStatuses).toContainEqual({
+      gate: "mcp_gateway",
+      evidenceField: "mcp_gateway_evidence",
+      status: "missing",
+      blockers: ["mcp_gateway_evidence is missing"],
+    });
   });
 
   it("blocks approved proof records when attached artifacts are missing", () => {
@@ -211,6 +223,7 @@ funding_balance_evidence: funding.json
         payout_obligation_evidence: "attached: payout-obligations.json",
         funding_balance_evidence: "attached: missing-funding-balance.json",
         mcp_bundle_evidence: "attached: mcp-bundle.json",
+        mcp_gateway_evidence: "attached: mcp-gateway.jsonl",
         artifact_manifest_evidence: "attached: artifact-manifest.json",
         commands_run: "attached: commands.log",
         approval_decision: "approved",
@@ -500,6 +513,7 @@ function createManifestProof(): string {
     payout_obligation_evidence: "https://artifacts.example/obligations.json",
     funding_balance_evidence: "attached: funding-balance.json",
     mcp_bundle_evidence: "https://artifacts.example/mcp.json",
+    mcp_gateway_evidence: "attached: mcp-gateway.jsonl",
     artifact_manifest_evidence: "attached: artifact-manifest.json",
     commands_run: "attached: commands.log",
     approval_decision: "approved",
@@ -520,6 +534,7 @@ function createManifestArtifacts(proofText: string): Map<string, Uint8Array> {
       ),
     ],
     ["evidence/paid-suite.log", encode("paid proof\n")],
+    ["evidence/mcp-gateway.jsonl", encode("{\"method\":\"tools/list\"}\n")],
     [
       "evidence/funding-balance.json",
       encode(

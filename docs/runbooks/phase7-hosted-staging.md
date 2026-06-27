@@ -85,6 +85,11 @@ corepack pnpm phase7:staging-proof > phase7-staging-proof.txt
 corepack pnpm phase7:hosted:preflight
 corepack pnpm phase7:staging:collect-reads
 corepack pnpm demo:mcp-bundle > phase7-staging-evidence/mcp-bundle.json
+printf '{"jsonrpc":"2.0","id":"tools","method":"tools/list"}\n' \
+  | SPLIT402_MCP_CONTROL_PLANE_URL="$SPLIT402_PHASE7_CONTROL_PLANE_URL" \
+    SPLIT402_MCP_CONTROL_PLANE_TOKEN="$SPLIT402_PHASE7_CONTROL_PLANE_TOKEN" \
+    SPLIT402_MCP_CAPABILITY=solana.wallet-risk \
+    corepack pnpm demo:mcp-gateway > phase7-staging-evidence/mcp-gateway.jsonl
 corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log
 corepack pnpm phase7:staging:manifest phase7-staging-proof.txt > phase7-staging-evidence/artifact-manifest.json
 corepack pnpm phase7:staging:assemble > phase7-staging-proof.txt
@@ -96,9 +101,10 @@ demo review. It verifies that the hosted preflight artifact was captured against
 the same control-plane and dashboard URLs listed in the proof, and that the
 dashboard is locked without the viewer token while accepting the viewer-token
 path.
+Attach `phase7-staging-evidence/mcp-gateway.jsonl` as `mcp_gateway_evidence`.
 Run `corepack pnpm demo:mcp-gateway` from an MCP client stdio session when the
 review needs direct MCP tool discovery in addition to the captured bundle
-artifact.
+artifact. Set `SPLIT402_MCP_CONTROL_PLANE_URL` for hosted route discovery.
 
 ## Shutdown
 

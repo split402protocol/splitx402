@@ -24,6 +24,9 @@ describe("Phase 7 staging evidence workspace", () => {
       "SPLIT402_PHASE7_ASSEMBLE_FUNDING_BALANCE_EVIDENCE=evidence/phase7/funding-balance.json",
     );
     expect(workspace.envText).toContain(
+      "SPLIT402_PHASE7_ASSEMBLE_MCP_GATEWAY_EVIDENCE=evidence/phase7/mcp-gateway.jsonl",
+    );
+    expect(workspace.envText).toContain(
       "SPLIT402_PHASE7_ASSEMBLE_ARTIFACT_MANIFEST_EVIDENCE=evidence/phase7/artifact-manifest.json",
     );
     expect(workspace.envText).toContain(
@@ -37,6 +40,7 @@ describe("Phase 7 staging evidence workspace", () => {
     expect(workspace.readmeText).toContain("# Phase 7 Staging Evidence");
     expect(workspace.readmeText).toContain("hosted-preflight.json");
     expect(workspace.readmeText).toContain("funding-balance.json");
+    expect(workspace.readmeText).toContain("mcp-gateway.jsonl");
     expect(workspace.readmeText).toContain("artifact-manifest.json");
     expect(workspace.readmeText).toContain(
       "Do not create\nplaceholder artifact files",
