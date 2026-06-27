@@ -5,9 +5,12 @@ import {
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  Split402ControlPlaneDiscoveryClient,
   Split402Router,
   Split402RouterProviderError,
   type Split402CapabilityProvider,
+  type Split402DiscoveryFetch,
+  type Split402DiscoveryFetchResponse,
   type Split402RouterExecutor
 } from "../src/index.js";
 
@@ -236,6 +239,75 @@ describe("Split402Router", () => {
   });
 });
 
+describe("Split402ControlPlaneDiscoveryClient", () => {
+  it("discovers router providers from control-plane route and Bazaar metadata", async () => {
+    const calls: Array<{ url: string; authorization?: string }> = [];
+    const discovery = new Split402ControlPlaneDiscoveryClient({
+      controlPlaneUrl: "https://control.example/base/",
+      bearerToken: "control-token",
+      fetch: controlPlaneFetch(calls),
+      capabilityMapper: (resource) =>
+        resource.metadata.operationId === "risk.score"
+          ? "solana.wallet-risk"
+          : undefined,
+      now: () => new Date("2026-06-24T00:03:00.000Z")
+    });
+
+    const providers = await discovery.discoverProviders({
+      capability: "solana.wallet-risk",
+      limit: 25
+    });
+
+    expect(providers).toEqual([
+      expect.objectContaining({
+        providerId: "rte_1:risk.score",
+        capability: "solana.wallet-risk",
+        routeId: "rte_1",
+        merchantOrigin: receipt.merchantOrigin,
+        path: "/v1/risk",
+        method: "POST",
+        operationId: "risk.score",
+        campaignId: receipt.campaignId,
+        merchantPublicKey,
+        network: receipt.network,
+        asset: receipt.asset,
+        amountAtomic: receipt.requiredAmountAtomic,
+        metadata: expect.objectContaining({
+          referrerWallet: receipt.referrerWallet,
+          payoutWallet: receipt.payoutWallet
+        })
+      })
+    ]);
+    expect(calls).toEqual([
+      {
+        url: "https://control.example/v1/routes/search?status=active&limit=25",
+        authorization: "Bearer control-token"
+      },
+      {
+        url: "https://control.example/v1/routes/rte_1/bazaar-resources",
+        authorization: "Bearer control-token"
+      },
+      {
+        url: `https://control.example/v1/campaigns/${receipt.campaignId}`,
+        authorization: "Bearer control-token"
+      },
+      {
+        url: `https://control.example/v1/merchants/${receipt.merchantId}`,
+        authorization: "Bearer control-token"
+      }
+    ]);
+  });
+
+  it("skips discovered providers without a merchant verification key by default", async () => {
+    const discovery = new Split402ControlPlaneDiscoveryClient({
+      controlPlaneUrl: "https://control.example",
+      fetch: controlPlaneFetch([], { omitMerchantKey: true })
+    });
+
+    await expect(discovery.discoverProviders()).resolves.toEqual([]);
+  });
+});
+
 function provider(
   overrides: Partial<Split402CapabilityProvider> = {},
   options: { omitPublicKey?: boolean } = {}
@@ -267,5 +339,98 @@ function executorReturning(
       data: { ok: true },
       receipt: returnedReceipt
     })
+  };
+}
+
+function controlPlaneFetch(
+  calls: Array<{ url: string; authorization?: string }>,
+  options: { omitMerchantKey?: boolean } = {}
+): Split402DiscoveryFetch {
+  return async (url, init) => {
+    calls.push({
+      url,
+      ...(init?.headers?.authorization === undefined
+        ? {}
+        : { authorization: init.headers.authorization })
+    });
+    const parsed = new URL(url);
+    if (parsed.pathname === "/v1/routes/search") {
+      return jsonResponse({
+        routes: [
+          {
+            id: "rte_1",
+            campaignId: receipt.campaignId
+          }
+        ]
+      });
+    }
+    if (parsed.pathname === "/v1/routes/rte_1/bazaar-resources") {
+      return jsonResponse({
+        resources: [
+          {
+            schema: "split402.bazaar_resource.v1",
+            resource: `${receipt.merchantOrigin}/v1/risk`,
+            type: "http",
+            x402Version: 2,
+            accepts: [
+              {
+                scheme: "exact",
+                network: receipt.network,
+                amount: receipt.requiredAmountAtomic,
+                asset: receipt.asset,
+                payTo: receipt.payToWallet
+              }
+            ],
+            metadata: {
+              method: "POST",
+              operationId: "risk.score",
+              split402: {
+                routeId: "rte_1",
+                campaignId: receipt.campaignId,
+                referrerWallet: receipt.referrerWallet,
+                payoutWallet: receipt.payoutWallet
+              }
+            }
+          }
+        ]
+      });
+    }
+    if (parsed.pathname === `/v1/campaigns/${receipt.campaignId}`) {
+      return jsonResponse({
+        campaign: {
+          merchantId: receipt.merchantId,
+          current: {
+            merchantKid: receipt.kid
+          }
+        }
+      });
+    }
+    if (parsed.pathname === `/v1/merchants/${receipt.merchantId}`) {
+      return jsonResponse({
+        merchant: {
+          keys: options.omitMerchantKey
+            ? []
+            : [
+                {
+                  kid: receipt.kid,
+                  publicKey: merchantPublicKey,
+                  purpose: "offer_receipt",
+                  validFrom: "2026-06-24T00:00:00.000Z"
+                }
+              ]
+        }
+      });
+    }
+    return jsonResponse({ error: "not_found" }, 404);
+  };
+}
+
+function jsonResponse(
+  body: unknown,
+  status = 200
+): Split402DiscoveryFetchResponse {
+  return {
+    status,
+    text: async () => JSON.stringify(body)
   };
 }

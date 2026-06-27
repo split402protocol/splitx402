@@ -42,7 +42,7 @@ flowchart LR
 | Protocol primitives | Implemented: schemas, hashes, IDs, amount math, operation digests, signatures, and test vectors. |
 | x402 integration | Implemented: Split402 offers, referral claims, request digests, and receipts around standard x402 settlement. |
 | Demo path | Implemented for Solana Devnet paid-suite proof runs. |
-| Router alpha | Implemented public-alpha static-provider router with capability search, budget filtering, deterministic ranking, retry/fallback, and fail-closed receipt verification. |
+| Router alpha | Implemented public-alpha router with static providers, control-plane route discovery, capability search, budget filtering, deterministic ranking, retry/fallback, and fail-closed receipt verification. |
 | MCP demo bundle and gateway | Implemented public-alpha demo bundle and narrow stdio gateway: paid tool card, x402 payment metadata, Split402 campaign metadata, expected referral economics, router-backed `split402.searchCapabilities`, `split402.execute`, `split402.getReceipt`, and proof commands. It is a runnable demo gateway, not production MCP hosting. |
 | Dashboard UI | Implemented public-alpha merchant/referrer operations UI with a narrow read proxy for dashboard summary, reliability, payout obligations, webhook delivery, referrer routes, balances, payouts, and an optional hosted-staging viewer gate with signed, expiring session cookies. The referrer views render the canonical control-plane `{ summary }` balance and `{ items }` payout response contracts. |
 | Phase 7 hosted staging | Implemented compose stack for PostgreSQL, control plane, migration job, dashboard, optional demo merchant, and optional workers. |
@@ -72,9 +72,9 @@ The near-term objective is the correctness-router sprint. Protocol fee wiring,
 self-referral semantics, receipt policy gates, public approval boundaries,
 payout terminal states, signer byte verification, finalized transfer-content
 verification, transaction-to-item finality mapping, safe allocation release,
-dashboard response-contract alignment, and production-facing digest-pinned
-deployment examples are now implemented in the working branches. The
-static-provider router alpha and router-backed MCP demo gateway are also
+dashboard response-contract alignment, production-facing digest-pinned
+deployment examples, and control-plane route discovery for the router are now
+implemented in the working branches. The router-backed MCP demo gateway is also
 implemented. Next is hosted proof evidence from a real staging environment. The
 hosted staging proof remains `no-go` until a real hosted environment supplies
 all required evidence from the same source commit.
