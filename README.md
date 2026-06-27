@@ -72,7 +72,7 @@ flowchart LR
 | Dashboard and discovery | Implemented for public-alpha operations: reliability profiles, dashboard summaries, webhook feeds, referrer routes, balances, payouts, hosted-staging viewer sessions, and proof capture. |
 | Payout engine | In progress: preview, allocation, safe allocation release, Solana transfer planning, simulation, signer policy, local-dev signer, remote signer client, signer appliance scaffold, signer deployment artifacts, signed-byte persistence, broadcast boundary, finality monitor, rollup, payout lifecycle events, unknown-outcome reconciliation queue, referrer payout views, and idempotent ledger closure are implemented. |
 | Atomic split settlement | Later research. The MVP does not split the original x402 transaction onchain. |
-| `$SPLIT` bonding | Later research after the USDC accrual-and-payout loop is production ready. |
+| `$SPLIT` bonding | Later research after the USDC accrual-and-payout loop clears public-alpha proof and custody gates. |
 
 ## Commission Example
 
