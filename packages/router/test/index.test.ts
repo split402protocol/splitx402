@@ -260,6 +260,108 @@ describe("Split402Router", () => {
     expect(result.receipt.referralClaimHash).toBe(receipt.referralClaimHash);
   });
 
+  it("skips providers whose route metadata conflicts with the supplied referral claim", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>().mockResolvedValue({
+      data: { risk: "low" },
+      receipt
+    });
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-wrong-route",
+          routeId: "rte_ffffffffffffffffffffffffffffffff",
+          reliability: { successRateBps: 10_000 }
+        }),
+        provider({
+          providerId: "provider-matching-route",
+          routeId: referralClaim.routeId,
+          metadata: {
+            referrerWallet: referralClaim.referrerWallet,
+            payoutWallet: referralClaim.payoutWallet
+          },
+          reliability: { successRateBps: 9000 }
+        })
+      ],
+      executor: { execute }
+    });
+
+    const result = await router.execute({
+      capability: "solana.wallet-risk",
+      input: { wallet: "wallet_1" },
+      budget: {
+        network: receipt.network,
+        asset: receipt.asset,
+        maxAmountAtomic: receipt.requiredAmountAtomic
+      },
+      referralClaim
+    });
+
+    expect(result.providerId).toBe("provider-matching-route");
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: expect.objectContaining({
+          providerId: "provider-matching-route"
+        }),
+        referralClaim
+      })
+    );
+  });
+
+  it("rejects before execution when no provider metadata matches the supplied referral claim", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-wrong-route",
+          routeId: "rte_ffffffffffffffffffffffffffffffff"
+        }),
+        provider({
+          providerId: "provider-wrong-wallets",
+          routeId: referralClaim.routeId,
+          metadata: {
+            referrerWallet: sample.keys.payerWallet,
+            payoutWallet: referralClaim.payoutWallet
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: { wallet: "wallet_1" },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        },
+        referralClaim
+      })
+    ).rejects.toMatchObject({
+      code: "execution_failed",
+      message: "no providers match the supplied referralClaim for solana.wallet-risk",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-wrong-route",
+          retryable: false,
+          error: expect.stringContaining(
+            "provider routeId does not match referralClaim routeId"
+          )
+        }),
+        expect.objectContaining({
+          providerId: "provider-wrong-wallets",
+          retryable: false,
+          error: expect.stringContaining(
+            "provider referrerWallet does not match referralClaim referrerWallet"
+          )
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it("rejects receipts whose attribution does not match the supplied referral claim", async () => {
     const cases: Array<{
       name: string;
