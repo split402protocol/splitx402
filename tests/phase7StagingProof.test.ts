@@ -376,6 +376,10 @@ funding_balance_evidence: funding.json
       status: "valid",
       blockers: [],
     });
+    expect(report.paidRequestStatus).toEqual({
+      status: "valid",
+      blockers: [],
+    });
     expect(report.fundingBalanceStatus).toEqual({
       status: "valid",
       blockers: [],
@@ -388,6 +392,58 @@ funding_balance_evidence: funding.json
       status: "valid",
       blockers: [],
     });
+  });
+
+  it("blocks staged proof status when paid-suite evidence did not pass", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/paid-suite.log",
+      encode(
+        [
+          "--- valid paid request ---",
+          JSON.stringify(
+            {
+              paidSuitePassed: false,
+              validReceipt: {
+                receiptId: "rcp_valid",
+                paymentId: "pay_valid",
+                commissionBps: 0,
+                commissionAmountAtomic: "0",
+                referrerCreditAtomic: "0",
+                settlementTxSignature: "tx_valid",
+              },
+              invalidReceipt: {
+                receiptId: "rcp_invalid",
+                paymentId: "pay_invalid",
+                commissionBps: 0,
+                commissionAmountAtomic: "0",
+                referrerCreditAtomic: "0",
+                settlementTxSignature: "tx_invalid",
+              },
+            },
+            null,
+            2,
+          ),
+          "",
+        ].join("\n"),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.paidRequestStatus.blockers).toContain(
+      "paid_request_evidence paidSuitePassed must be true",
+    );
+    expect(report.paidRequestStatus.blockers).toContain(
+      "paid_request_evidence validReceipt.commissionBps must be positive",
+    );
   });
 
   it("blocks staged proof status when control-plane read evidence is empty", () => {
@@ -714,13 +770,14 @@ function createManifestArtifacts(proofText: string): Map<string, Uint8Array> {
         }),
       ),
     ],
-    ["evidence/paid-suite.log", encode("paid proof\n")],
+    ["evidence/paid-suite.log", encode(createValidPaidSuiteLog())],
     [
       "evidence/receipt-verification.json",
       encode(
         JSON.stringify({
           receiptId: "rcp_001",
           verificationStatus: "verified",
+          errors: [],
         }),
       ),
     ],
@@ -978,6 +1035,66 @@ function createValidPayoutObligations(): unknown {
       ],
     },
   };
+}
+
+function createValidPaidSuiteLog(): string {
+  return [
+    "merchant ready at http://127.0.0.1:4021",
+    "",
+    "--- preflight ---",
+    JSON.stringify({ readyForPaidRun: true }),
+    "",
+    "--- valid paid request ---",
+    JSON.stringify({ risk: "low" }),
+    JSON.stringify({
+      split402ReceiptVerified: true,
+      errors: [],
+      receiptId: "rcp_valid",
+      referralCreditStatus: "credited",
+      commissionBps: 2000,
+      commissionAmountAtomic: "2000",
+      referrerCreditAtomic: "1800",
+      settlementTxSignature: "tx_valid",
+    }),
+    "",
+    "--- invalid-claim paid request ---",
+    JSON.stringify({ risk: "low" }),
+    JSON.stringify({
+      split402ReceiptVerified: true,
+      errors: [],
+      receiptId: "rcp_invalid",
+      referralCreditStatus: "zero",
+      commissionBps: 0,
+      commissionAmountAtomic: "0",
+      referrerCreditAtomic: "0",
+      settlementTxSignature: "tx_invalid",
+    }),
+    JSON.stringify(
+      {
+        paidSuitePassed: true,
+        validReceipt: {
+          receiptId: "rcp_valid",
+          paymentId: "pay_valid",
+          commissionBps: 2000,
+          commissionAmountAtomic: "2000",
+          referrerCreditAtomic: "1800",
+          settlementTxSignature: "tx_valid",
+          routeId: "rte_001",
+        },
+        invalidReceipt: {
+          receiptId: "rcp_invalid",
+          paymentId: "pay_invalid",
+          commissionBps: 0,
+          commissionAmountAtomic: "0",
+          referrerCreditAtomic: "0",
+          settlementTxSignature: "tx_invalid",
+        },
+      },
+      null,
+      2,
+    ),
+    "",
+  ].join("\n");
 }
 
 function createValidMcpGatewayTranscript(

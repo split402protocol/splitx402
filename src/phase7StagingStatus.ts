@@ -87,6 +87,7 @@ export interface Phase7StagingStatusReport {
   manifestStatus: Phase7StagingManifestStatus;
   hostedPreflightStatus: Phase7HostedPreflightStatus;
   controlPlaneReadStatus: Phase7ControlPlaneReadStatus;
+  paidRequestStatus: Phase7PaidRequestStatus;
   fundingBalanceStatus: Phase7FundingBalanceStatus;
   mcpBundleStatus: Phase7McpBundleStatus;
   mcpGatewayStatus: Phase7McpGatewayStatus;
@@ -131,6 +132,11 @@ export interface Phase7ControlPlaneReadStatus {
   blockers: string[];
 }
 
+export interface Phase7PaidRequestStatus {
+  status: "not_checked" | "not_applicable" | "valid" | "invalid";
+  blockers: string[];
+}
+
 export interface Phase7FundingBalanceStatus {
   status: "not_checked" | "not_applicable" | "valid" | "invalid";
   blockers: string[];
@@ -156,6 +162,7 @@ export function createPhase7StagingStatusReport(
   const manifestStatus = createManifestStatus(proofText, options);
   const hostedPreflightStatus = createHostedPreflightStatus(proofText, options);
   const controlPlaneReadStatus = createControlPlaneReadStatus(proofText, options);
+  const paidRequestStatus = createPaidRequestStatus(proofText, options);
   const fundingBalanceStatus = createFundingBalanceStatus(proofText, options);
   const mcpBundleStatus = createMcpBundleStatus(proofText, options);
   const mcpGatewayStatus = createMcpGatewayStatus(proofText, options);
@@ -163,6 +170,7 @@ export function createPhase7StagingStatusReport(
   const manifestBlockers = manifestStatus.blockers;
   const hostedPreflightBlockers = hostedPreflightStatus.blockers;
   const controlPlaneReadBlockers = controlPlaneReadStatus.blockers;
+  const paidRequestBlockers = paidRequestStatus.blockers;
   const fundingBalanceBlockers = fundingBalanceStatus.blockers;
   const mcpBundleBlockers = mcpBundleStatus.blockers;
   const mcpGatewayBlockers = mcpGatewayStatus.blockers;
@@ -172,6 +180,7 @@ export function createPhase7StagingStatusReport(
     manifestBlockers.length === 0 &&
     hostedPreflightBlockers.length === 0 &&
     controlPlaneReadBlockers.length === 0 &&
+    paidRequestBlockers.length === 0 &&
     fundingBalanceBlockers.length === 0 &&
     mcpBundleBlockers.length === 0 &&
     mcpGatewayBlockers.length === 0;
@@ -187,6 +196,7 @@ export function createPhase7StagingStatusReport(
       manifestBlockers,
       hostedPreflightBlockers,
       controlPlaneReadBlockers,
+      paidRequestBlockers,
       fundingBalanceBlockers,
       mcpBundleBlockers,
       mcpGatewayBlockers,
@@ -195,6 +205,7 @@ export function createPhase7StagingStatusReport(
     manifestStatus,
     hostedPreflightStatus,
     controlPlaneReadStatus,
+    paidRequestStatus,
     fundingBalanceStatus,
     mcpBundleStatus,
     mcpGatewayStatus,
@@ -204,6 +215,7 @@ export function createPhase7StagingStatusReport(
       ...manifestBlockers,
       ...hostedPreflightBlockers,
       ...controlPlaneReadBlockers,
+      ...paidRequestBlockers,
       ...fundingBalanceBlockers,
       ...mcpBundleBlockers,
       ...mcpGatewayBlockers,
@@ -217,6 +229,7 @@ function createGateStatuses(
   manifestBlockers: readonly string[],
   hostedPreflightBlockers: readonly string[],
   controlPlaneReadBlockers: readonly string[],
+  paidRequestBlockers: readonly string[],
   fundingBalanceBlockers: readonly string[],
   mcpBundleBlockers: readonly string[],
   mcpGatewayBlockers: readonly string[],
@@ -243,6 +256,7 @@ function createGateStatuses(
       manifestBlockers,
       hostedPreflightBlockers,
       controlPlaneReadBlockers,
+      paidRequestBlockers,
       fundingBalanceBlockers,
       mcpBundleBlockers,
       mcpGatewayBlockers,
@@ -294,6 +308,7 @@ function createGateArtifactBlockers(
   manifestBlockers: readonly string[],
   hostedPreflightBlockers: readonly string[],
   controlPlaneReadBlockers: readonly string[],
+  paidRequestBlockers: readonly string[],
   fundingBalanceBlockers: readonly string[],
   mcpBundleBlockers: readonly string[],
   mcpGatewayBlockers: readonly string[],
@@ -309,6 +324,12 @@ function createGateArtifactBlockers(
   );
   if (readEvidenceBlockers.length > 0) {
     return [...artifactBlockers, ...readEvidenceBlockers];
+  }
+  const paidEvidenceBlockers = paidRequestBlockers.filter((blocker) =>
+    blocker.startsWith(`${evidenceField} `),
+  );
+  if (paidEvidenceBlockers.length > 0) {
+    return [...artifactBlockers, ...paidEvidenceBlockers];
   }
   if (evidenceField === "funding_balance_evidence") {
     return [...artifactBlockers, ...fundingBalanceBlockers];
@@ -614,6 +635,209 @@ function validateControlPlaneReadArtifact(
     case "payout_obligation_evidence":
       validatePayoutObligationArtifact(artifact, blockers);
       return;
+  }
+}
+
+function createPaidRequestStatus(
+  proofText: string | undefined,
+  options: Phase7StagingStatusOptions,
+): Phase7PaidRequestStatus {
+  if (proofText === undefined) {
+    return { status: "not_checked", blockers: [] };
+  }
+
+  const fields = parsePhase7ProofRecord(proofText);
+  const paidReference = fields.get("paid_request_evidence");
+  const receiptReference = fields.get("receipt_verification_evidence");
+  if (
+    (paidReference === undefined || paidReference.length === 0) &&
+    (receiptReference === undefined || receiptReference.length === 0)
+  ) {
+    return { status: "not_applicable", blockers: [] };
+  }
+  if (options.artifactBaseDir === undefined || options.readArtifact === undefined) {
+    return { status: "not_checked", blockers: [] };
+  }
+
+  const blockers: string[] = [];
+  validatePaidSuiteReference(paidReference, options, blockers);
+  validateReceiptVerificationReference(receiptReference, options, blockers);
+  return blockers.length === 0
+    ? { status: "valid", blockers: [] }
+    : { status: "invalid", blockers };
+}
+
+function validatePaidSuiteReference(
+  reference: string | undefined,
+  options: Phase7StagingStatusOptions,
+  blockers: string[],
+): void {
+  if (reference === undefined || reference.length === 0) {
+    return;
+  }
+  if (isHttpUrl(reference)) {
+    blockers.push(
+      "paid_request_evidence must be an attached local artifact for status validation",
+    );
+    return;
+  }
+  const artifactPath = readAttachedArtifactPath(reference);
+  if (artifactPath === undefined) {
+    return;
+  }
+  const text = readTextArtifact("paid_request_evidence", artifactPath, options, blockers);
+  if (text === undefined) {
+    return;
+  }
+  const paidSuite = extractJsonObjectWithMarker(
+    text,
+    "paid_request_evidence",
+    "paidSuitePassed",
+    blockers,
+  );
+  if (paidSuite === undefined) {
+    return;
+  }
+  validatePaidSuiteArtifact(paidSuite, blockers);
+}
+
+function validateReceiptVerificationReference(
+  reference: string | undefined,
+  options: Phase7StagingStatusOptions,
+  blockers: string[],
+): void {
+  if (reference === undefined || reference.length === 0) {
+    return;
+  }
+  if (isHttpUrl(reference)) {
+    blockers.push(
+      "receipt_verification_evidence must be an attached local artifact for status validation",
+    );
+    return;
+  }
+  const artifactPath = readAttachedArtifactPath(reference);
+  if (artifactPath === undefined) {
+    return;
+  }
+  const artifact = readJsonArtifact(
+    "receipt_verification_evidence",
+    artifactPath,
+    options,
+    blockers,
+  );
+  if (artifact === undefined) {
+    return;
+  }
+  validateReceiptVerificationArtifact(artifact, blockers);
+}
+
+function validatePaidSuiteArtifact(artifact: unknown, blockers: string[]): void {
+  const record = readRecord(artifact);
+  if (record === undefined) {
+    blockers.push("paid_request_evidence paid-suite summary must be a JSON object");
+    return;
+  }
+  if (record.paidSuitePassed !== true) {
+    blockers.push("paid_request_evidence paidSuitePassed must be true");
+  }
+  const validReceipt = readRecord(record.validReceipt);
+  if (validReceipt === undefined) {
+    blockers.push("paid_request_evidence validReceipt is missing");
+  } else {
+    validatePaidSuiteReceiptSummary({
+      field: "paid_request_evidence validReceipt",
+      receipt: validReceipt,
+      expectedCommission: "positive",
+      blockers,
+    });
+  }
+
+  const invalidReceipt = readRecord(record.invalidReceipt);
+  if (invalidReceipt === undefined) {
+    blockers.push("paid_request_evidence invalidReceipt is missing");
+  } else {
+    validatePaidSuiteReceiptSummary({
+      field: "paid_request_evidence invalidReceipt",
+      receipt: invalidReceipt,
+      expectedCommission: "zero",
+      blockers,
+    });
+  }
+}
+
+function validatePaidSuiteReceiptSummary(input: {
+  field: string;
+  receipt: Record<string, unknown>;
+  expectedCommission: "positive" | "zero";
+  blockers: string[];
+}): void {
+  for (const field of ["receiptId", "paymentId", "settlementTxSignature"]) {
+    if (readNonEmptyString(input.receipt[field]) === undefined) {
+      input.blockers.push(`${input.field}.${field} is missing`);
+    }
+  }
+  if (input.expectedCommission === "positive") {
+    const commissionBps = readPositiveInteger(input.receipt.commissionBps);
+    const commissionAmount = readPositiveAtomicString(
+      input.receipt.commissionAmountAtomic,
+    );
+    const referrerCredit = readPositiveAtomicString(
+      input.receipt.referrerCreditAtomic,
+    );
+    if (commissionBps === undefined) {
+      input.blockers.push(`${input.field}.commissionBps must be positive`);
+    }
+    if (commissionAmount === undefined) {
+      input.blockers.push(
+        `${input.field}.commissionAmountAtomic must be positive`,
+      );
+    }
+    if (referrerCredit === undefined) {
+      input.blockers.push(`${input.field}.referrerCreditAtomic must be positive`);
+    }
+    if (readNonEmptyString(input.receipt.routeId) === undefined) {
+      input.blockers.push(`${input.field}.routeId is missing`);
+    }
+    return;
+  }
+
+  if (input.receipt.commissionBps !== 0) {
+    input.blockers.push(`${input.field}.commissionBps must be zero`);
+  }
+  for (const field of ["commissionAmountAtomic", "referrerCreditAtomic"]) {
+    const amount = readNonNegativeAtomicString(input.receipt[field]);
+    if (amount === undefined) {
+      input.blockers.push(`${input.field}.${field} must be an atomic amount`);
+    } else if (amount !== 0n) {
+      input.blockers.push(`${input.field}.${field} must be zero`);
+    }
+  }
+}
+
+function validateReceiptVerificationArtifact(
+  artifact: unknown,
+  blockers: string[],
+): void {
+  const record = readRecord(artifact);
+  if (record === undefined) {
+    blockers.push("receipt_verification_evidence artifact must be a JSON object");
+    return;
+  }
+  const verified =
+    record.split402ReceiptVerified === true ||
+    record.receiptVerificationStatus === "verified" ||
+    record.verificationStatus === "verified" ||
+    record.verified === true ||
+    record.ok === true;
+  if (!verified) {
+    blockers.push("receipt_verification_evidence must show a verified Split402 receipt");
+  }
+  if (readNonEmptyString(record.receiptId) === undefined) {
+    blockers.push("receipt_verification_evidence receiptId is missing");
+  }
+  const errors = record.errors;
+  if (Array.isArray(errors) && errors.length > 0) {
+    blockers.push("receipt_verification_evidence errors must be empty");
   }
 }
 
@@ -1497,6 +1721,89 @@ function readJsonArtifact(
   }
 }
 
+function readTextArtifact(
+  field: string,
+  artifactPath: string,
+  options: Phase7StagingStatusOptions,
+  blockers: string[],
+): string | undefined {
+  const resolvedPath = resolveArtifactPath(artifactPath, options);
+  try {
+    const artifactBytes = options.readArtifact?.(resolvedPath);
+    if (artifactBytes === undefined) {
+      blockers.push(`${field} artifact could not be read`);
+      return undefined;
+    }
+    return new TextDecoder().decode(artifactBytes);
+  } catch (error) {
+    blockers.push(`${field} artifact could not be read: ${formatError(error)}`);
+    return undefined;
+  }
+}
+
+function extractJsonObjectWithMarker(
+  text: string,
+  field: string,
+  marker: string,
+  blockers: string[],
+): unknown | undefined {
+  const markerIndex = text.lastIndexOf(`"${marker}"`);
+  if (markerIndex < 0) {
+    blockers.push(`${field} missing ${marker} JSON summary`);
+    return undefined;
+  }
+  const start = text.lastIndexOf("{", markerIndex);
+  if (start < 0) {
+    blockers.push(`${field} missing JSON object for ${marker}`);
+    return undefined;
+  }
+  const end = findJsonObjectEnd(text, start);
+  if (end === undefined) {
+    blockers.push(`${field} JSON summary is incomplete`);
+    return undefined;
+  }
+  try {
+    return JSON.parse(text.slice(start, end + 1));
+  } catch (error) {
+    blockers.push(`${field} JSON summary could not be parsed: ${formatError(error)}`);
+    return undefined;
+  }
+}
+
+function findJsonObjectEnd(text: string, start: number): number | undefined {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = start; index < text.length; index += 1) {
+    const char = text[index];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+    if (char === "\"") {
+      inString = true;
+      continue;
+    }
+    if (char === "{") {
+      depth += 1;
+      continue;
+    }
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+  return undefined;
+}
+
 function readAttachedArtifactPath(reference: string): string | undefined {
   const attachedPrefix = "attached:";
   if (!reference.startsWith(attachedPrefix)) {
@@ -1693,6 +2000,12 @@ function readBasisPoints(value: unknown): number | undefined {
 
 function readNonNegativeInteger(value: unknown): number | undefined {
   return Number.isInteger(value) && typeof value === "number" && value >= 0
+    ? value
+    : undefined;
+}
+
+function readPositiveInteger(value: unknown): number | undefined {
+  return Number.isInteger(value) && typeof value === "number" && value > 0
     ? value
     : undefined;
 }
