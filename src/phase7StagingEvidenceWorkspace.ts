@@ -71,6 +71,12 @@ const PHASE7_STAGING_EVIDENCE_ARTIFACTS: readonly Phase7StagingEvidenceArtifact[
       purpose: "MCP demo bundle output for the paid tool card.",
     },
     {
+      field: "mcp_gateway_evidence",
+      fileName: "mcp-gateway.jsonl",
+      purpose:
+        "MCP gateway stdio transcript showing router-backed discovery or execution.",
+    },
+    {
       field: "artifact_manifest_evidence",
       fileName: "artifact-manifest.json",
       purpose: "SHA-256 manifest for the reviewed local evidence files.",
