@@ -27,6 +27,22 @@ describe("Split402 dashboard app", () => {
     expect(response.text).toContain("referrer_wallet");
   });
 
+  it("renders referrer data using the control-plane response contracts", async () => {
+    const { app } = createDashboardApp({
+      config: {
+        controlPlaneUrl: "https://control.example",
+        port: 4027
+      }
+    });
+
+    const response = await request(app).get("/").expect(200);
+
+    expect(response.text).toContain("renderBalance(balances?.summary)");
+    expect(response.text).toContain("renderPayouts(payouts?.items ?? [])");
+    expect(response.text).toContain("value?.assets");
+    expect(response.text).toContain("availableAmountAtomic");
+  });
+
   it("proxies merchant dashboard reads to the configured control plane", async () => {
     const calls: Array<{ url: string; authorization?: string }> = [];
     const { app } = createDashboardApp({
