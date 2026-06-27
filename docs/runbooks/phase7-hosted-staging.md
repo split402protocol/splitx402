@@ -87,6 +87,7 @@ corepack pnpm phase7:staging:collect-reads
 SPLIT402_MCP_CONTROL_PLANE_URL="$SPLIT402_PHASE7_CONTROL_PLANE_URL" \
 SPLIT402_MCP_CONTROL_PLANE_TOKEN="$SPLIT402_PHASE7_CONTROL_PLANE_TOKEN" \
 SPLIT402_MCP_CAPABILITY=solana.wallet-risk \
+SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 \
 corepack pnpm phase7:staging:collect-mcp-gateway
 corepack pnpm demo:mcp-bundle > phase7-staging-evidence/mcp-bundle.json
 corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log
@@ -104,11 +105,11 @@ path.
 Attach `phase7-staging-evidence/mcp-gateway.jsonl` as `mcp_gateway_evidence`.
 The collector runs the gateway with JSON-RPC `initialize`, `tools/list`, and
 `split402.searchCapabilities` requests. Set `SPLIT402_MCP_CONTROL_PLANE_URL` for
-hosted route discovery. Leave hosted execution disabled unless the same staging
-run has live x402 buyer configuration; when that is ready, set
-`SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1`, `SPLIT402_MCP_WALLET`, and
-`SPLIT402_MCP_MAX_AMOUNT_ATOMIC` to also capture `split402.execute` and
-`split402.getReceipt`.
+hosted route discovery. Phase 7 proof closure also requires
+`split402.execute` and `split402.getReceipt`, so keep
+`SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1` enabled only after the same staging run
+has live x402 buyer configuration. Set `SPLIT402_MCP_WALLET` and
+`SPLIT402_MCP_MAX_AMOUNT_ATOMIC` for the execution budget.
 
 ## Shutdown
 

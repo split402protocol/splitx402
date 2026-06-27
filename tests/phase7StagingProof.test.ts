@@ -704,6 +704,31 @@ funding_balance_evidence: funding.json
     );
   });
 
+  it("blocks staged proof status when MCP gateway evidence has no execution", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          includeExecute: false,
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence missing split402.execute request",
+    );
+  });
+
   it("blocks staged proof status when MCP execution evidence has no receipt lookup", () => {
     const proofText = createManifestProof();
     const artifacts = createManifestArtifacts(proofText);
@@ -1236,8 +1261,13 @@ function createValidCommandsLog(): string {
 }
 
 function createValidMcpGatewayTranscript(
-  options: { includeReceiptLookup?: boolean; tools?: string[] } = {},
+  options: {
+    includeExecute?: boolean;
+    includeReceiptLookup?: boolean;
+    tools?: string[];
+  } = {},
 ): string {
+  const includeExecute = options.includeExecute ?? true;
   const includeReceiptLookup = options.includeReceiptLookup ?? true;
   const tools = options.tools ?? [
     "split402.searchCapabilities",
@@ -1294,49 +1324,21 @@ function createValidMcpGatewayTranscript(
         },
       },
     },
-    {
-      direction: "request",
-      message: {
-        jsonrpc: "2.0",
-        id: "execute",
-        method: "tools/call",
-        params: {
-          name: "split402.execute",
-          arguments: {
-            capability: "solana.wallet-risk",
-            input: { wallet: "wallet-demo" },
-            budget: { maxAmountAtomic: "50000" },
-          },
-        },
-      },
-    },
-    {
-      direction: "response",
-      message: {
-        jsonrpc: "2.0",
-        id: "execute",
-        result: {
-          structuredContent: {
-            providerId: "split402-demo-merchant",
-            amountPaidAtomic: "10000",
-            receiptId,
-            receiptVerificationStatus: "verified",
-            referrerCreditAtomic: "1800",
-          },
-        },
-      },
-    },
-    ...(includeReceiptLookup
+    ...(includeExecute
       ? [
           {
             direction: "request",
             message: {
               jsonrpc: "2.0",
-              id: "receipt",
+              id: "execute",
               method: "tools/call",
               params: {
-                name: "split402.getReceipt",
-                arguments: { receiptId },
+                name: "split402.execute",
+                arguments: {
+                  capability: "solana.wallet-risk",
+                  input: { wallet: "wallet-demo" },
+                  budget: { maxAmountAtomic: "50000" },
+                },
               },
             },
           },
@@ -1344,18 +1346,50 @@ function createValidMcpGatewayTranscript(
             direction: "response",
             message: {
               jsonrpc: "2.0",
-              id: "receipt",
+              id: "execute",
               result: {
                 structuredContent: {
+                  providerId: "split402-demo-merchant",
+                  amountPaidAtomic: "10000",
                   receiptId,
-                  receipt: {
-                    receiptId,
-                    referrerCreditAtomic: "1800",
-                  },
+                  receiptVerificationStatus: "verified",
+                  referrerCreditAtomic: "1800",
                 },
               },
             },
           },
+          ...(includeReceiptLookup
+            ? [
+                {
+                  direction: "request",
+                  message: {
+                    jsonrpc: "2.0",
+                    id: "receipt",
+                    method: "tools/call",
+                    params: {
+                      name: "split402.getReceipt",
+                      arguments: { receiptId },
+                    },
+                  },
+                },
+                {
+                  direction: "response",
+                  message: {
+                    jsonrpc: "2.0",
+                    id: "receipt",
+                    result: {
+                      structuredContent: {
+                        receiptId,
+                        receipt: {
+                          receiptId,
+                          referrerCreditAtomic: "1800",
+                        },
+                      },
+                    },
+                  },
+                },
+              ]
+            : []),
         ]
       : []),
   ];
