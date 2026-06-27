@@ -375,7 +375,12 @@ function createManifestStatus(
     return { status: "not_applicable", blockers: [] };
   }
   if (isHttpUrl(manifestReference)) {
-    return { status: "not_checked", blockers: [] };
+    return {
+      status: "invalid",
+      blockers: [
+        "artifact_manifest_evidence must be an attached local artifact for status validation",
+      ],
+    };
   }
 
   const manifestArtifactPath = readAttachedArtifactPath(manifestReference);
