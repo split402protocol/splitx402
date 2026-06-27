@@ -86,6 +86,7 @@ export interface Phase7StagingStatusReport {
   artifactStatuses: Phase7StagingArtifactStatus[];
   manifestStatus: Phase7StagingManifestStatus;
   hostedPreflightStatus: Phase7HostedPreflightStatus;
+  controlPlaneReadStatus: Phase7ControlPlaneReadStatus;
   fundingBalanceStatus: Phase7FundingBalanceStatus;
   mcpBundleStatus: Phase7McpBundleStatus;
   mcpGatewayStatus: Phase7McpGatewayStatus;
@@ -125,6 +126,11 @@ export interface Phase7HostedPreflightStatus {
   blockers: string[];
 }
 
+export interface Phase7ControlPlaneReadStatus {
+  status: "not_checked" | "not_applicable" | "valid" | "invalid";
+  blockers: string[];
+}
+
 export interface Phase7FundingBalanceStatus {
   status: "not_checked" | "not_applicable" | "valid" | "invalid";
   blockers: string[];
@@ -149,12 +155,14 @@ export function createPhase7StagingStatusReport(
   const artifactStatuses = createArtifactStatuses(proofText, options);
   const manifestStatus = createManifestStatus(proofText, options);
   const hostedPreflightStatus = createHostedPreflightStatus(proofText, options);
+  const controlPlaneReadStatus = createControlPlaneReadStatus(proofText, options);
   const fundingBalanceStatus = createFundingBalanceStatus(proofText, options);
   const mcpBundleStatus = createMcpBundleStatus(proofText, options);
   const mcpGatewayStatus = createMcpGatewayStatus(proofText, options);
   const artifactBlockers = artifactStatuses.flatMap((status) => status.blockers);
   const manifestBlockers = manifestStatus.blockers;
   const hostedPreflightBlockers = hostedPreflightStatus.blockers;
+  const controlPlaneReadBlockers = controlPlaneReadStatus.blockers;
   const fundingBalanceBlockers = fundingBalanceStatus.blockers;
   const mcpBundleBlockers = mcpBundleStatus.blockers;
   const mcpGatewayBlockers = mcpGatewayStatus.blockers;
@@ -163,6 +171,7 @@ export function createPhase7StagingStatusReport(
     artifactBlockers.length === 0 &&
     manifestBlockers.length === 0 &&
     hostedPreflightBlockers.length === 0 &&
+    controlPlaneReadBlockers.length === 0 &&
     fundingBalanceBlockers.length === 0 &&
     mcpBundleBlockers.length === 0 &&
     mcpGatewayBlockers.length === 0;
@@ -177,6 +186,7 @@ export function createPhase7StagingStatusReport(
       artifactStatuses,
       manifestBlockers,
       hostedPreflightBlockers,
+      controlPlaneReadBlockers,
       fundingBalanceBlockers,
       mcpBundleBlockers,
       mcpGatewayBlockers,
@@ -184,6 +194,7 @@ export function createPhase7StagingStatusReport(
     artifactStatuses,
     manifestStatus,
     hostedPreflightStatus,
+    controlPlaneReadStatus,
     fundingBalanceStatus,
     mcpBundleStatus,
     mcpGatewayStatus,
@@ -192,6 +203,7 @@ export function createPhase7StagingStatusReport(
       ...artifactBlockers,
       ...manifestBlockers,
       ...hostedPreflightBlockers,
+      ...controlPlaneReadBlockers,
       ...fundingBalanceBlockers,
       ...mcpBundleBlockers,
       ...mcpGatewayBlockers,
@@ -204,6 +216,7 @@ function createGateStatuses(
   artifactStatuses: readonly Phase7StagingArtifactStatus[],
   manifestBlockers: readonly string[],
   hostedPreflightBlockers: readonly string[],
+  controlPlaneReadBlockers: readonly string[],
   fundingBalanceBlockers: readonly string[],
   mcpBundleBlockers: readonly string[],
   mcpGatewayBlockers: readonly string[],
@@ -229,6 +242,7 @@ function createGateStatuses(
       artifactBlockers,
       manifestBlockers,
       hostedPreflightBlockers,
+      controlPlaneReadBlockers,
       fundingBalanceBlockers,
       mcpBundleBlockers,
       mcpGatewayBlockers,
@@ -279,6 +293,7 @@ function createGateArtifactBlockers(
   artifactBlockers: readonly string[],
   manifestBlockers: readonly string[],
   hostedPreflightBlockers: readonly string[],
+  controlPlaneReadBlockers: readonly string[],
   fundingBalanceBlockers: readonly string[],
   mcpBundleBlockers: readonly string[],
   mcpGatewayBlockers: readonly string[],
@@ -288,6 +303,12 @@ function createGateArtifactBlockers(
   }
   if (evidenceField === "hosted_preflight_evidence") {
     return [...artifactBlockers, ...hostedPreflightBlockers];
+  }
+  const readEvidenceBlockers = controlPlaneReadBlockers.filter((blocker) =>
+    blocker.startsWith(`${evidenceField} `),
+  );
+  if (readEvidenceBlockers.length > 0) {
+    return [...artifactBlockers, ...readEvidenceBlockers];
   }
   if (evidenceField === "funding_balance_evidence") {
     return [...artifactBlockers, ...fundingBalanceBlockers];
@@ -516,6 +537,313 @@ function createHostedPreflightStatus(
   return blockers.length === 0
     ? { status: "valid", blockers: [] }
     : { status: "invalid", blockers };
+}
+
+const PHASE7_CONTROL_PLANE_READ_EVIDENCE_FIELDS = [
+  "agent_discovery_evidence",
+  "referrer_balance_evidence",
+  "dashboard_summary_evidence",
+  "webhook_delivery_evidence",
+  "payout_obligation_evidence",
+] as const;
+
+function createControlPlaneReadStatus(
+  proofText: string | undefined,
+  options: Phase7StagingStatusOptions,
+): Phase7ControlPlaneReadStatus {
+  if (proofText === undefined) {
+    return { status: "not_checked", blockers: [] };
+  }
+
+  const fields = parsePhase7ProofRecord(proofText);
+  const references = PHASE7_CONTROL_PLANE_READ_EVIDENCE_FIELDS
+    .map((field) => [field, fields.get(field)] as const)
+    .filter(([, reference]) => reference !== undefined && reference.length > 0);
+  if (references.length === 0) {
+    return { status: "not_applicable", blockers: [] };
+  }
+  if (options.artifactBaseDir === undefined || options.readArtifact === undefined) {
+    return { status: "not_checked", blockers: [] };
+  }
+
+  const blockers: string[] = [];
+  for (const [field, reference] of references) {
+    if (reference === undefined) {
+      continue;
+    }
+    if (isHttpUrl(reference)) {
+      blockers.push(
+        `${field} must be an attached local artifact for status validation`,
+      );
+      continue;
+    }
+    const artifactPath = readAttachedArtifactPath(reference);
+    if (artifactPath === undefined) {
+      continue;
+    }
+    const artifact = readJsonArtifact(field, artifactPath, options, blockers);
+    if (artifact === undefined) {
+      continue;
+    }
+    validateControlPlaneReadArtifact(field, artifact, blockers);
+  }
+
+  return blockers.length === 0
+    ? { status: "valid", blockers: [] }
+    : { status: "invalid", blockers };
+}
+
+function validateControlPlaneReadArtifact(
+  field: (typeof PHASE7_CONTROL_PLANE_READ_EVIDENCE_FIELDS)[number],
+  artifact: unknown,
+  blockers: string[],
+): void {
+  switch (field) {
+    case "agent_discovery_evidence":
+      validateAgentDiscoveryArtifact(artifact, blockers);
+      return;
+    case "referrer_balance_evidence":
+      validateReferrerBalanceArtifact(artifact, blockers);
+      return;
+    case "dashboard_summary_evidence":
+      validateDashboardSummaryArtifact(artifact, blockers);
+      return;
+    case "webhook_delivery_evidence":
+      validateWebhookDeliveryArtifact(artifact, blockers);
+      return;
+    case "payout_obligation_evidence":
+      validatePayoutObligationArtifact(artifact, blockers);
+      return;
+  }
+}
+
+function validateAgentDiscoveryArtifact(
+  artifact: unknown,
+  blockers: string[],
+): void {
+  const record = readRecord(artifact);
+  const routes = Array.isArray(record?.routes) ? record.routes : undefined;
+  if (routes === undefined) {
+    blockers.push("agent_discovery_evidence routes must be an array");
+    return;
+  }
+  if (routes.length === 0) {
+    blockers.push("agent_discovery_evidence must include at least one route");
+    return;
+  }
+  let hasActiveRoute = false;
+  for (const [index, route] of routes.entries()) {
+    const routeRecord = readRecord(route);
+    if (routeRecord === undefined) {
+      blockers.push(`agent_discovery_evidence routes[${index}] is invalid`);
+      continue;
+    }
+    if (routeRecord.status === "active") {
+      hasActiveRoute = true;
+    }
+    for (const field of ["campaignId", "referrerWallet", "payoutWallet"]) {
+      if (readNonEmptyString(routeRecord[field]) === undefined) {
+        blockers.push(`agent_discovery_evidence routes[${index}].${field} is missing`);
+      }
+    }
+    if (
+      readNonEmptyString(routeRecord.id) === undefined &&
+      readNonEmptyString(routeRecord.routeId) === undefined
+    ) {
+      blockers.push(`agent_discovery_evidence routes[${index}].id is missing`);
+    }
+  }
+  if (!hasActiveRoute) {
+    blockers.push("agent_discovery_evidence must include at least one active route");
+  }
+}
+
+function validateReferrerBalanceArtifact(
+  artifact: unknown,
+  blockers: string[],
+): void {
+  const summary = readRecord(readRecord(artifact)?.summary);
+  if (summary === undefined) {
+    blockers.push("referrer_balance_evidence summary is missing");
+    return;
+  }
+  if (readNonEmptyString(summary.referrerWallet) === undefined) {
+    blockers.push("referrer_balance_evidence summary.referrerWallet is missing");
+  }
+  const assets = Array.isArray(summary.assets) ? summary.assets : undefined;
+  if (assets === undefined) {
+    blockers.push("referrer_balance_evidence summary.assets must be an array");
+    return;
+  }
+  if (assets.length === 0) {
+    blockers.push("referrer_balance_evidence must include at least one asset");
+    return;
+  }
+
+  let hasPositiveEarning = false;
+  for (const [index, asset] of assets.entries()) {
+    const record = readRecord(asset);
+    if (record === undefined) {
+      blockers.push(`referrer_balance_evidence assets[${index}] is invalid`);
+      continue;
+    }
+    if (readNonEmptyString(record.asset) === undefined) {
+      blockers.push(`referrer_balance_evidence assets[${index}].asset is missing`);
+    }
+    for (const field of [
+      "pendingAmountAtomic",
+      "availableAmountAtomic",
+      "heldAmountAtomic",
+      "inFlightAmountAtomic",
+      "paidAmountAtomic",
+      "totalEarnedAmountAtomic",
+    ]) {
+      const amount = readNonNegativeAtomicString(record[field]);
+      if (amount === undefined) {
+        blockers.push(
+          `referrer_balance_evidence assets[${index}].${field} must be a non-negative atomic amount`,
+        );
+      } else if (field === "totalEarnedAmountAtomic" && amount > 0n) {
+        hasPositiveEarning = true;
+      }
+    }
+  }
+  if (!hasPositiveEarning) {
+    blockers.push("referrer_balance_evidence must show positive referrer earnings");
+  }
+}
+
+function validateDashboardSummaryArtifact(
+  artifact: unknown,
+  blockers: string[],
+): void {
+  const summary = readRecord(readRecord(artifact)?.summary);
+  if (summary === undefined) {
+    blockers.push("dashboard_summary_evidence summary is missing");
+    return;
+  }
+  if (summary.schema !== "split402.merchant_dashboard_summary.v1") {
+    blockers.push("dashboard_summary_evidence summary schema is invalid");
+  }
+  if (readRecord(summary.merchant) === undefined) {
+    blockers.push("dashboard_summary_evidence summary.merchant is missing");
+  }
+  const campaigns = readRecord(summary.campaigns);
+  const routes = readRecord(summary.routes);
+  const campaignTotal = readNonNegativeInteger(campaigns?.total);
+  const routeTotal = readNonNegativeInteger(routes?.total);
+  if (campaignTotal === undefined) {
+    blockers.push("dashboard_summary_evidence campaigns.total must be a non-negative integer");
+  } else if (campaignTotal === 0) {
+    blockers.push("dashboard_summary_evidence must include at least one campaign");
+  }
+  if (routeTotal === undefined) {
+    blockers.push("dashboard_summary_evidence routes.total must be a non-negative integer");
+  } else if (routeTotal === 0) {
+    blockers.push("dashboard_summary_evidence must include at least one route");
+  }
+  const activeCampaignIds = Array.isArray(campaigns?.activeCampaignIds)
+    ? campaigns?.activeCampaignIds
+    : undefined;
+  if (activeCampaignIds === undefined || activeCampaignIds.length === 0) {
+    blockers.push("dashboard_summary_evidence must include an active campaign id");
+  }
+  const activeRouteIds = Array.isArray(routes?.activeRouteIds)
+    ? routes?.activeRouteIds
+    : undefined;
+  if (activeRouteIds === undefined || activeRouteIds.length === 0) {
+    blockers.push("dashboard_summary_evidence must include an active route id");
+  }
+}
+
+function validateWebhookDeliveryArtifact(
+  artifact: unknown,
+  blockers: string[],
+): void {
+  const record = readRecord(artifact);
+  const events = Array.isArray(record?.events) ? record.events : undefined;
+  if (events === undefined) {
+    blockers.push("webhook_delivery_evidence events must be an array");
+    return;
+  }
+  if (events.length === 0) {
+    blockers.push("webhook_delivery_evidence must include at least one event");
+    return;
+  }
+  let hasDeliveredEvent = false;
+  for (const [index, event] of events.entries()) {
+    const eventRecord = readRecord(event);
+    if (eventRecord === undefined) {
+      blockers.push(`webhook_delivery_evidence events[${index}] is invalid`);
+      continue;
+    }
+    if (eventRecord.status === "delivered") {
+      hasDeliveredEvent = true;
+    }
+    if (readNonEmptyString(eventRecord.eventType) === undefined) {
+      blockers.push(`webhook_delivery_evidence events[${index}].eventType is missing`);
+    }
+    if (readNonEmptyString(eventRecord.status) === undefined) {
+      blockers.push(`webhook_delivery_evidence events[${index}].status is missing`);
+    }
+  }
+  if (!hasDeliveredEvent) {
+    blockers.push("webhook_delivery_evidence must include a delivered event");
+  }
+}
+
+function validatePayoutObligationArtifact(
+  artifact: unknown,
+  blockers: string[],
+): void {
+  const summary = readMerchantObligationSummary(artifact);
+  if (summary === undefined) {
+    blockers.push("payout_obligation_evidence summary is missing");
+    return;
+  }
+  if (summary.schema !== "split402.merchant_obligation_summary.v1") {
+    blockers.push("payout_obligation_evidence summary schema is invalid");
+  }
+  if (!Array.isArray(summary.assets)) {
+    blockers.push("payout_obligation_evidence summary.assets must be an array");
+    return;
+  }
+  if (summary.assets.length === 0) {
+    blockers.push("payout_obligation_evidence must include at least one asset");
+    return;
+  }
+  let hasObligation = false;
+  for (const [index, asset] of summary.assets.entries()) {
+    const record = readRecord(asset);
+    if (record === undefined) {
+      blockers.push(`payout_obligation_evidence assets[${index}] is invalid`);
+      continue;
+    }
+    for (const field of [
+      "outstandingAmountAtomic",
+      "totalAccruedAmountAtomic",
+      "pendingAmountAtomic",
+      "availableAmountAtomic",
+      "heldAmountAtomic",
+      "inFlightAmountAtomic",
+      "paidAmountAtomic",
+    ]) {
+      const amount = readNonNegativeAtomicString(record[field]);
+      if (amount === undefined) {
+        blockers.push(
+          `payout_obligation_evidence assets[${index}].${field} must be a non-negative atomic amount`,
+        );
+      } else if (
+        (field === "outstandingAmountAtomic" || field === "totalAccruedAmountAtomic") &&
+        amount > 0n
+      ) {
+        hasObligation = true;
+      }
+    }
+  }
+  if (!hasObligation) {
+    blockers.push("payout_obligation_evidence must show a payout obligation");
+  }
 }
 
 function createFundingBalanceStatus(
@@ -1149,6 +1477,26 @@ function resolveArtifactPath(
     : options.resolveArtifactPath(artifactPath, options.artifactBaseDir ?? ".");
 }
 
+function readJsonArtifact(
+  field: string,
+  artifactPath: string,
+  options: Phase7StagingStatusOptions,
+  blockers: string[],
+): unknown | undefined {
+  const resolvedPath = resolveArtifactPath(artifactPath, options);
+  try {
+    const artifactBytes = options.readArtifact?.(resolvedPath);
+    if (artifactBytes === undefined) {
+      blockers.push(`${field} artifact could not be read`);
+      return undefined;
+    }
+    return JSON.parse(new TextDecoder().decode(artifactBytes));
+  } catch (error) {
+    blockers.push(`${field} artifact could not be read: ${formatError(error)}`);
+    return undefined;
+  }
+}
+
 function readAttachedArtifactPath(reference: string): string | undefined {
   const attachedPrefix = "attached:";
   if (!reference.startsWith(attachedPrefix)) {
@@ -1339,6 +1687,12 @@ function readBasisPoints(value: unknown): number | undefined {
     typeof value === "number" &&
     value >= 0 &&
     value <= 10_000
+    ? value
+    : undefined;
+}
+
+function readNonNegativeInteger(value: unknown): number | undefined {
+  return Number.isInteger(value) && typeof value === "number" && value >= 0
     ? value
     : undefined;
 }
