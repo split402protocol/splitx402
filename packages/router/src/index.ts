@@ -52,6 +52,15 @@ export interface Split402RouterExecuteResult<T = unknown> {
   attempts: Split402RouterAttempt[];
 }
 
+export interface Split402RouterSearchInput {
+  capability?: string;
+  budget?: {
+    network?: string;
+    asset?: string;
+    maxAmountAtomic?: string;
+  };
+}
+
 export interface Split402RouterAttempt {
   providerId: string;
   capability: string;
@@ -205,9 +214,35 @@ export class Split402Router {
     }
   }
 
-  searchCapabilities(capability?: string): Split402CapabilityProvider[] {
+  searchCapabilities(
+    input?: string | Split402RouterSearchInput
+  ): Split402CapabilityProvider[] {
+    const search = normalizeSearchInput(input);
     return this.providers
-      .filter((provider) => capability === undefined || provider.capability === capability)
+      .filter(
+        (provider) =>
+          search.capability === undefined ||
+          provider.capability === search.capability
+      )
+      .filter(
+        (provider) =>
+          search.budget?.network === undefined ||
+          provider.network === search.budget.network
+      )
+      .filter(
+        (provider) =>
+          search.budget?.asset === undefined ||
+          provider.asset === search.budget.asset
+      )
+      .filter(
+        (provider) =>
+          search.budget?.maxAmountAtomic === undefined ||
+          readAtomicAmount(provider.amountAtomic, "provider.amountAtomic") <=
+            readAtomicAmount(
+              search.budget.maxAmountAtomic,
+              "budget.maxAmountAtomic"
+            )
+      )
       .sort(compareProviders);
   }
 
@@ -614,6 +649,26 @@ function compareProviders(
     readMedianLatency(left) - readMedianLatency(right) ||
     left.providerId.localeCompare(right.providerId)
   );
+}
+
+function normalizeSearchInput(
+  input: string | Split402RouterSearchInput | undefined
+): Split402RouterSearchInput {
+  if (typeof input === "string") {
+    return input.length === 0 ? {} : { capability: input };
+  }
+  if (input === undefined) {
+    return {};
+  }
+  if (input.capability !== undefined && input.capability.trim().length === 0) {
+    throw new Split402RouterError("invalid_request", "capability must not be empty");
+  }
+  if (
+    input.budget?.maxAmountAtomic !== undefined
+  ) {
+    readAtomicAmount(input.budget.maxAmountAtomic, "budget.maxAmountAtomic");
+  }
+  return input;
 }
 
 function validateOfferMatchesProvider(

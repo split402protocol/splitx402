@@ -46,7 +46,8 @@ The gateway supports `initialize`, `tools/list`, and `tools/call` over stdio
 JSON-RPC. It exposes:
 
 - `split402.walletRiskScore` for the original paid HTTP request metadata;
-- `split402.searchCapabilities` for router provider discovery;
+- `split402.searchCapabilities` for router provider discovery with optional
+  network, asset, and max-amount budget filters;
 - `split402.execute` for a router-backed demo execution result;
 - `split402.getReceipt` for receipts captured during the current gateway
   session.
@@ -57,6 +58,27 @@ shape, and receipt verification without a live funded buyer wallet. It is not a
 claim of production MCP hosting or mainnet-ready payment execution.
 
 Example `tools/call` request:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "search-1",
+  "method": "tools/call",
+  "params": {
+    "name": "split402.searchCapabilities",
+    "arguments": {
+      "capability": "solana.wallet-risk",
+      "budget": {
+        "network": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+        "asset": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+        "maxAmountAtomic": "50000"
+      }
+    }
+  }
+}
+```
+
+Example execution request:
 
 ```json
 {

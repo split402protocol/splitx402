@@ -75,6 +75,44 @@ describe("Split402Router", () => {
     ).toEqual(["provider-reliable", "provider-cheaper"]);
   });
 
+  it("searches capabilities with optional budget filters", () => {
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-devnet-cheap",
+          amountAtomic: "10000",
+          network: receipt.network,
+          asset: receipt.asset
+        }),
+        provider({
+          providerId: "provider-devnet-expensive",
+          amountAtomic: "60000",
+          network: receipt.network,
+          asset: receipt.asset
+        }),
+        provider({
+          providerId: "provider-other-asset",
+          amountAtomic: "10000",
+          network: receipt.network,
+          asset: "other-asset"
+        })
+      ]
+    });
+
+    expect(
+      router
+        .searchCapabilities({
+          capability: "solana.wallet-risk",
+          budget: {
+            network: receipt.network,
+            asset: receipt.asset,
+            maxAmountAtomic: "50000"
+          }
+        })
+        .map((item) => item.providerId)
+    ).toEqual(["provider-devnet-cheap"]);
+  });
+
   it("rejects when every provider exceeds budget", async () => {
     const router = new Split402Router({
       providers: [provider({ providerId: "provider-expensive", amountAtomic: "50001" })],
