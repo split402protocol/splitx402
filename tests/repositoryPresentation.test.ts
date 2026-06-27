@@ -21,14 +21,16 @@ const TEXT_FILE_EXTENSIONS = new Set([
   ".yml",
 ]);
 
+const OLD_REPO_SLUG = ["ff", "ff"].join("");
+
 const FORBIDDEN_OLD_REPO_REFERENCES = [
-  /github\.com\/[^)\s"'`]+\/ffff\b/iu,
-  /\bsplit402protocol\/ffff\b/iu,
-  /\bsplitx402\/ffff\b/iu,
+  new RegExp(`github\\.com/\\S*/${OLD_REPO_SLUG}\\b`, "iu"),
+  new RegExp(`\\bsplit402protocol/${OLD_REPO_SLUG}\\b`, "iu"),
+  new RegExp(`\\bsplitx402/${OLD_REPO_SLUG}\\b`, "iu"),
 ];
 
 describe("repository presentation", () => {
-  it("does not reintroduce old ffff GitHub or repository references", () => {
+  it("does not reintroduce old GitHub or repository references", () => {
     const offenders = listPresentationFiles()
       .map((filePath) => ({
         filePath,
@@ -47,7 +49,7 @@ describe("repository presentation", () => {
     const readme = readFileSync("README.md", "utf8");
 
     expect(readme).toContain("split402protocol/splitx402");
-    expect(readme).not.toMatch(/\bffff\b/iu);
+    expect(readme).not.toMatch(new RegExp(`\\b${OLD_REPO_SLUG}\\b`, "iu"));
   });
 
   it("keeps the public PR workflow professional and reviewable", () => {
