@@ -57,6 +57,8 @@ with enough information for fail-closed receipt verification by default.
 - executes through `Split402AgentClient` by default;
 - accepts an injected executor for tests or controlled gateways;
 - verifies receipts fail-closed by default;
+- requires returned receipts to match the supplied `referralClaim` route, claim
+  hash, referrer wallet, and payout wallet;
 - retries/falls back on network errors, HTTP 5xx, 408, 425, 429, missing
   receipts, and invalid receipts;
 - stops on non-retryable HTTP 4xx errors.

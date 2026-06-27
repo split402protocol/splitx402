@@ -1,5 +1,6 @@
 import { Split402AgentClient } from "@split402/agent-sdk";
 import {
+  hashProtocolObject,
   Split402ReceiptV1Schema,
   verifySplit402Receipt,
   type ReferralClaimV1,
@@ -261,7 +262,11 @@ export class Split402Router {
             : { referralClaim: input.referralClaim }),
           ...(this.signer === undefined ? {} : { signer: this.signer })
         });
-        const receipt = this.verifyProviderReceipt(provider, result.receipt);
+        const receipt = this.verifyProviderReceipt(
+          provider,
+          result.receipt,
+          input.referralClaim
+        );
         attempts.push({
           providerId: provider.providerId,
           capability: provider.capability,
@@ -304,7 +309,8 @@ export class Split402Router {
 
   private verifyProviderReceipt(
     provider: Split402CapabilityProvider,
-    value: Split402ReceiptV1 | undefined
+    value: Split402ReceiptV1 | undefined,
+    referralClaim: ReferralClaimV1 | undefined
   ): Split402ReceiptV1 {
     if (value === undefined) {
       throw new Split402RouterProviderError("missing Split402 receipt", {
@@ -321,7 +327,10 @@ export class Split402Router {
       );
     }
     const receipt = parsed.data;
-    const errors = validateReceiptMatchesProvider(receipt, provider);
+    const errors = [
+      ...validateReceiptMatchesProvider(receipt, provider),
+      ...validateReceiptMatchesReferralClaim(receipt, referralClaim)
+    ];
     if (this.verifyReceipts) {
       if (provider.merchantPublicKey === undefined) {
         errors.push("provider merchantPublicKey is required for receipt verification");
@@ -638,6 +647,30 @@ function validateReceiptMatchesProvider(
     },
     provider
   ).map((error) => error.replace(/^offer/u, "receipt"));
+}
+
+function validateReceiptMatchesReferralClaim(
+  receipt: Split402ReceiptV1,
+  referralClaim: ReferralClaimV1 | undefined
+): string[] {
+  if (referralClaim === undefined) {
+    return [];
+  }
+  const errors: string[] = [];
+  const expectedHash = hashProtocolObject(referralClaim);
+  if (receipt.routeId !== referralClaim.routeId) {
+    errors.push("receipt routeId does not match referralClaim routeId");
+  }
+  if (receipt.referralClaimHash !== expectedHash) {
+    errors.push("receipt referralClaimHash does not match referralClaim");
+  }
+  if (receipt.referrerWallet !== referralClaim.referrerWallet) {
+    errors.push("receipt referrerWallet does not match referralClaim referrerWallet");
+  }
+  if (receipt.payoutWallet !== referralClaim.payoutWallet) {
+    errors.push("receipt payoutWallet does not match referralClaim payoutWallet");
+  }
+  return errors;
 }
 
 function readReliabilityBps(provider: Split402CapabilityProvider): number {
