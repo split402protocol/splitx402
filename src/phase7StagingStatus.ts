@@ -1498,6 +1498,7 @@ const PHASE7_REQUIRED_COMMAND_EVIDENCE = [
   "corepack pnpm phase7:staging:collect-mcp-gateway",
   "corepack pnpm demo:mcp-bundle",
   "corepack pnpm demo:paid-suite",
+  "corepack pnpm phase7:staging:derive-receipt-verification",
   "corepack pnpm phase7:staging:manifest",
   "corepack pnpm phase7:staging:assemble",
   "corepack pnpm phase7:staging:status",
