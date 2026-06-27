@@ -32,6 +32,7 @@ console.log(
         `corepack pnpm phase7:hosted:preflight > ${workspace.directory}/hosted-preflight.json`,
         "corepack pnpm phase7:staging:collect-reads",
         "corepack pnpm phase7:staging:collect-mcp-gateway",
+        "corepack pnpm demo:mcp-gateway:smoke",
         `corepack pnpm demo:mcp-bundle > ${workspace.directory}/mcp-bundle.json`,
         `corepack pnpm demo:paid-suite > ${workspace.directory}/paid-suite.log`,
         "corepack pnpm phase7:staging:derive-receipt-verification",

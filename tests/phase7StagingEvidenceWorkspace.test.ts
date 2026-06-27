@@ -43,8 +43,15 @@ describe("Phase 7 staging evidence workspace", () => {
     expect(workspace.readmeText).toContain("mcp-gateway.jsonl");
     expect(workspace.readmeText).toContain("artifact-manifest.json");
     expect(workspace.readmeText).toContain(
+      "router-backed discovery, execution, and receipt lookup",
+    );
+    expect(workspace.readmeText).toContain(
       "corepack pnpm phase7:staging:collect-mcp-gateway",
     );
+    expect(workspace.readmeText).toContain(
+      "corepack pnpm demo:mcp-gateway:smoke",
+    );
+    expect(workspace.readmeText).toContain("receiptVerificationStatus");
     expect(workspace.readmeText).toContain(
       "corepack pnpm phase7:staging:derive-receipt-verification",
     );
