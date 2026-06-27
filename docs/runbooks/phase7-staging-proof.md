@@ -20,6 +20,7 @@ corepack pnpm phase7:staging:collect-mcp-gateway
 corepack pnpm dashboard
 corepack pnpm demo:mcp-bundle
 corepack pnpm demo:paid-suite
+corepack pnpm phase7:staging:derive-receipt-verification
 # Capture payout obligations with SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc
 # and attach covered/deficit funding evidence to funding_balance_evidence.
 corepack pnpm phase7:staging:manifest phase7-staging-proof.txt > phase7-staging-evidence/artifact-manifest.json
@@ -47,6 +48,10 @@ configuration.
 health, dashboard health, dashboard session state, locked dashboard access
 without a viewer token, and successful dashboard access with the viewer token
 before the payment proof run.
+`phase7:staging:derive-receipt-verification` derives
+`receipt-verification.json` from the captured `paid-suite.log`, preserving the
+verified commission-bearing receipt and the invalid-claim zero-commission path
+as machine-checkable JSON.
 `phase7:staging:manifest` records SHA-256 hashes for local attached artifacts
 and remote references for URL-based artifacts. Attach the generated
 `artifact-manifest.json` locally; the status checker will not close the proof
