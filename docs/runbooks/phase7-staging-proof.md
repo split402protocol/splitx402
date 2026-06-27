@@ -16,13 +16,9 @@ corepack pnpm phase7:staging:init
 corepack pnpm phase7:staging-proof > phase7-staging-proof.txt
 corepack pnpm phase7:hosted:preflight
 corepack pnpm phase7:staging:collect-reads
+corepack pnpm phase7:staging:collect-mcp-gateway
 corepack pnpm dashboard
 corepack pnpm demo:mcp-bundle
-# Capture stdio output from demo:mcp-gateway into mcp-gateway.jsonl.
-printf '{"jsonrpc":"2.0","id":"tools","method":"tools/list"}\n' \
-  | SPLIT402_MCP_CONTROL_PLANE_URL=<control-plane-url> \
-    SPLIT402_MCP_CAPABILITY=solana.wallet-risk \
-    corepack pnpm demo:mcp-gateway > phase7-staging-evidence/mcp-gateway.jsonl
 corepack pnpm demo:paid-suite
 # Capture payout obligations with SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc
 # and attach covered/deficit funding evidence to funding_balance_evidence.
@@ -38,6 +34,10 @@ artifact files; those must be captured from the hosted staging run.
 referrer routes, referrer balances, dashboard summary, webhook delivery, payout
 obligations, and funding-balance coverage using the staging merchant and
 referrer environment variables.
+`phase7:staging:collect-mcp-gateway` captures `mcp-gateway.jsonl` by sending
+`initialize`, `tools/list`, and `split402.searchCapabilities` requests through
+the MCP gateway. Set `SPLIT402_MCP_CONTROL_PLANE_URL` and, when needed,
+`SPLIT402_MCP_CAPABILITY` so the transcript proves hosted route discovery.
 `phase7:hosted:preflight` captures `hosted-preflight.json` with control-plane
 health, dashboard health, dashboard session state, locked dashboard access
 without a viewer token, and successful dashboard access with the viewer token
@@ -45,11 +45,8 @@ before the payment proof run.
 `phase7:staging:manifest` records SHA-256 hashes for local attached artifacts
 and remote references for URL-based artifacts. Generate it after the evidence
 files exist and before the final assemble/status check.
-Run `corepack pnpm demo:mcp-gateway` from an MCP client stdio session and attach
-the transcript as `mcp_gateway_evidence`. Set
-`SPLIT402_MCP_CONTROL_PLANE_URL` and, when needed, `SPLIT402_MCP_CAPABILITY` so
-the transcript proves hosted route discovery in addition to the stable
-`mcp-bundle.json` evidence.
+The MCP gateway transcript is attached as `mcp_gateway_evidence`; it proves
+hosted route discovery in addition to the stable `mcp-bundle.json` evidence.
 
 The status report includes `gateStatuses`; each gate is marked `ready`,
 `missing`, `placeholder`, `invalid`, or `not_checked` with blockers attached to
