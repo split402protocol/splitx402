@@ -49,6 +49,43 @@ describe("repository presentation", () => {
     expect(readme).toContain("split402protocol/splitx402");
     expect(readme).not.toMatch(/\bffff\b/iu);
   });
+
+  it("keeps the public PR workflow professional and reviewable", () => {
+    const pullRequestTemplate = readFileSync(
+      ".github/pull_request_template.md",
+      "utf8",
+    );
+
+    expect(pullRequestTemplate).toContain("## Summary");
+    expect(pullRequestTemplate).toContain("## Validation");
+    expect(pullRequestTemplate).toContain("Commands run:");
+    expect(pullRequestTemplate).toContain("## Protocol / Security Notes");
+    expect(pullRequestTemplate).toContain("## Docs Updated");
+  });
+
+  it("keeps required GitHub validation and security automation configured", () => {
+    const ciWorkflow = readFileSync(".github/workflows/ci.yml", "utf8");
+    const codeqlWorkflow = readFileSync(
+      ".github/workflows/codeql.yml",
+      "utf8",
+    );
+    const dependabotConfig = readFileSync(".github/dependabot.yml", "utf8");
+
+    expect(ciWorkflow).toContain("corepack pnpm lint");
+    expect(ciWorkflow).toContain("corepack pnpm typecheck");
+    expect(ciWorkflow).toContain("corepack pnpm test");
+    expect(ciWorkflow).toContain("corepack pnpm build");
+    expect(ciWorkflow).toContain("corepack pnpm vectors:check");
+    expect(ciWorkflow).toContain("corepack pnpm audit --audit-level high");
+    expect(ciWorkflow).toContain("corepack pnpm test:postgres");
+    expect(ciWorkflow).toContain("postgres:16");
+
+    expect(codeqlWorkflow).toContain("github/codeql-action/init@v3");
+    expect(codeqlWorkflow).toContain("javascript-typescript");
+
+    expect(dependabotConfig).toContain('package-ecosystem: "github-actions"');
+    expect(dependabotConfig).toContain('package-ecosystem: "npm"');
+  });
 });
 
 function listPresentationFiles(): string[] {
