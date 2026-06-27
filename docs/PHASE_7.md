@@ -121,8 +121,11 @@ from the same staging environment.
 The final status check verifies that local `attached:` artifacts still match the
 recorded manifest sizes and SHA-256 hashes, and that the hosted preflight checks
 passed against the same control-plane and dashboard URLs listed in the proof.
-It also validates the funding-balance artifact, requiring every asset to show a
-resolved `covered` or `deficit` state instead of unresolved funding.
+It also validates the control-plane read artifacts so route discovery, referrer
+earnings, dashboard summary, webhook delivery, and payout obligations must be
+present and non-empty. The funding-balance artifact is checked separately,
+requiring every asset to show a resolved `covered` or `deficit` state instead of
+unresolved funding.
 
 ## Remaining Phase 7 Work
 
