@@ -54,6 +54,11 @@ export const PHASE7_STAGING_COMMANDS = [
     evidenceField: "mcp_gateway_evidence",
   },
   {
+    gate: "mcp_gateway_smoke",
+    command: "corepack pnpm demo:mcp-gateway:smoke",
+    evidenceField: "commands_run",
+  },
+  {
     gate: "agent_paid_suite",
     command: "corepack pnpm demo:paid-suite",
     evidenceField: "paid_request_evidence",
@@ -1496,6 +1501,7 @@ const PHASE7_REQUIRED_COMMAND_EVIDENCE = [
   "corepack pnpm phase7:hosted:preflight",
   "corepack pnpm phase7:staging:collect-reads",
   "corepack pnpm phase7:staging:collect-mcp-gateway",
+  "corepack pnpm demo:mcp-gateway:smoke",
   "corepack pnpm demo:mcp-bundle",
   "corepack pnpm demo:paid-suite",
   "corepack pnpm phase7:staging:derive-receipt-verification",

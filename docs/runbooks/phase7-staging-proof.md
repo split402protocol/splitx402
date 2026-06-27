@@ -17,6 +17,7 @@ corepack pnpm phase7:staging-proof > phase7-staging-proof.txt
 corepack pnpm phase7:hosted:preflight
 corepack pnpm phase7:staging:collect-reads
 corepack pnpm phase7:staging:collect-mcp-gateway
+corepack pnpm demo:mcp-gateway:smoke
 corepack pnpm dashboard
 corepack pnpm demo:mcp-bundle
 corepack pnpm demo:paid-suite

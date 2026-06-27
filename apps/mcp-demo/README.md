@@ -137,6 +137,17 @@ corepack pnpm demo:paid-suite
 Run `corepack pnpm demo:mcp-gateway` in an MCP client stdio session when the
 proof needs direct MCP tool discovery.
 
+Run the deterministic local gateway smoke proof before attaching hosted
+evidence:
+
+```bash
+corepack pnpm demo:mcp-gateway:smoke
+```
+
+The smoke command initializes the gateway, lists the router tools, executes
+`split402.execute` in demo-router mode, and retrieves the captured receipt with
+`split402.getReceipt`.
+
 ## Status
 
 Phase 7 public-alpha bundle and stdio gateway for agent-facing tooling. It is
