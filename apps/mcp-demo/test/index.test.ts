@@ -9,6 +9,7 @@ import {
   handleMcpGatewayLine,
   handleMcpGatewayLineAsync
 } from "../src/gateway.js";
+import { runMcpGatewaySmoke } from "../src/gateway-smoke.js";
 import { createMcpDemoBundle } from "../src/index.js";
 
 describe("createMcpDemoBundle", () => {
@@ -489,6 +490,24 @@ describe("MCP demo gateway", () => {
       }
     });
     expect(response?.error?.message).toContain("referralClaim is invalid");
+  });
+
+  it("runs the local MCP gateway smoke proof", async () => {
+    await expect(runMcpGatewaySmoke()).resolves.toMatchObject({
+      status: "ok",
+      serverName: "split402-demo",
+      tools: [
+        "split402.walletRiskScore",
+        "split402.searchCapabilities",
+        "split402.execute",
+        "split402.getReceipt"
+      ],
+      providerId: "split402-demo-merchant",
+      executionMode: "router-demo-mock",
+      amountPaidAtomic: "10000",
+      receiptVerificationStatus: "verified",
+      referrerCreditAtomic: "1800"
+    });
   });
 
   it("builds a wallet risk tool result from the bundle", () => {
