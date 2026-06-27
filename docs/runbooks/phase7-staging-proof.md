@@ -116,5 +116,10 @@ The validator requires:
   Each asset must report `covered` with `fundingDeficitAtomic: "0"` or
   `deficit` with a positive `fundingDeficitAtomic`; `unknown` funding status
   does not close the gate.
+- `mcp_gateway_evidence` must be a local attached `mcp-gateway.jsonl`
+  transcript containing initialize, tools/list, and
+  `split402.searchCapabilities` request/response pairs. When the transcript
+  includes `split402.execute`, it must also include a matching
+  `split402.getReceipt` response for the returned receipt id.
 - local `attached:` artifacts must match the generated artifact manifest when
   the manifest is also attached locally.

@@ -87,6 +87,7 @@ export interface Phase7StagingStatusReport {
   manifestStatus: Phase7StagingManifestStatus;
   hostedPreflightStatus: Phase7HostedPreflightStatus;
   fundingBalanceStatus: Phase7FundingBalanceStatus;
+  mcpGatewayStatus: Phase7McpGatewayStatus;
   validation?: Phase7StagingProofValidation;
   nextActions: string[];
 }
@@ -128,6 +129,11 @@ export interface Phase7FundingBalanceStatus {
   blockers: string[];
 }
 
+export interface Phase7McpGatewayStatus {
+  status: "not_checked" | "not_applicable" | "valid" | "invalid";
+  blockers: string[];
+}
+
 export function createPhase7StagingStatusReport(
   proofText?: string,
   options: Phase7StagingStatusOptions = {},
@@ -138,16 +144,19 @@ export function createPhase7StagingStatusReport(
   const manifestStatus = createManifestStatus(proofText, options);
   const hostedPreflightStatus = createHostedPreflightStatus(proofText, options);
   const fundingBalanceStatus = createFundingBalanceStatus(proofText, options);
+  const mcpGatewayStatus = createMcpGatewayStatus(proofText, options);
   const artifactBlockers = artifactStatuses.flatMap((status) => status.blockers);
   const manifestBlockers = manifestStatus.blockers;
   const hostedPreflightBlockers = hostedPreflightStatus.blockers;
   const fundingBalanceBlockers = fundingBalanceStatus.blockers;
+  const mcpGatewayBlockers = mcpGatewayStatus.blockers;
   const readyForPublicAlphaDemo =
     (validation?.approved ?? false) &&
     artifactBlockers.length === 0 &&
     manifestBlockers.length === 0 &&
     hostedPreflightBlockers.length === 0 &&
-    fundingBalanceBlockers.length === 0;
+    fundingBalanceBlockers.length === 0 &&
+    mcpGatewayBlockers.length === 0;
 
   return {
     schema: "split402.phase7_staging_status.v1",
@@ -160,17 +169,20 @@ export function createPhase7StagingStatusReport(
       manifestBlockers,
       hostedPreflightBlockers,
       fundingBalanceBlockers,
+      mcpGatewayBlockers,
     ),
     artifactStatuses,
     manifestStatus,
     hostedPreflightStatus,
     fundingBalanceStatus,
+    mcpGatewayStatus,
     validation,
     nextActions: createNextActions(validation, [
       ...artifactBlockers,
       ...manifestBlockers,
       ...hostedPreflightBlockers,
       ...fundingBalanceBlockers,
+      ...mcpGatewayBlockers,
     ]),
   };
 }
@@ -181,6 +193,7 @@ function createGateStatuses(
   manifestBlockers: readonly string[],
   hostedPreflightBlockers: readonly string[],
   fundingBalanceBlockers: readonly string[],
+  mcpGatewayBlockers: readonly string[],
 ): Phase7StagingGateStatus[] {
   return PHASE7_STAGING_COMMANDS.map((command) => {
     if (validation === undefined) {
@@ -204,6 +217,7 @@ function createGateStatuses(
       manifestBlockers,
       hostedPreflightBlockers,
       fundingBalanceBlockers,
+      mcpGatewayBlockers,
     );
     if (validation.missingFields.includes(command.evidenceField)) {
       return {
@@ -252,6 +266,7 @@ function createGateArtifactBlockers(
   manifestBlockers: readonly string[],
   hostedPreflightBlockers: readonly string[],
   fundingBalanceBlockers: readonly string[],
+  mcpGatewayBlockers: readonly string[],
 ): string[] {
   if (evidenceField === "artifact_manifest_evidence") {
     return [...artifactBlockers, ...manifestBlockers];
@@ -261,6 +276,9 @@ function createGateArtifactBlockers(
   }
   if (evidenceField === "funding_balance_evidence") {
     return [...artifactBlockers, ...fundingBalanceBlockers];
+  }
+  if (evidenceField === "mcp_gateway_evidence") {
+    return [...artifactBlockers, ...mcpGatewayBlockers];
   }
   return [...artifactBlockers];
 }
@@ -610,6 +628,171 @@ function createFundingBalanceStatus(
     : { status: "invalid", blockers };
 }
 
+function createMcpGatewayStatus(
+  proofText: string | undefined,
+  options: Phase7StagingStatusOptions,
+): Phase7McpGatewayStatus {
+  if (proofText === undefined) {
+    return { status: "not_checked", blockers: [] };
+  }
+
+  const fields = parsePhase7ProofRecord(proofText);
+  const reference = fields.get("mcp_gateway_evidence");
+  if (reference === undefined || reference.length === 0) {
+    return { status: "not_applicable", blockers: [] };
+  }
+  if (isHttpUrl(reference)) {
+    return {
+      status: "invalid",
+      blockers: [
+        "mcp_gateway_evidence must be an attached local artifact for status validation",
+      ],
+    };
+  }
+
+  const artifactPath = readAttachedArtifactPath(reference);
+  if (artifactPath === undefined) {
+    return { status: "not_applicable", blockers: [] };
+  }
+  if (options.artifactBaseDir === undefined || options.readArtifact === undefined) {
+    return { status: "not_checked", blockers: [] };
+  }
+
+  const resolvedPath = resolveArtifactPath(artifactPath, options);
+  const blockers: string[] = [];
+  let lines: McpGatewayTranscriptLine[] = [];
+  try {
+    const artifactBytes = options.readArtifact(resolvedPath);
+    const text = new TextDecoder().decode(artifactBytes);
+    lines = parseMcpGatewayTranscript(text, blockers);
+  } catch (error) {
+    blockers.push(
+      `mcp_gateway_evidence artifact could not be read: ${formatError(error)}`,
+    );
+  }
+
+  if (blockers.length > 0) {
+    return { status: "invalid", blockers };
+  }
+  validateMcpGatewayTranscript(lines, blockers);
+  return blockers.length === 0
+    ? { status: "valid", blockers: [] }
+    : { status: "invalid", blockers };
+}
+
+function parseMcpGatewayTranscript(
+  text: string,
+  blockers: string[],
+): McpGatewayTranscriptLine[] {
+  const rows = text
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  if (rows.length === 0) {
+    blockers.push("mcp_gateway_evidence transcript is empty");
+    return [];
+  }
+  const lines: McpGatewayTranscriptLine[] = [];
+  for (const [index, row] of rows.entries()) {
+    try {
+      const parsed = JSON.parse(row);
+      if (isMcpGatewayTranscriptLine(parsed)) {
+        lines.push(parsed);
+      } else {
+        blockers.push(`mcp_gateway_evidence line ${index + 1} is invalid`);
+      }
+    } catch (error) {
+      blockers.push(
+        `mcp_gateway_evidence line ${index + 1} is not valid JSON: ${formatError(error)}`,
+      );
+    }
+  }
+  return lines;
+}
+
+function validateMcpGatewayTranscript(
+  lines: readonly McpGatewayTranscriptLine[],
+  blockers: string[],
+): void {
+  const initializeRequest = findRequest(lines, (message) => message.method === "initialize");
+  if (initializeRequest === undefined) {
+    blockers.push("mcp_gateway_evidence missing initialize request");
+  } else if (findResponse(lines, initializeRequest.message.id) === undefined) {
+    blockers.push("mcp_gateway_evidence missing initialize response");
+  }
+
+  const toolsRequest = findRequest(lines, (message) => message.method === "tools/list");
+  if (toolsRequest === undefined) {
+    blockers.push("mcp_gateway_evidence missing tools/list request");
+  } else if (findResponse(lines, toolsRequest.message.id) === undefined) {
+    blockers.push("mcp_gateway_evidence missing tools/list response");
+  }
+
+  const searchRequest = findRequest(
+    lines,
+    (message) => readToolCallName(message) === "split402.searchCapabilities",
+  );
+  if (searchRequest === undefined) {
+    blockers.push("mcp_gateway_evidence missing split402.searchCapabilities request");
+  } else {
+    const searchResponse = findResponse(lines, searchRequest.message.id);
+    const capabilities = readStructuredArray(searchResponse, "capabilities");
+    if (capabilities === undefined || capabilities.length === 0) {
+      blockers.push("mcp_gateway_evidence search response has no capabilities");
+    }
+  }
+
+  const executeRequest = findRequest(
+    lines,
+    (message) => readToolCallName(message) === "split402.execute",
+  );
+  if (executeRequest === undefined) {
+    return;
+  }
+
+  const executeResponse = findResponse(lines, executeRequest.message.id);
+  const executeContent = readStructuredContent(executeResponse);
+  if (executeContent === undefined) {
+    blockers.push("mcp_gateway_evidence execute response is missing structuredContent");
+    return;
+  }
+  const receiptId = readNonEmptyString(executeContent.receiptId);
+  for (const [field, value] of [
+    ["providerId", executeContent.providerId],
+    ["amountPaidAtomic", executeContent.amountPaidAtomic],
+    ["receiptId", executeContent.receiptId],
+    ["referrerCreditAtomic", executeContent.referrerCreditAtomic],
+  ] as const) {
+    if (readNonEmptyString(value) === undefined) {
+      blockers.push(`mcp_gateway_evidence execute response missing ${field}`);
+    }
+  }
+  if (executeContent.receiptVerificationStatus !== "verified") {
+    blockers.push(
+      "mcp_gateway_evidence execute response receiptVerificationStatus is not verified",
+    );
+  }
+  if (receiptId === undefined) {
+    return;
+  }
+
+  const receiptRequest = findRequest(
+    lines,
+    (message) =>
+      readToolCallName(message) === "split402.getReceipt" &&
+      readToolCallArguments(message)?.receiptId === receiptId,
+  );
+  if (receiptRequest === undefined) {
+    blockers.push("mcp_gateway_evidence missing split402.getReceipt request");
+    return;
+  }
+  const receiptResponse = findResponse(lines, receiptRequest.message.id);
+  const receiptContent = readStructuredContent(receiptResponse);
+  if (receiptContent?.receiptId !== receiptId || readRecord(receiptContent?.receipt) === undefined) {
+    blockers.push("mcp_gateway_evidence getReceipt response does not match execute receiptId");
+  }
+}
+
 function createArtifactStatuses(
   proofText: string | undefined,
   options: Phase7StagingStatusOptions,
@@ -795,6 +978,99 @@ interface Phase7HostedPreflightCheck {
 interface Phase7MerchantObligationSummaryArtifact {
   schema?: unknown;
   assets?: unknown;
+}
+
+interface McpGatewayTranscriptLine {
+  direction: "request" | "response";
+  message: {
+    id?: unknown;
+    method?: unknown;
+    params?: unknown;
+    result?: unknown;
+    error?: unknown;
+  };
+}
+
+function isMcpGatewayTranscriptLine(value: unknown): value is McpGatewayTranscriptLine {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return (
+    (record.direction === "request" || record.direction === "response") &&
+    typeof record.message === "object" &&
+    record.message !== null
+  );
+}
+
+function findRequest(
+  lines: readonly McpGatewayTranscriptLine[],
+  predicate: (message: McpGatewayTranscriptLine["message"]) => boolean,
+): McpGatewayTranscriptLine | undefined {
+  return lines.find(
+    (line) =>
+      line.direction === "request" &&
+      predicate(line.message),
+  );
+}
+
+function findResponse(
+  lines: readonly McpGatewayTranscriptLine[],
+  id: unknown,
+): McpGatewayTranscriptLine | undefined {
+  return lines.find(
+    (line) =>
+      line.direction === "response" &&
+      line.message.id === id &&
+      line.message.error === undefined,
+  );
+}
+
+function readToolCallName(
+  message: McpGatewayTranscriptLine["message"],
+): string | undefined {
+  if (message.method !== "tools/call") {
+    return undefined;
+  }
+  const params = readRecord(message.params);
+  const name = params?.name;
+  return typeof name === "string" ? name : undefined;
+}
+
+function readToolCallArguments(
+  message: McpGatewayTranscriptLine["message"],
+): Record<string, unknown> | undefined {
+  if (message.method !== "tools/call") {
+    return undefined;
+  }
+  const params = readRecord(message.params);
+  return readRecord(params?.arguments);
+}
+
+function readStructuredContent(
+  response: McpGatewayTranscriptLine | undefined,
+): Record<string, unknown> | undefined {
+  const result = readRecord(response?.message.result);
+  return readRecord(result?.structuredContent);
+}
+
+function readStructuredArray(
+  response: McpGatewayTranscriptLine | undefined,
+  key: string,
+): unknown[] | undefined {
+  const structuredContent = readStructuredContent(response);
+  const value = structuredContent?.[key];
+  return Array.isArray(value) ? value : undefined;
+}
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function readNonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 function readMerchantObligationSummary(

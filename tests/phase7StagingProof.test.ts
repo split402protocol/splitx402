@@ -375,6 +375,76 @@ funding_balance_evidence: funding.json
       status: "valid",
       blockers: [],
     });
+    expect(report.mcpGatewayStatus).toEqual({
+      status: "valid",
+      blockers: [],
+    });
+  });
+
+  it("blocks staged proof status when MCP gateway evidence is not a useful transcript", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        [
+          JSON.stringify({
+            direction: "request",
+            message: { jsonrpc: "2.0", id: "tools", method: "tools/list" },
+          }),
+          JSON.stringify({
+            direction: "response",
+            message: { jsonrpc: "2.0", id: "tools", result: { tools: [] } },
+          }),
+          "",
+        ].join("\n"),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence missing split402.searchCapabilities request",
+    );
+    expect(report.gateStatuses).toContainEqual({
+      gate: "mcp_gateway",
+      evidenceField: "mcp_gateway_evidence",
+      status: "invalid",
+      blockers: expect.arrayContaining([
+        "mcp_gateway_evidence missing split402.searchCapabilities request",
+      ]),
+    });
+  });
+
+  it("blocks staged proof status when MCP execution evidence has no receipt lookup", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          includeReceiptLookup: false,
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence missing split402.getReceipt request",
+    );
   });
 
   it("blocks staged proof status when funding balance evidence is unresolved", () => {
@@ -534,7 +604,7 @@ function createManifestArtifacts(proofText: string): Map<string, Uint8Array> {
       ),
     ],
     ["evidence/paid-suite.log", encode("paid proof\n")],
-    ["evidence/mcp-gateway.jsonl", encode("{\"method\":\"tools/list\"}\n")],
+    ["evidence/mcp-gateway.jsonl", encode(createValidMcpGatewayTranscript())],
     [
       "evidence/funding-balance.json",
       encode(
@@ -626,6 +696,128 @@ function createPassingHostedPreflightChecks(): unknown[] {
       ok: true,
     },
   ];
+}
+
+function createValidMcpGatewayTranscript(
+  options: { includeReceiptLookup?: boolean } = {},
+): string {
+  const includeReceiptLookup = options.includeReceiptLookup ?? true;
+  const receiptId = "rcp_00000000000000000000000000000005";
+  const lines = [
+    {
+      direction: "request",
+      message: { jsonrpc: "2.0", id: "initialize", method: "initialize" },
+    },
+    {
+      direction: "response",
+      message: {
+        jsonrpc: "2.0",
+        id: "initialize",
+        result: { protocolVersion: "2024-11-05" },
+      },
+    },
+    {
+      direction: "request",
+      message: { jsonrpc: "2.0", id: "tools", method: "tools/list" },
+    },
+    {
+      direction: "response",
+      message: {
+        jsonrpc: "2.0",
+        id: "tools",
+        result: { tools: [{ name: "split402.execute" }] },
+      },
+    },
+    {
+      direction: "request",
+      message: {
+        jsonrpc: "2.0",
+        id: "search",
+        method: "tools/call",
+        params: {
+          name: "split402.searchCapabilities",
+          arguments: { capability: "solana.wallet-risk" },
+        },
+      },
+    },
+    {
+      direction: "response",
+      message: {
+        jsonrpc: "2.0",
+        id: "search",
+        result: {
+          structuredContent: {
+            capabilities: [{ providerId: "split402-demo-merchant" }],
+          },
+        },
+      },
+    },
+    {
+      direction: "request",
+      message: {
+        jsonrpc: "2.0",
+        id: "execute",
+        method: "tools/call",
+        params: {
+          name: "split402.execute",
+          arguments: {
+            capability: "solana.wallet-risk",
+            input: { wallet: "wallet-demo" },
+            budget: { maxAmountAtomic: "50000" },
+          },
+        },
+      },
+    },
+    {
+      direction: "response",
+      message: {
+        jsonrpc: "2.0",
+        id: "execute",
+        result: {
+          structuredContent: {
+            providerId: "split402-demo-merchant",
+            amountPaidAtomic: "10000",
+            receiptId,
+            receiptVerificationStatus: "verified",
+            referrerCreditAtomic: "1800",
+          },
+        },
+      },
+    },
+    ...(includeReceiptLookup
+      ? [
+          {
+            direction: "request",
+            message: {
+              jsonrpc: "2.0",
+              id: "receipt",
+              method: "tools/call",
+              params: {
+                name: "split402.getReceipt",
+                arguments: { receiptId },
+              },
+            },
+          },
+          {
+            direction: "response",
+            message: {
+              jsonrpc: "2.0",
+              id: "receipt",
+              result: {
+                structuredContent: {
+                  receiptId,
+                  receipt: {
+                    receiptId,
+                    referrerCreditAtomic: "1800",
+                  },
+                },
+              },
+            },
+          },
+        ]
+      : []),
+  ];
+  return `${lines.map((line) => JSON.stringify(line)).join("\n")}\n`;
 }
 
 function encode(value: string): Uint8Array {
