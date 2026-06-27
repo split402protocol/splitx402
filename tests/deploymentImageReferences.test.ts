@@ -27,5 +27,9 @@ describe("production-facing deployment image references", () => {
     expect(runbook).not.toMatch(/\brelease tag\b/iu);
     expect(runbook).not.toContain(":latest");
     expect(signerReadme).toContain("placeholder image digest");
+    expect(signerReadme).toContain("local/dev only");
+    expect(signerReadme).toContain(
+      "ghcr.io/split402protocol/splitx402/payout-signer@sha256:<digest>",
+    );
   });
 });
