@@ -81,6 +81,11 @@ describe("Phase 7 MCP gateway evidence collector", () => {
       blockers: [],
       executionCaptured: true,
       receiptLookupCaptured: true,
+      providerId: "split402-demo-merchant",
+      amountPaidAtomic: "10000",
+      receiptId: "rcp_00000000000000000000000000000005",
+      receiptVerificationStatus: "verified",
+      referrerCreditAtomic: "1800",
       requestCount: 5,
       responseCount: 5,
     });

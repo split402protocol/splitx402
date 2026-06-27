@@ -40,7 +40,9 @@ referrer environment variables.
 `initialize`, `tools/list`, `split402.searchCapabilities`, `split402.execute`,
 and `split402.getReceipt` requests through the MCP gateway. The transcript must
 include provider used, amount paid, receipt id, receipt verification status, and
-referrer credit. Default demo mode captures the full flow automatically. When
+referrer credit, and the collector's JSON report echoes those fields as
+`providerId`, `amountPaidAtomic`, `receiptId`, `receiptVerificationStatus`, and
+`referrerCreditAtomic`. Default demo mode captures the full flow automatically. When
 `SPLIT402_MCP_CONTROL_PLANE_URL` is set for hosted route discovery, also set
 `SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1` plus a funded buyer key in
 `SPLIT402_MCP_SVM_PRIVATE_KEY` or `SVM_PRIVATE_KEY` for the router-backed x402
