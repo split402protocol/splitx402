@@ -214,7 +214,7 @@ funding_balance_evidence: funding.json
         demo_merchant_url: "https://merchant.staging.example",
         webhook_receiver_url: "https://webhook.staging.example",
         hosted_preflight_evidence: "attached: hosted-preflight.json",
-        agent_discovery_evidence: "https://artifacts.example/discovery.json",
+        agent_discovery_evidence: "attached: agent-discovery.json",
         paid_request_evidence: "attached: paid-suite.log",
         receipt_verification_evidence: "attached: receipt-verification.json",
         referrer_balance_evidence: "attached: referrer-balances.json",
@@ -239,8 +239,9 @@ funding_balance_evidence: funding.json
     expect(report.readyForPublicAlphaDemo).toBe(false);
     expect(report.artifactStatuses).toContainEqual({
       evidenceField: "agent_discovery_evidence",
-      reference: "https://artifacts.example/discovery.json",
-      status: "remote",
+      reference: "attached: agent-discovery.json",
+      artifactPath: "evidence/agent-discovery.json",
+      status: "present",
       blockers: [],
     });
     expect(report.artifactStatuses).toContainEqual({
@@ -371,6 +372,10 @@ funding_balance_evidence: funding.json
       status: "valid",
       blockers: [],
     });
+    expect(report.controlPlaneReadStatus).toEqual({
+      status: "valid",
+      blockers: [],
+    });
     expect(report.fundingBalanceStatus).toEqual({
       status: "valid",
       blockers: [],
@@ -383,6 +388,45 @@ funding_balance_evidence: funding.json
       status: "valid",
       blockers: [],
     });
+  });
+
+  it("blocks staged proof status when control-plane read evidence is empty", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/referrer-balances.json",
+      encode(
+        JSON.stringify({
+          summary: {
+            referrerWallet: "referrer-wallet",
+            generatedAt: "2026-06-26T00:00:00.000Z",
+            assets: [
+              {
+                asset: "usdc-devnet",
+                pendingAmountAtomic: "0",
+                availableAmountAtomic: "0",
+                heldAmountAtomic: "0",
+                inFlightAmountAtomic: "0",
+                paidAmountAtomic: "0",
+                totalEarnedAmountAtomic: "0",
+              },
+            ],
+          },
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.controlPlaneReadStatus.blockers).toContain(
+      "referrer_balance_evidence must show positive referrer earnings",
+    );
   });
 
   it("blocks staged proof status when MCP bundle economics are not useful", () => {
@@ -641,13 +685,13 @@ function createManifestProof(): string {
     demo_merchant_url: "https://merchant.staging.example",
     webhook_receiver_url: "https://webhook.staging.example",
     hosted_preflight_evidence: "attached: hosted-preflight.json",
-    agent_discovery_evidence: "https://artifacts.example/discovery.json",
+    agent_discovery_evidence: "attached: agent-discovery.json",
     paid_request_evidence: "attached: paid-suite.log",
-    receipt_verification_evidence: "https://artifacts.example/receipt.json",
-    referrer_balance_evidence: "https://artifacts.example/balances.json",
-    dashboard_summary_evidence: "https://artifacts.example/dashboard.json",
-    webhook_delivery_evidence: "https://artifacts.example/webhooks.json",
-    payout_obligation_evidence: "https://artifacts.example/obligations.json",
+    receipt_verification_evidence: "attached: receipt-verification.json",
+    referrer_balance_evidence: "attached: referrer-balances.json",
+    dashboard_summary_evidence: "attached: dashboard-summary.json",
+    webhook_delivery_evidence: "attached: webhook-events.json",
+    payout_obligation_evidence: "attached: payout-obligations.json",
     funding_balance_evidence: "attached: funding-balance.json",
     mcp_bundle_evidence: "attached: mcp-bundle.json",
     mcp_gateway_evidence: "attached: mcp-gateway.jsonl",
@@ -671,40 +715,118 @@ function createManifestArtifacts(proofText: string): Map<string, Uint8Array> {
       ),
     ],
     ["evidence/paid-suite.log", encode("paid proof\n")],
-    ["evidence/mcp-bundle.json", encode(JSON.stringify(createValidMcpBundle()))],
-    ["evidence/mcp-gateway.jsonl", encode(createValidMcpGatewayTranscript())],
     [
-      "evidence/funding-balance.json",
+      "evidence/receipt-verification.json",
+      encode(
+        JSON.stringify({
+          receiptId: "rcp_001",
+          verificationStatus: "verified",
+        }),
+      ),
+    ],
+    [
+      "evidence/agent-discovery.json",
+      encode(
+        JSON.stringify({
+          routes: [
+            {
+              id: "rte_001",
+              status: "active",
+              campaignId: "cmp_001",
+              referrerWallet: "referrer-wallet",
+              payoutWallet: "payout-wallet",
+            },
+          ],
+        }),
+      ),
+    ],
+    [
+      "evidence/referrer-balances.json",
       encode(
         JSON.stringify({
           summary: {
-            schema: "split402.merchant_obligation_summary.v1",
-            merchantId: "mrc_001",
+            referrerWallet: "referrer-wallet",
             generatedAt: "2026-06-26T00:00:00.000Z",
             assets: [
               {
                 asset: "usdc-devnet",
-                fundingStatus: "covered",
-                fundingAmountAtomic: "1000",
-                fundingDeficitAtomic: "0",
                 pendingAmountAtomic: "0",
-                availableAmountAtomic: "1000",
+                availableAmountAtomic: "1800",
                 heldAmountAtomic: "0",
                 inFlightAmountAtomic: "0",
                 paidAmountAtomic: "0",
-                outstandingAmountAtomic: "1000",
-                totalAccruedAmountAtomic: "1000",
-                accrualCount: 1,
-                pendingAccrualCount: 0,
-                availableAccrualCount: 1,
-                heldAccrualCount: 0,
-                inFlightAccrualCount: 0,
-                paidAccrualCount: 0,
+                totalEarnedAmountAtomic: "1800",
               },
             ],
           },
         }),
       ),
+    ],
+    [
+      "evidence/dashboard-summary.json",
+      encode(
+        JSON.stringify({
+          summary: {
+            schema: "split402.merchant_dashboard_summary.v1",
+            generatedAt: "2026-06-26T00:00:00.000Z",
+            merchant: {
+              id: "mrc_001",
+              slug: "merchant",
+              displayName: "Merchant",
+              status: "active",
+            },
+            reliability: {
+              acceptsReceipts: true,
+              payoutReady: true,
+              webhookReady: true,
+              discoveryReady: true,
+              signals: {
+                verifiedOrigins: 1,
+                activeOfferReceiptKeys: 1,
+                activeWebhookKeys: 1,
+                activePayoutWallets: 1,
+              },
+            },
+            campaigns: {
+              total: 1,
+              byStatus: { draft: 0, active: 1, paused: 0, closed: 0 },
+              activeCampaignIds: ["cmp_001"],
+              operationCount: 1,
+            },
+            routes: {
+              total: 1,
+              byStatus: { active: 1, suspended: 0, expired: 0, revoked: 0 },
+              activeRouteIds: ["rte_001"],
+            },
+          },
+        }),
+      ),
+    ],
+    [
+      "evidence/webhook-events.json",
+      encode(
+        JSON.stringify({
+          events: [
+            {
+              id: "evt_001",
+              eventType: "webhook.receipt.accepted.v1",
+              status: "delivered",
+              attempts: 1,
+              payload: { merchantId: "mrc_001" },
+            },
+          ],
+        }),
+      ),
+    ],
+    [
+      "evidence/payout-obligations.json",
+      encode(JSON.stringify(createValidPayoutObligations())),
+    ],
+    ["evidence/mcp-bundle.json", encode(JSON.stringify(createValidMcpBundle()))],
+    ["evidence/mcp-gateway.jsonl", encode(createValidMcpGatewayTranscript())],
+    [
+      "evidence/funding-balance.json",
+      encode(JSON.stringify(createValidPayoutObligations())),
     ],
     ["evidence/commands.log", encode("commands\n")],
   ]);
@@ -823,6 +945,37 @@ function createValidMcpBundle(): unknown {
       protocolFeeAtomic: "200",
       referrerCreditAtomic: "1800",
       merchantRetainsAtomic: "8000",
+    },
+  };
+}
+
+function createValidPayoutObligations(): unknown {
+  return {
+    summary: {
+      schema: "split402.merchant_obligation_summary.v1",
+      merchantId: "mrc_001",
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      assets: [
+        {
+          asset: "usdc-devnet",
+          fundingStatus: "covered",
+          fundingAmountAtomic: "1800",
+          fundingDeficitAtomic: "0",
+          pendingAmountAtomic: "0",
+          availableAmountAtomic: "1800",
+          heldAmountAtomic: "0",
+          inFlightAmountAtomic: "0",
+          paidAmountAtomic: "0",
+          outstandingAmountAtomic: "1800",
+          totalAccruedAmountAtomic: "1800",
+          accrualCount: 1,
+          pendingAccrualCount: 0,
+          availableAccrualCount: 1,
+          heldAccrualCount: 0,
+          inFlightAccrualCount: 0,
+          paidAccrualCount: 0,
+        },
+      ],
     },
   };
 }

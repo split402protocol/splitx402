@@ -63,9 +63,12 @@ the evidence field that must be fixed. When a proof file path is supplied,
 `artifactStatuses` also verifies that local `attached:` artifact paths exist
 relative to the proof file directory, and `manifestStatus` verifies that local
 artifact sizes and SHA-256 hashes still match `artifact-manifest.json`. Remote
-`http(s)` artifact URLs are marked as remote references. `fundingBalanceStatus`
-parses the local funding-balance artifact and rejects unresolved funding so the
-proof shows whether each asset is covered or exactly how much is missing.
+`http(s)` artifact URLs are marked as remote references. `controlPlaneReadStatus`
+parses the local read-API artifacts and rejects empty route discovery, zero
+referrer earnings, empty dashboard activity, missing delivered webhooks, or
+missing payout obligations. `fundingBalanceStatus` parses the local
+funding-balance artifact and rejects unresolved funding so the proof shows
+whether each asset is covered or exactly how much is missing.
 
 ## Required Evidence
 
@@ -114,6 +117,13 @@ The validator requires:
 - `hosted_preflight_evidence` must be a local attached
   `hosted-preflight.json` artifact whose checks passed against the proof's
   control-plane and dashboard URLs.
+- `agent_discovery_evidence`, `referrer_balance_evidence`,
+  `dashboard_summary_evidence`, `webhook_delivery_evidence`, and
+  `payout_obligation_evidence` must be local attached JSON artifacts captured
+  from the control-plane read APIs. The status checker validates that they show
+  at least one active route, positive referrer earnings, at least one active
+  campaign and route in the dashboard summary, a delivered webhook event, and a
+  positive payout obligation.
 - `funding_balance_evidence` must be a local attached
   `funding-balance.json` artifact containing a merchant obligation summary.
   Each asset must report `covered` with `fundingDeficitAtomic: "0"` or
