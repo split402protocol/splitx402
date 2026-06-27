@@ -250,9 +250,28 @@ export class Split402Router {
       );
     }
 
-    const maxAttempts = normalizeMaxAttempts(input.maxAttempts, providers.length);
+    const eligibleProviders = providers.filter(
+      (provider) =>
+        validateProviderAcceptsReferralClaim(provider, input.referralClaim)
+          .length === 0
+    );
+    if (eligibleProviders.length === 0) {
+      throw new Split402RouterError(
+        "execution_failed",
+        `no providers match the supplied referralClaim for ${input.capability}`,
+        providers.map((provider) => ({
+          providerId: provider.providerId,
+          capability: provider.capability,
+          status: "failed",
+          retryable: false,
+          error: `provider does not match referralClaim: ${validateProviderAcceptsReferralClaim(provider, input.referralClaim).join("; ")}`
+        }))
+      );
+    }
+
+    const maxAttempts = normalizeMaxAttempts(input.maxAttempts, eligibleProviders.length);
     const attempts: Split402RouterAttempt[] = [];
-    for (const provider of providers.slice(0, maxAttempts)) {
+    for (const provider of eligibleProviders.slice(0, maxAttempts)) {
       try {
         const result = await this.executor.execute({
           provider,
@@ -647,6 +666,32 @@ function validateReceiptMatchesProvider(
     },
     provider
   ).map((error) => error.replace(/^offer/u, "receipt"));
+}
+
+function validateProviderAcceptsReferralClaim(
+  provider: Split402CapabilityProvider,
+  referralClaim: ReferralClaimV1 | undefined
+): string[] {
+  if (referralClaim === undefined) {
+    return [];
+  }
+  const errors: string[] = [];
+  if (provider.routeId !== undefined && provider.routeId !== referralClaim.routeId) {
+    errors.push("provider routeId does not match referralClaim routeId");
+  }
+  if (
+    provider.metadata?.referrerWallet !== undefined &&
+    provider.metadata.referrerWallet !== referralClaim.referrerWallet
+  ) {
+    errors.push("provider referrerWallet does not match referralClaim referrerWallet");
+  }
+  if (
+    provider.metadata?.payoutWallet !== undefined &&
+    provider.metadata.payoutWallet !== referralClaim.payoutWallet
+  ) {
+    errors.push("provider payoutWallet does not match referralClaim payoutWallet");
+  }
+  return errors;
 }
 
 function validateReceiptMatchesReferralClaim(

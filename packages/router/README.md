@@ -56,6 +56,8 @@ with enough information for fail-closed receipt verification by default.
 - ranks by success rate, then price, then latency, then provider id;
 - executes through `Split402AgentClient` by default;
 - accepts an injected executor for tests or controlled gateways;
+- skips providers whose discovered route/referrer/payout metadata conflicts
+  with the supplied `referralClaim`;
 - verifies receipts fail-closed by default;
 - requires returned receipts to match the supplied `referralClaim` route, claim
   hash, referrer wallet, and payout wallet;
