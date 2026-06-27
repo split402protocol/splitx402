@@ -375,9 +375,76 @@ funding_balance_evidence: funding.json
       status: "valid",
       blockers: [],
     });
+    expect(report.mcpBundleStatus).toEqual({
+      status: "valid",
+      blockers: [],
+    });
     expect(report.mcpGatewayStatus).toEqual({
       status: "valid",
       blockers: [],
+    });
+  });
+
+  it("blocks staged proof status when MCP bundle economics are not useful", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-bundle.json",
+      encode(
+        JSON.stringify({
+          schemaVersion: "split402.mcp-demo-bundle.v1",
+          project: "Split402",
+          mcp: {
+            tools: [
+              {
+                name: "split402.walletRiskScore",
+                paidHttpCall: { method: "POST", url: "https://merchant.example/v1/risk" },
+                x402: {
+                  scheme: "exact",
+                  network: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+                  asset: "usdc-devnet",
+                  amountAtomic: "10000",
+                },
+                split402: {
+                  campaignId: "cmp_001",
+                  operationId: "wallet-risk-score",
+                  commissionBps: 2000,
+                  protocolFeeBpsOfCommission: 1000,
+                },
+              },
+            ],
+          },
+          expectedEconomics: {
+            paymentAmountAtomic: "10000",
+            referrerCommissionBps: 2000,
+            protocolFeeBpsOfCommission: 1000,
+            commissionAmountAtomic: "2000",
+            protocolFeeAtomic: "0",
+            referrerCreditAtomic: "2000",
+            merchantRetainsAtomic: "8000",
+          },
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpBundleStatus.blockers).toContain(
+      "mcp_bundle_evidence expectedEconomics.protocolFeeAtomic does not match protocol fee bps",
+    );
+    expect(report.gateStatuses).toContainEqual({
+      gate: "mcp_bundle",
+      evidenceField: "mcp_bundle_evidence",
+      status: "invalid",
+      blockers: expect.arrayContaining([
+        "mcp_bundle_evidence expectedEconomics.protocolFeeAtomic does not match protocol fee bps",
+      ]),
     });
   });
 
@@ -582,7 +649,7 @@ function createManifestProof(): string {
     webhook_delivery_evidence: "https://artifacts.example/webhooks.json",
     payout_obligation_evidence: "https://artifacts.example/obligations.json",
     funding_balance_evidence: "attached: funding-balance.json",
-    mcp_bundle_evidence: "https://artifacts.example/mcp.json",
+    mcp_bundle_evidence: "attached: mcp-bundle.json",
     mcp_gateway_evidence: "attached: mcp-gateway.jsonl",
     artifact_manifest_evidence: "attached: artifact-manifest.json",
     commands_run: "attached: commands.log",
@@ -604,6 +671,7 @@ function createManifestArtifacts(proofText: string): Map<string, Uint8Array> {
       ),
     ],
     ["evidence/paid-suite.log", encode("paid proof\n")],
+    ["evidence/mcp-bundle.json", encode(JSON.stringify(createValidMcpBundle()))],
     ["evidence/mcp-gateway.jsonl", encode(createValidMcpGatewayTranscript())],
     [
       "evidence/funding-balance.json",
@@ -696,6 +764,67 @@ function createPassingHostedPreflightChecks(): unknown[] {
       ok: true,
     },
   ];
+}
+
+function createValidMcpBundle(): unknown {
+  return {
+    schemaVersion: "split402.mcp-demo-bundle.v1",
+    project: "Split402",
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    merchant: {
+      merchantId: "mrc_001",
+      origin: "https://merchant.staging.example",
+      discoveryUrl: "https://merchant.staging.example/.well-known/split402.json",
+      servicePublicKey: "service-public-key",
+    },
+    mcp: {
+      serverName: "split402-demo",
+      transport: "stdio",
+      tools: [
+        {
+          name: "split402.walletRiskScore",
+          description: "Paid wallet-risk score demo tool.",
+          inputSchema: {
+            type: "object",
+            properties: { wallet: { type: "string" } },
+            required: ["wallet"],
+            additionalProperties: false,
+          },
+          paidHttpCall: {
+            method: "POST",
+            url: "https://merchant.staging.example/v1/risk",
+            bodyTemplate: { wallet: "{{wallet}}" },
+          },
+          x402: {
+            scheme: "exact",
+            network: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+            asset: "usdc-devnet",
+            amountAtomic: "10000",
+          },
+          split402: {
+            campaignId: "cmp_001",
+            operationId: "wallet-risk-score",
+            commissionBps: 2000,
+            protocolFeeBpsOfCommission: 1000,
+            referralClaimSources: ["mcp-config", "tool-argument", "http-header"],
+            receiptVerification: {
+              package: "@split402/agent-sdk",
+              method: "Split402AgentClient.verifyReceipt",
+            },
+          },
+        },
+      ],
+    },
+    expectedEconomics: {
+      paymentAmountAtomic: "10000",
+      referrerCommissionBps: 2000,
+      protocolFeeBpsOfCommission: 1000,
+      commissionAmountAtomic: "2000",
+      protocolFeeAtomic: "200",
+      referrerCreditAtomic: "1800",
+      merchantRetainsAtomic: "8000",
+    },
+  };
 }
 
 function createValidMcpGatewayTranscript(

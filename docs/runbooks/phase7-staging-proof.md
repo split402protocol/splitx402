@@ -53,6 +53,9 @@ files exist and before the final assemble/status check.
 The MCP gateway transcript is attached as `mcp_gateway_evidence`; it proves
 gateway discovery and, in demo or explicitly opted-in live mode, execution plus
 receipt lookup in addition to the stable `mcp-bundle.json` evidence.
+Attach `mcp-bundle.json` locally as `mcp_bundle_evidence`; the status checker
+parses it to verify the paid MCP tool, x402 price, Split402 campaign metadata,
+protocol fee basis points, and expected referral economics.
 
 The status report includes `gateStatuses`; each gate is marked `ready`,
 `missing`, `placeholder`, `invalid`, or `not_checked` with blockers attached to
@@ -116,6 +119,12 @@ The validator requires:
   Each asset must report `covered` with `fundingDeficitAtomic: "0"` or
   `deficit` with a positive `fundingDeficitAtomic`; `unknown` funding status
   does not close the gate.
+- `mcp_bundle_evidence` must be a local attached `mcp-bundle.json` artifact
+  with schema `split402.mcp-demo-bundle.v1`, project `Split402`, a
+  `split402.walletRiskScore` paid tool, exact x402 pricing, Split402 campaign
+  metadata, `protocolFeeBpsOfCommission`, and expected economics that match the
+  payment amount, commission bps, protocol fee, referrer credit, and merchant
+  retained amount.
 - `mcp_gateway_evidence` must be a local attached `mcp-gateway.jsonl`
   transcript containing initialize, tools/list, and
   `split402.searchCapabilities` request/response pairs. When the transcript

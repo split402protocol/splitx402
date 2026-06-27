@@ -87,6 +87,7 @@ export interface Phase7StagingStatusReport {
   manifestStatus: Phase7StagingManifestStatus;
   hostedPreflightStatus: Phase7HostedPreflightStatus;
   fundingBalanceStatus: Phase7FundingBalanceStatus;
+  mcpBundleStatus: Phase7McpBundleStatus;
   mcpGatewayStatus: Phase7McpGatewayStatus;
   validation?: Phase7StagingProofValidation;
   nextActions: string[];
@@ -129,6 +130,11 @@ export interface Phase7FundingBalanceStatus {
   blockers: string[];
 }
 
+export interface Phase7McpBundleStatus {
+  status: "not_checked" | "not_applicable" | "valid" | "invalid";
+  blockers: string[];
+}
+
 export interface Phase7McpGatewayStatus {
   status: "not_checked" | "not_applicable" | "valid" | "invalid";
   blockers: string[];
@@ -144,11 +150,13 @@ export function createPhase7StagingStatusReport(
   const manifestStatus = createManifestStatus(proofText, options);
   const hostedPreflightStatus = createHostedPreflightStatus(proofText, options);
   const fundingBalanceStatus = createFundingBalanceStatus(proofText, options);
+  const mcpBundleStatus = createMcpBundleStatus(proofText, options);
   const mcpGatewayStatus = createMcpGatewayStatus(proofText, options);
   const artifactBlockers = artifactStatuses.flatMap((status) => status.blockers);
   const manifestBlockers = manifestStatus.blockers;
   const hostedPreflightBlockers = hostedPreflightStatus.blockers;
   const fundingBalanceBlockers = fundingBalanceStatus.blockers;
+  const mcpBundleBlockers = mcpBundleStatus.blockers;
   const mcpGatewayBlockers = mcpGatewayStatus.blockers;
   const readyForPublicAlphaDemo =
     (validation?.approved ?? false) &&
@@ -156,6 +164,7 @@ export function createPhase7StagingStatusReport(
     manifestBlockers.length === 0 &&
     hostedPreflightBlockers.length === 0 &&
     fundingBalanceBlockers.length === 0 &&
+    mcpBundleBlockers.length === 0 &&
     mcpGatewayBlockers.length === 0;
 
   return {
@@ -169,12 +178,14 @@ export function createPhase7StagingStatusReport(
       manifestBlockers,
       hostedPreflightBlockers,
       fundingBalanceBlockers,
+      mcpBundleBlockers,
       mcpGatewayBlockers,
     ),
     artifactStatuses,
     manifestStatus,
     hostedPreflightStatus,
     fundingBalanceStatus,
+    mcpBundleStatus,
     mcpGatewayStatus,
     validation,
     nextActions: createNextActions(validation, [
@@ -182,6 +193,7 @@ export function createPhase7StagingStatusReport(
       ...manifestBlockers,
       ...hostedPreflightBlockers,
       ...fundingBalanceBlockers,
+      ...mcpBundleBlockers,
       ...mcpGatewayBlockers,
     ]),
   };
@@ -193,6 +205,7 @@ function createGateStatuses(
   manifestBlockers: readonly string[],
   hostedPreflightBlockers: readonly string[],
   fundingBalanceBlockers: readonly string[],
+  mcpBundleBlockers: readonly string[],
   mcpGatewayBlockers: readonly string[],
 ): Phase7StagingGateStatus[] {
   return PHASE7_STAGING_COMMANDS.map((command) => {
@@ -217,6 +230,7 @@ function createGateStatuses(
       manifestBlockers,
       hostedPreflightBlockers,
       fundingBalanceBlockers,
+      mcpBundleBlockers,
       mcpGatewayBlockers,
     );
     if (validation.missingFields.includes(command.evidenceField)) {
@@ -266,6 +280,7 @@ function createGateArtifactBlockers(
   manifestBlockers: readonly string[],
   hostedPreflightBlockers: readonly string[],
   fundingBalanceBlockers: readonly string[],
+  mcpBundleBlockers: readonly string[],
   mcpGatewayBlockers: readonly string[],
 ): string[] {
   if (evidenceField === "artifact_manifest_evidence") {
@@ -276,6 +291,9 @@ function createGateArtifactBlockers(
   }
   if (evidenceField === "funding_balance_evidence") {
     return [...artifactBlockers, ...fundingBalanceBlockers];
+  }
+  if (evidenceField === "mcp_bundle_evidence") {
+    return [...artifactBlockers, ...mcpBundleBlockers];
   }
   if (evidenceField === "mcp_gateway_evidence") {
     return [...artifactBlockers, ...mcpGatewayBlockers];
@@ -626,6 +644,223 @@ function createFundingBalanceStatus(
   return blockers.length === 0
     ? { status: "valid", blockers: [] }
     : { status: "invalid", blockers };
+}
+
+function createMcpBundleStatus(
+  proofText: string | undefined,
+  options: Phase7StagingStatusOptions,
+): Phase7McpBundleStatus {
+  if (proofText === undefined) {
+    return { status: "not_checked", blockers: [] };
+  }
+
+  const fields = parsePhase7ProofRecord(proofText);
+  const reference = fields.get("mcp_bundle_evidence");
+  if (reference === undefined || reference.length === 0) {
+    return { status: "not_applicable", blockers: [] };
+  }
+  if (isHttpUrl(reference)) {
+    return {
+      status: "invalid",
+      blockers: [
+        "mcp_bundle_evidence must be an attached local artifact for status validation",
+      ],
+    };
+  }
+
+  const artifactPath = readAttachedArtifactPath(reference);
+  if (artifactPath === undefined) {
+    return { status: "not_applicable", blockers: [] };
+  }
+  if (options.artifactBaseDir === undefined || options.readArtifact === undefined) {
+    return { status: "not_checked", blockers: [] };
+  }
+
+  const resolvedPath = resolveArtifactPath(artifactPath, options);
+  const blockers: string[] = [];
+  let bundle: unknown;
+  try {
+    const artifactBytes = options.readArtifact(resolvedPath);
+    bundle = JSON.parse(new TextDecoder().decode(artifactBytes));
+  } catch (error) {
+    blockers.push(
+      `mcp_bundle_evidence artifact could not be read: ${formatError(error)}`,
+    );
+  }
+
+  if (bundle === undefined) {
+    return { status: "invalid", blockers };
+  }
+  validateMcpBundleArtifact(bundle, blockers);
+  return blockers.length === 0
+    ? { status: "valid", blockers: [] }
+    : { status: "invalid", blockers };
+}
+
+function validateMcpBundleArtifact(bundle: unknown, blockers: string[]): void {
+  const record = readRecord(bundle);
+  if (record === undefined) {
+    blockers.push("mcp_bundle_evidence artifact must be a JSON object");
+    return;
+  }
+  if (record.schemaVersion !== "split402.mcp-demo-bundle.v1") {
+    blockers.push("mcp_bundle_evidence schemaVersion is invalid");
+  }
+  if (record.project !== "Split402") {
+    blockers.push("mcp_bundle_evidence project must be Split402");
+  }
+
+  const mcp = readRecord(record.mcp);
+  const tools = Array.isArray(mcp?.tools) ? mcp.tools : undefined;
+  if (tools === undefined || tools.length === 0) {
+    blockers.push("mcp_bundle_evidence must include at least one MCP tool");
+    return;
+  }
+
+  const paidTool = tools
+    .map((tool) => readRecord(tool))
+    .find((tool) => tool?.name === "split402.walletRiskScore");
+  if (paidTool === undefined) {
+    blockers.push("mcp_bundle_evidence missing split402.walletRiskScore tool");
+    return;
+  }
+
+  const paidHttpCall = readRecord(paidTool.paidHttpCall);
+  if (paidHttpCall?.method !== "POST" || readNonEmptyString(paidHttpCall.url) === undefined) {
+    blockers.push("mcp_bundle_evidence paid tool must describe a POST paidHttpCall");
+  }
+
+  const x402 = readRecord(paidTool.x402);
+  if (x402?.scheme !== "exact") {
+    blockers.push("mcp_bundle_evidence paid tool x402.scheme must be exact");
+  }
+  if (readNonEmptyString(x402?.network) === undefined) {
+    blockers.push("mcp_bundle_evidence paid tool x402.network is missing");
+  }
+  if (readNonEmptyString(x402?.asset) === undefined) {
+    blockers.push("mcp_bundle_evidence paid tool x402.asset is missing");
+  }
+  const amountAtomic = readPositiveAtomicString(x402?.amountAtomic);
+  if (amountAtomic === undefined) {
+    blockers.push(
+      "mcp_bundle_evidence paid tool x402.amountAtomic must be a positive atomic amount",
+    );
+  }
+
+  const split402 = readRecord(paidTool.split402);
+  if (readNonEmptyString(split402?.campaignId) === undefined) {
+    blockers.push("mcp_bundle_evidence paid tool split402.campaignId is missing");
+  }
+  if (readNonEmptyString(split402?.operationId) === undefined) {
+    blockers.push("mcp_bundle_evidence paid tool split402.operationId is missing");
+  }
+  const commissionBps = readBasisPoints(split402?.commissionBps);
+  if (commissionBps === undefined) {
+    blockers.push(
+      "mcp_bundle_evidence paid tool split402.commissionBps must be an integer from 0 to 10000",
+    );
+  }
+  const protocolFeeBpsOfCommission = readBasisPoints(
+    split402?.protocolFeeBpsOfCommission,
+  );
+  if (protocolFeeBpsOfCommission === undefined) {
+    blockers.push(
+      "mcp_bundle_evidence paid tool split402.protocolFeeBpsOfCommission must be an integer from 0 to 10000",
+    );
+  }
+
+  const economics = readRecord(record.expectedEconomics);
+  if (economics === undefined) {
+    blockers.push("mcp_bundle_evidence expectedEconomics is missing");
+    return;
+  }
+  const paymentAmount = readNonNegativeAtomicString(economics.paymentAmountAtomic);
+  const commissionAmount = readNonNegativeAtomicString(
+    economics.commissionAmountAtomic,
+  );
+  const protocolFee = readNonNegativeAtomicString(economics.protocolFeeAtomic);
+  const referrerCredit = readNonNegativeAtomicString(
+    economics.referrerCreditAtomic,
+  );
+  const merchantRetains = readNonNegativeAtomicString(
+    economics.merchantRetainsAtomic,
+  );
+
+  for (const [field, value] of [
+    ["paymentAmountAtomic", paymentAmount],
+    ["commissionAmountAtomic", commissionAmount],
+    ["protocolFeeAtomic", protocolFee],
+    ["referrerCreditAtomic", referrerCredit],
+    ["merchantRetainsAtomic", merchantRetains],
+  ] as const) {
+    if (value === undefined) {
+      blockers.push(
+        `mcp_bundle_evidence expectedEconomics.${field} must be a non-negative atomic amount`,
+      );
+    }
+  }
+  if (
+    paymentAmount !== undefined &&
+    amountAtomic !== undefined &&
+    paymentAmount !== amountAtomic
+  ) {
+    blockers.push(
+      "mcp_bundle_evidence expectedEconomics.paymentAmountAtomic must match x402.amountAtomic",
+    );
+  }
+  if (
+    commissionBps !== undefined &&
+    economics.referrerCommissionBps !== commissionBps
+  ) {
+    blockers.push(
+      "mcp_bundle_evidence expectedEconomics.referrerCommissionBps must match split402.commissionBps",
+    );
+  }
+  if (
+    protocolFeeBpsOfCommission !== undefined &&
+    economics.protocolFeeBpsOfCommission !== protocolFeeBpsOfCommission
+  ) {
+    blockers.push(
+      "mcp_bundle_evidence expectedEconomics.protocolFeeBpsOfCommission must match split402.protocolFeeBpsOfCommission",
+    );
+  }
+  if (
+    paymentAmount === undefined ||
+    commissionBps === undefined ||
+    protocolFeeBpsOfCommission === undefined ||
+    commissionAmount === undefined ||
+    protocolFee === undefined ||
+    referrerCredit === undefined ||
+    merchantRetains === undefined
+  ) {
+    return;
+  }
+
+  const expectedCommission = (paymentAmount * BigInt(commissionBps)) / 10_000n;
+  const expectedProtocolFee =
+    (expectedCommission * BigInt(protocolFeeBpsOfCommission)) / 10_000n;
+  const expectedReferrerCredit = expectedCommission - expectedProtocolFee;
+  const expectedMerchantRetains = paymentAmount - expectedCommission;
+  if (commissionAmount !== expectedCommission) {
+    blockers.push(
+      "mcp_bundle_evidence expectedEconomics.commissionAmountAtomic does not match commission bps",
+    );
+  }
+  if (protocolFee !== expectedProtocolFee) {
+    blockers.push(
+      "mcp_bundle_evidence expectedEconomics.protocolFeeAtomic does not match protocol fee bps",
+    );
+  }
+  if (referrerCredit !== expectedReferrerCredit) {
+    blockers.push(
+      "mcp_bundle_evidence expectedEconomics.referrerCreditAtomic does not match commission minus protocol fee",
+    );
+  }
+  if (merchantRetains !== expectedMerchantRetains) {
+    blockers.push(
+      "mcp_bundle_evidence expectedEconomics.merchantRetainsAtomic does not match payment minus commission",
+    );
+  }
 }
 
 function createMcpGatewayStatus(
@@ -1092,6 +1327,20 @@ function readNonNegativeAtomicString(value: unknown): bigint | undefined {
     return undefined;
   }
   return BigInt(value);
+}
+
+function readPositiveAtomicString(value: unknown): bigint | undefined {
+  const parsed = readNonNegativeAtomicString(value);
+  return parsed !== undefined && parsed > 0n ? parsed : undefined;
+}
+
+function readBasisPoints(value: unknown): number | undefined {
+  return Number.isInteger(value) &&
+    typeof value === "number" &&
+    value >= 0 &&
+    value <= 10_000
+    ? value
+    : undefined;
 }
 
 function isManifestEntry(value: unknown): value is Phase7ArtifactManifestEntry {
