@@ -38,6 +38,7 @@
     "phase7:staging:init": "tsx src/phase7-staging-init.ts",
     "phase7:hosted:preflight": "tsx src/phase7-hosted-preflight.ts",
     "phase7:staging:collect-reads": "tsx src/phase7-staging-collect-reads.ts",
+    "phase7:staging:collect-mcp-gateway": "tsx src/phase7-staging-collect-mcp-gateway.ts",
     "phase7:staging:assemble": "tsx src/phase7-staging-assemble.ts",
     "phase7:staging:manifest": "tsx src/phase7-staging-manifest.ts",
     "phase7:staging:status": "tsx src/phase7-staging-status.ts",
