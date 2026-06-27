@@ -176,6 +176,9 @@ importers:
       '@split402/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+      '@split402/router':
+        specifier: workspace:*
+        version: link:../../packages/router
     devDependencies:
       vitest:
         specifier: ^4.1.9

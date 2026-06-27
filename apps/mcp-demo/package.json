@@ -14,7 +14,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@split402/protocol": "workspace:*"
+    "@split402/protocol": "workspace:*",
+    "@split402/router": "workspace:*"
   },
   "devDependencies": {
     "vitest": "^4.1.9"
