@@ -66,9 +66,11 @@ artifact sizes and SHA-256 hashes still match `artifact-manifest.json`. Remote
 `http(s)` artifact URLs are marked as remote references. `controlPlaneReadStatus`
 parses the local read-API artifacts and rejects empty route discovery, zero
 referrer earnings, empty dashboard activity, missing delivered webhooks, or
-missing payout obligations. `fundingBalanceStatus` parses the local
-funding-balance artifact and rejects unresolved funding so the proof shows
-whether each asset is covered or exactly how much is missing.
+missing payout obligations. `paidRequestStatus` parses the local paid-suite log
+and receipt-verification JSON so the x402 paid request and Split402 receipt
+verification gates cannot close on placeholder output. `fundingBalanceStatus`
+parses the local funding-balance artifact and rejects unresolved funding so the
+proof shows whether each asset is covered or exactly how much is missing.
 
 ## Required Evidence
 
@@ -124,6 +126,12 @@ The validator requires:
   at least one active route, positive referrer earnings, at least one active
   campaign and route in the dashboard summary, a delivered webhook event, and a
   positive payout obligation.
+- `paid_request_evidence` must be a local attached `paid-suite.log` artifact
+  whose final JSON summary reports `paidSuitePassed: true`, a commission-bearing
+  valid referral receipt, and a zero-commission invalid-claim receipt.
+- `receipt_verification_evidence` must be a local attached JSON artifact that
+  names the verified receipt id and reports a verified Split402 receipt with no
+  errors.
 - `funding_balance_evidence` must be a local attached
   `funding-balance.json` artifact containing a merchant obligation summary.
   Each asset must report `covered` with `fundingDeficitAtomic: "0"` or
