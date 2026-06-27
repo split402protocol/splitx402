@@ -36,8 +36,13 @@ obligations, and funding-balance coverage using the staging merchant and
 referrer environment variables.
 `phase7:staging:collect-mcp-gateway` captures `mcp-gateway.jsonl` by sending
 `initialize`, `tools/list`, and `split402.searchCapabilities` requests through
-the MCP gateway. Set `SPLIT402_MCP_CONTROL_PLANE_URL` and, when needed,
-`SPLIT402_MCP_CAPABILITY` so the transcript proves hosted route discovery.
+the MCP gateway. In default demo mode it also captures `split402.execute` and
+`split402.getReceipt`, including provider used, amount paid, receipt id,
+receipt verification status, and referrer credit. Set
+`SPLIT402_MCP_CONTROL_PLANE_URL` and, when needed, `SPLIT402_MCP_CAPABILITY` so
+the transcript proves hosted route discovery. Hosted/live execution is opt-in
+with `SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1` because it requires live x402 buyer
+configuration.
 `phase7:hosted:preflight` captures `hosted-preflight.json` with control-plane
 health, dashboard health, dashboard session state, locked dashboard access
 without a viewer token, and successful dashboard access with the viewer token
@@ -46,7 +51,8 @@ before the payment proof run.
 and remote references for URL-based artifacts. Generate it after the evidence
 files exist and before the final assemble/status check.
 The MCP gateway transcript is attached as `mcp_gateway_evidence`; it proves
-hosted route discovery in addition to the stable `mcp-bundle.json` evidence.
+gateway discovery and, in demo or explicitly opted-in live mode, execution plus
+receipt lookup in addition to the stable `mcp-bundle.json` evidence.
 
 The status report includes `gateStatuses`; each gate is marked `ready`,
 `missing`, `placeholder`, `invalid`, or `not_checked` with blockers attached to
@@ -70,7 +76,7 @@ flowchart LR
   Dashboard["Dashboard summary"]
   Webhooks["Webhook delivery feed"]
   Funding["Funding balance coverage"]
-  Mcp["MCP gateway discovery"]
+  Mcp["MCP gateway transcript"]
   Approval["Approved proof record"]
 
   Preflight --> Discovery

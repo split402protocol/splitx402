@@ -54,8 +54,9 @@ corepack pnpm demo:mcp-bundle
 ```
 
 Run `corepack pnpm demo:mcp-gateway` when an MCP client needs direct stdio
-tool discovery for the demo. Set `SPLIT402_MCP_CONTROL_PLANE_URL` to capture
-hosted route discovery through the control plane.
+tool discovery, router-backed demo execution, or receipt lookup. Set
+`SPLIT402_MCP_CONTROL_PLANE_URL` to capture hosted route discovery through the
+control plane.
 
 ## Dashboard UI
 
