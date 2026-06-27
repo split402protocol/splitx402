@@ -120,6 +120,9 @@ payment, Split402 receipt verification, referrer earnings, dashboard summary,
 webhook delivery, payout obligations, Solana RPC funding-balance coverage, MCP
 bundle output, MCP gateway transcript evidence, and artifact manifest hashes
 from the same staging environment.
+The MCP gateway collection report must identify the provider used, paid amount,
+receipt id, verification status, and referrer credit for the executed router
+call.
 The final status check verifies that local `attached:` artifacts still match the
 recorded local manifest sizes and SHA-256 hashes, and that the hosted preflight
 checks passed against the same control-plane and dashboard URLs listed in the

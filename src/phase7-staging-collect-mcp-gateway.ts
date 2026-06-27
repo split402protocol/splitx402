@@ -40,6 +40,8 @@ try {
       "  SPLIT402_MCP_OPERATION_ID",
       "  SPLIT402_MCP_DISCOVERY_LIMIT",
       "  SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE",
+      "  SPLIT402_MCP_SVM_PRIVATE_KEY",
+      "  SVM_PRIVATE_KEY",
     ].join("\n"),
   );
   process.exitCode = 1;

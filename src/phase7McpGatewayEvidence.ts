@@ -23,6 +23,11 @@ export interface Phase7McpGatewayEvidenceReport {
   blockers: string[];
   executionCaptured: boolean;
   receiptLookupCaptured: boolean;
+  providerId?: string;
+  amountPaidAtomic?: string;
+  receiptId?: string;
+  receiptVerificationStatus?: string;
+  referrerCreditAtomic?: string;
   requestCount: number;
   responseCount: number;
 }
@@ -76,6 +81,7 @@ export async function collectPhase7McpGatewayEvidence(
   let responseCount = 0;
   let executionCaptured = false;
   let receiptLookupCaptured = false;
+  let executionSummary: McpGatewayExecutionSummary | undefined;
   const blockers: string[] = [];
   for (const request of requests) {
     transcript.push({ direction: "request", message: request });
@@ -116,7 +122,8 @@ export async function collectPhase7McpGatewayEvidence(
           `split402.execute failed: ${executeResponse.error.message}`,
         );
       }
-      const receiptId = readReceiptId(executeResponse);
+      executionSummary = readExecutionSummary(executeResponse);
+      const receiptId = executionSummary?.receiptId;
       if (receiptId !== undefined) {
         const receiptRequest: JsonRpcRequest = {
           jsonrpc: "2.0",
@@ -172,6 +179,15 @@ export async function collectPhase7McpGatewayEvidence(
     blockers,
     executionCaptured,
     receiptLookupCaptured,
+    ...(executionSummary === undefined
+      ? {}
+      : {
+          providerId: executionSummary.providerId,
+          amountPaidAtomic: executionSummary.amountPaidAtomic,
+          receiptId: executionSummary.receiptId,
+          receiptVerificationStatus: executionSummary.receiptVerificationStatus,
+          referrerCreditAtomic: executionSummary.referrerCreditAtomic,
+        }),
     requestCount: transcript.filter((line) => line.direction === "request").length,
     responseCount,
   };
@@ -188,13 +204,44 @@ function shouldCaptureExecution(
   return executionMode === "router-demo-mock";
 }
 
-function readReceiptId(response: McpGatewayResponse): string | undefined {
+interface McpGatewayExecutionSummary {
+  providerId: string;
+  amountPaidAtomic: string;
+  receiptId: string;
+  receiptVerificationStatus: string;
+  referrerCreditAtomic: string;
+}
+
+function readExecutionSummary(
+  response: McpGatewayResponse,
+): McpGatewayExecutionSummary | undefined {
   const result = readRecord(response.result);
   const structuredContent = readRecord(result?.structuredContent);
-  const receiptId = structuredContent?.receiptId;
-  return typeof receiptId === "string" && receiptId.length > 0
-    ? receiptId
-    : undefined;
+  const providerId = readNonEmptyString(structuredContent?.providerId);
+  const amountPaidAtomic = readNonEmptyString(structuredContent?.amountPaidAtomic);
+  const receiptId = readNonEmptyString(structuredContent?.receiptId);
+  const receiptVerificationStatus = readNonEmptyString(
+    structuredContent?.receiptVerificationStatus,
+  );
+  const referrerCreditAtomic = readNonEmptyString(
+    structuredContent?.referrerCreditAtomic,
+  );
+  if (
+    providerId === undefined ||
+    amountPaidAtomic === undefined ||
+    receiptId === undefined ||
+    receiptVerificationStatus === undefined ||
+    referrerCreditAtomic === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    providerId,
+    amountPaidAtomic,
+    receiptId,
+    receiptVerificationStatus,
+    referrerCreditAtomic,
+  };
 }
 
 function joinPath(input: Phase7McpGatewayEvidenceInput, fileName: string): string {
@@ -213,4 +260,8 @@ function readRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null
     ? (value as Record<string, unknown>)
     : undefined;
+}
+
+function readNonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
