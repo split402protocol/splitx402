@@ -327,10 +327,14 @@ async function handleToolCallAsync(
   }
   const record = params as Record<string, unknown>;
   if (record.name === "split402.searchCapabilities") {
+    const searchInput = readCapabilitySearchInput(record.arguments);
+    if ("message" in searchInput) {
+      return createErrorResponse(id, -32602, searchInput.message);
+    }
     return createResultResponse(id, {
       structuredContent: {
         capabilities: context.router
-          .searchCapabilities(readOptionalStringArgument(record.arguments, "capability"))
+          .searchCapabilities(searchInput)
           .map(publicProviderView)
       },
       isError: false
@@ -500,7 +504,16 @@ function routerToolCards() {
       inputSchema: {
         type: "object",
         properties: {
-          capability: { type: "string" }
+          capability: { type: "string" },
+          budget: {
+            type: "object",
+            properties: {
+              network: { type: "string" },
+              asset: { type: "string" },
+              maxAmountAtomic: { type: "string" }
+            },
+            additionalProperties: false
+          }
         },
         additionalProperties: false
       }
@@ -694,17 +707,85 @@ function readBudget(
   return { network, asset, maxAmountAtomic };
 }
 
-function readOptionalStringArgument(
+function readCapabilitySearchInput(
   args: unknown,
-  key: string,
-): string | undefined {
+):
+  | {
+      capability?: string;
+      budget?: {
+        network?: string;
+        asset?: string;
+        maxAmountAtomic?: string;
+      };
+    }
+  | { message: string } {
   if (typeof args !== "object" || args === null) {
+    return {};
+  }
+  const record = args as Record<string, unknown>;
+  const capability =
+    record.capability === undefined
+      ? undefined
+      : readRequiredStringArgument(record.capability, "capability");
+  if (capability !== undefined && typeof capability !== "string") {
+    return capability;
+  }
+  const budget = readOptionalBudgetFilter(record.budget);
+  if (budget !== undefined && "message" in budget) {
+    return budget;
+  }
+  return {
+    ...(capability === undefined ? {} : { capability }),
+    ...(budget === undefined ? {} : { budget })
+  };
+}
+
+function readOptionalBudgetFilter(
+  value: unknown,
+):
+  | {
+      network?: string;
+      asset?: string;
+      maxAmountAtomic?: string;
+    }
+  | undefined
+  | { message: string } {
+  if (value === undefined) {
     return undefined;
   }
-  const value = (args as Record<string, unknown>)[key];
-  return typeof value === "string" && value.trim().length > 0
-    ? value.trim()
-    : undefined;
+  if (typeof value !== "object" || value === null) {
+    return { message: "budget must be an object" };
+  }
+  const record = value as Record<string, unknown>;
+  const network =
+    record.network === undefined
+      ? undefined
+      : readRequiredStringArgument(record.network, "budget.network");
+  if (network !== undefined && typeof network !== "string") {
+    return network;
+  }
+  const asset =
+    record.asset === undefined
+      ? undefined
+      : readRequiredStringArgument(record.asset, "budget.asset");
+  if (asset !== undefined && typeof asset !== "string") {
+    return asset;
+  }
+  const maxAmountAtomic =
+    record.maxAmountAtomic === undefined
+      ? undefined
+      : readRequiredStringArgument(
+          record.maxAmountAtomic,
+          "budget.maxAmountAtomic"
+        );
+  if (maxAmountAtomic !== undefined && typeof maxAmountAtomic !== "string") {
+    return maxAmountAtomic;
+  }
+  return {
+    ...(network === undefined ? {} : { network }),
+    ...(asset === undefined ? {} : { asset }),
+    ...(maxAmountAtomic === undefined ? {} : { maxAmountAtomic })
+  };
 }
 
 function readOptionalReferralClaim(

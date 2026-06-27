@@ -92,6 +92,18 @@ describe("MCP demo gateway", () => {
       "split402.getReceipt"
     ]);
     expect(result.tools[0]?.inputSchema?.required).toEqual(["wallet"]);
+    expect(result.tools[1]?.inputSchema).toMatchObject({
+      properties: {
+        capability: { type: "string" },
+        budget: {
+          properties: {
+            network: { type: "string" },
+            asset: { type: "string" },
+            maxAmountAtomic: { type: "string" }
+          }
+        }
+      }
+    });
     expect(result.tools[2]?.inputSchema).toMatchObject({
       properties: {
         referralClaim: { type: "object" },
@@ -206,6 +218,43 @@ describe("MCP demo gateway", () => {
               amountAtomic: "10000"
             })
           ]
+        },
+        isError: false
+      }
+    });
+  });
+
+  it("filters router capability search by budget through MCP tools/call", async () => {
+    const context = createMcpGatewayContext(
+      createMcpDemoBundle({
+        generatedAt: "2026-06-26T00:00:00.000Z"
+      })
+    );
+
+    const response = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "search-budget",
+        method: "tools/call",
+        params: {
+          name: "split402.searchCapabilities",
+          arguments: {
+            capability: "solana.wallet-risk",
+            budget: {
+              maxAmountAtomic: "9999"
+            }
+          }
+        }
+      }),
+      context
+    );
+
+    expect(response).toMatchObject({
+      jsonrpc: "2.0",
+      id: "search-budget",
+      result: {
+        structuredContent: {
+          capabilities: []
         },
         isError: false
       }

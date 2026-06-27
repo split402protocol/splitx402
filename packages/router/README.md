@@ -43,6 +43,15 @@ const providers = await discovery.discoverProviders({
 });
 
 const split402 = new Split402Router({ providers, signer });
+
+const affordable = split402.searchCapabilities({
+  capability: "solana.wallet-risk",
+  budget: {
+    network: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+    asset: DEVNET_USDC_MINT,
+    maxAmountAtomic: "50000"
+  }
+});
 ```
 
 Discovery fetches active routes, reads each route's Bazaar resource projection,
@@ -52,6 +61,8 @@ with enough information for fail-closed receipt verification by default.
 ## Current Behavior
 
 - filters providers by capability, network, asset, and maximum amount;
+- searches providers by capability plus optional network, asset, and maximum
+  amount budget filters;
 - discovers active control-plane routes into provider records;
 - ranks by success rate, then price, then latency, then provider id;
 - executes through `Split402AgentClient` by default;
