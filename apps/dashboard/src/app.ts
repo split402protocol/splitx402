@@ -1069,7 +1069,7 @@ function renderDashboardHtml(config: DashboardConfig): string {
     }
 
     function formatAssetBalance(asset) {
-      const available = asset?.availableAmountAtomic ?? asset?.availableAtomic ?? "0";
+      const available = asset?.availableAmountAtomic ?? "0";
       const label = asset?.asset ?? "asset";
       return String(available) + " " + String(label);
     }
