@@ -23,7 +23,7 @@ available accruals. The first `@split402/router` alpha package is present with
 static providers, control-plane route discovery, budget enforcement, ranking,
 fallback, and receipt verification, and the MCP demo gateway now exposes router-backed
 `split402.searchCapabilities`, `split402.execute`, and `split402.getReceipt`
-tools in demo mode.
+tools in demo mode plus optional control-plane route discovery.
 
 The MVP still uses normal x402 settlement to the merchant and records a
 commission liability for later merchant-funded payout. Protocol fee is a
@@ -381,8 +381,9 @@ Current slice:
   route discovery, budget enforcement, deterministic ranking, retry/fallback,
   and fail-closed receipt verification.
 - Router-backed MCP demo tools for capability search, demo execution results,
-  and session receipt lookup. The execution path is explicitly demo/mock mode,
-  not production MCP hosting.
+  and session receipt lookup, plus optional control-plane route discovery for
+  live staging providers. The default execution path is explicitly demo/mock
+  mode, not production MCP hosting.
 - merchant/referrer dashboard UI with a narrow control-plane read proxy for
   summaries, reliability profiles, webhook delivery, routes, balances, and
   payouts.
