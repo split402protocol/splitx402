@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createSampleProtocolArtifacts, hashProtocolObject } from "@split402/protocol";
 import type { Split402DiscoveryFetch, Split402DiscoveryFetchResponse } from "@split402/router";
 
 import {
@@ -92,6 +93,7 @@ describe("MCP demo gateway", () => {
     expect(result.tools[0]?.inputSchema?.required).toEqual(["wallet"]);
     expect(result.tools[2]?.inputSchema).toMatchObject({
       properties: {
+        referralClaim: { type: "object" },
         budget: {
           required: ["maxAmountAtomic"]
         }
@@ -381,6 +383,92 @@ describe("MCP demo gateway", () => {
           "no providers support solana.wallet-risk on solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1/wrong-asset"
       }
     });
+  });
+
+  it("passes referral claims from split402.execute into the router", async () => {
+    const context = createMcpGatewayContext(
+      createMcpDemoBundle({
+        generatedAt: "2026-06-26T00:00:00.000Z"
+      })
+    );
+    const referralClaim = createSampleProtocolArtifacts().artifacts.referralClaim;
+
+    const response = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "execute-with-referral",
+        method: "tools/call",
+        params: {
+          name: "split402.execute",
+          arguments: {
+            capability: "solana.wallet-risk",
+            input: {
+              wallet: "wallet-123"
+            },
+            budget: {
+              maxAmountAtomic: "10000"
+            },
+            referralClaim
+          }
+        }
+      }),
+      context
+    );
+
+    expect(response).toMatchObject({
+      jsonrpc: "2.0",
+      id: "execute-with-referral",
+      result: {
+        structuredContent: {
+          status: "executed",
+          data: {
+            referralClaimHash: hashProtocolObject(referralClaim)
+          }
+        },
+        isError: false
+      }
+    });
+  });
+
+  it("rejects malformed referral claims before router execution", async () => {
+    const context = createMcpGatewayContext(
+      createMcpDemoBundle({
+        generatedAt: "2026-06-26T00:00:00.000Z"
+      })
+    );
+
+    const response = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "execute-bad-referral",
+        method: "tools/call",
+        params: {
+          name: "split402.execute",
+          arguments: {
+            capability: "solana.wallet-risk",
+            input: {
+              wallet: "wallet-123"
+            },
+            budget: {
+              maxAmountAtomic: "10000"
+            },
+            referralClaim: {
+              routeId: "not-a-valid-claim"
+            }
+          }
+        }
+      }),
+      context
+    );
+
+    expect(response).toMatchObject({
+      jsonrpc: "2.0",
+      id: "execute-bad-referral",
+      error: {
+        code: -32602
+      }
+    });
+    expect(response?.error?.message).toContain("referralClaim is invalid");
   });
 
   it("builds a wallet risk tool result from the bundle", () => {

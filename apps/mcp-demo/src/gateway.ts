@@ -8,8 +8,10 @@ import {
   hashProtocolObject,
   hexToBytes,
   parseAtomicAmount,
+  ReferralClaimV1Schema,
   serializeAtomicAmount,
   signEd25519Message,
+  type ReferralClaimV1,
   type Split402ReceiptV1
 } from "@split402/protocol";
 import {
@@ -353,12 +355,17 @@ async function handleRouterExecuteTool(
   if ("message" in budget) {
     return createErrorResponse(id, -32602, budget.message);
   }
+  const referralClaim = readOptionalReferralClaim(record.referralClaim);
+  if (referralClaim !== undefined && "message" in referralClaim) {
+    return createErrorResponse(id, -32602, referralClaim.message);
+  }
 
   try {
     const result = await context.router.execute({
       capability,
       input: record.input ?? {},
       budget,
+      ...(referralClaim === undefined ? {} : { referralClaim }),
       ...(typeof record.maxAttempts === "number"
         ? { maxAttempts: record.maxAttempts }
         : {})
@@ -496,6 +503,7 @@ function routerToolCards() {
         properties: {
           capability: { type: "string" },
           input: { type: "object" },
+          referralClaim: { type: "object" },
           budget: {
             type: "object",
             properties: {
@@ -536,6 +544,10 @@ function createDemoRouterExecutor(bundle: McpDemoBundle): Split402RouterExecutor
           typeof input.body === "object" && input.body !== null
             ? ((input.body as Record<string, unknown>).wallet ?? null)
             : null,
+        referralClaimHash:
+          input.referralClaim === undefined
+            ? null
+            : hashProtocolObject(input.referralClaim),
         riskScore: 17,
         risk: "low"
       },
@@ -682,6 +694,23 @@ function readOptionalStringArgument(
   return typeof value === "string" && value.trim().length > 0
     ? value.trim()
     : undefined;
+}
+
+function readOptionalReferralClaim(
+  value: unknown
+): ReferralClaimV1 | undefined | { message: string } {
+  if (value === undefined) {
+    return undefined;
+  }
+  const parsed = ReferralClaimV1Schema.safeParse(value);
+  if (!parsed.success) {
+    return {
+      message: `referralClaim is invalid: ${parsed.error.issues
+        .map((issue) => issue.message)
+        .join("; ")}`
+    };
+  }
+  return parsed.data;
 }
 
 function readRequiredStringArgument(

@@ -72,6 +72,21 @@ Example `tools/call` request:
       },
       "budget": {
         "maxAmountAtomic": "50000"
+      },
+      "referralClaim": {
+        "protocolVersion": "0.1",
+        "routeId": "rte_...",
+        "campaignId": "cmp_...",
+        "campaignVersion": 1,
+        "referrerWallet": "referrer-wallet",
+        "payoutWallet": "payout-wallet",
+        "expiresAt": "2026-06-27T00:00:00Z",
+        "nonce": "claim-nonce",
+        "signature": {
+          "scheme": "ed25519",
+          "publicKey": "referrer-public-key",
+          "value": "signature"
+        }
       }
     }
   }
@@ -79,7 +94,9 @@ Example `tools/call` request:
 ```
 
 When `network` or `asset` are omitted from `budget`, the gateway defaults them
-from the selected provider and still enforces `maxAmountAtomic`.
+from the selected provider and still enforces `maxAmountAtomic`. `referralClaim`
+is optional; when present, the gateway validates the Split402 claim schema before
+forwarding it into the router execution.
 
 ### Control-Plane Discovery Mode
 
