@@ -19,6 +19,8 @@ export interface Phase7McpGatewayEvidenceReport {
   artifactPath: string;
   executionMode: "router-demo-mock" | "router-live-agent-sdk";
   capability: string;
+  executionCaptured: boolean;
+  receiptLookupCaptured: boolean;
   requestCount: number;
   responseCount: number;
 }
@@ -40,6 +42,9 @@ export async function collectPhase7McpGatewayEvidence(
 ): Promise<Phase7McpGatewayEvidenceReport> {
   const env = input.env ?? process.env;
   const capability = readOptionalEnv(env.SPLIT402_MCP_CAPABILITY) ?? "solana.wallet-risk";
+  const wallet = readOptionalEnv(env.SPLIT402_MCP_WALLET) ?? "phase7-demo-wallet";
+  const maxAmountAtomic =
+    readOptionalEnv(env.SPLIT402_MCP_MAX_AMOUNT_ATOMIC) ?? "50000";
   const context = await createMcpGatewayContextFromEnv({
     env,
     ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
@@ -67,6 +72,8 @@ export async function collectPhase7McpGatewayEvidence(
   ];
   const transcript: TranscriptLine[] = [];
   let responseCount = 0;
+  let executionCaptured = false;
+  let receiptLookupCaptured = false;
   for (const request of requests) {
     transcript.push({ direction: "request", message: request });
     const response = await handleMcpGatewayLineAsync(
@@ -76,6 +83,53 @@ export async function collectPhase7McpGatewayEvidence(
     if (response !== undefined) {
       responseCount += 1;
       transcript.push({ direction: "response", message: response });
+    }
+  }
+  if (shouldCaptureExecution(context.executionMode, env)) {
+    const executeRequest: JsonRpcRequest = {
+      jsonrpc: "2.0",
+      id: "execute",
+      method: "tools/call",
+      params: {
+        name: "split402.execute",
+        arguments: {
+          capability,
+          input: { wallet },
+          budget: { maxAmountAtomic },
+        },
+      },
+    };
+    transcript.push({ direction: "request", message: executeRequest });
+    const executeResponse = await handleMcpGatewayLineAsync(
+      JSON.stringify(executeRequest),
+      context,
+    );
+    if (executeResponse !== undefined) {
+      responseCount += 1;
+      transcript.push({ direction: "response", message: executeResponse });
+      executionCaptured = executeResponse.error === undefined;
+      const receiptId = readReceiptId(executeResponse);
+      if (receiptId !== undefined) {
+        const receiptRequest: JsonRpcRequest = {
+          jsonrpc: "2.0",
+          id: "receipt",
+          method: "tools/call",
+          params: {
+            name: "split402.getReceipt",
+            arguments: { receiptId },
+          },
+        };
+        transcript.push({ direction: "request", message: receiptRequest });
+        const receiptResponse = await handleMcpGatewayLineAsync(
+          JSON.stringify(receiptRequest),
+          context,
+        );
+        if (receiptResponse !== undefined) {
+          responseCount += 1;
+          transcript.push({ direction: "response", message: receiptResponse });
+          receiptLookupCaptured = receiptResponse.error === undefined;
+        }
+      }
     }
   }
 
@@ -91,9 +145,31 @@ export async function collectPhase7McpGatewayEvidence(
     artifactPath,
     executionMode: context.executionMode,
     capability,
-    requestCount: requests.length,
+    executionCaptured,
+    receiptLookupCaptured,
+    requestCount: transcript.filter((line) => line.direction === "request").length,
     responseCount,
   };
+}
+
+function shouldCaptureExecution(
+  executionMode: Phase7McpGatewayEvidenceReport["executionMode"],
+  env: NodeJS.ProcessEnv,
+): boolean {
+  const override = readOptionalEnv(env.SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE);
+  if (override !== undefined) {
+    return ["1", "true", "yes"].includes(override.toLowerCase());
+  }
+  return executionMode === "router-demo-mock";
+}
+
+function readReceiptId(response: McpGatewayResponse): string | undefined {
+  const result = readRecord(response.result);
+  const structuredContent = readRecord(result?.structuredContent);
+  const receiptId = structuredContent?.receiptId;
+  return typeof receiptId === "string" && receiptId.length > 0
+    ? receiptId
+    : undefined;
 }
 
 function joinPath(input: Phase7McpGatewayEvidenceInput, fileName: string): string {
@@ -106,4 +182,10 @@ function readOptionalEnv(value: string | undefined): string | undefined {
   return value === undefined || value.trim().length === 0
     ? undefined
     : value.trim();
+}
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null
+    ? (value as Record<string, unknown>)
+    : undefined;
 }

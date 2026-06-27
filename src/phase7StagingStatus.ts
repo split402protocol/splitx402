@@ -690,7 +690,7 @@ function createNextActions(
       "Create the evidence workspace with corepack pnpm phase7:staging:init.",
       "Generate a proof scaffold with corepack pnpm phase7:staging-proof.",
       "Run the dashboard, MCP bundle, paid-suite, control-plane read checks, and funding-balance check against staging.",
-      "Capture MCP gateway discovery evidence with corepack pnpm phase7:staging:collect-mcp-gateway.",
+      "Capture MCP gateway transcript evidence with corepack pnpm phase7:staging:collect-mcp-gateway.",
       "Run the hosted staging preflight with corepack pnpm phase7:hosted:preflight.",
       "Capture read API evidence with corepack pnpm phase7:staging:collect-reads.",
       "Generate artifact hashes with corepack pnpm phase7:staging:manifest <phase7-staging-proof.txt>.",
