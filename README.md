@@ -330,12 +330,14 @@ Check the combined product readiness gates:
 
 ```bash
 corepack pnpm product:status
+corepack pnpm product:status --brief
 corepack pnpm product:status <phase6-custody-evidence.txt> <phase7-staging-proof.txt>
 ```
 
 This reports the current Split402 phase, whether the public-alpha hosted proof
-and production custody evidence are checked, and why the launch decision remains
-`no-go` until both machine-checkable gates are satisfied.
+and production custody evidence are checked, launch-gate percentages, and why
+the launch decision remains `no-go` until both machine-checkable gates are
+satisfied.
 
 Generate the Phase 6 image provenance review record after building immutable
 signer and control-plane images:

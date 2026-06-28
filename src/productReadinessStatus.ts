@@ -20,6 +20,7 @@ export interface Split402ProductReadinessReport {
   repository: "split402protocol/splitx402";
   currentPhase: "Phase 7 public-alpha staging and Phase 6 custody evidence";
   implementationState: "public-alpha foundation implemented";
+  readiness: Split402ProductReadinessProgress;
   launchDecision: "go" | "no-go";
   readyForPublicAlphaDemo: boolean;
   readyForProductionCustody: boolean;
@@ -28,6 +29,28 @@ export interface Split402ProductReadinessReport {
   phase7: Phase7StagingStatusReport;
   nextActions: string[];
   summary: string;
+}
+
+export interface Split402ProductReadinessProgress {
+  totalLaunchGates: 2;
+  checkedLaunchGates: number;
+  readyLaunchGates: number;
+  checkedLaunchGatePercent: number;
+  readyLaunchGatePercent: number;
+  gates: [
+    {
+      gate: "phase7_public_alpha_demo";
+      label: "Phase 7 hosted public-alpha proof";
+      checked: boolean;
+      ready: boolean;
+    },
+    {
+      gate: "phase6_production_custody";
+      label: "Phase 6 production custody evidence";
+      checked: boolean;
+      ready: boolean;
+    },
+  ];
 }
 
 export function createSplit402ProductReadinessReport(
@@ -43,6 +66,7 @@ export function createSplit402ProductReadinessReport(
   const readyForMainnet = false;
   const launchDecision =
     readyForPublicAlphaDemo && readyForProductionCustody ? "go" : "no-go";
+  const readiness = createReadinessProgress(phase6, phase7);
   const nextActions = createProductNextActions(phase6, phase7);
 
   return {
@@ -51,6 +75,7 @@ export function createSplit402ProductReadinessReport(
     repository: "split402protocol/splitx402",
     currentPhase: "Phase 7 public-alpha staging and Phase 6 custody evidence",
     implementationState: "public-alpha foundation implemented",
+    readiness,
     launchDecision,
     readyForPublicAlphaDemo,
     readyForProductionCustody,
@@ -64,6 +89,72 @@ export function createSplit402ProductReadinessReport(
       phase6Checked: phase6.evidenceBundleChecked,
       phase7Checked: phase7.proofChecked,
     }),
+  };
+}
+
+export function formatSplit402ProductReadinessBrief(
+  report: Split402ProductReadinessReport,
+): string {
+  const gateLines = report.readiness.gates.map((gate) => {
+    const status = gate.ready
+      ? "ready"
+      : gate.checked
+        ? "checked, blocked"
+        : "not checked";
+    return `- ${gate.label}: ${status}`;
+  });
+  const nextActions = report.nextActions.slice(0, 5).map((action) => `- ${action}`);
+
+  return [
+    `Split402 status: ${report.launchDecision}`,
+    `Phase: ${report.currentPhase}`,
+    `Implementation: ${report.implementationState}`,
+    `Launch gates ready: ${report.readiness.readyLaunchGates}/${report.readiness.totalLaunchGates} (${report.readiness.readyLaunchGatePercent}%)`,
+    `Launch gates checked: ${report.readiness.checkedLaunchGates}/${report.readiness.totalLaunchGates} (${report.readiness.checkedLaunchGatePercent}%)`,
+    `Mainnet ready: ${report.readyForMainnet ? "yes" : "no"}`,
+    report.summary,
+    "",
+    "Gate status:",
+    ...gateLines,
+    "",
+    "Next actions:",
+    ...(nextActions.length > 0 ? nextActions : ["- No machine-generated next actions."]),
+  ].join("\n");
+}
+
+function createReadinessProgress(
+  phase6: Phase6EvidenceStatusReport,
+  phase7: Phase7StagingStatusReport,
+): Split402ProductReadinessProgress {
+  const gates: Split402ProductReadinessProgress["gates"] = [
+    {
+      gate: "phase7_public_alpha_demo",
+      label: "Phase 7 hosted public-alpha proof",
+      checked: phase7.proofChecked,
+      ready: phase7.readyForPublicAlphaDemo,
+    },
+    {
+      gate: "phase6_production_custody",
+      label: "Phase 6 production custody evidence",
+      checked: phase6.evidenceBundleChecked,
+      ready: phase6.readyForCustody,
+    },
+  ];
+  const totalLaunchGates = 2;
+  const checkedLaunchGates = gates.filter((gate) => gate.checked).length;
+  const readyLaunchGates = gates.filter((gate) => gate.ready).length;
+
+  return {
+    totalLaunchGates,
+    checkedLaunchGates,
+    readyLaunchGates,
+    checkedLaunchGatePercent: Math.round(
+      (checkedLaunchGates / totalLaunchGates) * 100,
+    ),
+    readyLaunchGatePercent: Math.round(
+      (readyLaunchGates / totalLaunchGates) * 100,
+    ),
+    gates,
   };
 }
 

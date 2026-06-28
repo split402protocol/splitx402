@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { createSplit402ProductReadinessReport } from "../src/productReadinessStatus.js";
+import {
+  createSplit402ProductReadinessReport,
+  formatSplit402ProductReadinessBrief,
+} from "../src/productReadinessStatus.js";
 
 describe("Split402 product readiness status", () => {
   it("reports the product as no-go until Phase 6 and Phase 7 evidence are checked", () => {
@@ -11,6 +14,13 @@ describe("Split402 product readiness status", () => {
       product: "Split402",
       repository: "split402protocol/splitx402",
       implementationState: "public-alpha foundation implemented",
+      readiness: {
+        totalLaunchGates: 2,
+        checkedLaunchGates: 0,
+        readyLaunchGates: 0,
+        checkedLaunchGatePercent: 0,
+        readyLaunchGatePercent: 0,
+      },
       launchDecision: "no-go",
       readyForPublicAlphaDemo: false,
       readyForProductionCustody: false,
@@ -58,11 +68,25 @@ approval_notes: checked evidence is intentionally incomplete
     expect(report.launchDecision).toBe("no-go");
     expect(report.phase6.evidenceBundleChecked).toBe(true);
     expect(report.phase7.proofChecked).toBe(true);
+    expect(report.readiness.checkedLaunchGatePercent).toBe(100);
+    expect(report.readiness.readyLaunchGatePercent).toBe(0);
     expect(report.nextActions.join("\n")).toContain(
       "Fix Phase 7 hosted proof blockers",
     );
     expect(report.nextActions.join("\n")).toContain(
       "Fix Phase 6 custody evidence blockers",
     );
+  });
+
+  it("formats a simple operator-facing summary", () => {
+    const report = createSplit402ProductReadinessReport();
+    const brief = formatSplit402ProductReadinessBrief(report);
+
+    expect(brief).toContain("Split402 status: no-go");
+    expect(brief).toContain("Launch gates ready: 0/2 (0%)");
+    expect(brief).toContain("Launch gates checked: 0/2 (0%)");
+    expect(brief).toContain("Phase 7 hosted public-alpha proof: not checked");
+    expect(brief).toContain("Phase 6 production custody evidence: not checked");
+    expect(brief).toContain("Mainnet ready: no");
   });
 });

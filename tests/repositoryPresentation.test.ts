@@ -147,7 +147,9 @@ describe("repository presentation", () => {
     const currentState = readFileSync("docs/CURRENT_STATE.md", "utf8");
 
     expect(readme).toContain("corepack pnpm product:status");
+    expect(readme).toContain("corepack pnpm product:status --brief");
     expect(readme).toContain("launch decision remains");
+    expect(readme).toContain("launch-gate percentages");
     expect(currentState).toContain("corepack pnpm product:status");
   });
 });
