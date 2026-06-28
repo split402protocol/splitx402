@@ -28,6 +28,11 @@ export interface Phase7McpGatewayEvidenceReport {
   receiptId?: string;
   receiptVerificationStatus?: string;
   referrerCreditAtomic?: string;
+  routeId?: string;
+  commissionBps?: number;
+  protocolFeeBpsOfCommission?: number;
+  commissionAmountAtomic?: string;
+  protocolFeeAtomic?: string;
   requestCount: number;
   responseCount: number;
 }
@@ -85,6 +90,7 @@ export async function collectPhase7McpGatewayEvidence(
   let executionCaptured = false;
   let receiptLookupCaptured = false;
   let executionSummary: McpGatewayExecutionSummary | undefined;
+  let receiptSummary: McpGatewayReceiptSummary | undefined;
   const blockers: string[] = [];
   for (const request of requests) {
     transcript.push({ direction: "request", message: request });
@@ -150,6 +156,13 @@ export async function collectPhase7McpGatewayEvidence(
             blockers.push(
               `split402.getReceipt failed: ${receiptResponse.error.message}`,
             );
+          } else {
+            receiptSummary = readReceiptSummary(receiptResponse);
+            if (receiptSummary === undefined) {
+              blockers.push(
+                "mcp_gateway_evidence getReceipt response missing receipt economics",
+              );
+            }
           }
         }
       }
@@ -191,6 +204,16 @@ export async function collectPhase7McpGatewayEvidence(
           receiptVerificationStatus: executionSummary.receiptVerificationStatus,
           referrerCreditAtomic: executionSummary.referrerCreditAtomic,
         }),
+    ...(receiptSummary === undefined
+      ? {}
+      : {
+          routeId: receiptSummary.routeId,
+          commissionBps: receiptSummary.commissionBps,
+          protocolFeeBpsOfCommission:
+            receiptSummary.protocolFeeBpsOfCommission,
+          commissionAmountAtomic: receiptSummary.commissionAmountAtomic,
+          protocolFeeAtomic: receiptSummary.protocolFeeAtomic,
+        }),
     requestCount: transcript.filter((line) => line.direction === "request").length,
     responseCount,
   };
@@ -213,6 +236,14 @@ interface McpGatewayExecutionSummary {
   receiptId: string;
   receiptVerificationStatus: string;
   referrerCreditAtomic: string;
+}
+
+interface McpGatewayReceiptSummary {
+  routeId: string;
+  commissionBps: number;
+  protocolFeeBpsOfCommission: number;
+  commissionAmountAtomic: string;
+  protocolFeeAtomic: string;
 }
 
 function readExecutionSummary(
@@ -247,6 +278,39 @@ function readExecutionSummary(
   };
 }
 
+function readReceiptSummary(
+  response: McpGatewayResponse,
+): McpGatewayReceiptSummary | undefined {
+  const result = readRecord(response.result);
+  const structuredContent = readRecord(result?.structuredContent);
+  const receipt = readRecord(structuredContent?.receipt);
+  const routeId = readNonEmptyString(receipt?.routeId);
+  const commissionBps = readBasisPoints(receipt?.commissionBps);
+  const protocolFeeBpsOfCommission = readBasisPoints(
+    receipt?.protocolFeeBpsOfCommission,
+  );
+  const commissionAmountAtomic = readNonEmptyString(
+    receipt?.commissionAmountAtomic,
+  );
+  const protocolFeeAtomic = readNonEmptyString(receipt?.protocolFeeAtomic);
+  if (
+    routeId === undefined ||
+    commissionBps === undefined ||
+    protocolFeeBpsOfCommission === undefined ||
+    commissionAmountAtomic === undefined ||
+    protocolFeeAtomic === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    routeId,
+    commissionBps,
+    protocolFeeBpsOfCommission,
+    commissionAmountAtomic,
+    protocolFeeAtomic,
+  };
+}
+
 function joinPath(input: Phase7McpGatewayEvidenceInput, fileName: string): string {
   return input.joinPath === undefined
     ? `${input.outputDir}/${fileName}`
@@ -267,4 +331,13 @@ function readRecord(value: unknown): Record<string, unknown> | undefined {
 
 function readNonEmptyString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function readBasisPoints(value: unknown): number | undefined {
+  return Number.isInteger(value) &&
+    typeof value === "number" &&
+    value >= 0 &&
+    value <= 10_000
+    ? value
+    : undefined;
 }
