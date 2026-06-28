@@ -1,0 +1,19 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  PHASE7_REQUIRED_COMMAND_EVIDENCE,
+  createPhase7CommandEvidenceTemplate,
+} from "../src/phase7CommandEvidence.js";
+
+describe("Phase 7 command evidence template", () => {
+  it("lists every required command as a commented transcript checklist", () => {
+    const template = createPhase7CommandEvidenceTemplate();
+
+    expect(template).toContain("# Split402 Phase 7 command evidence transcript");
+    expect(template).toContain("Do not paste secrets");
+    for (const command of PHASE7_REQUIRED_COMMAND_EVIDENCE) {
+      expect(template).toContain(`# $ ${command}`);
+      expect(template).not.toContain(`\n$ ${command}`);
+    }
+  });
+});
