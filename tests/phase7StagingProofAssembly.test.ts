@@ -1,8 +1,21 @@
 import { describe, expect, it } from "vitest";
 
-import { assemblePhase7StagingProof } from "../src/phase7StagingProofAssembly.js";
+import {
+  PHASE7_STAGING_ATTACHMENT_FIELDS,
+  assemblePhase7StagingProof,
+} from "../src/phase7StagingProofAssembly.js";
 
 describe("Phase 7 staging proof assembly", () => {
+  it("lists every local artifact attachment needed for proof closure", () => {
+    expect(PHASE7_STAGING_ATTACHMENT_FIELDS[0]).toBe(
+      "hosted_preflight_evidence",
+    );
+    expect(PHASE7_STAGING_ATTACHMENT_FIELDS).toContain(
+      "artifact_manifest_evidence",
+    );
+    expect(PHASE7_STAGING_ATTACHMENT_FIELDS).toContain("commands_run");
+  });
+
   it("assembles proof values from artifact attachments", () => {
     const proof = assemblePhase7StagingProof({
       attachments: {
