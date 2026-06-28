@@ -2,6 +2,7 @@ export interface Phase7SourceDirtyInput {
   porcelainStatus: string;
   proofPath?: string;
   allowedArtifactPaths?: readonly string[];
+  repositoryRoot?: string;
 }
 
 export function listPhase7SourceWorktreeChanges(
@@ -9,14 +10,18 @@ export function listPhase7SourceWorktreeChanges(
 ): string[] {
   const allowedPaths = new Set(
     [input.proofPath, ...(input.allowedArtifactPaths ?? [])]
-      .map((path) => (path === undefined ? undefined : normalizeGitPath(path)))
+      .map((path) =>
+        path === undefined
+          ? undefined
+          : normalizeGitPath(path, input.repositoryRoot),
+      )
       .filter((path): path is string => path !== undefined && path.length > 0),
   );
   const allowedDirectories = new Set(
     [
       "phase7-staging-evidence",
       ...(input.allowedArtifactPaths ?? []).map((path) =>
-        readDirectoryName(normalizeGitPath(path)),
+        readDirectoryName(normalizeGitPath(path, input.repositoryRoot)),
       ),
     ].filter((path): path is string => path !== undefined && path.length > 0),
   );
@@ -51,8 +56,19 @@ function readPorcelainPath(line: string): string | undefined {
   return normalizeGitPath(renameParts[renameParts.length - 1] ?? value);
 }
 
-function normalizeGitPath(path: string): string {
-  return path.replace(/\\/gu, "/").replace(/^\.\/+/u, "").replace(/\/+$/u, "");
+function normalizeGitPath(path: string, repositoryRoot?: string): string {
+  const normalized = path
+    .replace(/\\/gu, "/")
+    .replace(/^\.\/+/u, "")
+    .replace(/\/+$/u, "");
+  if (repositoryRoot === undefined) {
+    return normalized;
+  }
+  const normalizedRoot = repositoryRoot
+    .replace(/\\/gu, "/")
+    .replace(/\/+$/u, "");
+  const prefix = `${normalizedRoot}/`;
+  return normalized.startsWith(prefix) ? normalized.slice(prefix.length) : normalized;
 }
 
 function readDirectoryName(path: string): string | undefined {
