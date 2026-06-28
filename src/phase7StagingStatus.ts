@@ -1647,6 +1647,13 @@ function validateMcpGatewayTranscript(
   if (searchRequest === undefined) {
     blockers.push("mcp_gateway_evidence missing split402.searchCapabilities request");
   } else {
+    const searchArguments = readToolCallArguments(searchRequest.message);
+    const searchBudget = readRecord(searchArguments?.budget);
+    if (readNonEmptyString(searchBudget?.maxAmountAtomic) === undefined) {
+      blockers.push(
+        "mcp_gateway_evidence search request missing budget.maxAmountAtomic",
+      );
+    }
     const searchResponse = findResponse(lines, searchRequest.message.id);
     const capabilities = readStructuredArray(searchResponse, "capabilities");
     if (capabilities === undefined || capabilities.length === 0) {

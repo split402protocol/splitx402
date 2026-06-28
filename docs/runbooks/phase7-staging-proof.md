@@ -164,11 +164,13 @@ The validator requires:
   retained amount.
 - `mcp_gateway_evidence` must be a local attached `mcp-gateway.jsonl`
   transcript containing initialize, tools/list, and
-  `split402.searchCapabilities` request/response pairs. The tools/list response
-  must advertise `split402.searchCapabilities`, `split402.execute`, and
-  `split402.getReceipt`. The transcript must include `split402.execute` with
-  provider id, amount paid, verified receipt status, referrer credit, and a
-  matching `split402.getReceipt` response for the returned receipt id.
+  `split402.searchCapabilities` request/response pairs. The search request must
+  include `budget.maxAmountAtomic` so the proof demonstrates budget-filtered
+  capability discovery. The tools/list response must advertise
+  `split402.searchCapabilities`, `split402.execute`, and `split402.getReceipt`.
+  The transcript must include `split402.execute` with provider id, amount paid,
+  verified receipt status, referrer credit, and a matching
+  `split402.getReceipt` response for the returned receipt id.
 - `artifact_manifest_evidence` must be a local attached
   `artifact-manifest.json` artifact. Local `attached:` artifacts must match the
   generated manifest.
