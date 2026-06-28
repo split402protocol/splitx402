@@ -52,6 +52,7 @@ export function createSplit402LaunchPreflightReport(
   const requiredFiles = [
     join(workspace.directory, workspace.readmeFileName),
     join(workspace.directory, workspace.phase6EvidenceFileName),
+    join(workspace.directory, workspace.phase6EnvFileName),
     join(workspace.directory, workspace.phase7ProofFileName),
     join(workspace.directory, workspace.phase7EnvFileName),
     join(workspace.phase7.directory, workspace.phase7.readmeFileName),

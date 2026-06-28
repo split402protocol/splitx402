@@ -43,6 +43,10 @@ export function createProductEvidenceInitWrites(
       contents: workspace.phase6EvidenceText,
     },
     {
+      path: join(workspace.directory, workspace.phase6EnvFileName),
+      contents: workspace.phase6EnvText,
+    },
+    {
       path: join(workspace.directory, workspace.phase7ProofFileName),
       contents: workspace.phase7ProofText,
     },

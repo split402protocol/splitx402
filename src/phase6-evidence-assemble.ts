@@ -11,6 +11,10 @@ import {
   phase6CustodyEvidenceEnvName,
   type Phase6CustodyEvidenceBundleValues,
 } from "./phase6CustodyBundle.js";
+import {
+  PHASE6_ATTACHMENT_ENV,
+  PHASE6_RECORD_EXTRACTION_ENV,
+} from "./phase6EvidenceAssemblyEnv.js";
 
 const env = process.env;
 
@@ -38,18 +42,9 @@ try {
       "Direct field override environment:",
       "  SPLIT402_PHASE6_EVIDENCE_<FIELD_NAME>",
       "Record extraction environment:",
-      "  SPLIT402_PHASE6_ASSEMBLE_IMAGE_PROVENANCE_RECORD",
-      "  SPLIT402_PHASE6_ASSEMBLE_SIGNER_POLICY_RECORD",
+      ...PHASE6_RECORD_EXTRACTION_ENV.map((envName) => `  ${envName}`),
       "Attachment path environment:",
-      "  SPLIT402_PHASE6_ASSEMBLE_NETWORK_POLICY_RECORD",
-      "  SPLIT402_PHASE6_ASSEMBLE_SMOKE_CHECK_OUTPUT",
-      "  SPLIT402_PHASE6_ASSEMBLE_UNKNOWN_OUTCOME_RECONCILIATION_RECORD",
-      "  SPLIT402_PHASE6_ASSEMBLE_ROTATION_DRILL_RECORD",
-      "  SPLIT402_PHASE6_ASSEMBLE_EMERGENCY_REVOCATION_DRILL_RECORD",
-      "  SPLIT402_PHASE6_ASSEMBLE_KEY_CUSTODY_RECORD",
-      "  SPLIT402_PHASE6_ASSEMBLE_INCIDENT_DRILL_RECORD",
-      "  SPLIT402_PHASE6_ASSEMBLE_ROLLBACK_DRILL_RECORD",
-      "  SPLIT402_PHASE6_ASSEMBLE_RPC_FAILOVER_RECORD",
+      ...PHASE6_ATTACHMENT_ENV.map((entry) => `  ${entry.envName}`),
     ].join("\n"),
   );
   process.exitCode = 1;
@@ -67,37 +62,9 @@ function readDirectValues(): Phase6CustodyEvidenceBundleValues {
 }
 
 function readAttachmentPaths(): NonNullable<Phase6EvidenceAssemblyInput["attachments"]> {
-  const attachmentEnv: ReadonlyArray<readonly [string, string]> = [
-    [
-      "network_policy_record",
-      "SPLIT402_PHASE6_ASSEMBLE_NETWORK_POLICY_RECORD",
-    ],
-    [
-      "signer_policy_record",
-      "SPLIT402_PHASE6_ASSEMBLE_SIGNER_POLICY_RECORD",
-    ],
-    ["smoke_check_output", "SPLIT402_PHASE6_ASSEMBLE_SMOKE_CHECK_OUTPUT"],
-    [
-      "unknown_outcome_reconciliation_record",
-      "SPLIT402_PHASE6_ASSEMBLE_UNKNOWN_OUTCOME_RECONCILIATION_RECORD",
-    ],
-    [
-      "rotation_drill_record",
-      "SPLIT402_PHASE6_ASSEMBLE_ROTATION_DRILL_RECORD",
-    ],
-    [
-      "emergency_revocation_drill_record",
-      "SPLIT402_PHASE6_ASSEMBLE_EMERGENCY_REVOCATION_DRILL_RECORD",
-    ],
-    ["key_custody_record", "SPLIT402_PHASE6_ASSEMBLE_KEY_CUSTODY_RECORD"],
-    ["incident_drill_record", "SPLIT402_PHASE6_ASSEMBLE_INCIDENT_DRILL_RECORD"],
-    ["rollback_drill_record", "SPLIT402_PHASE6_ASSEMBLE_ROLLBACK_DRILL_RECORD"],
-    ["rpc_failover_record", "SPLIT402_PHASE6_ASSEMBLE_RPC_FAILOVER_RECORD"],
-  ];
-
   return Object.fromEntries(
-    attachmentEnv
-      .map(([field, envName]) => [field, readOptionalEnv(envName)])
+    PHASE6_ATTACHMENT_ENV
+      .map((entry) => [entry.field, readOptionalEnv(entry.envName)])
       .filter((entry): entry is [string, string] => entry[1] !== undefined),
   );
 }
