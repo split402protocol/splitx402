@@ -6,6 +6,7 @@ import {
   parsePhase7ProofRecord,
   validatePhase7StagingProof,
 } from "./phase7StagingProof.js";
+import { PHASE7_REQUIRED_COMMAND_EVIDENCE } from "./phase7CommandEvidence.js";
 
 export const PHASE7_STAGING_COMMANDS = [
   {
@@ -1907,30 +1908,6 @@ function readMcpGatewaySelectedProvider(
     .map(readRecord)
     .find((capability) => capability?.providerId === providerId);
 }
-
-const PHASE7_REQUIRED_COMMAND_EVIDENCE = [
-  "git rev-parse HEAD",
-  "git status --short --branch",
-  "corepack pnpm phase7:staging:init",
-  "corepack pnpm phase7:staging:seed",
-  "corepack pnpm phase7:staging-proof",
-  "corepack pnpm phase7:hosted:preflight",
-  "corepack pnpm phase7:staging:collect-reads",
-  "corepack pnpm phase7:staging:collect-mcp-gateway",
-  "corepack pnpm demo:mcp-gateway:smoke",
-  "corepack pnpm demo:mcp-bundle",
-  "corepack pnpm demo:paid-suite",
-  "corepack pnpm phase7:staging:derive-receipt-verification",
-  "corepack pnpm phase7:staging:manifest",
-  "corepack pnpm phase7:staging:assemble",
-  "corepack pnpm phase7:staging:status",
-  "corepack pnpm lint",
-  "corepack pnpm typecheck",
-  "corepack pnpm test",
-  "corepack pnpm build",
-  "corepack pnpm vectors:check",
-  "corepack pnpm audit --audit-level high",
-] as const;
 
 function createCommandEvidenceStatus(
   proofText: string | undefined,

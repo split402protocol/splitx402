@@ -59,6 +59,9 @@ describe("Split402 product evidence workspace", () => {
       "corepack pnpm phase7:staging:collect-reads",
     );
     expect(workspace.nextCommands).toContain(
+      "corepack pnpm phase7:staging:commands-template > split402-launch-evidence/phase7-staging-evidence/commands.log",
+    );
+    expect(workspace.nextCommands).toContain(
       "Review split402-launch-evidence/phase7-staging-proof.txt and fill direct hosted proof fields.",
     );
     expect(workspace.nextCommands).toContain(
