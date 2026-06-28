@@ -375,13 +375,23 @@ async function handleRouterExecuteTool(
   if (record.budget === undefined) {
     return createErrorResponse(id, -32602, "budget argument is required");
   }
+  const matchingProviders = context.router.searchCapabilities({
+    capability,
+    ...(budgetFilter === undefined ? {} : { budget: budgetFilter })
+  });
   const provider =
-    context.router.searchCapabilities({
-      capability,
-      ...(budgetFilter === undefined ? {} : { budget: budgetFilter })
-    })[0] ?? context.router.searchCapabilities(capability)[0];
+    matchingProviders[0] ??
+    (budgetFilter === undefined
+      ? context.router.searchCapabilities(capability)[0]
+      : undefined);
   if (provider === undefined) {
-    return createErrorResponse(id, -32602, `unknown capability: ${capability}`);
+    return createErrorResponse(
+      id,
+      -32602,
+      budgetFilter === undefined
+        ? `unknown capability: ${capability}`
+        : `no providers match capability and budget: ${capability}`
+    );
   }
   const budget = readBudget(record.budget, provider);
   if ("message" in budget) {
