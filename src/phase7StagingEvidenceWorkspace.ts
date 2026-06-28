@@ -201,6 +201,8 @@ function createReadmeText(directory: string): string {
     "report should include providerId, amountPaidAtomic, receiptId,",
     "receiptVerificationStatus, referrerCreditAtomic, routeId, commissionBps,",
     "protocolFeeBpsOfCommission, commissionAmountAtomic, and protocolFeeAtomic.",
+    "The transcript should include the selected provider payToWallet and a",
+    "matching receipt payToWallet.",
     "The staging seed prints `proofEnv`; copy those values into",
     "`phase7-staging.env` before running hosted collectors.",
     "The proof remains no-go until",

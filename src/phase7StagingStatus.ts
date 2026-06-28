@@ -1886,6 +1886,9 @@ function validateMcpGatewayTranscript(
   }
   const selectedProviderNetwork = readNonEmptyString(selectedProvider?.network);
   const selectedProviderAsset = readNonEmptyString(selectedProvider?.asset);
+  const selectedProviderPayToWallet = readNonEmptyString(
+    selectedProvider?.payToWallet,
+  );
   const selectedProviderAmount = readPositiveAtomicString(
     selectedProvider?.amountAtomic,
   );
@@ -1895,6 +1898,11 @@ function validateMcpGatewayTranscript(
     }
     if (selectedProviderAsset === undefined) {
       blockers.push("mcp_gateway_evidence selected provider asset is missing");
+    }
+    if (selectedProviderPayToWallet === undefined) {
+      blockers.push(
+        "mcp_gateway_evidence selected provider payToWallet is missing",
+      );
     }
     if (selectedProviderAmount === undefined) {
       blockers.push(
@@ -1968,6 +1976,14 @@ function validateMcpGatewayTranscript(
   ) {
     blockers.push(
       "mcp_gateway_evidence getReceipt asset does not match selected provider",
+    );
+  }
+  if (
+    selectedProviderPayToWallet !== undefined &&
+    receiptRecord.payToWallet !== selectedProviderPayToWallet
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt payToWallet does not match selected provider",
     );
   }
   if (
