@@ -362,7 +362,15 @@ async function handleRouterExecuteTool(
   if (typeof capability !== "string") {
     return createErrorResponse(id, -32602, capability.message);
   }
-  const provider = context.router.searchCapabilities(capability)[0];
+  const budgetFilter = readOptionalBudgetFilter(record.budget);
+  if (budgetFilter !== undefined && "message" in budgetFilter) {
+    return createErrorResponse(id, -32602, budgetFilter.message);
+  }
+  const provider =
+    context.router.searchCapabilities({
+      capability,
+      ...(budgetFilter === undefined ? {} : { budget: budgetFilter })
+    })[0] ?? context.router.searchCapabilities(capability)[0];
   if (provider === undefined) {
     return createErrorResponse(id, -32602, `unknown capability: ${capability}`);
   }
