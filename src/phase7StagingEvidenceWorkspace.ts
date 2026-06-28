@@ -109,7 +109,15 @@ export function createPhase7StagingEvidenceWorkspace(input: {
 
 function createEnvText(directory: string): string {
   return [
-    "# Source this file after filling the direct SPLIT402_PHASE7_* proof fields.",
+    "# Uncomment and fill direct SPLIT402_PHASE7_* proof fields for this run.",
+    "# SPLIT402_PHASE7_PROOF_ID=phase7-staging-YYYY-MM-DD",
+    "# SPLIT402_PHASE7_PROOF_REVIEWERS=Split402 operators",
+    "# SPLIT402_PHASE7_STAGING_ENVIRONMENT=hosted-devnet-public-alpha",
+    "# SPLIT402_PHASE7_CONTROL_PLANE_URL=http://localhost:4021",
+    "# SPLIT402_PHASE7_DASHBOARD_URL=http://localhost:4027",
+    "# SPLIT402_PHASE7_DEMO_MERCHANT_URL=http://localhost:4023",
+    "# SPLIT402_PHASE7_WEBHOOK_RECEIVER_URL=http://localhost:4040",
+    "# SPLIT402_PHASE7_SOURCE_COMMIT defaults to git rev-parse HEAD when omitted.",
     "# The status checker will fail until each attached artifact file exists.",
     `SPLIT402_PHASE7_EVIDENCE_DIR=${directory}`,
     ...PHASE7_STAGING_EVIDENCE_ARTIFACTS.map(

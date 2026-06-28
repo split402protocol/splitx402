@@ -15,6 +15,15 @@ describe("Phase 7 staging evidence workspace", () => {
       PHASE7_STAGING_ATTACHMENT_FIELDS,
     );
     expect(workspace.envText).toContain(
+      "# SPLIT402_PHASE7_PROOF_ID=phase7-staging-YYYY-MM-DD",
+    );
+    expect(workspace.envText).toContain(
+      "# SPLIT402_PHASE7_CONTROL_PLANE_URL=http://localhost:4021",
+    );
+    expect(workspace.envText).toContain(
+      "# SPLIT402_PHASE7_SOURCE_COMMIT defaults to git rev-parse HEAD when omitted.",
+    );
+    expect(workspace.envText).toContain(
       "SPLIT402_PHASE7_EVIDENCE_DIR=evidence/phase7",
     );
     expect(workspace.envText).toContain(
