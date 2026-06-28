@@ -111,6 +111,7 @@ function createEnvText(directory: string): string {
   return [
     "# Source this file after filling the direct SPLIT402_PHASE7_* proof fields.",
     "# The status checker will fail until each attached artifact file exists.",
+    `SPLIT402_PHASE7_EVIDENCE_DIR=${directory}`,
     ...PHASE7_STAGING_EVIDENCE_ARTIFACTS.map(
       (artifact) =>
         `${phase7AttachmentEnvName(artifact.field)}=${directory}/${artifact.fileName}`,
