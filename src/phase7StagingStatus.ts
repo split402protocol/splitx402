@@ -14,6 +14,11 @@ export const PHASE7_STAGING_COMMANDS = [
     evidenceField: "commands_run",
   },
   {
+    gate: "hosted_staging_seed",
+    command: "corepack pnpm phase7:staging:seed",
+    evidenceField: "commands_run",
+  },
+  {
     gate: "proof_scaffold",
     command: "corepack pnpm phase7:staging-proof",
     evidenceField: "proof_id",
@@ -1497,6 +1502,7 @@ function createMcpGatewayStatus(
 
 const PHASE7_REQUIRED_COMMAND_EVIDENCE = [
   "corepack pnpm phase7:staging:init",
+  "corepack pnpm phase7:staging:seed",
   "corepack pnpm phase7:staging-proof",
   "corepack pnpm phase7:hosted:preflight",
   "corepack pnpm phase7:staging:collect-reads",
@@ -1963,6 +1969,7 @@ function createNextActions(
   if (validation === undefined) {
     return [
       "Create the evidence workspace with corepack pnpm phase7:staging:init.",
+      "Seed the hosted staging demo state with SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed.",
       "Generate a proof scaffold with corepack pnpm phase7:staging-proof.",
       "Run the dashboard, MCP bundle, paid-suite, control-plane read checks, and funding-balance check against staging.",
       "Capture MCP gateway transcript evidence with corepack pnpm phase7:staging:collect-mcp-gateway.",
