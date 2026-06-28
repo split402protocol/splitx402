@@ -107,7 +107,9 @@ dashboard summary has active campaign/route ids, webhook evidence has a
 delivered event, payout obligations show a positive obligation, and funding
 has at least one resolved `covered` or `deficit` asset. If it fails with
 `fundingStatus is unknown`, rerun the staging stack with the Solana RPC
-funding-balance provider configured before assembling the proof.
+funding-balance provider configured before assembling the proof. Read artifacts
+are written only after the full read set passes validation, so failed collection
+runs do not leave partial evidence files to assemble by accident.
 
 The status command must pass before Phase 7 can be marked ready for public-alpha
 demo review. It verifies that the hosted preflight artifact was captured against
