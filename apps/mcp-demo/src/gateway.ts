@@ -180,9 +180,11 @@ export function createDemoProvider(
   bundle: McpDemoBundle
 ): Split402CapabilityProvider {
   const tool = bundle.mcp.tools[0];
+  const sample = createSampleProtocolArtifacts();
   return {
     providerId: "split402-demo-merchant",
     capability: "solana.wallet-risk",
+    routeId: sample.artifacts.receipt.routeId!,
     merchantOrigin: bundle.merchant.origin,
     path: new URL(tool.paidHttpCall.url).pathname,
     method: tool.paidHttpCall.method,
@@ -196,6 +198,10 @@ export function createDemoProvider(
     reliability: {
       successRateBps: 9500,
       medianLatencyMs: 250
+    },
+    metadata: {
+      referrerWallet: sample.artifacts.receipt.referrerWallet!,
+      payoutWallet: sample.artifacts.receipt.payoutWallet!
     }
   };
 }
@@ -703,6 +709,7 @@ function publicProviderView(provider: Split402CapabilityProvider) {
   return {
     providerId: provider.providerId,
     capability: provider.capability,
+    ...(provider.routeId === undefined ? {} : { routeId: provider.routeId }),
     merchantOrigin: provider.merchantOrigin,
     path: provider.path,
     method: provider.method,
@@ -712,6 +719,12 @@ function publicProviderView(provider: Split402CapabilityProvider) {
     asset: provider.asset,
     payToWallet: provider.payToWallet,
     amountAtomic: provider.amountAtomic,
+    ...(provider.metadata?.referrerWallet === undefined
+      ? {}
+      : { referrerWallet: provider.metadata.referrerWallet }),
+    ...(provider.metadata?.payoutWallet === undefined
+      ? {}
+      : { payoutWallet: provider.metadata.payoutWallet }),
     reliability: provider.reliability ?? null
   };
 }

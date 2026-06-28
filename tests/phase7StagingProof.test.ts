@@ -1165,6 +1165,7 @@ funding_balance_evidence: funding.json
           includeSearchProviderAsset: false,
           includeSearchProviderPayToWallet: false,
           includeSearchProviderAmount: false,
+          includeSearchProviderRouteId: false,
         }),
       ),
     );
@@ -1188,6 +1189,9 @@ funding_balance_evidence: funding.json
     );
     expect(report.mcpGatewayStatus.blockers).toContain(
       "mcp_gateway_evidence selected provider amountAtomic must be a positive atomic amount",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence selected provider routeId is missing",
     );
   });
 
@@ -1225,6 +1229,32 @@ funding_balance_evidence: funding.json
     );
     expect(report.mcpGatewayStatus.blockers).toContain(
       "mcp_gateway_evidence execute amountPaidAtomic does not match selected provider amountAtomic",
+    );
+  });
+
+  it("blocks staged proof status when MCP receipt route differs from selected provider", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          searchProviderRouteId: "rte_00000000000000000000000000000003",
+          lookupRouteId: "rte_00000000000000000000000000000004",
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence getReceipt routeId does not match selected provider",
     );
   });
 
@@ -2064,10 +2094,12 @@ function createValidMcpGatewayTranscript(
     includeSearchProviderAsset?: boolean;
     includeSearchProviderPayToWallet?: boolean;
     includeSearchProviderAmount?: boolean;
+    includeSearchProviderRouteId?: boolean;
     searchProviderNetwork?: string;
     searchProviderAsset?: string;
     searchProviderPayToWallet?: string;
     searchProviderAmountAtomic?: string;
+    searchProviderRouteId?: string;
     amountPaidAtomic?: string;
     executeReferrerCreditAtomic?: string;
     lookupReceiptId?: string;
@@ -2076,6 +2108,7 @@ function createValidMcpGatewayTranscript(
     lookupNetwork?: string;
     lookupAsset?: string;
     lookupPayToWallet?: string;
+    lookupRouteId?: string;
     includeLookupRouteId?: boolean;
     includeLookupCommissionAmount?: boolean;
     lookupCommissionAmountAtomic?: string;
@@ -2108,6 +2141,8 @@ function createValidMcpGatewayTranscript(
   const includeSearchProviderPayToWallet =
     options.includeSearchProviderPayToWallet ?? true;
   const includeSearchProviderAmount = options.includeSearchProviderAmount ?? true;
+  const includeSearchProviderRouteId =
+    options.includeSearchProviderRouteId ?? true;
   const searchProviderNetwork =
     options.searchProviderNetwork ?? "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
   const searchProviderAsset = options.searchProviderAsset ?? "usdc-devnet";
@@ -2115,6 +2150,8 @@ function createValidMcpGatewayTranscript(
     options.searchProviderPayToWallet ?? "pay-to-wallet";
   const searchProviderAmountAtomic =
     options.searchProviderAmountAtomic ?? amountPaidAtomic;
+  const searchProviderRouteId =
+    options.searchProviderRouteId ?? "rte_00000000000000000000000000000003";
   const executeReferrerCreditAtomic =
     options.executeReferrerCreditAtomic ?? "1800";
   const tools = options.tools ?? [
@@ -2132,6 +2169,7 @@ function createValidMcpGatewayTranscript(
   const lookupAsset = options.lookupAsset ?? searchProviderAsset;
   const lookupPayToWallet =
     options.lookupPayToWallet ?? searchProviderPayToWallet;
+  const lookupRouteId = options.lookupRouteId ?? searchProviderRouteId;
   const includeLookupRouteId = options.includeLookupRouteId ?? true;
   const includeLookupCommissionAmount =
     options.includeLookupCommissionAmount ?? true;
@@ -2207,6 +2245,9 @@ function createValidMcpGatewayTranscript(
                 ...(includeSearchProviderAmount
                   ? { amountAtomic: searchProviderAmountAtomic }
                   : {}),
+                ...(includeSearchProviderRouteId
+                  ? { routeId: searchProviderRouteId }
+                  : {}),
               },
             ],
           },
@@ -2280,7 +2321,7 @@ function createValidMcpGatewayTranscript(
                           referrerCreditAtomic: lookupReferrerCreditAtomic,
                           requiredAmountAtomic: lookupRequiredAmountAtomic,
                           ...(includeLookupRouteId
-                            ? { routeId: "rte_00000000000000000000000000000003" }
+                            ? { routeId: lookupRouteId }
                             : {}),
                           ...(includeLookupCommissionAmount
                             ? { commissionAmountAtomic: lookupCommissionAmountAtomic }

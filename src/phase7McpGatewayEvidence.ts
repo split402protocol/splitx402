@@ -29,6 +29,7 @@ export interface Phase7McpGatewayEvidenceReport {
   providerAsset?: string;
   providerAmountAtomic?: string;
   providerPayToWallet?: string;
+  providerRouteId?: string;
   amountPaidAtomic?: string;
   receiptId?: string;
   receiptVerificationStatus?: string;
@@ -267,6 +268,11 @@ export async function collectPhase7McpGatewayEvidence(
             "mcp_gateway_evidence getReceipt payToWallet does not match selected provider",
           );
         }
+        if (receiptSummary.routeId !== providerSummary.routeId) {
+          blockers.push(
+            "mcp_gateway_evidence getReceipt routeId does not match selected provider",
+          );
+        }
       }
     }
     const amountPaid = readAtomicAmount(executionSummary.amountPaidAtomic);
@@ -306,6 +312,7 @@ export async function collectPhase7McpGatewayEvidence(
           providerAsset: providerSummary.asset,
           providerAmountAtomic: providerSummary.amountAtomic,
           providerPayToWallet: providerSummary.payToWallet,
+          providerRouteId: providerSummary.routeId,
         }),
     ...(executionSummary === undefined
       ? {}
@@ -384,6 +391,7 @@ interface McpGatewaySearchProviderSummary {
   asset: string;
   amountAtomic: string;
   payToWallet: string;
+  routeId: string;
 }
 
 function readExecutionSummary(
@@ -530,15 +538,17 @@ function readSearchProviderSummary(
     const asset = readNonEmptyString(capability.asset);
     const amountAtomic = readNonEmptyString(capability.amountAtomic);
     const payToWallet = readNonEmptyString(capability.payToWallet);
+    const routeId = readNonEmptyString(capability.routeId);
     if (
       network === undefined ||
       asset === undefined ||
       amountAtomic === undefined ||
-      payToWallet === undefined
+      payToWallet === undefined ||
+      routeId === undefined
     ) {
       return undefined;
     }
-    return { network, asset, amountAtomic, payToWallet };
+    return { network, asset, amountAtomic, payToWallet, routeId };
   }
   return undefined;
 }
