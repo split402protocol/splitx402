@@ -64,4 +64,19 @@ describe("Phase 7 staging artifact manifest", () => {
       ),
     ).toThrow("agent_discovery_evidence must be an attached local artifact");
   });
+
+  it("rejects bare artifact paths in proof records", () => {
+    expect(() =>
+      createPhase7StagingArtifactManifest(
+        createPhase7StagingProofRecord({
+          agent_discovery_evidence: "agent-discovery.json",
+          artifact_manifest_evidence: "attached: artifact-manifest.json",
+        }),
+        {
+          artifactBaseDir: "evidence",
+          readArtifact: () => new Uint8Array(),
+        },
+      ),
+    ).toThrow("agent_discovery_evidence must be an attached local artifact");
+  });
 });

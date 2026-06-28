@@ -82,7 +82,7 @@ function createArtifactManifestEntry(
 
   const artifactPath = readAttachedArtifactPath(reference);
   if (artifactPath === undefined) {
-    throw new Error(`${field} must be an attached artifact or http(s) URL`);
+    throw new Error(`${field} must be an attached local artifact`);
   }
   const resolvedPath =
     options.resolveArtifactPath === undefined

@@ -12,17 +12,20 @@ const envSchema = z.object({
   SPLIT402_PAYMENT_MODE: z.enum(["mock", "x402"]).default("mock"),
   SPLIT402_NETWORK: z.custom<`${string}:${string}`>(
     (value) => typeof value === "string" && value.includes(":"),
-    "network must be a CAIP-2 style value such as eip155:84532",
-  ).default("eip155:84532"),
-  SPLIT402_ASSET: z.string().min(1).default("USDC"),
+    "network must be a CAIP-2 style value such as solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+  ).default("solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1"),
+  SPLIT402_ASSET: z.string().min(1).default("usdc-devnet"),
   SPLIT402_PRICE_USD: z
     .string()
     .regex(/^\d+(\.\d+)?$/, "price must be a positive decimal string")
     .default("0.001"),
   SPLIT402_PAY_TO: z
     .string()
-    .regex(/^0x[a-fA-F0-9]{40}$/, "payTo must be an EVM address")
-    .default("0x0000000000000000000000000000000000000000"),
+    .regex(
+      /^(?:[1-9A-HJ-NP-Za-km-z]{32,44}|0x[a-fA-F0-9]{40})$/,
+      "payTo must be a Solana public key or an EVM address for legacy x402 mode",
+    )
+    .default("11111111111111111111111111111111"),
   SPLIT402_FACILITATOR_URL: z.string().url().default("https://x402.org/facilitator"),
   SPLIT402_SYNC_FACILITATOR: z
     .enum(["true", "false"])

@@ -19,6 +19,8 @@ export function createX402PaymentMiddleware(
   store: SettlementStore,
   logger: Logger,
 ): RequestHandler {
+  assertLegacyEvmConfig(config);
+
   const facilitatorClient = new HTTPFacilitatorClient({
     url: config.facilitatorUrl,
   });
@@ -67,4 +69,17 @@ export function createX402PaymentMiddleware(
     undefined,
     config.syncFacilitator,
   );
+}
+
+function assertLegacyEvmConfig(config: AppConfig): void {
+  if (!config.network.startsWith("eip155:")) {
+    throw new Error(
+      "SPLIT402_PAYMENT_MODE=x402 is the legacy EVM transitional path; use an eip155:* network or run the canonical Solana Split402 demos",
+    );
+  }
+  if (!/^0x[a-fA-F0-9]{40}$/u.test(config.payTo)) {
+    throw new Error(
+      "SPLIT402_PAYMENT_MODE=x402 requires an EVM payTo address for the legacy transitional path",
+    );
+  }
 }

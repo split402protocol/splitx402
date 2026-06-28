@@ -97,14 +97,11 @@ the viewer token before the payment proof run.
 `receipt-verification.json` from the captured `paid-suite.log`, preserving the
 verified commission-bearing receipt and the invalid-claim zero-commission path
 as machine-checkable JSON.
-`phase7:staging:manifest` records SHA-256 hashes for local attached artifacts
-and remote references for URL-based artifacts that do not require local machine
-parsing. It rejects remote references for proof artifacts that must be local,
-including paid-suite, receipt verification, read API, funding, MCP bundle, MCP
-gateway, command transcript, and hosted preflight evidence. Attach the generated
-`artifact-manifest.json` locally; the status checker will not close the proof
-against a remote manifest URL. Generate it after the evidence files exist and
-before the final assemble/status check.
+`phase7:staging:manifest` records SHA-256 hashes for local attached artifacts.
+All Phase 7 proof evidence is local-only so the status checker can parse and
+hash every artifact. Attach the generated `artifact-manifest.json` locally; the
+status checker will not close the proof against a remote manifest URL. Generate
+it after the evidence files exist and before the final assemble/status check.
 The MCP gateway transcript is attached as `mcp_gateway_evidence`; it proves
 gateway discovery, execution, and receipt lookup in addition to the stable
 `mcp-bundle.json` evidence.
