@@ -126,7 +126,13 @@ describe("Phase 7 staging evidence workspace", () => {
       "phase7:hosted:preflight > phase7-staging-evidence/hosted-preflight.json",
     );
     expect(workspace.readmeText).toContain(
-      "corepack pnpm phase7:staging:collect-mcp-gateway",
+      "# Fill SPLIT402_MCP_* hosted proof variables and use a funded buyer key.",
+    );
+    expect(workspace.readmeText).toContain(
+      "SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 corepack pnpm phase7:staging:collect-mcp-gateway",
+    );
+    expect(workspace.readmeText).not.toContain(
+      "\ncorepack pnpm phase7:staging:collect-mcp-gateway\n",
     );
     expect(workspace.readmeText).toContain(
       "corepack pnpm demo:mcp-gateway:smoke",
