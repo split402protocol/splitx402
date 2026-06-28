@@ -111,6 +111,7 @@ describe("MCP demo gateway", () => {
       }
     });
     expect(result.tools[2]?.inputSchema).toMatchObject({
+      required: ["capability", "input", "budget"],
       properties: {
         referralClaim: { type: "object" },
         budget: {
@@ -439,6 +440,41 @@ describe("MCP demo gateway", () => {
           })
         },
         isError: false
+      }
+    });
+  });
+
+  it("rejects router execution without an explicit budget", async () => {
+    const context = createMcpGatewayContext(
+      createMcpDemoBundle({
+        generatedAt: "2026-06-26T00:00:00.000Z"
+      })
+    );
+
+    const response = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "execute-no-budget",
+        method: "tools/call",
+        params: {
+          name: "split402.execute",
+          arguments: {
+            capability: "solana.wallet-risk",
+            input: {
+              wallet: "wallet-123"
+            }
+          }
+        }
+      }),
+      context
+    );
+
+    expect(response).toEqual({
+      jsonrpc: "2.0",
+      id: "execute-no-budget",
+      error: {
+        code: -32602,
+        message: "budget argument is required"
       }
     });
   });
