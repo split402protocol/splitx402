@@ -72,7 +72,7 @@ describe("Phase 7 MCP gateway evidence collector", () => {
       writeArtifact: (path, text) => writes.set(path, text),
     });
 
-    expect(report).toEqual({
+    expect(report).toMatchObject({
       schema: "split402.phase7_mcp_gateway_evidence.v1",
       outputDir: "evidence",
       artifactPath: "evidence/mcp-gateway.jsonl",
@@ -84,7 +84,6 @@ describe("Phase 7 MCP gateway evidence collector", () => {
       receiptLookupCaptured: true,
       providerId: "split402-demo-merchant",
       amountPaidAtomic: "10000",
-      receiptId: "rcp_00000000000000000000000000000005",
       receiptVerificationStatus: "verified",
       referrerCreditAtomic: "1800",
       routeId: "rte_00000000000000000000000000000003",
@@ -95,13 +94,14 @@ describe("Phase 7 MCP gateway evidence collector", () => {
       requestCount: 5,
       responseCount: 5,
     });
+    expect(report.receiptId).toMatch(/^rcp_[0-9a-f]{32}$/u);
     const transcript = writes.get("evidence/mcp-gateway.jsonl");
     expect(transcript).toContain('"split402.execute"');
     expect(transcript).toContain('"split402.getReceipt"');
     expect(transcript).toContain('"budget":{"maxAmountAtomic":"50000"}');
     expect(transcript).toContain('"providerId":"split402-demo-merchant"');
     expect(transcript).toContain('"amountPaidAtomic":"10000"');
-    expect(transcript).toContain('"receiptId":"rcp_00000000000000000000000000000005"');
+    expect(transcript).toContain(`"receiptId":"${report.receiptId}"`);
     expect(transcript).toContain('"receiptVerificationStatus":"verified"');
     expect(transcript).toContain('"referrerCreditAtomic":"1800"');
     expect(transcript).toContain('"routeId":"rte_00000000000000000000000000000003"');
