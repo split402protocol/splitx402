@@ -35,7 +35,10 @@ artifact files; those must be captured from the hosted staging run.
 `phase7:staging:collect-reads` captures the control-plane read evidence for
 referrer routes, referrer balances, dashboard summary, webhook delivery, payout
 obligations, and funding-balance coverage using the staging merchant and
-referrer environment variables.
+referrer environment variables. It fails immediately if the funding-balance
+artifact is not a merchant obligation summary with resolved `covered` or
+`deficit` funding states, so unresolved funding cannot slip through as a
+successful collection.
 `phase7:staging:collect-mcp-gateway` captures `mcp-gateway.jsonl` by sending
 `initialize`, `tools/list`, `split402.searchCapabilities`, `split402.execute`,
 and `split402.getReceipt` requests through the MCP gateway. The transcript must

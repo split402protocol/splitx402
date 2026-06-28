@@ -69,6 +69,9 @@ export async function collectPhase7ReadArtifacts(
         )}`,
       );
     }
+    if (spec.field === "funding_balance_evidence") {
+      assertResolvedFundingBalanceArtifact(text);
+    }
     const artifactPath = joinPath(input, spec.fileName);
     input.writeArtifact(artifactPath, formatArtifact(text));
     captures.push({
@@ -168,4 +171,104 @@ function assertNonEmpty(value: string, label: string): string {
     throw new Error(`${label} is required`);
   }
   return trimmed;
+}
+
+function assertResolvedFundingBalanceArtifact(text: string): void {
+  let artifact: unknown;
+  try {
+    artifact = JSON.parse(text);
+  } catch (error) {
+    throw new Error(
+      `funding_balance_evidence artifact is not valid JSON: ${formatError(error)}`,
+    );
+  }
+
+  const summary = readRecord(artifact)?.summary ?? artifact;
+  const summaryRecord = readRecord(summary);
+  if (summaryRecord?.schema !== "split402.merchant_obligation_summary.v1") {
+    throw new Error(
+      "funding_balance_evidence must contain a merchant obligation summary",
+    );
+  }
+  const assets = summaryRecord.assets;
+  if (!Array.isArray(assets) || assets.length === 0) {
+    throw new Error(
+      "funding_balance_evidence summary must include at least one asset",
+    );
+  }
+
+  let hasCoveredOrDeficit = false;
+  for (const [index, asset] of assets.entries()) {
+    const record = readRecord(asset);
+    if (record === undefined) {
+      throw new Error(`funding_balance_evidence assets[${index}] is invalid`);
+    }
+    const assetName = readNonEmptyString(record.asset) ?? `assets[${index}]`;
+    const fundingStatus = record.fundingStatus;
+    if (fundingStatus === "unknown") {
+      throw new Error(
+        `funding_balance_evidence ${assetName} fundingStatus is unknown`,
+      );
+    }
+    if (fundingStatus !== "covered" && fundingStatus !== "deficit") {
+      throw new Error(
+        `funding_balance_evidence ${assetName} fundingStatus must be covered or deficit`,
+      );
+    }
+    hasCoveredOrDeficit = true;
+
+    const fundingAmount = readNonNegativeAtomicString(record.fundingAmountAtomic);
+    if (fundingAmount === undefined) {
+      throw new Error(
+        `funding_balance_evidence ${assetName} fundingAmountAtomic must be a non-negative atomic amount`,
+      );
+    }
+    const fundingDeficit = readNonNegativeAtomicString(
+      record.fundingDeficitAtomic,
+    );
+    if (fundingDeficit === undefined) {
+      throw new Error(
+        `funding_balance_evidence ${assetName} fundingDeficitAtomic must be a non-negative atomic amount`,
+      );
+    }
+    if (fundingStatus === "covered" && fundingDeficit !== 0n) {
+      throw new Error(
+        `funding_balance_evidence ${assetName} covered status must have zero deficit`,
+      );
+    }
+    if (fundingStatus === "deficit" && fundingDeficit <= 0n) {
+      throw new Error(
+        `funding_balance_evidence ${assetName} deficit status must report a positive deficit`,
+      );
+    }
+  }
+
+  if (!hasCoveredOrDeficit) {
+    throw new Error(
+      "funding_balance_evidence must include at least one asset with covered or deficit funding status",
+    );
+  }
+}
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function readNonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : undefined;
+}
+
+function readNonNegativeAtomicString(value: unknown): bigint | undefined {
+  if (typeof value !== "string" || !/^(0|[1-9]\d*)$/u.test(value)) {
+    return undefined;
+  }
+  return BigInt(value);
+}
+
+function formatError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
