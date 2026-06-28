@@ -99,6 +99,13 @@ corepack pnpm phase7:staging:assemble > phase7-staging-proof.txt
 corepack pnpm phase7:staging:status phase7-staging-proof.txt
 ```
 
+`phase7:staging:collect-reads` writes both payout-obligation and
+funding-balance artifacts from the payout-obligations endpoint. The collector
+fails fast unless the funding artifact contains a merchant obligation summary
+with at least one asset in resolved `covered` or `deficit` state. If it fails
+with `fundingStatus is unknown`, rerun the staging stack with the Solana RPC
+funding-balance provider configured before assembling the proof.
+
 The status command must pass before Phase 7 can be marked ready for public-alpha
 demo review. It verifies that the hosted preflight artifact was captured against
 the same control-plane and dashboard URLs listed in the proof, and that the
