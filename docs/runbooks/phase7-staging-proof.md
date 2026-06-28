@@ -131,7 +131,7 @@ local-only proof artifacts; use local `attached:` artifacts for evidence that
 the status checker parses. Leave `approval_decision` as `no-go` until all
 attached evidence is from the same staging environment and source commit.
 Include `artifact_manifest_evidence` from
-`corepack pnpm phase7:staging:manifest`.
+`corepack pnpm phase7:staging:manifest phase7-staging-proof.txt`.
 
 The validator requires:
 
