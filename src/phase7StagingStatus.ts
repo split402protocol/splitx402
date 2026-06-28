@@ -1819,6 +1819,20 @@ function validateMcpGatewayTranscript(
       "mcp_gateway_evidence getReceipt commissionAmountAtomic must be positive",
     );
   }
+  const receiptCommissionBps = readBasisPoints(receiptRecord.commissionBps);
+  if (receiptCommissionBps === undefined || receiptCommissionBps === 0) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt commissionBps must be positive basis points",
+    );
+  }
+  const receiptProtocolFeeBps = readBasisPoints(
+    receiptRecord.protocolFeeBpsOfCommission,
+  );
+  if (receiptProtocolFeeBps === undefined) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt protocolFeeBpsOfCommission must be basis points",
+    );
+  }
   const receiptProtocolFee = readNonNegativeAtomicString(
     receiptRecord.protocolFeeAtomic,
   );
@@ -1826,6 +1840,35 @@ function validateMcpGatewayTranscript(
     blockers.push(
       "mcp_gateway_evidence getReceipt protocolFeeAtomic must be a non-negative atomic amount",
     );
+  }
+  const receiptRequiredAmount = readNonNegativeAtomicString(
+    receiptRecord.requiredAmountAtomic,
+  );
+  if (
+    receiptRequiredAmount !== undefined &&
+    receiptCommissionBps !== undefined &&
+    receiptCommissionAmount !== undefined
+  ) {
+    const expectedCommission =
+      (receiptRequiredAmount * BigInt(receiptCommissionBps)) / 10_000n;
+    if (receiptCommissionAmount !== expectedCommission) {
+      blockers.push(
+        "mcp_gateway_evidence getReceipt commissionAmountAtomic does not match commissionBps",
+      );
+    }
+  }
+  if (
+    receiptCommissionAmount !== undefined &&
+    receiptProtocolFeeBps !== undefined &&
+    receiptProtocolFee !== undefined
+  ) {
+    const expectedProtocolFee =
+      (receiptCommissionAmount * BigInt(receiptProtocolFeeBps)) / 10_000n;
+    if (receiptProtocolFee !== expectedProtocolFee) {
+      blockers.push(
+        "mcp_gateway_evidence getReceipt protocolFeeAtomic does not match protocolFeeBpsOfCommission",
+      );
+    }
   }
   const receiptReferrerCredit = readNonNegativeAtomicString(
     receiptRecord.referrerCreditAtomic,
