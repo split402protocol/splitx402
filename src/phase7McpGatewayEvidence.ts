@@ -148,6 +148,12 @@ export async function collectPhase7McpGatewayEvidence(
         );
       }
       executionSummary = readExecutionSummary(executeResponse);
+      if (
+        executeResponse.error === undefined &&
+        executionSummary === undefined
+      ) {
+        addExecutionSummaryBlockers(executeResponse, blockers);
+      }
       const receiptId = executionSummary?.receiptId;
       if (receiptId !== undefined) {
         const receiptRequest: JsonRpcRequest = {
@@ -220,6 +226,14 @@ export async function collectPhase7McpGatewayEvidence(
     if (executionSummary.receiptVerificationStatus !== "verified") {
       blockers.push(
         "mcp_gateway_evidence execute response receiptVerificationStatus is not verified",
+      );
+    }
+    if (
+      readPositiveAtomicAmount(executionSummary.referrerCreditAtomic) ===
+      undefined
+    ) {
+      blockers.push(
+        "mcp_gateway_evidence execute response referrerCreditAtomic must be positive",
       );
     }
     if (executionSummary.executionMode !== context.executionMode) {
@@ -405,6 +419,49 @@ function readExecutionSummary(
     executionMode,
     referrerCreditAtomic,
   };
+}
+
+function addExecutionSummaryBlockers(
+  response: McpGatewayResponse,
+  blockers: string[],
+): void {
+  const result = readRecord(response.result);
+  const structuredContent = readRecord(result?.structuredContent);
+  if (structuredContent === undefined) {
+    blockers.push("mcp_gateway_evidence execute response is missing structuredContent");
+    return;
+  }
+  for (const [field, value] of [
+    ["providerId", structuredContent.providerId],
+    ["amountPaidAtomic", structuredContent.amountPaidAtomic],
+    ["receiptId", structuredContent.receiptId],
+    ["referrerCreditAtomic", structuredContent.referrerCreditAtomic],
+  ] as const) {
+    if (readNonEmptyString(value) === undefined) {
+      blockers.push(`mcp_gateway_evidence execute response missing ${field}`);
+    }
+  }
+  if (structuredContent.receiptVerificationStatus !== "verified") {
+    blockers.push(
+      "mcp_gateway_evidence execute response receiptVerificationStatus is not verified",
+    );
+  }
+  if (readExecutionMode(structuredContent.executionMode) === undefined) {
+    blockers.push(
+      "mcp_gateway_evidence execute response executionMode is missing or unsupported",
+    );
+  }
+  const referrerCreditAtomic = readNonEmptyString(
+    structuredContent.referrerCreditAtomic,
+  );
+  if (
+    referrerCreditAtomic !== undefined &&
+    readPositiveAtomicAmount(referrerCreditAtomic) === undefined
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence execute response referrerCreditAtomic must be positive",
+    );
+  }
 }
 
 function readReceiptSummary(
