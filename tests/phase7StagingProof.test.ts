@@ -193,6 +193,18 @@ approval_decision: no-go
     expect(report.nextActions).toContain(
       "Run the hosted staging preflight with corepack pnpm phase7:hosted:preflight.",
     );
+    expect(report.nextActions).toContain(
+      "Capture MCP bundle evidence with corepack pnpm demo:mcp-bundle > phase7-staging-evidence/mcp-bundle.json.",
+    );
+    expect(report.nextActions).toContain(
+      "Capture paid-suite evidence with corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log.",
+    );
+    expect(report.nextActions).toContain(
+      "Derive receipt-verification evidence with corepack pnpm phase7:staging:derive-receipt-verification.",
+    );
+    expect(report.nextActions).not.toContain(
+      "Run the dashboard, MCP bundle, paid-suite, control-plane read checks, and funding-balance check against staging.",
+    );
   });
 
   it("reports gate-level blockers for incomplete proof evidence", () => {
