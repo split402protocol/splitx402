@@ -113,7 +113,9 @@ hosted route discovery. Phase 7 proof closure also requires
 `SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1` enabled only after the same staging run
 has live x402 buyer configuration. Set `SPLIT402_MCP_SVM_PRIVATE_KEY` or
 `SVM_PRIVATE_KEY` to the funded buyer key, and set `SPLIT402_MCP_WALLET` and
-`SPLIT402_MCP_MAX_AMOUNT_ATOMIC` for the execution input and budget.
+`SPLIT402_MCP_MAX_AMOUNT_ATOMIC` for the execution input and budget. The status
+validator requires the search and execute budgets to match and the reported paid
+amount to stay within that budget.
 The collector JSON report should echo the provider id, paid amount, receipt id,
 receipt verification status, and referrer credit from the executed router call.
 Run `corepack pnpm demo:mcp-gateway:smoke` as a deterministic local gateway

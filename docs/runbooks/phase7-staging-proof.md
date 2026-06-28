@@ -168,9 +168,10 @@ The validator requires:
   include `budget.maxAmountAtomic` so the proof demonstrates budget-filtered
   capability discovery. The tools/list response must advertise
   `split402.searchCapabilities`, `split402.execute`, and `split402.getReceipt`.
-  The transcript must include `split402.execute` with provider id, amount paid,
-  verified receipt status, referrer credit, and a matching
-  `split402.getReceipt` response for the returned receipt id.
+  The transcript must include `split402.execute` with the same
+  `budget.maxAmountAtomic`, provider id, amount paid at or below that budget,
+  verified receipt status, referrer credit, and a matching `split402.getReceipt`
+  response for the returned receipt id.
 - `artifact_manifest_evidence` must be a local attached
   `artifact-manifest.json` artifact. Local `attached:` artifacts must match the
   generated manifest.

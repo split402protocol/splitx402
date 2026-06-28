@@ -1669,6 +1669,28 @@ function validateMcpGatewayTranscript(
     blockers.push("mcp_gateway_evidence missing split402.execute request");
     return;
   }
+  const searchBudget =
+    searchRequest === undefined
+      ? undefined
+      : readRecord(readToolCallArguments(searchRequest.message)?.budget);
+  const searchMaxAmountAtomic = readNonEmptyString(searchBudget?.maxAmountAtomic);
+  const executeArguments = readToolCallArguments(executeRequest.message);
+  const executeBudget = readRecord(executeArguments?.budget);
+  const executeMaxAmountAtomic = readNonEmptyString(
+    executeBudget?.maxAmountAtomic,
+  );
+  if (executeMaxAmountAtomic === undefined) {
+    blockers.push(
+      "mcp_gateway_evidence execute request missing budget.maxAmountAtomic",
+    );
+  } else if (
+    searchMaxAmountAtomic !== undefined &&
+    executeMaxAmountAtomic !== searchMaxAmountAtomic
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence execute budget.maxAmountAtomic does not match search budget",
+    );
+  }
 
   const executeResponse = findResponse(lines, executeRequest.message.id);
   const executeContent = readStructuredContent(executeResponse);
@@ -1690,6 +1712,19 @@ function validateMcpGatewayTranscript(
   if (executeContent.receiptVerificationStatus !== "verified") {
     blockers.push(
       "mcp_gateway_evidence execute response receiptVerificationStatus is not verified",
+    );
+  }
+  const amountPaidAtomic = readNonNegativeAtomicString(
+    executeContent.amountPaidAtomic,
+  );
+  const budgetAmountAtomic = readNonNegativeAtomicString(executeMaxAmountAtomic);
+  if (
+    amountPaidAtomic !== undefined &&
+    budgetAmountAtomic !== undefined &&
+    amountPaidAtomic > budgetAmountAtomic
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence execute response amountPaidAtomic exceeds budget.maxAmountAtomic",
     );
   }
   if (receiptId === undefined) {
