@@ -131,11 +131,13 @@ bundle output, MCP gateway transcript evidence, and artifact manifest hashes
 from the same staging environment.
 The MCP gateway collection report must identify the provider used, paid amount,
 receipt id, verification status, referrer credit, provider route id, receipt
-route id, provider referrer wallet, receipt referrer wallet, provider payout
-wallet, receipt payout wallet, commission bps, protocol-fee bps, commission
-amount, and protocol-fee amount for the executed router call. Demo-mode MCP
-collection remains no-go; proof-ready MCP evidence must come from
-`router-live-agent-sdk` execution against hosted route discovery.
+route id, provider merchant origin, receipt merchant origin, provider operation
+id, receipt operation id, provider campaign id, receipt campaign id, provider
+referrer wallet, receipt referrer wallet, provider payout wallet, receipt payout
+wallet, commission bps, protocol-fee bps, commission amount, and protocol-fee
+amount for the executed router call. Demo-mode MCP collection remains no-go;
+proof-ready MCP evidence must come from `router-live-agent-sdk` execution
+against hosted route discovery.
 The final status check verifies that local `attached:` artifacts still match the
 recorded local manifest sizes and SHA-256 hashes, and that the hosted preflight
 checks passed against the same source commit, control-plane URL, and dashboard
@@ -146,8 +148,9 @@ present and non-empty. The paid-suite log and receipt-verification JSON are
 checked for a successful paid request, a verified commission-bearing receipt,
 and the invalid-claim zero-commission path. The MCP gateway transcript must
 prove budget-filtered capability discovery, live router execution, matching
-provider network/asset/amount/pay-to wallet/route id, matching receipt lookup,
-selected-provider route/referrer/payout attribution, and
+provider network/asset/merchant origin/operation id/campaign id/amount/pay-to
+wallet/route id, matching receipt lookup, selected-provider
+merchant/campaign/operation/route/referrer/payout attribution, and
 commission/protocol-fee amounts derived from the receipt
 `commissionBps` and `protocolFeeBpsOfCommission` fields. The command transcript
 must include the Phase 7 evidence commands and full validation suite.

@@ -1163,6 +1163,9 @@ funding_balance_evidence: funding.json
         createValidMcpGatewayTranscript({
           includeSearchProviderNetwork: false,
           includeSearchProviderAsset: false,
+          includeSearchProviderMerchantOrigin: false,
+          includeSearchProviderOperationId: false,
+          includeSearchProviderCampaignId: false,
           includeSearchProviderPayToWallet: false,
           includeSearchProviderAmount: false,
           includeSearchProviderRouteId: false,
@@ -1185,6 +1188,15 @@ funding_balance_evidence: funding.json
     );
     expect(report.mcpGatewayStatus.blockers).toContain(
       "mcp_gateway_evidence selected provider asset is missing",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence selected provider merchantOrigin is missing",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence selected provider operationId is missing",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence selected provider campaignId is missing",
     );
     expect(report.mcpGatewayStatus.blockers).toContain(
       "mcp_gateway_evidence selected provider payToWallet is missing",
@@ -1237,6 +1249,39 @@ funding_balance_evidence: funding.json
     );
     expect(report.mcpGatewayStatus.blockers).toContain(
       "mcp_gateway_evidence execute amountPaidAtomic does not match selected provider amountAtomic",
+    );
+  });
+
+  it("blocks staged proof status when MCP receipt context differs from selected provider", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          lookupMerchantOrigin: "https://other-merchant.example",
+          lookupOperationId: "other-operation",
+          lookupCampaignId: "cmp_ffffffffffffffffffffffffffffffff",
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence getReceipt merchantOrigin does not match selected provider",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence getReceipt operationId does not match selected provider",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence getReceipt campaignId does not match selected provider",
     );
   });
 
@@ -2131,6 +2176,9 @@ function createValidMcpGatewayTranscript(
     executeExecutionMode?: string;
     includeSearchProviderNetwork?: boolean;
     includeSearchProviderAsset?: boolean;
+    includeSearchProviderMerchantOrigin?: boolean;
+    includeSearchProviderOperationId?: boolean;
+    includeSearchProviderCampaignId?: boolean;
     includeSearchProviderPayToWallet?: boolean;
     includeSearchProviderAmount?: boolean;
     includeSearchProviderRouteId?: boolean;
@@ -2138,6 +2186,9 @@ function createValidMcpGatewayTranscript(
     includeSearchProviderPayoutWallet?: boolean;
     searchProviderNetwork?: string;
     searchProviderAsset?: string;
+    searchProviderMerchantOrigin?: string;
+    searchProviderOperationId?: string;
+    searchProviderCampaignId?: string;
     searchProviderPayToWallet?: string;
     searchProviderAmountAtomic?: string;
     searchProviderRouteId?: string;
@@ -2150,6 +2201,9 @@ function createValidMcpGatewayTranscript(
     lookupRequiredAmountAtomic?: string;
     lookupNetwork?: string;
     lookupAsset?: string;
+    lookupMerchantOrigin?: string;
+    lookupOperationId?: string;
+    lookupCampaignId?: string;
     lookupPayToWallet?: string;
     lookupRouteId?: string;
     lookupReferrerWallet?: string;
@@ -2185,6 +2239,12 @@ function createValidMcpGatewayTranscript(
   const includeSearchProviderNetwork =
     options.includeSearchProviderNetwork ?? true;
   const includeSearchProviderAsset = options.includeSearchProviderAsset ?? true;
+  const includeSearchProviderMerchantOrigin =
+    options.includeSearchProviderMerchantOrigin ?? true;
+  const includeSearchProviderOperationId =
+    options.includeSearchProviderOperationId ?? true;
+  const includeSearchProviderCampaignId =
+    options.includeSearchProviderCampaignId ?? true;
   const includeSearchProviderPayToWallet =
     options.includeSearchProviderPayToWallet ?? true;
   const includeSearchProviderAmount = options.includeSearchProviderAmount ?? true;
@@ -2197,6 +2257,12 @@ function createValidMcpGatewayTranscript(
   const searchProviderNetwork =
     options.searchProviderNetwork ?? "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
   const searchProviderAsset = options.searchProviderAsset ?? "usdc-devnet";
+  const searchProviderMerchantOrigin =
+    options.searchProviderMerchantOrigin ?? "https://merchant.staging.example";
+  const searchProviderOperationId =
+    options.searchProviderOperationId ?? "wallet-risk-score";
+  const searchProviderCampaignId =
+    options.searchProviderCampaignId ?? "cmp_00000000000000000000000000000002";
   const searchProviderPayToWallet =
     options.searchProviderPayToWallet ?? "pay-to-wallet";
   const searchProviderAmountAtomic =
@@ -2222,6 +2288,11 @@ function createValidMcpGatewayTranscript(
     options.lookupRequiredAmountAtomic ?? amountPaidAtomic;
   const lookupNetwork = options.lookupNetwork ?? searchProviderNetwork;
   const lookupAsset = options.lookupAsset ?? searchProviderAsset;
+  const lookupMerchantOrigin =
+    options.lookupMerchantOrigin ?? searchProviderMerchantOrigin;
+  const lookupOperationId =
+    options.lookupOperationId ?? searchProviderOperationId;
+  const lookupCampaignId = options.lookupCampaignId ?? searchProviderCampaignId;
   const lookupPayToWallet =
     options.lookupPayToWallet ?? searchProviderPayToWallet;
   const lookupRouteId = options.lookupRouteId ?? searchProviderRouteId;
@@ -2301,6 +2372,15 @@ function createValidMcpGatewayTranscript(
                   ? { network: searchProviderNetwork }
                   : {}),
                 ...(includeSearchProviderAsset ? { asset: searchProviderAsset } : {}),
+                ...(includeSearchProviderMerchantOrigin
+                  ? { merchantOrigin: searchProviderMerchantOrigin }
+                  : {}),
+                ...(includeSearchProviderOperationId
+                  ? { operationId: searchProviderOperationId }
+                  : {}),
+                ...(includeSearchProviderCampaignId
+                  ? { campaignId: searchProviderCampaignId }
+                  : {}),
                 ...(includeSearchProviderPayToWallet
                   ? { payToWallet: searchProviderPayToWallet }
                   : {}),
@@ -2385,6 +2465,9 @@ function createValidMcpGatewayTranscript(
                           receiptId: lookupReceiptId,
                           network: lookupNetwork,
                           asset: lookupAsset,
+                          merchantOrigin: lookupMerchantOrigin,
+                          operationId: lookupOperationId,
+                          campaignId: lookupCampaignId,
                           payToWallet: lookupPayToWallet,
                           referrerCreditAtomic: lookupReferrerCreditAtomic,
                           requiredAmountAtomic: lookupRequiredAmountAtomic,

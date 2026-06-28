@@ -27,6 +27,9 @@ export interface Phase7McpGatewayEvidenceReport {
   maxAmountAtomic?: string;
   providerNetwork?: string;
   providerAsset?: string;
+  providerMerchantOrigin?: string;
+  providerOperationId?: string;
+  providerCampaignId?: string;
   providerAmountAtomic?: string;
   providerPayToWallet?: string;
   providerRouteId?: string;
@@ -40,6 +43,9 @@ export interface Phase7McpGatewayEvidenceReport {
   routeId?: string;
   network?: string;
   asset?: string;
+  merchantOrigin?: string;
+  operationId?: string;
+  campaignId?: string;
   requiredAmountAtomic?: string;
   payToWallet?: string;
   receiptReferrerCreditAtomic?: string;
@@ -267,6 +273,21 @@ export async function collectPhase7McpGatewayEvidence(
             "mcp_gateway_evidence getReceipt asset does not match selected provider",
           );
         }
+        if (receiptSummary.merchantOrigin !== providerSummary.merchantOrigin) {
+          blockers.push(
+            "mcp_gateway_evidence getReceipt merchantOrigin does not match selected provider",
+          );
+        }
+        if (receiptSummary.operationId !== providerSummary.operationId) {
+          blockers.push(
+            "mcp_gateway_evidence getReceipt operationId does not match selected provider",
+          );
+        }
+        if (receiptSummary.campaignId !== providerSummary.campaignId) {
+          blockers.push(
+            "mcp_gateway_evidence getReceipt campaignId does not match selected provider",
+          );
+        }
         if (receiptSummary.payToWallet !== providerSummary.payToWallet) {
           blockers.push(
             "mcp_gateway_evidence getReceipt payToWallet does not match selected provider",
@@ -324,6 +345,9 @@ export async function collectPhase7McpGatewayEvidence(
       : {
           providerNetwork: providerSummary.network,
           providerAsset: providerSummary.asset,
+          providerMerchantOrigin: providerSummary.merchantOrigin,
+          providerOperationId: providerSummary.operationId,
+          providerCampaignId: providerSummary.campaignId,
           providerAmountAtomic: providerSummary.amountAtomic,
           providerPayToWallet: providerSummary.payToWallet,
           providerRouteId: providerSummary.routeId,
@@ -346,6 +370,9 @@ export async function collectPhase7McpGatewayEvidence(
           routeId: receiptSummary.routeId,
           network: receiptSummary.network,
           asset: receiptSummary.asset,
+          merchantOrigin: receiptSummary.merchantOrigin,
+          operationId: receiptSummary.operationId,
+          campaignId: receiptSummary.campaignId,
           requiredAmountAtomic: receiptSummary.requiredAmountAtomic,
           payToWallet: receiptSummary.payToWallet,
           receiptReferrerCreditAtomic: receiptSummary.referrerCreditAtomic,
@@ -395,6 +422,9 @@ interface McpGatewayReceiptSummary {
   routeId: string;
   network: string;
   asset: string;
+  merchantOrigin: string;
+  operationId: string;
+  campaignId: string;
   requiredAmountAtomic: string;
   payToWallet: string;
   referrerCreditAtomic: string;
@@ -409,6 +439,9 @@ interface McpGatewayReceiptSummary {
 interface McpGatewaySearchProviderSummary {
   network: string;
   asset: string;
+  merchantOrigin: string;
+  operationId: string;
+  campaignId: string;
   amountAtomic: string;
   payToWallet: string;
   routeId: string;
@@ -503,6 +536,9 @@ function readReceiptSummary(
   const routeId = readNonEmptyString(receipt?.routeId);
   const network = readNonEmptyString(receipt?.network);
   const asset = readNonEmptyString(receipt?.asset);
+  const merchantOrigin = readNonEmptyString(receipt?.merchantOrigin);
+  const operationId = readNonEmptyString(receipt?.operationId);
+  const campaignId = readNonEmptyString(receipt?.campaignId);
   const requiredAmountAtomic = readNonEmptyString(receipt?.requiredAmountAtomic);
   const payToWallet = readNonEmptyString(receipt?.payToWallet);
   const referrerCreditAtomic = readNonEmptyString(receipt?.referrerCreditAtomic);
@@ -520,6 +556,9 @@ function readReceiptSummary(
     routeId === undefined ||
     network === undefined ||
     asset === undefined ||
+    merchantOrigin === undefined ||
+    operationId === undefined ||
+    campaignId === undefined ||
     requiredAmountAtomic === undefined ||
     payToWallet === undefined ||
     referrerCreditAtomic === undefined ||
@@ -536,6 +575,9 @@ function readReceiptSummary(
     routeId,
     network,
     asset,
+    merchantOrigin,
+    operationId,
+    campaignId,
     requiredAmountAtomic,
     payToWallet,
     referrerCreditAtomic,
@@ -564,6 +606,9 @@ function readSearchProviderSummary(
     }
     const network = readNonEmptyString(capability.network);
     const asset = readNonEmptyString(capability.asset);
+    const merchantOrigin = readNonEmptyString(capability.merchantOrigin);
+    const operationId = readNonEmptyString(capability.operationId);
+    const campaignId = readNonEmptyString(capability.campaignId);
     const amountAtomic = readNonEmptyString(capability.amountAtomic);
     const payToWallet = readNonEmptyString(capability.payToWallet);
     const routeId = readNonEmptyString(capability.routeId);
@@ -572,6 +617,9 @@ function readSearchProviderSummary(
     if (
       network === undefined ||
       asset === undefined ||
+      merchantOrigin === undefined ||
+      operationId === undefined ||
+      campaignId === undefined ||
       amountAtomic === undefined ||
       payToWallet === undefined ||
       routeId === undefined ||
@@ -583,6 +631,9 @@ function readSearchProviderSummary(
     return {
       network,
       asset,
+      merchantOrigin,
+      operationId,
+      campaignId,
       amountAtomic,
       payToWallet,
       routeId,

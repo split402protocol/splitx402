@@ -1886,6 +1886,15 @@ function validateMcpGatewayTranscript(
   }
   const selectedProviderNetwork = readNonEmptyString(selectedProvider?.network);
   const selectedProviderAsset = readNonEmptyString(selectedProvider?.asset);
+  const selectedProviderMerchantOrigin = readNonEmptyString(
+    selectedProvider?.merchantOrigin,
+  );
+  const selectedProviderOperationId = readNonEmptyString(
+    selectedProvider?.operationId,
+  );
+  const selectedProviderCampaignId = readNonEmptyString(
+    selectedProvider?.campaignId,
+  );
   const selectedProviderPayToWallet = readNonEmptyString(
     selectedProvider?.payToWallet,
   );
@@ -1905,6 +1914,21 @@ function validateMcpGatewayTranscript(
     }
     if (selectedProviderAsset === undefined) {
       blockers.push("mcp_gateway_evidence selected provider asset is missing");
+    }
+    if (selectedProviderMerchantOrigin === undefined) {
+      blockers.push(
+        "mcp_gateway_evidence selected provider merchantOrigin is missing",
+      );
+    }
+    if (selectedProviderOperationId === undefined) {
+      blockers.push(
+        "mcp_gateway_evidence selected provider operationId is missing",
+      );
+    }
+    if (selectedProviderCampaignId === undefined) {
+      blockers.push(
+        "mcp_gateway_evidence selected provider campaignId is missing",
+      );
     }
     if (selectedProviderPayToWallet === undefined) {
       blockers.push(
@@ -2004,6 +2028,30 @@ function validateMcpGatewayTranscript(
   ) {
     blockers.push(
       "mcp_gateway_evidence getReceipt payToWallet does not match selected provider",
+    );
+  }
+  if (
+    selectedProviderMerchantOrigin !== undefined &&
+    receiptRecord.merchantOrigin !== selectedProviderMerchantOrigin
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt merchantOrigin does not match selected provider",
+    );
+  }
+  if (
+    selectedProviderOperationId !== undefined &&
+    receiptRecord.operationId !== selectedProviderOperationId
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt operationId does not match selected provider",
+    );
+  }
+  if (
+    selectedProviderCampaignId !== undefined &&
+    receiptRecord.campaignId !== selectedProviderCampaignId
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt campaignId does not match selected provider",
     );
   }
   if (
