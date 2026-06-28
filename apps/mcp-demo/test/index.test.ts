@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { createSampleProtocolArtifacts, hashProtocolObject } from "@split402/protocol";
-import type { Split402DiscoveryFetch, Split402DiscoveryFetchResponse } from "@split402/router";
+import {
+  Split402Router,
+  type Split402CapabilityProvider,
+  type Split402DiscoveryFetch,
+  type Split402DiscoveryFetchResponse,
+  type Split402RouterExecutor
+} from "@split402/router";
 
 import {
   createMcpGatewayContext,
@@ -409,6 +415,99 @@ describe("MCP demo gateway", () => {
           receipt: expect.objectContaining({
             referrerCreditAtomic: "1800"
           })
+        },
+        isError: false
+      }
+    });
+  });
+
+  it("defaults execute network and asset from a budget-eligible provider", async () => {
+    const sample = createSampleProtocolArtifacts().artifacts.receipt;
+    const providers: Split402CapabilityProvider[] = [
+      {
+        providerId: "expensive-provider",
+        capability: "solana.wallet-risk",
+        merchantOrigin: sample.merchantOrigin,
+        path: "/v1/risk",
+        method: "POST",
+        operationId: sample.operationId,
+        campaignId: sample.campaignId,
+        network: "solana:expensive-devnet",
+        asset: sample.asset,
+        amountAtomic: "20000",
+        reliability: {
+          successRateBps: 10000,
+          medianLatencyMs: 10
+        }
+      },
+      {
+        providerId: "affordable-provider",
+        capability: "solana.wallet-risk",
+        merchantOrigin: sample.merchantOrigin,
+        path: "/v1/risk",
+        method: "POST",
+        operationId: sample.operationId,
+        campaignId: sample.campaignId,
+        network: sample.network,
+        asset: sample.asset,
+        amountAtomic: sample.requiredAmountAtomic,
+        reliability: {
+          successRateBps: 9000,
+          medianLatencyMs: 20
+        }
+      }
+    ];
+    const executor: Split402RouterExecutor = {
+      execute: async (input) => ({
+        data: {
+          providerId: input.provider.providerId
+        },
+        receipt: sample
+      })
+    };
+    const context = createMcpGatewayContext(
+      createMcpDemoBundle({
+        generatedAt: "2026-06-26T00:00:00.000Z"
+      }),
+      new Split402Router({
+        providers,
+        executor,
+        verifyReceipts: false
+      })
+    );
+
+    const response = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "execute-budget-defaults",
+        method: "tools/call",
+        params: {
+          name: "split402.execute",
+          arguments: {
+            capability: "solana.wallet-risk",
+            input: {
+              wallet: "wallet-123"
+            },
+            budget: {
+              maxAmountAtomic: sample.requiredAmountAtomic
+            }
+          }
+        }
+      }),
+      context
+    );
+
+    expect(response).toMatchObject({
+      jsonrpc: "2.0",
+      id: "execute-budget-defaults",
+      result: {
+        structuredContent: {
+          status: "executed",
+          providerId: "affordable-provider",
+          amountPaidAtomic: sample.requiredAmountAtomic,
+          data: {
+            providerId: "affordable-provider"
+          }
         },
         isError: false
       }
