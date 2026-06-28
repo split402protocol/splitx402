@@ -25,6 +25,8 @@ export interface Phase7McpGatewayEvidenceReport {
   receiptLookupCaptured: boolean;
   providerId?: string;
   maxAmountAtomic?: string;
+  providerNetwork?: string;
+  providerAsset?: string;
   providerAmountAtomic?: string;
   providerPayToWallet?: string;
   amountPaidAtomic?: string;
@@ -32,6 +34,8 @@ export interface Phase7McpGatewayEvidenceReport {
   receiptVerificationStatus?: string;
   referrerCreditAtomic?: string;
   routeId?: string;
+  network?: string;
+  asset?: string;
   payToWallet?: string;
   commissionBps?: number;
   protocolFeeBpsOfCommission?: number;
@@ -207,13 +211,22 @@ export async function collectPhase7McpGatewayEvidence(
           "mcp_gateway_evidence execute amountPaidAtomic does not match selected provider amountAtomic",
         );
       }
-      if (
-        receiptSummary !== undefined &&
-        receiptSummary.payToWallet !== providerSummary.payToWallet
-      ) {
-        blockers.push(
-          "mcp_gateway_evidence getReceipt payToWallet does not match selected provider",
-        );
+      if (receiptSummary !== undefined) {
+        if (receiptSummary.network !== providerSummary.network) {
+          blockers.push(
+            "mcp_gateway_evidence getReceipt network does not match selected provider",
+          );
+        }
+        if (receiptSummary.asset !== providerSummary.asset) {
+          blockers.push(
+            "mcp_gateway_evidence getReceipt asset does not match selected provider",
+          );
+        }
+        if (receiptSummary.payToWallet !== providerSummary.payToWallet) {
+          blockers.push(
+            "mcp_gateway_evidence getReceipt payToWallet does not match selected provider",
+          );
+        }
       }
     }
     const amountPaid = readAtomicAmount(executionSummary.amountPaidAtomic);
@@ -249,6 +262,8 @@ export async function collectPhase7McpGatewayEvidence(
     ...(providerSummary === undefined
       ? {}
       : {
+          providerNetwork: providerSummary.network,
+          providerAsset: providerSummary.asset,
           providerAmountAtomic: providerSummary.amountAtomic,
           providerPayToWallet: providerSummary.payToWallet,
         }),
@@ -265,6 +280,8 @@ export async function collectPhase7McpGatewayEvidence(
       ? {}
       : {
           routeId: receiptSummary.routeId,
+          network: receiptSummary.network,
+          asset: receiptSummary.asset,
           payToWallet: receiptSummary.payToWallet,
           commissionBps: receiptSummary.commissionBps,
           protocolFeeBpsOfCommission:
@@ -307,6 +324,8 @@ interface McpGatewayExecutionSummary {
 
 interface McpGatewayReceiptSummary {
   routeId: string;
+  network: string;
+  asset: string;
   payToWallet: string;
   commissionBps: number;
   protocolFeeBpsOfCommission: number;
@@ -315,6 +334,8 @@ interface McpGatewayReceiptSummary {
 }
 
 interface McpGatewaySearchProviderSummary {
+  network: string;
+  asset: string;
   amountAtomic: string;
   payToWallet: string;
 }
@@ -358,6 +379,8 @@ function readReceiptSummary(
   const structuredContent = readRecord(result?.structuredContent);
   const receipt = readRecord(structuredContent?.receipt);
   const routeId = readNonEmptyString(receipt?.routeId);
+  const network = readNonEmptyString(receipt?.network);
+  const asset = readNonEmptyString(receipt?.asset);
   const payToWallet = readNonEmptyString(receipt?.payToWallet);
   const commissionBps = readBasisPoints(receipt?.commissionBps);
   const protocolFeeBpsOfCommission = readBasisPoints(
@@ -369,6 +392,8 @@ function readReceiptSummary(
   const protocolFeeAtomic = readNonEmptyString(receipt?.protocolFeeAtomic);
   if (
     routeId === undefined ||
+    network === undefined ||
+    asset === undefined ||
     payToWallet === undefined ||
     commissionBps === undefined ||
     protocolFeeBpsOfCommission === undefined ||
@@ -379,6 +404,8 @@ function readReceiptSummary(
   }
   return {
     routeId,
+    network,
+    asset,
     payToWallet,
     commissionBps,
     protocolFeeBpsOfCommission,
@@ -401,12 +428,19 @@ function readSearchProviderSummary(
     if (capability === undefined || capability.providerId !== providerId) {
       continue;
     }
+    const network = readNonEmptyString(capability.network);
+    const asset = readNonEmptyString(capability.asset);
     const amountAtomic = readNonEmptyString(capability.amountAtomic);
     const payToWallet = readNonEmptyString(capability.payToWallet);
-    if (amountAtomic === undefined || payToWallet === undefined) {
+    if (
+      network === undefined ||
+      asset === undefined ||
+      amountAtomic === undefined ||
+      payToWallet === undefined
+    ) {
       return undefined;
     }
-    return { amountAtomic, payToWallet };
+    return { network, asset, amountAtomic, payToWallet };
   }
   return undefined;
 }
