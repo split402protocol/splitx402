@@ -94,6 +94,7 @@ describe("Phase 7 MCP gateway evidence collector", () => {
       providerPayToWallet: bundle.mcp.tools[0].x402.payToWallet,
       amountPaidAtomic: "10000",
       receiptVerificationStatus: "verified",
+      executeExecutionMode: "router-demo-mock",
       referrerCreditAtomic: "1800",
       routeId: "rte_00000000000000000000000000000003",
       network: bundle.mcp.tools[0].x402.network,
