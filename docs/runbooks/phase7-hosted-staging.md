@@ -129,7 +129,9 @@ has at least one resolved `covered` or `deficit` asset. If it fails with
 `fundingStatus is unknown`, rerun the staging stack with the Solana RPC
 funding-balance provider configured before assembling the proof. Read artifacts
 are written only after the full read set passes validation, so failed collection
-runs do not leave partial evidence files to assemble by accident.
+runs do not leave partial evidence files to assemble by accident. The final
+status checker also cross-checks that those read artifacts agree on the active
+route, campaign, referrer wallet, and merchant id.
 
 The status command must pass before Phase 7 can be marked ready for public-alpha
 demo review. It verifies that the hosted preflight artifact was captured against
@@ -153,10 +155,12 @@ run has live x402 buyer configuration. Set `SPLIT402_MCP_SVM_PRIVATE_KEY` or
 validator requires the search and execute budgets to match, the selected
 provider network/asset/merchant origin/operation id/campaign id/amount/pay-to
 wallet/route id/referrer wallet/payout wallet to match the receipt, and the
-reported paid amount to stay within that budget. If hosted execution is enabled
-without a buyer signer, the collector fails before producing misleading partial
-evidence. If the gateway falls back to `router-demo-mock`, the collector remains
-no-go.
+reported paid amount to stay within that budget. It also compares
+receipt-verification evidence with the paid-suite valid and invalid-claim
+receipt summaries, so stale receipt artifacts from another run keep the proof
+no-go. If hosted execution is enabled without a buyer signer, the collector
+fails before producing misleading partial evidence. If the gateway falls back to
+`router-demo-mock`, the collector remains no-go.
 The collector JSON report should echo the provider id, paid amount, receipt id,
 receipt verification status, referrer credit, provider route id, receipt route
 id, provider merchant origin, receipt merchant origin, provider operation id,

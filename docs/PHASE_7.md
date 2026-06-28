@@ -144,9 +144,11 @@ checks passed against the same source commit, control-plane URL, and dashboard
 URL listed in the proof.
 It also validates the control-plane read artifacts so route discovery, referrer
 earnings, dashboard summary, webhook delivery, and payout obligations must be
-present and non-empty. The paid-suite log and receipt-verification JSON are
-checked for a successful paid request, a verified commission-bearing receipt,
-and the invalid-claim zero-commission path. The MCP gateway transcript must
+present and non-empty, and must line up around the same active route, campaign,
+referrer wallet, and merchant id. The paid-suite log and receipt-verification
+JSON are checked for a successful paid request, a verified commission-bearing
+receipt, the invalid-claim zero-commission path, and matching valid/invalid
+receipt summaries across both artifacts. The MCP gateway transcript must
 prove budget-filtered capability discovery, live router execution, matching
 provider network/asset/merchant origin/operation id/campaign id/amount/pay-to
 wallet/route id, matching receipt lookup, selected-provider
