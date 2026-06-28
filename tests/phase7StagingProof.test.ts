@@ -959,6 +959,56 @@ funding_balance_evidence: funding.json
     );
   });
 
+  it("blocks staged proof status when MCP receipt amount differs from execution", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          lookupRequiredAmountAtomic: "9000",
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence getReceipt requiredAmountAtomic does not match execute amountPaidAtomic",
+    );
+  });
+
+  it("blocks staged proof status when MCP receipt lookup has no route", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          includeLookupRouteId: false,
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence getReceipt receipt.routeId is missing",
+    );
+  });
+
   it("blocks staged proof status when funding balance evidence is unresolved", () => {
     const proofText = createManifestProof();
     const artifacts = createManifestArtifacts(proofText);
@@ -1481,6 +1531,8 @@ function createValidMcpGatewayTranscript(
     amountPaidAtomic?: string;
     lookupReceiptId?: string;
     lookupReferrerCreditAtomic?: string;
+    lookupRequiredAmountAtomic?: string;
+    includeLookupRouteId?: boolean;
     tools?: string[];
   } = {},
 ): string {
@@ -1505,6 +1557,9 @@ function createValidMcpGatewayTranscript(
   const lookupReceiptId = options.lookupReceiptId ?? receiptId;
   const lookupReferrerCreditAtomic =
     options.lookupReferrerCreditAtomic ?? "1800";
+  const lookupRequiredAmountAtomic =
+    options.lookupRequiredAmountAtomic ?? amountPaidAtomic;
+  const includeLookupRouteId = options.includeLookupRouteId ?? true;
   const lines = [
     {
       direction: "request",
@@ -1620,6 +1675,10 @@ function createValidMcpGatewayTranscript(
                         receipt: {
                           receiptId: lookupReceiptId,
                           referrerCreditAtomic: lookupReferrerCreditAtomic,
+                          requiredAmountAtomic: lookupRequiredAmountAtomic,
+                          ...(includeLookupRouteId
+                            ? { routeId: "rte_00000000000000000000000000000003" }
+                            : {}),
                         },
                       },
                     },

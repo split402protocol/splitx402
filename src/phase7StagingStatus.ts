@@ -1798,6 +1798,14 @@ function validateMcpGatewayTranscript(
       "mcp_gateway_evidence getReceipt referrerCreditAtomic does not match execute response",
     );
   }
+  if (receiptRecord.requiredAmountAtomic !== executeContent.amountPaidAtomic) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt requiredAmountAtomic does not match execute amountPaidAtomic",
+    );
+  }
+  if (readNonEmptyString(receiptRecord.routeId) === undefined) {
+    blockers.push("mcp_gateway_evidence getReceipt receipt.routeId is missing");
+  }
 }
 
 function createArtifactStatuses(
