@@ -24,6 +24,9 @@ export interface Phase7McpGatewayEvidenceReport {
   executionCaptured: boolean;
   receiptLookupCaptured: boolean;
   providerId?: string;
+  maxAmountAtomic?: string;
+  providerAmountAtomic?: string;
+  providerPayToWallet?: string;
   amountPaidAtomic?: string;
   receiptId?: string;
   receiptVerificationStatus?: string;
@@ -91,6 +94,7 @@ export async function collectPhase7McpGatewayEvidence(
   let responseCount = 0;
   let executionCaptured = false;
   let receiptLookupCaptured = false;
+  let searchResponse: McpGatewayResponse | undefined;
   let executionSummary: McpGatewayExecutionSummary | undefined;
   let receiptSummary: McpGatewayReceiptSummary | undefined;
   const blockers: string[] = [];
@@ -103,6 +107,9 @@ export async function collectPhase7McpGatewayEvidence(
     if (response !== undefined) {
       responseCount += 1;
       transcript.push({ direction: "response", message: response });
+      if (request.id === "search") {
+        searchResponse = response;
+      }
     }
   }
   if (shouldCaptureExecution(context.executionMode, env)) {
@@ -185,6 +192,42 @@ export async function collectPhase7McpGatewayEvidence(
       "mcp_gateway_evidence requires router-live-agent-sdk execution mode for Phase 7 hosted proof",
     );
   }
+  const providerSummary =
+    executionSummary === undefined || searchResponse === undefined
+      ? undefined
+      : readSearchProviderSummary(searchResponse, executionSummary.providerId);
+  if (executionSummary !== undefined) {
+    if (providerSummary === undefined) {
+      blockers.push(
+        "mcp_gateway_evidence search response missing executed provider details",
+      );
+    } else {
+      if (executionSummary.amountPaidAtomic !== providerSummary.amountAtomic) {
+        blockers.push(
+          "mcp_gateway_evidence execute amountPaidAtomic does not match selected provider amountAtomic",
+        );
+      }
+      if (
+        receiptSummary !== undefined &&
+        receiptSummary.payToWallet !== providerSummary.payToWallet
+      ) {
+        blockers.push(
+          "mcp_gateway_evidence getReceipt payToWallet does not match selected provider",
+        );
+      }
+    }
+    const amountPaid = readAtomicAmount(executionSummary.amountPaidAtomic);
+    const maxAmount = readAtomicAmount(maxAmountAtomic);
+    if (amountPaid === undefined || maxAmount === undefined) {
+      blockers.push(
+        "mcp_gateway_evidence execute amountPaidAtomic and budget.maxAmountAtomic must be atomic amounts",
+      );
+    } else if (amountPaid > maxAmount) {
+      blockers.push(
+        "mcp_gateway_evidence execute amountPaidAtomic exceeds budget.maxAmountAtomic",
+      );
+    }
+  }
 
   const artifactPath = joinPath(input, "mcp-gateway.jsonl");
   input.writeArtifact(
@@ -202,6 +245,13 @@ export async function collectPhase7McpGatewayEvidence(
     blockers,
     executionCaptured,
     receiptLookupCaptured,
+    maxAmountAtomic,
+    ...(providerSummary === undefined
+      ? {}
+      : {
+          providerAmountAtomic: providerSummary.amountAtomic,
+          providerPayToWallet: providerSummary.payToWallet,
+        }),
     ...(executionSummary === undefined
       ? {}
       : {
@@ -262,6 +312,11 @@ interface McpGatewayReceiptSummary {
   protocolFeeBpsOfCommission: number;
   commissionAmountAtomic: string;
   protocolFeeAtomic: string;
+}
+
+interface McpGatewaySearchProviderSummary {
+  amountAtomic: string;
+  payToWallet: string;
 }
 
 function readExecutionSummary(
@@ -332,6 +387,30 @@ function readReceiptSummary(
   };
 }
 
+function readSearchProviderSummary(
+  response: McpGatewayResponse,
+  providerId: string,
+): McpGatewaySearchProviderSummary | undefined {
+  const result = readRecord(response.result);
+  const structuredContent = readRecord(result?.structuredContent);
+  const capabilities = Array.isArray(structuredContent?.capabilities)
+    ? structuredContent.capabilities
+    : [];
+  for (const value of capabilities) {
+    const capability = readRecord(value);
+    if (capability === undefined || capability.providerId !== providerId) {
+      continue;
+    }
+    const amountAtomic = readNonEmptyString(capability.amountAtomic);
+    const payToWallet = readNonEmptyString(capability.payToWallet);
+    if (amountAtomic === undefined || payToWallet === undefined) {
+      return undefined;
+    }
+    return { amountAtomic, payToWallet };
+  }
+  return undefined;
+}
+
 function joinPath(input: Phase7McpGatewayEvidenceInput, fileName: string): string {
   return input.joinPath === undefined
     ? `${input.outputDir}/${fileName}`
@@ -361,4 +440,8 @@ function readBasisPoints(value: unknown): number | undefined {
     value <= 10_000
     ? value
     : undefined;
+}
+
+function readAtomicAmount(value: string): bigint | undefined {
+  return /^(0|[1-9][0-9]*)$/u.test(value) ? BigInt(value) : undefined;
 }
