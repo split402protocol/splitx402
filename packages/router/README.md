@@ -57,7 +57,8 @@ const affordable = split402.searchCapabilities({
 Discovery fetches active routes, reads each route's Bazaar resource projection,
 including the advertised `payToWallet`, resolves the campaign's active merchant
 service key, and only emits providers with enough information for fail-closed
-receipt verification by default.
+receipt verification by default. Blank payment metadata and malformed atomic
+prices are discarded before provider records are returned.
 
 ## Current Behavior
 
