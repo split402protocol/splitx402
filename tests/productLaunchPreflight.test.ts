@@ -25,6 +25,12 @@ describe("Split402 launch preflight", () => {
     expect(report.nextActions).toContain(
       "Run corepack pnpm product:evidence:init.",
     );
+    expect(report.nextActions).not.toContain(
+      "Fill SPLIT402_PHASE6_EVIDENCE_REVIEW_ID in split402-launch-evidence\\phase6-evidence.env.",
+    );
+    expect(report.nextActions).not.toContain(
+      "Set SPLIT402_PHASE6_ASSEMBLE_IMAGE_PROVENANCE_RECORD=split402-launch-evidence/phase6-image-provenance.txt",
+    );
     expect(formatSplit402LaunchPreflightBrief(report)).toContain(
       "Split402 launch preflight: not ready",
     );
