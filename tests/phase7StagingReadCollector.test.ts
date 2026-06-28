@@ -19,7 +19,10 @@ describe("Phase 7 staging read collector", () => {
         return {
           ok: true,
           status: 200,
-          text: async () => JSON.stringify({ url }),
+          text: async () =>
+            url.endsWith("/payout-obligations")
+              ? JSON.stringify(createFundingSummary())
+              : JSON.stringify({ url }),
         };
       },
       writeArtifact: (path, text) => writes.set(path, text),
@@ -69,6 +72,9 @@ describe("Phase 7 staging read collector", () => {
     expect(writes.get("evidence/dashboard-summary.json")).toContain(
       '"url": "https://control.staging.example/v1/merchants/mrc_001/dashboard-summary"',
     );
+    expect(writes.get("evidence/funding-balance.json")).toContain(
+      '"fundingStatus": "covered"',
+    );
   });
 
   it("fails fast when a read artifact request fails", async () => {
@@ -89,4 +95,60 @@ describe("Phase 7 staging read collector", () => {
       "agent_discovery_evidence capture failed with HTTP 503: service unavailable",
     );
   });
+
+  it("fails fast when funding balance evidence is unresolved", async () => {
+    await expect(
+      collectPhase7ReadArtifacts({
+        controlPlaneUrl: "https://control.staging.example",
+        merchantId: "mrc_001",
+        referrerWallet: "referrer",
+        outputDir: "evidence",
+        fetch: async (url) => ({
+          ok: true,
+          status: 200,
+          text: async () =>
+            url.endsWith("/payout-obligations")
+              ? JSON.stringify(
+                  createFundingSummary({
+                    fundingStatus: "unknown",
+                    fundingAmountAtomic: "0",
+                    fundingDeficitAtomic: "0",
+                  }),
+                )
+              : JSON.stringify({ url }),
+        }),
+        writeArtifact: () => undefined,
+      }),
+    ).rejects.toThrow(
+      "funding_balance_evidence usdc-devnet fundingStatus is unknown",
+    );
+  });
 });
+
+function createFundingSummary(
+  overrides: Partial<Record<string, string>> = {},
+): Record<string, unknown> {
+  return {
+    summary: {
+      schema: "split402.merchant_obligation_summary.v1",
+      merchantId: "mrc_001",
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      assets: [
+        {
+          asset: "usdc-devnet",
+          outstandingAmountAtomic: "1000",
+          totalAccruedAmountAtomic: "1000",
+          pendingAmountAtomic: "0",
+          availableAmountAtomic: "1000",
+          heldAmountAtomic: "0",
+          inFlightAmountAtomic: "0",
+          paidAmountAtomic: "0",
+          fundingStatus: "covered",
+          fundingAmountAtomic: "1000",
+          fundingDeficitAtomic: "0",
+          ...overrides,
+        },
+      ],
+    },
+  };
+}
