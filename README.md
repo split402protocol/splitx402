@@ -10,9 +10,11 @@
 
 Split402 lets an agent pay a merchant through a normal x402 USDC flow and attach
 a signed referral claim to that paid request. If the merchant campaign says the
-referral earns 10 percent, Split402 records that 10 percent as a payable
-commission to the referrer's payout wallet, verifies the underlying settlement,
-and later moves eligible commissions into merchant-funded payout batches.
+referral earns 10 percent, Split402 records that commission as a payable to the
+referrer's payout wallet, verifies the underlying settlement, and later moves
+eligible commissions into merchant-funded payout batches. Campaigns may also set
+a protocol fee as a percentage of the referral commission, not as a percentage of
+the gross buyer payment.
 
 The important money model is simple:
 
@@ -66,8 +68,9 @@ flowchart LR
 | Chain verification | Implemented as an outbox-driven Solana JSON-RPC worker for settlement signature and transfer checks. |
 | Webhooks | Implemented for accepted-receipt and payout lifecycle events with signed delivery envelopes and retry/dead-letter handling. |
 | Merchant SDK reliability boundary | Implemented with cached campaign lookup, service-key rotation helpers, payment identifiers, operation digests, and merchant-local receipt outbox primitives. |
+| Capability router | Implemented public-alpha static-provider router with budget filtering, deterministic ranking, fallback, and fail-closed receipt verification. |
 | Dashboard and discovery | Implemented for public-alpha operations: reliability profiles, dashboard summaries, webhook feeds, referrer routes, balances, payouts, hosted-staging viewer sessions, and proof capture. |
-| Payout engine | In progress: preview, allocation, Solana transfer planning, simulation, signer policy, local-dev signer, remote signer client, signer appliance scaffold, signer deployment artifacts, signed-byte persistence, broadcast boundary, finality monitor, rollup, payout lifecycle events, unknown-outcome reconciliation queue, referrer payout views, and idempotent ledger closure are implemented. |
+| Payout engine | In progress: preview, allocation, safe allocation release, Solana transfer planning, simulation, signer policy, local-dev signer, remote signer client, signer appliance scaffold, signer deployment artifacts, signed-byte persistence, broadcast boundary, finality monitor, rollup, payout lifecycle events, unknown-outcome reconciliation queue, referrer payout views, and idempotent ledger closure are implemented. |
 | Atomic split settlement | Later research. The MVP does not split the original x402 transaction onchain. |
 | `$SPLIT` bonding | Later research after the USDC accrual-and-payout loop is production ready. |
 
@@ -77,14 +80,18 @@ flowchart LR
 flowchart LR
   Pay["Agent pays 1.00 USDC"]
   Gross["x402 settles 1.00 USDC to merchant"]
-  Terms["Campaign commission: 1000 bps"]
-  Liability["Split402 records 0.10 USDC payable"]
+  Terms["Campaign commission: 2000 bps"]
+  Fee["Protocol fee: 1000 bps of commission"]
+  Liability["Split402 records 0.18 USDC referrer payable"]
+  ProtocolFee["Split402 records 0.02 USDC protocol payable"]
   Verify["Chain verification marks accrual available"]
-  Batch["Payout batch sends 0.10 USDC later"]
+  Batch["Payout batch sends 0.18 USDC later"]
 
   Pay --> Gross
   Gross --> Terms
-  Terms --> Liability
+  Terms --> Fee
+  Fee --> Liability
+  Fee --> ProtocolFee
   Liability --> Verify
   Verify --> Batch
 ```
@@ -93,14 +100,19 @@ flowchart LR
 | --- | --- |
 | API price | `1.00 USDC` |
 | x402 settlement | `1.00 USDC` paid to the merchant |
-| Campaign commission | `1000` bps, equal to 10 percent |
-| Split402 accrual | `0.10 USDC` owed to the referrer |
+| Campaign commission | `2000` bps, equal to `0.20 USDC` |
+| Protocol fee | `1000` bps of commission, equal to `0.02 USDC` |
+| Split402 accrual | `0.18 USDC` owed to the referrer |
 | Payout source | Merchant-controlled USDC payout wallet |
 | Payout timing | Later, after verification, eligibility, allocation, and finality checks |
 
 This is why Split402 is different from an atomic onchain splitter today: it does
 not redirect part of the buyer's x402 payment in the MVP. It makes the referral
 commission auditable, idempotent, and payable after settlement.
+
+Self-referral policy is evaluated against the settled payer and, where known, the
+merchant owner. A referrer may use the same wallet for identity and payout; that
+alone is not treated as self-referral.
 
 ## End-To-End Sequence
 
@@ -146,6 +158,7 @@ flowchart TB
   Extension["@split402/x402-extension"]
   Express["@split402/express"]
   Agent["@split402/agent-sdk"]
+  Router["@split402/router"]
   MerchantSdk["@split402/merchant-sdk"]
   Merchant["@split402/demo-merchant"]
   DemoAgent["@split402/demo-agent"]
@@ -156,12 +169,14 @@ flowchart TB
   Protocol --> Vectors
   Protocol --> Extension
   Protocol --> Agent
+  Protocol --> Router
   Protocol --> MerchantSdk
   Protocol --> Control
   Express --> Merchant
   Extension --> Merchant
   Extension --> MerchantSdk
   Agent --> DemoAgent
+  Agent --> Router
   DemoAgent --> McpDemo
   MerchantSdk --> Merchant
   MerchantSdk --> Control
@@ -178,6 +193,7 @@ flowchart TB
 | `@split402/x402-extension` | Split402 offer, attribution, and receipt hooks around standard x402 settlement. |
 | `@split402/express` | Express request-context adapter for stable operation-digest inputs. |
 | `@split402/agent-sdk` | Buyer-side offer inspection, referral-claim creation, paid JSON calls, and receipt verification. |
+| `@split402/router` | Public-alpha static-provider capability router with budget enforcement, deterministic ranking, retry/fallback, and receipt verification for paid tools. |
 | `@split402/merchant-sdk` | Merchant helpers for campaign caching, service-key rotation, payment IDs, operation digests, and durable receipt outbox delivery. |
 | `@split402/demo-merchant` | Solana Devnet merchant API used to prove the x402 plus Split402 flow. |
 | `@split402/demo-agent` | Runnable buyer/agent harness for setup, preflight, offer inspection, and paid-suite proof runs. |

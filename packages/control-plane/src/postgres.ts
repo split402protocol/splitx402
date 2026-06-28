@@ -88,6 +88,7 @@ import type {
   ReceiptIngestionSnapshot,
   ReceiptIngestionStore,
   ReceiptChainVerificationStore,
+  MarkReceiptChainRejectedInput,
   MarkReceiptChainVerifiedInput,
   ReceiptRecord,
   ReceiptVerificationState,
@@ -104,6 +105,7 @@ import type {
   PayoutBatchStatus,
   PayoutItemRecord,
   PayoutItemStatus,
+  PayoutTransactionItemRecord,
   PayoutTransactionRecord,
   PayoutTransactionStatus,
   PayoutTransactionStore,
@@ -122,10 +124,12 @@ import type {
   ReferrerPayoutHistoryItem,
   ReferrerPayoutViewInput,
   ReferrerPayoutViewStore,
-  ListReferrerPayoutHistoryInput
+  ListReferrerPayoutHistoryInput,
+  ReleasePayoutBatchAllocationsInput
 } from "./payouts.js";
 import {
   PayoutBatchConflictError,
+  attachPayoutTransactionItemMappings,
   createMerchantObligationSummary,
   createPayoutFinalizationLedgerTransaction,
   createPayoutBatchPlan,
@@ -133,7 +137,9 @@ import {
   createReferrerBalanceSummary,
   createReferrerPayoutHistoryItems,
   createSignedPayoutTransactionRecords,
-  summarizePayoutBatchFinality
+  releasePayoutBatchAllocationsForBatch,
+  summarizePayoutBatchTransactionItemFinality,
+  verifyPayoutFinalizedTransfersBeforeLedgerClosure
 } from "./payouts.js";
 import {
   WEBHOOK_PAYOUT_CONFIRMED_EVENT_TYPE,
@@ -170,6 +176,7 @@ interface PaymentReceiptRow extends QueryResultRow {
   receipt_json: unknown;
   source: string;
   verification_state: string;
+  verification_reason: string | null;
   ingestion_state: string;
   created_at: Date | string;
 }
@@ -310,6 +317,14 @@ interface PayoutTransactionRow extends QueryResultRow {
   finalized_at: Date | string | null;
   error_json: unknown;
   created_at: Date | string;
+}
+
+interface PayoutTransactionItemRow extends QueryResultRow {
+  payout_transaction_id: string;
+  payout_item_id: string;
+  amount_atomic: string;
+  destination_wallet: string;
+  destination_token_account: string | null;
 }
 
 interface WalletAuthChallengeRow extends QueryResultRow {
@@ -487,7 +502,8 @@ export class PostgresReceiptIngestionStore
     await this.withTransaction(async (client) => {
       await client.query(
         `update payment_receipts
-            set verification_state = 'signature_verified'
+            set verification_state = 'signature_verified',
+                verification_reason = null
           where id = $1
             and verification_state = 'pending_chain_verification'`,
         [input.receiptId]
@@ -499,6 +515,29 @@ export class PostgresReceiptIngestionStore
           where receipt_id = $1
             and status = 'pending_chain_verification'`,
         [input.receiptId, input.verifiedAt]
+      );
+    });
+    return this.getByReceiptId(input.receiptId);
+  }
+
+  async markReceiptChainRejected(
+    input: MarkReceiptChainRejectedInput
+  ): Promise<ReceiptIngestionSnapshot | undefined> {
+    await this.withTransaction(async (client) => {
+      await client.query(
+        `update payment_receipts
+            set verification_state = 'chain_rejected',
+                verification_reason = $2
+          where id = $1
+            and verification_state = 'pending_chain_verification'`,
+        [input.receiptId, input.reason]
+      );
+      await client.query(
+        `update commission_accruals
+            set status = 'rejected'
+          where receipt_id = $1
+            and status = 'pending_chain_verification'`,
+        [input.receiptId]
       );
     });
     return this.getByReceiptId(input.receiptId);
@@ -563,15 +602,37 @@ export class PostgresReceiptIngestionStore
     return loadPayoutBatch(this.db, batchId);
   }
 
+  async releasePayoutBatchAllocations(
+    input: ReleasePayoutBatchAllocationsInput
+  ): Promise<PayoutBatchRecord | undefined> {
+    return this.withTransaction(async (client) => {
+      const batch = await loadPayoutBatch(client, input.payoutBatchId);
+      if (batch === undefined) {
+        return undefined;
+      }
+      const released = releasePayoutBatchAllocationsForBatch({
+        batch,
+        reason: input.reason,
+        ...(input.now === undefined ? {} : { now: input.now })
+      });
+      await markPayoutBatchAllocationsReleased(client, released);
+      return released;
+    });
+  }
+
   async saveSignedPayoutTransactions(
     input: SaveSignedPayoutTransactionsInput
   ): Promise<PayoutTransactionRecord[]> {
-    const records = createSignedPayoutTransactionRecords(input);
-    if ((await this.getPayoutBatch(input.payoutBatchId)) === undefined) {
+    const batch = await this.getPayoutBatch(input.payoutBatchId);
+    if (batch === undefined) {
       throw new PayoutBatchConflictError(
         `unknown payout batch: ${input.payoutBatchId}`
       );
     }
+    const records = attachPayoutTransactionItemMappings(
+      createSignedPayoutTransactionRecords(input),
+      batch
+    );
     const existingRecords = await this.listPayoutTransactions(input.payoutBatchId);
     for (const record of records) {
       if (
@@ -589,6 +650,9 @@ export class PostgresReceiptIngestionStore
     await this.withTransaction(async (client) => {
       for (const record of records) {
         await insertPayoutTransaction(client, record);
+        for (const item of record.items) {
+          await insertPayoutTransactionItem(client, item);
+        }
       }
     });
     return records;
@@ -607,7 +671,10 @@ export class PostgresReceiptIngestionStore
         order by sequence, attempt, created_at, id`,
       [payoutBatchId]
     );
-    return result.rows.map(mapPayoutTransaction);
+    return mapPayoutTransactionsWithItems(
+      result.rows,
+      await this.listPayoutTransactionItems(result.rows.map((row) => row.id))
+    );
   }
 
   async listPayoutReconciliationItems(
@@ -782,7 +849,15 @@ export class PostgresReceiptIngestionStore
       if (row === undefined) {
         return undefined;
       }
-      const transaction = mapPayoutTransaction(row);
+      const transaction = (
+        await mapPayoutTransactionsWithItems(
+          [row],
+          await listPayoutTransactionItems(client, [row.id])
+        )
+      )[0];
+      if (transaction === undefined) {
+        return undefined;
+      }
       await rollUpPayoutBatchFinality(client, transaction.payoutBatchId, submittedAt);
       await this.insertPayoutLifecycleEventsIfBatchMatches(
         client,
@@ -837,7 +912,15 @@ export class PostgresReceiptIngestionStore
       if (row === undefined) {
         return undefined;
       }
-      const transaction = mapPayoutTransaction(row);
+      const transaction = (
+        await mapPayoutTransactionsWithItems(
+          [row],
+          await listPayoutTransactionItems(client, [row.id])
+        )
+      )[0];
+      if (transaction === undefined) {
+        return undefined;
+      }
       await rollUpPayoutBatchFinality(client, transaction.payoutBatchId, observedAt);
       if (lifecycleKind !== undefined) {
         await this.insertPayoutLifecycleEventsIfBatchMatches(
@@ -865,7 +948,21 @@ export class PostgresReceiptIngestionStore
       [id]
     );
     const row = result.rows[0];
-    return row === undefined ? undefined : mapPayoutTransaction(row);
+    if (row === undefined) {
+      return undefined;
+    }
+    return (
+      await mapPayoutTransactionsWithItems(
+        [row],
+      await this.listPayoutTransactionItems([row.id])
+      )
+    )[0];
+  }
+
+  private async listPayoutTransactionItems(
+    payoutTransactionIds: readonly string[]
+  ): Promise<PayoutTransactionItemRecord[]> {
+    return listPayoutTransactionItems(this.db, payoutTransactionIds);
   }
 
   async closeFinalizedPayoutBatchLedger(
@@ -882,6 +979,11 @@ export class PostgresReceiptIngestionStore
     if (batch === undefined) {
       return undefined;
     }
+    await verifyPayoutFinalizedTransfersBeforeLedgerClosure({
+      batch,
+      transactions: await this.listPayoutTransactions(batch.id),
+      verifier: input.finalizedTransferVerifier
+    });
     const transaction = createPayoutFinalizationLedgerTransaction({
       batch,
       ...(input.now === undefined ? {} : { now: input.now }),
@@ -897,6 +999,7 @@ export class PostgresReceiptIngestionStore
       for (const entry of transaction.entries) {
         await insertLedgerEntry(client, entry);
       }
+      await markBatchAccrualsPaid(client, batch);
       await insertOutboxEvent(
         client,
         this.createPayoutFinalizedEvent(batch, transaction)
@@ -934,7 +1037,8 @@ export class PostgresReceiptIngestionStore
     values: readonly unknown[]
   ): Promise<ReceiptIngestionSnapshot | undefined> {
     const receiptResult = await this.db.query<PaymentReceiptRow>(
-      `select id, receipt_hash, receipt_json, source, verification_state, ingestion_state, created_at
+      `select id, receipt_hash, receipt_json, source, verification_state,
+              verification_reason, ingestion_state, created_at
          from payment_receipts
         where ${whereClause}
         limit 1`,
@@ -2333,7 +2437,7 @@ function insertCampaignVersion(
       version.terms.network,
       version.terms.asset,
       version.terms.commissionBps,
-      version.terms.protocolFeeBps,
+      version.terms.protocolFeeBpsOfCommission,
       version.terms.payoutThresholdAtomic,
       version.terms.startsAt,
       version.terms.endsAt,
@@ -2548,9 +2652,10 @@ function insertReceipt(
     `insert into payment_receipts (
        id, receipt_hash, merchant_id, campaign_id, campaign_version, payment_id,
        settlement_tx_signature, network, asset_mint, payer_wallet, pay_to_wallet,
-       receipt_json, source, verification_state, ingestion_state, created_at
+       receipt_json, source, verification_state, verification_reason,
+       ingestion_state, created_at
      ) values (
-       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14, $15, $16
+       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14, $15, $16, $17
      )`,
     [
       receiptRecord.id,
@@ -2567,6 +2672,7 @@ function insertReceipt(
       JSON.stringify(receiptRecord.receipt),
       receiptRecord.source,
       receiptRecord.verificationState,
+      receiptRecord.verificationReason ?? null,
       receiptRecord.ingestionState,
       receiptRecord.createdAt
     ]
@@ -2804,6 +2910,61 @@ function insertPayoutAllocation(
   );
 }
 
+async function markBatchAccrualsPaid(
+  client: PostgresQueryExecutor,
+  batch: PayoutBatchRecord
+): Promise<void> {
+  const finalizedAccrualIds = batch.items
+    .filter((item) => item.status === "finalized")
+    .flatMap((item) => item.allocations.map((allocation) => allocation.accrualId));
+  for (const accrualId of finalizedAccrualIds) {
+    await client.query(
+      `update commission_accruals
+          set status = 'paid'
+        where id = $1
+          and status = 'allocated'`,
+      [accrualId]
+    );
+  }
+}
+
+async function markPayoutBatchAllocationsReleased(
+  client: PostgresQueryExecutor,
+  batch: PayoutBatchRecord
+): Promise<void> {
+  await client.query(
+    `update payout_batches
+        set status = $2,
+            failure_code = $3,
+            failure_message = $4,
+            updated_at = $5
+      where id = $1`,
+    [
+      batch.id,
+      batch.status,
+      batch.failureCode ?? null,
+      batch.failureMessage ?? null,
+      batch.updatedAt
+    ]
+  );
+  await client.query(
+    `update payout_items
+        set status = 'released'
+      where payout_batch_id = $1`,
+    [batch.id]
+  );
+  await client.query(
+    `update commission_accruals ca
+        set status = 'available'
+       from payout_allocations pa
+       join payout_items pi on pi.id = pa.payout_item_id
+      where ca.id = pa.accrual_id
+        and pi.payout_batch_id = $1
+        and ca.status = 'allocated'`,
+    [batch.id]
+  );
+}
+
 function insertPayoutTransaction(
   client: PostgresQueryExecutor,
   transaction: PayoutTransactionRecord
@@ -2835,6 +2996,45 @@ function insertPayoutTransaction(
   );
 }
 
+function insertPayoutTransactionItem(
+  client: PostgresQueryExecutor,
+  item: PayoutTransactionItemRecord
+): Promise<QueryResult> {
+  return client.query(
+    `insert into payout_transaction_items (
+       payout_transaction_id, payout_item_id, amount_atomic,
+       destination_wallet, destination_token_account
+     ) values (
+       $1, $2, $3, $4, $5
+     )`,
+    [
+      item.payoutTransactionId,
+      item.payoutItemId,
+      item.amountAtomic,
+      item.destinationWallet,
+      item.destinationTokenAccount ?? null
+    ]
+  );
+}
+
+async function listPayoutTransactionItems(
+  db: PostgresQueryExecutor,
+  payoutTransactionIds: readonly string[]
+): Promise<PayoutTransactionItemRecord[]> {
+  if (payoutTransactionIds.length === 0) {
+    return [];
+  }
+  const result = await db.query<PayoutTransactionItemRow>(
+    `select payout_transaction_id, payout_item_id, amount_atomic,
+            destination_wallet, destination_token_account
+       from payout_transaction_items
+      where payout_transaction_id = any($1)
+      order by payout_transaction_id, payout_item_id`,
+    [payoutTransactionIds]
+  );
+  return result.rows.map(mapPayoutTransactionItem);
+}
+
 async function rollUpPayoutBatchFinality(
   db: PostgresQueryExecutor,
   payoutBatchId: string,
@@ -2850,9 +3050,18 @@ async function rollUpPayoutBatchFinality(
       order by sequence, attempt, created_at, id`,
     [payoutBatchId]
   );
-  const rollup = summarizePayoutBatchFinality(
-    result.rows.map(mapPayoutTransaction)
+  const batch = await loadPayoutBatch(db, payoutBatchId);
+  if (batch === undefined) {
+    return;
+  }
+  const transactions = mapPayoutTransactionsWithItems(
+    result.rows,
+    await listPayoutTransactionItems(db, result.rows.map((row) => row.id))
   );
+  const rollup = summarizePayoutBatchTransactionItemFinality({
+    batch,
+    transactions
+  });
   if (rollup === undefined) {
     return;
   }
@@ -2871,12 +3080,12 @@ async function rollUpPayoutBatchFinality(
       updatedAt
     ]
   );
-  if (rollup.itemStatus !== undefined) {
+  for (const item of rollup.updatedItems) {
     await db.query(
       `update payout_items
           set status = $2
-        where payout_batch_id = $1`,
-      [payoutBatchId, rollup.itemStatus]
+        where id = $1`,
+      [item.payoutItemId, item.status]
     );
   }
 }
@@ -3176,6 +3385,9 @@ function mapReceiptRecord(row: PaymentReceiptRow): ReceiptRecord {
     receipt: parsedReceipt,
     source: readReceiptSource(row.source),
     verificationState: readReceiptVerificationState(row.verification_state),
+    ...(row.verification_reason === null
+      ? {}
+      : { verificationReason: row.verification_reason }),
     ingestionState: readIngestionState(row.ingestion_state),
     createdAt: toIsoString(row.created_at)
   };
@@ -3317,7 +3529,39 @@ function mapPayoutTransaction(row: PayoutTransactionRow): PayoutTransactionRecor
       ? {}
       : { finalizedAt: toIsoString(row.finalized_at) }),
     ...(row.error_json === null ? {} : { error: parseOptionalJsonObject(row.error_json) }),
-    createdAt: toIsoString(row.created_at)
+    createdAt: toIsoString(row.created_at),
+    items: []
+  };
+}
+
+function mapPayoutTransactionsWithItems(
+  rows: readonly PayoutTransactionRow[],
+  itemRows: readonly PayoutTransactionItemRecord[]
+): PayoutTransactionRecord[] {
+  const itemsByTransactionId = new Map<string, PayoutTransactionItemRecord[]>();
+  for (const item of itemRows) {
+    itemsByTransactionId.set(item.payoutTransactionId, [
+      ...(itemsByTransactionId.get(item.payoutTransactionId) ?? []),
+      item
+    ]);
+  }
+  return rows.map((row) => ({
+    ...mapPayoutTransaction(row),
+    items: itemsByTransactionId.get(row.id) ?? []
+  }));
+}
+
+function mapPayoutTransactionItem(
+  row: PayoutTransactionItemRow
+): PayoutTransactionItemRecord {
+  return {
+    payoutTransactionId: row.payout_transaction_id,
+    payoutItemId: row.payout_item_id,
+    amountAtomic: row.amount_atomic,
+    destinationWallet: row.destination_wallet,
+    ...(row.destination_token_account === null
+      ? {}
+      : { destinationTokenAccount: row.destination_token_account })
   };
 }
 
@@ -3371,7 +3615,11 @@ function readReceiptSource(value: string): ReceiptIngestSource {
 }
 
 function readReceiptVerificationState(value: string): ReceiptVerificationState {
-  if (value === "signature_verified" || value === "pending_chain_verification") {
+  if (
+    value === "signature_verified" ||
+    value === "pending_chain_verification" ||
+    value === "chain_rejected"
+  ) {
     return value;
   }
   throw new Error(`unsupported receipt verification state: ${value}`);
@@ -3389,7 +3637,10 @@ function readAccrualStatus(value: string): AccrualStatus {
     value === "pending_chain_verification" ||
     value === "available" ||
     value === "held" ||
-    value === "allocated"
+    value === "allocated" ||
+    value === "paid" ||
+    value === "rejected" ||
+    value === "reversed"
   ) {
     return value;
   }
@@ -3735,7 +3986,10 @@ function parseCampaignTermsJson(value: unknown): CampaignTerms {
     ),
     payToWallet: readJsonString(terms.payToWallet, "payToWallet"),
     commissionBps: readJsonNumber(terms.commissionBps, "commissionBps"),
-    protocolFeeBps: readJsonNumber(terms.protocolFeeBps, "protocolFeeBps"),
+    protocolFeeBpsOfCommission: readJsonNumber(
+      terms.protocolFeeBpsOfCommission ?? terms.protocolFeeBps,
+      "protocolFeeBpsOfCommission"
+    ),
     commissionBase: readLiteral(
       terms.commissionBase,
       "required_amount",
