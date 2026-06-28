@@ -207,6 +207,8 @@ function createReadmeText(directory: string): string {
     "The transcript should include the selected provider network, asset, and",
     "payToWallet plus matching receipt network, asset, payToWallet, required",
     "amount, and referrer credit.",
+    "The collector rejects receipt evidence when commission, protocol fee, or",
+    "referrer credit arithmetic does not match the receipt bps and amount.",
     "The staging seed prints `proofEnv`; copy those values into",
     "`phase7-staging.env` before running hosted collectors.",
     "The proof remains no-go until",

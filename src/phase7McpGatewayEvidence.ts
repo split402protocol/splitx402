@@ -203,6 +203,19 @@ export async function collectPhase7McpGatewayEvidence(
       ? undefined
       : readSearchProviderSummary(searchResponse, executionSummary.providerId);
   if (executionSummary !== undefined) {
+    if (receiptSummary !== undefined) {
+      verifyReceiptEconomics(receiptSummary, blockers);
+      if (receiptSummary.requiredAmountAtomic !== executionSummary.amountPaidAtomic) {
+        blockers.push(
+          "mcp_gateway_evidence getReceipt requiredAmountAtomic does not match execute amountPaidAtomic",
+        );
+      }
+      if (receiptSummary.referrerCreditAtomic !== executionSummary.referrerCreditAtomic) {
+        blockers.push(
+          "mcp_gateway_evidence getReceipt referrerCreditAtomic does not match execute response",
+        );
+      }
+    }
     if (providerSummary === undefined) {
       blockers.push(
         "mcp_gateway_evidence search response missing executed provider details",
@@ -214,16 +227,6 @@ export async function collectPhase7McpGatewayEvidence(
         );
       }
       if (receiptSummary !== undefined) {
-        if (receiptSummary.requiredAmountAtomic !== executionSummary.amountPaidAtomic) {
-          blockers.push(
-            "mcp_gateway_evidence getReceipt requiredAmountAtomic does not match execute amountPaidAtomic",
-          );
-        }
-        if (receiptSummary.referrerCreditAtomic !== executionSummary.referrerCreditAtomic) {
-          blockers.push(
-            "mcp_gateway_evidence getReceipt referrerCreditAtomic does not match execute response",
-          );
-        }
         if (receiptSummary.network !== providerSummary.network) {
           blockers.push(
             "mcp_gateway_evidence getReceipt network does not match selected provider",
@@ -467,6 +470,61 @@ function readSearchProviderSummary(
   return undefined;
 }
 
+function verifyReceiptEconomics(
+  receipt: McpGatewayReceiptSummary,
+  blockers: string[],
+): void {
+  const commissionAmount = readPositiveAtomicAmount(receipt.commissionAmountAtomic);
+  if (commissionAmount === undefined) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt commissionAmountAtomic must be positive",
+    );
+  }
+  if (receipt.commissionBps === 0) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt commissionBps must be positive basis points",
+    );
+  }
+  const protocolFee = readAtomicAmount(receipt.protocolFeeAtomic);
+  if (protocolFee === undefined) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt protocolFeeAtomic must be a non-negative atomic amount",
+    );
+  }
+  const requiredAmount = readAtomicAmount(receipt.requiredAmountAtomic);
+  if (
+    requiredAmount !== undefined &&
+    commissionAmount !== undefined &&
+    commissionAmount !==
+      (requiredAmount * BigInt(receipt.commissionBps)) / 10_000n
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt commissionAmountAtomic does not match commissionBps",
+    );
+  }
+  if (
+    commissionAmount !== undefined &&
+    protocolFee !== undefined &&
+    protocolFee !==
+      (commissionAmount * BigInt(receipt.protocolFeeBpsOfCommission)) / 10_000n
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt protocolFeeAtomic does not match protocolFeeBpsOfCommission",
+    );
+  }
+  const referrerCredit = readAtomicAmount(receipt.referrerCreditAtomic);
+  if (
+    commissionAmount !== undefined &&
+    protocolFee !== undefined &&
+    referrerCredit !== undefined &&
+    commissionAmount - protocolFee !== referrerCredit
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt referrerCreditAtomic does not equal commission minus protocol fee",
+    );
+  }
+}
+
 function joinPath(input: Phase7McpGatewayEvidenceInput, fileName: string): string {
   return input.joinPath === undefined
     ? `${input.outputDir}/${fileName}`
@@ -500,4 +558,8 @@ function readBasisPoints(value: unknown): number | undefined {
 
 function readAtomicAmount(value: string): bigint | undefined {
   return /^(0|[1-9][0-9]*)$/u.test(value) ? BigInt(value) : undefined;
+}
+
+function readPositiveAtomicAmount(value: string): bigint | undefined {
+  return /^[1-9][0-9]*$/u.test(value) ? BigInt(value) : undefined;
 }
