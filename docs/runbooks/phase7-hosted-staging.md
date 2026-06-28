@@ -164,6 +164,9 @@ receipt operation id, provider campaign id, receipt campaign id, provider
 referrer wallet, receipt referrer wallet, provider payout wallet, receipt payout
 wallet, commission bps, protocol-fee bps, commission amount, and protocol-fee
 amount from the executed router call.
+The selected MCP provider route id must also appear in the collected
+`agent-discovery.json`, with matching campaign id, referrer wallet, and payout
+wallet.
 Run `corepack pnpm demo:mcp-gateway:smoke` as a deterministic local gateway
 contract check alongside the hosted transcript.
 
