@@ -21,7 +21,9 @@ accrual state, finalized payout ledger closure marks allocated accruals paid,
 and safe release can cancel pre-submission/problem payout batches back to
 available accruals. The first `@split402/router` alpha package is present with
 static providers, budget enforcement, ranking, fallback, and receipt
-verification.
+verification, and the MCP demo gateway now exposes router-backed
+`split402.searchCapabilities`, `split402.execute`, and `split402.getReceipt`
+tools in demo mode.
 
 The MVP still uses normal x402 settlement to the merchant and records a
 commission liability for later merchant-funded payout. Protocol fee is a
@@ -378,6 +380,9 @@ Current slice:
 - `@split402/router` public-alpha package with static providers, budget
   enforcement, deterministic ranking, retry/fallback, and fail-closed receipt
   verification.
+- Router-backed MCP demo tools for capability search, demo execution results,
+  and session receipt lookup. The execution path is explicitly demo/mock mode,
+  not production MCP hosting.
 - merchant/referrer dashboard UI with a narrow control-plane read proxy for
   summaries, reliability profiles, webhook delivery, routes, balances, and
   payouts.
@@ -395,8 +400,8 @@ Current slice:
 
 Pending Phase 7 adoption layer:
 
-- Runnable MCP gateway backed by the router. Do not claim full MCP compatibility
-  beyond the implemented interface.
+- Hosted/router-backed staging proof with real environment evidence. Do not
+  claim full MCP compatibility beyond the implemented stdio tool interface.
 
 ## Later: Token Bonding And Atomic Settlement
 
