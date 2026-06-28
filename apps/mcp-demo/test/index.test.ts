@@ -845,6 +845,8 @@ describe("MCP demo gateway", () => {
       ],
       providerId: "split402-demo-merchant",
       payToWallet: expect.any(String),
+      maxAmountAtomic: "50000",
+      providerAmountAtomic: "10000",
       executionMode: "router-demo-mock",
       amountPaidAtomic: "10000",
       receiptVerificationStatus: "verified",

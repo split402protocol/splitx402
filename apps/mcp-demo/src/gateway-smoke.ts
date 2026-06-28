@@ -12,6 +12,8 @@ export interface McpGatewaySmokeReport {
   tools: string[];
   providerId: string;
   payToWallet: string;
+  maxAmountAtomic: string;
+  providerAmountAtomic: string;
   executionMode: string;
   amountPaidAtomic: string;
   receiptId: string;
@@ -21,6 +23,7 @@ export interface McpGatewaySmokeReport {
 
 export async function runMcpGatewaySmoke(): Promise<McpGatewaySmokeReport> {
   const context = createMcpGatewayContext();
+  const maxAmountAtomic = "50000";
 
   const initialize = await callGateway(context, {
     jsonrpc: "2.0",
@@ -51,7 +54,10 @@ export async function runMcpGatewaySmoke(): Promise<McpGatewaySmokeReport> {
     params: {
       name: "split402.searchCapabilities",
       arguments: {
-        capability: "solana.wallet-risk"
+        capability: "solana.wallet-risk",
+        budget: {
+          maxAmountAtomic
+        }
       }
     }
   });
@@ -72,7 +78,7 @@ export async function runMcpGatewaySmoke(): Promise<McpGatewaySmokeReport> {
           wallet: "smoke-wallet"
         },
         budget: {
-          maxAmountAtomic: "50000"
+          maxAmountAtomic
         }
       }
     }
@@ -95,6 +101,15 @@ export async function runMcpGatewaySmoke(): Promise<McpGatewaySmokeReport> {
     ["result", "structuredContent", "amountPaidAtomic"],
     "execute amount paid"
   );
+  if (amountPaidAtomic !== selectedProvider.amountAtomic) {
+    throw new Error("execute amount paid must match search provider amount");
+  }
+  if (
+    readAtomicAmount(amountPaidAtomic, "execute amount paid") >
+    readAtomicAmount(maxAmountAtomic, "smoke max amount")
+  ) {
+    throw new Error("execute amount paid must not exceed smoke max amount");
+  }
   const receiptId = readString(
     executed,
     ["result", "structuredContent", "receiptId"],
@@ -137,6 +152,8 @@ export async function runMcpGatewaySmoke(): Promise<McpGatewaySmokeReport> {
     tools,
     providerId,
     payToWallet: selectedProvider.payToWallet,
+    maxAmountAtomic,
+    providerAmountAtomic: selectedProvider.amountAtomic,
     executionMode,
     amountPaidAtomic,
     receiptId,
@@ -148,7 +165,7 @@ export async function runMcpGatewaySmoke(): Promise<McpGatewaySmokeReport> {
 function readProvider(
   response: McpGatewayResponse,
   expectedProviderId: string
-): { providerId: string; payToWallet: string } {
+): { providerId: string; payToWallet: string; amountAtomic: string } {
   const capabilities = readPath(response, [
     "result",
     "structuredContent",
@@ -162,6 +179,11 @@ function readProvider(
     if (providerId === expectedProviderId) {
       return {
         providerId,
+        amountAtomic: readString(
+          capability,
+          ["amountAtomic"],
+          "provider amount"
+        ),
         payToWallet: readString(
           capability,
           ["payToWallet"],
@@ -216,6 +238,13 @@ function readString(
     throw new Error(`${label} must be a non-empty string`);
   }
   return target;
+}
+
+function readAtomicAmount(value: string, label: string): bigint {
+  if (!/^(0|[1-9][0-9]*)$/u.test(value)) {
+    throw new Error(`${label} must be a non-negative atomic amount string`);
+  }
+  return BigInt(value);
 }
 
 function readPath(value: unknown, path: readonly string[]): unknown {

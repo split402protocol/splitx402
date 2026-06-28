@@ -172,10 +172,12 @@ evidence:
 corepack pnpm demo:mcp-gateway:smoke
 ```
 
-The smoke command initializes the gateway, lists the router tools, executes
-`split402.execute` in demo-router mode, and retrieves the captured receipt with
-`split402.getReceipt`. It also checks that the receipt `payToWallet` matches the
-selected provider's advertised destination.
+The smoke command initializes the gateway, lists the router tools, performs
+budget-filtered capability search, executes `split402.execute` in demo-router
+mode, and retrieves the captured receipt with `split402.getReceipt`. It checks
+that the executed amount matches the selected provider amount, stays within the
+smoke budget, and that the receipt `payToWallet` matches the selected provider's
+advertised destination.
 
 ## Status
 
