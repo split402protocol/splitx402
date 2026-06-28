@@ -53,6 +53,9 @@ describe("Split402 product evidence workspace", () => {
       "The product remains `no-go` until the Phase 7 hosted proof and Phase 6",
     );
     expect(workspace.nextCommands).toContain(
+      "corepack pnpm product:launch-preflight --brief split402-launch-evidence",
+    );
+    expect(workspace.nextCommands).toContain(
       "corepack pnpm phase7:staging:collect-reads",
     );
     expect(workspace.nextCommands).toContain(
