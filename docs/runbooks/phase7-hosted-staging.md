@@ -97,6 +97,8 @@ SPLIT402_DATABASE_URL=postgresql://split402:split402@localhost:5432/split402
 Then run the normal proof sequence:
 
 ```bash
+git rev-parse HEAD
+git status --short --branch
 corepack pnpm phase7:staging:init
 SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed
 corepack pnpm phase7:staging-proof > phase7-staging-proof.txt
