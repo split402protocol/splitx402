@@ -179,6 +179,11 @@ export async function collectPhase7McpGatewayEvidence(
   if (!receiptLookupCaptured) {
     blockers.push("mcp_gateway_evidence did not capture successful split402.getReceipt");
   }
+  if (context.executionMode !== "router-live-agent-sdk") {
+    blockers.push(
+      "mcp_gateway_evidence requires router-live-agent-sdk execution mode for Phase 7 hosted proof",
+    );
+  }
 
   const artifactPath = joinPath(input, "mcp-gateway.jsonl");
   input.writeArtifact(
