@@ -393,7 +393,8 @@ Current slice:
 - optional dashboard viewer gate with signed, expiring sessions for hosted
   staging evidence captures.
 - hosted-staging compose stack with PostgreSQL, control plane, migration job,
-  dashboard, optional demo merchant, and optional workers.
+  dashboard, optional demo merchant, optional workers, and an operator-only
+  Devnet seed command for active demo merchant/campaign/route setup.
 - Phase 7 staging proof scaffold, hosted preflight collector, read collector,
   artifact manifest validator, funding-balance semantic validator, status
   validator, template, and runbooks for hosted end-to-end evidence.

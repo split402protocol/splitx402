@@ -15,6 +15,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "lint": "eslint .",
+    "phase7:staging:seed": "tsx src/phase7-staging-seed.ts",
     "payout:finality:failover-drill": "tsx src/payout-finality-failover-drill.ts",
     "migrate": "tsx src/migrate.ts",
     "test": "vitest run",

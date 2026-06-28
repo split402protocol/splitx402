@@ -54,6 +54,21 @@ are ready:
 docker compose -f deploy/phase7-staging/compose.yaml --profile demo --profile workers up
 ```
 
+Seed the hosted-staging control-plane state from an operator shell after
+migrations have run and before collecting proof evidence:
+
+```bash
+SPLIT402_DATABASE_URL=postgresql://split402:split402@localhost:5432/split402 \
+SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging \
+corepack pnpm phase7:staging:seed
+```
+
+This command creates or verifies the active demo merchant, verified origin,
+offer/receipt key, payout wallet, active campaign, and active referral route
+used by the proof collectors. It is intentionally a database-backed operator
+command, not a public HTTP approval endpoint. Keep it limited to Devnet
+public-alpha staging.
+
 Check the public readiness endpoints:
 
 ```bash
@@ -75,12 +90,14 @@ SPLIT402_PHASE7_DEMO_MERCHANT_URL=http://localhost:4023
 SPLIT402_PHASE7_CONTROL_PLANE_TOKEN=<merchant-session-token>
 SPLIT402_PHASE7_MERCHANT_ID=<merchant-id>
 SPLIT402_PHASE7_REFERRER_WALLET=<referrer-wallet>
+SPLIT402_DATABASE_URL=postgresql://split402:split402@localhost:5432/split402
 ```
 
 Then run the normal proof sequence:
 
 ```bash
 corepack pnpm phase7:staging:init
+SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed
 corepack pnpm phase7:staging-proof > phase7-staging-proof.txt
 corepack pnpm phase7:hosted:preflight
 corepack pnpm phase7:staging:collect-reads

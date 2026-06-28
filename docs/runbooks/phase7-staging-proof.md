@@ -13,6 +13,7 @@ proof sequence.
 
 ```bash
 corepack pnpm phase7:staging:init
+SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed
 corepack pnpm phase7:staging-proof > phase7-staging-proof.txt
 corepack pnpm phase7:hosted:preflight
 corepack pnpm phase7:staging:collect-reads
@@ -32,6 +33,13 @@ corepack pnpm phase7:staging:status phase7-staging-proof.txt
 `phase7:staging:init` creates a `phase7-staging-evidence/` directory README and
 `phase7-staging.env` attachment-path template. It does not create evidence
 artifact files; those must be captured from the hosted staging run.
+`phase7:staging:seed` is an operator-only PostgreSQL seed for hosted Devnet
+staging. It creates or verifies the active demo merchant, verified origin,
+offer/receipt key, payout wallet, active campaign, and active referral route
+without adding a public self-approval endpoint. Set `SPLIT402_DATABASE_URL` or
+`DATABASE_URL` before running it, and keep
+`SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging` out of production
+environments.
 `phase7:staging:collect-reads` captures the control-plane read evidence for
 referrer routes, referrer balances, dashboard summary, webhook delivery, payout
 obligations, and funding-balance coverage using the staging merchant and
