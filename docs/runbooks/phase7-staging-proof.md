@@ -64,7 +64,10 @@ before the payment proof run.
 verified commission-bearing receipt and the invalid-claim zero-commission path
 as machine-checkable JSON.
 `phase7:staging:manifest` records SHA-256 hashes for local attached artifacts
-and remote references for URL-based artifacts. Attach the generated
+and remote references for URL-based artifacts that do not require local machine
+parsing. It rejects remote references for proof artifacts that must be local,
+including paid-suite, receipt verification, read API, funding, MCP bundle, MCP
+gateway, command transcript, and hosted preflight evidence. Attach the generated
 `artifact-manifest.json` locally; the status checker will not close the proof
 against a remote manifest URL. Generate it after the evidence files exist and
 before the final assemble/status check.
