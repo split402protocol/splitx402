@@ -4,12 +4,11 @@ import { createPhase7StagingArtifactManifest } from "../src/phase7StagingArtifac
 import { createPhase7StagingProofRecord } from "../src/phase7StagingProof.js";
 
 describe("Phase 7 staging artifact manifest", () => {
-  it("hashes local attached artifacts and records remote references", () => {
+  it("hashes local attached artifacts", () => {
     const manifest = createPhase7StagingArtifactManifest(
       createPhase7StagingProofRecord({
         paid_request_evidence: "attached: paid-suite.log",
         mcp_gateway_evidence: "attached: mcp-gateway.jsonl",
-        agent_discovery_evidence: "https://artifacts.example/discovery.json",
         artifact_manifest_evidence: "attached: artifact-manifest.json",
       }),
       {
@@ -29,11 +28,6 @@ describe("Phase 7 staging artifact manifest", () => {
     expect(manifest).toMatchObject({
       schema: "split402.phase7_artifact_manifest.v1",
       artifactBaseDir: "evidence",
-    });
-    expect(manifest.artifacts).toContainEqual({
-      evidenceField: "agent_discovery_evidence",
-      reference: "https://artifacts.example/discovery.json",
-      kind: "remote",
     });
     expect(manifest.artifacts).toContainEqual({
       evidenceField: "paid_request_evidence",
@@ -60,7 +54,7 @@ describe("Phase 7 staging artifact manifest", () => {
     expect(() =>
       createPhase7StagingArtifactManifest(
         createPhase7StagingProofRecord({
-          paid_request_evidence: "https://artifacts.example/paid-suite.log",
+          agent_discovery_evidence: "https://artifacts.example/discovery.json",
           artifact_manifest_evidence: "attached: artifact-manifest.json",
         }),
         {
@@ -68,6 +62,6 @@ describe("Phase 7 staging artifact manifest", () => {
           readArtifact: () => new Uint8Array(),
         },
       ),
-    ).toThrow("paid_request_evidence must be an attached local artifact");
+    ).toThrow("agent_discovery_evidence must be an attached local artifact");
   });
 });

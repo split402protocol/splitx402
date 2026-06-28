@@ -54,6 +54,10 @@ export const PHASE7_EVIDENCE_FIELDS = [
   "commands_run",
 ] as const satisfies readonly Phase7StagingProofField[];
 
+export const PHASE7_LOCAL_ARTIFACT_EVIDENCE_FIELDS = [
+  ...PHASE7_EVIDENCE_FIELDS,
+] as const;
+
 const PHASE7_STAGING_PROOF_ENV_NAMES: Record<Phase7StagingProofField, string> = {
   proof_id: "SPLIT402_PHASE7_PROOF_ID",
   proof_date: "SPLIT402_PHASE7_PROOF_DATE",
