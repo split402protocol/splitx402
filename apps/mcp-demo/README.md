@@ -43,9 +43,18 @@ corepack pnpm demo:mcp-gateway
 ```
 
 The gateway supports `initialize`, `tools/list`, and `tools/call` over stdio
-JSON-RPC. Calling `split402.walletRiskScore` returns the paid HTTP request
-shape, x402 payment requirement, Split402 campaign metadata, and expected
-commission economics for the supplied wallet.
+JSON-RPC. It exposes:
+
+- `split402.walletRiskScore` for the original paid HTTP request metadata;
+- `split402.searchCapabilities` for router provider discovery;
+- `split402.execute` for a router-backed demo execution result;
+- `split402.getReceipt` for receipts captured during the current gateway
+  session.
+
+The default CLI gateway uses a router-backed mock executor with a
+merchant-signed demo receipt so agents can exercise discovery, execution result
+shape, and receipt verification without a live funded buyer wallet. It is not a
+claim of production MCP hosting or mainnet-ready payment execution.
 
 ## Proof Commands
 
@@ -62,4 +71,5 @@ proof needs direct MCP tool discovery.
 ## Status
 
 Phase 7 public-alpha bundle and stdio gateway for agent-facing tooling. It is
-not a production hosted MCP service.
+not a production hosted MCP service. The default `split402.execute` path is a
+router demo mode, not a live x402 payment.
