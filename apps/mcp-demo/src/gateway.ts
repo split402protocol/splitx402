@@ -76,6 +76,7 @@ export interface McpGatewayRuntimeOptions {
   bundle?: McpDemoBundle;
   env?: NodeJS.ProcessEnv;
   fetch?: Split402DiscoveryFetch;
+  requireSigner?: boolean;
 }
 
 export function handleMcpGatewayLine(
@@ -147,6 +148,11 @@ export async function createMcpGatewayContextFromEnv(
   const signerSecret =
     readOptionalEnvString(env.SPLIT402_MCP_SVM_PRIVATE_KEY) ??
     readOptionalEnvString(env.SVM_PRIVATE_KEY);
+  if (options.requireSigner === true && signerSecret === undefined) {
+    throw new Error(
+      "SPLIT402_MCP_SVM_PRIVATE_KEY or SVM_PRIVATE_KEY is required for live MCP gateway execution"
+    );
+  }
   const signer =
     signerSecret === undefined
       ? undefined

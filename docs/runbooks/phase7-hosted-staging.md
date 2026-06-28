@@ -115,9 +115,12 @@ has live x402 buyer configuration. Set `SPLIT402_MCP_SVM_PRIVATE_KEY` or
 `SVM_PRIVATE_KEY` to the funded buyer key, and set `SPLIT402_MCP_WALLET` and
 `SPLIT402_MCP_MAX_AMOUNT_ATOMIC` for the execution input and budget. The status
 validator requires the search and execute budgets to match and the reported paid
-amount to stay within that budget.
+amount to stay within that budget. If hosted execution is enabled without a
+buyer signer, the collector fails before producing misleading partial evidence.
 The collector JSON report should echo the provider id, paid amount, receipt id,
-receipt verification status, and referrer credit from the executed router call.
+receipt verification status, referrer credit, route id, commission bps,
+protocol-fee bps, commission amount, and protocol-fee amount from the executed
+router call.
 Run `corepack pnpm demo:mcp-gateway:smoke` as a deterministic local gateway
 contract check alongside the hosted transcript.
 

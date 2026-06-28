@@ -110,6 +110,29 @@ describe("Phase 7 MCP gateway evidence collector", () => {
     expect(transcript).toContain('"commissionAmountAtomic":"2000"');
     expect(transcript).toContain('"protocolFeeAtomic":"200"');
   });
+
+  it("requires a signer before hosted live execution collection", async () => {
+    const bundle = createMcpDemoBundle({
+      merchantOrigin: "https://merchant.example",
+      generatedAt: "2026-06-26T00:00:00.000Z",
+    });
+
+    await expect(
+      collectPhase7McpGatewayEvidence({
+        outputDir: "evidence",
+        env: {
+          SPLIT402_MCP_CONTROL_PLANE_URL: "https://control.example",
+          SPLIT402_MCP_CONTROL_PLANE_TOKEN: "control-token",
+          SPLIT402_MCP_CAPABILITY: "solana.wallet-risk",
+          SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE: "1",
+        },
+        fetch: gatewayFetch([], bundle),
+        writeArtifact: () => undefined,
+      }),
+    ).rejects.toThrow(
+      "SPLIT402_MCP_SVM_PRIVATE_KEY or SVM_PRIVATE_KEY is required for live MCP gateway execution",
+    );
+  });
 });
 
 function gatewayFetch(

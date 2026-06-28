@@ -60,6 +60,7 @@ export async function collectPhase7McpGatewayEvidence(
   const context = await createMcpGatewayContextFromEnv({
     env,
     ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+    requireSigner: shouldRequireHostedExecutionSigner(env),
   });
   const requests: JsonRpcRequest[] = [
     {
@@ -228,6 +229,15 @@ function shouldCaptureExecution(
     return ["1", "true", "yes"].includes(override.toLowerCase());
   }
   return executionMode === "router-demo-mock";
+}
+
+function shouldRequireHostedExecutionSigner(env: NodeJS.ProcessEnv): boolean {
+  return (
+    readOptionalEnv(env.SPLIT402_MCP_CONTROL_PLANE_URL) !== undefined &&
+    ["1", "true", "yes"].includes(
+      (readOptionalEnv(env.SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE) ?? "").toLowerCase(),
+    )
+  );
 }
 
 interface McpGatewayExecutionSummary {
