@@ -402,7 +402,7 @@ describe("MCP demo gateway", () => {
           executionMode: "router-demo-mock",
           providerId: "split402-demo-merchant",
           amountPaidAtomic: "10000",
-          receiptId: "rcp_00000000000000000000000000000005",
+          receiptId: expect.stringMatching(/^rcp_[0-9a-f]{32}$/u),
           receiptVerificationStatus: "verified",
           referrerCreditAtomic: "1800",
           data: {
@@ -413,6 +413,9 @@ describe("MCP demo gateway", () => {
         isError: false
       }
     });
+    const receiptId = (
+      executeResponse?.result as { structuredContent: { receiptId: string } }
+    ).structuredContent.receiptId;
 
     const receiptResponse = await handleMcpGatewayLineAsync(
       JSON.stringify({
@@ -422,7 +425,7 @@ describe("MCP demo gateway", () => {
         params: {
           name: "split402.getReceipt",
           arguments: {
-            receiptId: "rcp_00000000000000000000000000000005"
+            receiptId
           }
         }
       }),
@@ -434,12 +437,105 @@ describe("MCP demo gateway", () => {
       id: "receipt-1",
       result: {
         structuredContent: {
-          receiptId: "rcp_00000000000000000000000000000005",
+          receiptId,
           receipt: expect.objectContaining({
             referrerCreditAtomic: "1800"
           })
         },
         isError: false
+      }
+    });
+  });
+
+  it("stores distinct receipts for repeated demo executions", async () => {
+    const context = createMcpGatewayContext(
+      createMcpDemoBundle({
+        generatedAt: "2026-06-26T00:00:00.000Z"
+      })
+    );
+
+    const execute = async (id: string, wallet: string) =>
+      handleMcpGatewayLineAsync(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id,
+          method: "tools/call",
+          params: {
+            name: "split402.execute",
+            arguments: {
+              capability: "solana.wallet-risk",
+              input: {
+                wallet
+              },
+              budget: {
+                maxAmountAtomic: "10000"
+              }
+            }
+          }
+        }),
+        context
+      );
+
+    const first = await execute("execute-repeat-1", "wallet-1");
+    const second = await execute("execute-repeat-2", "wallet-2");
+    const firstReceiptId = (
+      first?.result as { structuredContent: { receiptId: string } }
+    ).structuredContent.receiptId;
+    const secondReceiptId = (
+      second?.result as { structuredContent: { receiptId: string } }
+    ).structuredContent.receiptId;
+
+    expect(firstReceiptId).toMatch(/^rcp_[0-9a-f]{32}$/u);
+    expect(secondReceiptId).toMatch(/^rcp_[0-9a-f]{32}$/u);
+    expect(firstReceiptId).not.toBe(secondReceiptId);
+
+    const firstLookup = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "receipt-repeat-1",
+        method: "tools/call",
+        params: {
+          name: "split402.getReceipt",
+          arguments: {
+            receiptId: firstReceiptId
+          }
+        }
+      }),
+      context
+    );
+    const secondLookup = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "receipt-repeat-2",
+        method: "tools/call",
+        params: {
+          name: "split402.getReceipt",
+          arguments: {
+            receiptId: secondReceiptId
+          }
+        }
+      }),
+      context
+    );
+
+    expect(firstLookup).toMatchObject({
+      result: {
+        structuredContent: {
+          receiptId: firstReceiptId,
+          receipt: expect.objectContaining({
+            receiptId: firstReceiptId
+          })
+        }
+      }
+    });
+    expect(secondLookup).toMatchObject({
+      result: {
+        structuredContent: {
+          receiptId: secondReceiptId,
+          receipt: expect.objectContaining({
+            receiptId: secondReceiptId
+          })
+        }
       }
     });
   });
