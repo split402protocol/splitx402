@@ -1095,6 +1095,31 @@ funding_balance_evidence: funding.json
     );
   });
 
+  it("blocks staged proof status when MCP search providers have no ids", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          includeSearchProviderId: false,
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence search response has no provider ids",
+    );
+  });
+
   it("blocks staged proof status when MCP selected provider omits payment details", () => {
     const proofText = createManifestProof();
     const artifacts = createManifestArtifacts(proofText);
@@ -1989,6 +2014,7 @@ function createValidMcpGatewayTranscript(
     executeMaxAmountAtomic?: string;
     searchCapability?: string;
     executeCapability?: string;
+    includeSearchProviderId?: boolean;
     searchProviderId?: string;
     executeProviderId?: string;
     executeExecutionMode?: string;
@@ -2023,6 +2049,7 @@ function createValidMcpGatewayTranscript(
   const searchMaxAmountAtomic = options.searchMaxAmountAtomic ?? "50000";
   const searchCapability = options.searchCapability ?? "solana.wallet-risk";
   const executeCapability = options.executeCapability ?? searchCapability;
+  const includeSearchProviderId = options.includeSearchProviderId ?? true;
   const searchProviderId = options.searchProviderId ?? "split402-demo-merchant";
   const executeProviderId = options.executeProviderId ?? "split402-demo-merchant";
   const executeExecutionMode =
@@ -2118,7 +2145,7 @@ function createValidMcpGatewayTranscript(
           structuredContent: {
             capabilities: [
               {
-                providerId: searchProviderId,
+                ...(includeSearchProviderId ? { providerId: searchProviderId } : {}),
                 ...(includeSearchProviderNetwork
                   ? { network: searchProviderNetwork }
                   : {}),
