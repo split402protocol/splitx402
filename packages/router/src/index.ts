@@ -20,6 +20,7 @@ export interface Split402CapabilityProvider {
   merchantPublicKey?: string;
   network: string;
   asset: string;
+  payToWallet: string;
   amountAtomic: string;
   reliability?: {
     successRateBps?: number;
@@ -521,6 +522,7 @@ export class Split402ControlPlaneDiscoveryClient {
       ...(merchantPublicKey === undefined ? {} : { merchantPublicKey }),
       network: accept.network,
       asset: accept.asset,
+      payToWallet: accept.payTo,
       amountAtomic: accept.amount,
       metadata: {
         ...(resource.metadata.input === undefined
@@ -679,6 +681,7 @@ function validateOfferMatchesProvider(
     campaignId: string;
     network: string;
     asset: string;
+    payToWallet: string;
     requiredAmountAtomic: string;
   },
   provider: Split402CapabilityProvider
@@ -699,6 +702,9 @@ function validateOfferMatchesProvider(
   if (offer.asset !== provider.asset) {
     errors.push("offer asset does not match provider asset");
   }
+  if (offer.payToWallet !== provider.payToWallet) {
+    errors.push("offer payToWallet does not match provider payToWallet");
+  }
   if (offer.requiredAmountAtomic !== provider.amountAtomic) {
     errors.push("offer requiredAmountAtomic does not match provider amountAtomic");
   }
@@ -717,6 +723,7 @@ function validateReceiptMatchesProvider(
       campaignId: receipt.campaignId,
       network: receipt.network,
       asset: receipt.asset,
+      payToWallet: receipt.payToWallet,
       requiredAmountAtomic: receipt.requiredAmountAtomic
     },
     provider

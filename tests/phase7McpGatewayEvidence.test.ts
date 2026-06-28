@@ -169,7 +169,7 @@ function gatewayFetch(
                 network: bundle.mcp.tools[0].x402.network,
                 amount: bundle.mcp.tools[0].x402.amountAtomic,
                 asset: bundle.mcp.tools[0].x402.asset,
-                payTo: "merchant-pay-to-wallet",
+                payTo: bundle.mcp.tools[0].x402.payToWallet,
               },
             ],
             metadata: {
