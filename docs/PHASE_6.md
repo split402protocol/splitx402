@@ -207,3 +207,4 @@ the merchant has enough funding.
 - `corepack pnpm phase6:signer-smoke`
 - `corepack pnpm phase6:signer-policy`
 - `corepack pnpm payout:finality:failover-drill`
+- `corepack pnpm product:status <phase6-custody-evidence.txt> <phase7-staging-proof.txt>`

@@ -83,3 +83,5 @@ continuity, plus commission/protocol-fee arithmetic from the receipt bps
 fields. Next is hosted proof evidence from a real staging environment.
 The hosted staging proof remains `no-go` until a real hosted environment
 supplies all required evidence from the same source commit.
+Use `corepack pnpm product:status` for a combined machine-readable view of the
+Phase 7 hosted proof gate and Phase 6 production custody gate.
