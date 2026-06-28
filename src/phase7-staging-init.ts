@@ -30,7 +30,7 @@ console.log(
         "Capture real staging outputs into the listed artifact files.",
         "SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",
         "corepack pnpm phase7:staging-proof > phase7-staging-proof.txt",
-        `corepack pnpm phase7:hosted:preflight > ${workspace.directory}/hosted-preflight.json`,
+        "corepack pnpm phase7:hosted:preflight",
         "corepack pnpm phase7:staging:collect-reads",
         "corepack pnpm phase7:staging:collect-mcp-gateway",
         "corepack pnpm demo:mcp-gateway:smoke",
