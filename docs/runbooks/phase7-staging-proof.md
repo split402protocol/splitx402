@@ -66,10 +66,11 @@ include provider used, amount paid, receipt id, receipt verification status, and
 referrer credit, and the collector's JSON report echoes those fields as
 `providerId`, `amountPaidAtomic`, `receiptId`, `receiptVerificationStatus`, and
 `referrerCreditAtomic`, plus route id, commission bps, protocol-fee bps, and
-commission/protocol-fee amounts when receipt lookup succeeds. Default demo mode
-captures the full flow automatically. When `SPLIT402_MCP_CONTROL_PLANE_URL` is
-set for hosted route discovery, also set
-`SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1` plus a funded buyer key in
+commission/protocol-fee amounts when receipt lookup succeeds. Demo mode is a
+local contract check only and remains no-go for hosted Phase 7 proof. Proof-ready
+MCP gateway evidence must run in `router-live-agent-sdk` mode: set
+`SPLIT402_MCP_CONTROL_PLANE_URL` for hosted route discovery, set
+`SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1`, and provide a funded buyer key in
 `SPLIT402_MCP_SVM_PRIVATE_KEY` or `SVM_PRIVATE_KEY` for the router-backed x402
 execution path.
 `phase7:hosted:preflight` captures `hosted-preflight.json` with the source

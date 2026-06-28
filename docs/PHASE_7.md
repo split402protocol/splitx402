@@ -109,6 +109,11 @@ corepack pnpm phase7:staging-proof > phase7-staging-proof.txt
 corepack pnpm phase7:hosted:preflight
 # Confirm hosted control plane has SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc.
 corepack pnpm phase7:staging:collect-reads
+SPLIT402_MCP_CONTROL_PLANE_URL="$SPLIT402_PHASE7_CONTROL_PLANE_URL" \
+SPLIT402_MCP_CONTROL_PLANE_TOKEN="$SPLIT402_PHASE7_CONTROL_PLANE_TOKEN" \
+SPLIT402_MCP_CAPABILITY=solana.wallet-risk \
+SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 \
+SPLIT402_MCP_SVM_PRIVATE_KEY=<funded-buyer-key-base58> \
 corepack pnpm phase7:staging:collect-mcp-gateway
 corepack pnpm demo:mcp-gateway:smoke
 corepack pnpm demo:mcp-bundle > phase7-staging-evidence/mcp-bundle.json
@@ -127,7 +132,8 @@ from the same staging environment.
 The MCP gateway collection report must identify the provider used, paid amount,
 receipt id, verification status, referrer credit, route id, commission bps,
 protocol-fee bps, commission amount, and protocol-fee amount for the executed
-router call.
+router call. Demo-mode MCP collection remains no-go; proof-ready MCP evidence
+must come from `router-live-agent-sdk` execution against hosted route discovery.
 The final status check verifies that local `attached:` artifacts still match the
 recorded local manifest sizes and SHA-256 hashes, and that the hosted preflight
 checks passed against the same source commit, control-plane URL, and dashboard
@@ -137,10 +143,11 @@ earnings, dashboard summary, webhook delivery, and payout obligations must be
 present and non-empty. The paid-suite log and receipt-verification JSON are
 checked for a successful paid request, a verified commission-bearing receipt,
 and the invalid-claim zero-commission path. The MCP gateway transcript must
-prove budget-filtered capability discovery, verified execution, matching receipt
-lookup, route attribution, and commission/protocol-fee amounts derived from the
-receipt `commissionBps` and `protocolFeeBpsOfCommission` fields. The command
-transcript must include the Phase 7 evidence commands and full validation suite.
+prove budget-filtered capability discovery, live router execution, matching
+provider network/asset/amount, matching receipt lookup, route attribution, and
+commission/protocol-fee amounts derived from the receipt `commissionBps` and
+`protocolFeeBpsOfCommission` fields. The command transcript must include the
+Phase 7 evidence commands and full validation suite.
 The funding-balance artifact is checked separately, requiring every asset to
 show a resolved `covered` or `deficit` state instead of unresolved funding.
 
