@@ -65,15 +65,16 @@ and `split402.getReceipt` requests through the MCP gateway. The transcript must
 include provider used, amount paid, receipt id, receipt verification status, and
 referrer credit, and the collector's JSON report echoes those fields as
 `providerId`, `providerNetwork`, `providerAsset`, `providerAmountAtomic`,
-`providerPayToWallet`, `amountPaidAtomic`, `receiptId`,
+`providerPayToWallet`, `providerRouteId`, `amountPaidAtomic`, `receiptId`,
 `receiptVerificationStatus`, `executeExecutionMode`, and `referrerCreditAtomic`,
 plus receipt-side `network`, `asset`, `requiredAmountAtomic`, `payToWallet`,
 `receiptReferrerCreditAtomic`, route id, commission bps, protocol-fee bps, and
 commission/protocol-fee amounts when receipt lookup succeeds. The collector
 rejects the report if the receipt amount, selected-provider payment details,
-commission, protocol fee, or referrer credit arithmetic does not match. It also
-rejects execute evidence with missing required fields, unsupported execution
-mode, unverified receipt status, or zero referrer credit. Demo mode is a local
+selected-provider route id, commission, protocol fee, or referrer credit
+arithmetic does not match. It also rejects execute evidence with missing
+required fields, unsupported execution mode, unverified receipt status, or zero
+referrer credit. Demo mode is a local
 contract check only and remains no-go for hosted Phase 7 proof. Proof-ready
 MCP gateway evidence must run in `router-live-agent-sdk` mode: set
 `SPLIT402_MCP_CONTROL_PLANE_URL` for hosted route discovery, set
@@ -214,7 +215,8 @@ The validator requires:
   or below that budget, verified receipt status, positive referrer credit, and a
   matching `split402.getReceipt` response whose receipt payload has the same
   receipt id, required amount, referrer credit, selected-provider payment
-  details, and route attribution. The receipt payload must also include positive
+  details, and selected-provider route attribution. The receipt payload must
+  also include positive
   commission bps, `protocolFeeBpsOfCommission`, positive commission amount,
   non-negative protocol fee, commission and protocol fee amounts derived from
   those bps fields, and referrer credit equal to commission minus protocol fee.

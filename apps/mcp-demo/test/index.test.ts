@@ -197,6 +197,7 @@ describe("MCP demo gateway", () => {
     const bundle = createMcpDemoBundle({
       generatedAt: "2026-06-26T00:00:00.000Z"
     });
+    const sample = createSampleProtocolArtifacts();
     const response = await handleMcpGatewayLineAsync(
       JSON.stringify({
         jsonrpc: "2.0",
@@ -221,6 +222,9 @@ describe("MCP demo gateway", () => {
             expect.objectContaining({
               providerId: "split402-demo-merchant",
               capability: "solana.wallet-risk",
+              routeId: sample.artifacts.receipt.routeId,
+              referrerWallet: sample.artifacts.receipt.referrerWallet,
+              payoutWallet: sample.artifacts.receipt.payoutWallet,
               payToWallet: bundle.mcp.tools[0].x402.payToWallet,
               amountAtomic: "10000"
             })

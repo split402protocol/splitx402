@@ -144,6 +144,7 @@ describe("Phase 7 staging evidence workspace", () => {
     );
     expect(workspace.readmeText).toContain("providerAsset");
     expect(workspace.readmeText).toContain("providerPayToWallet");
+    expect(workspace.readmeText).toContain("providerRouteId");
     expect(workspace.readmeText).toContain("requiredAmountAtomic");
     expect(workspace.readmeText).toContain("executeExecutionMode");
     expect(workspace.readmeText).toContain("receiptReferrerCreditAtomic");
@@ -151,7 +152,7 @@ describe("Phase 7 staging evidence workspace", () => {
       "selected provider network, asset, and",
     );
     expect(workspace.readmeText).toContain(
-      "matching receipt network, asset, payToWallet, required",
+      "matching receipt network, asset, payToWallet, routeId",
     );
     expect(workspace.readmeText).toContain(
       "collector rejects execute evidence with missing required fields",
