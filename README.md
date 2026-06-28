@@ -340,17 +340,18 @@ corepack pnpm product:status <phase6-custody-evidence.txt> <phase7-staging-proof
 ```
 
 `product:evidence:init` creates a local evidence workspace for the remaining
-Phase 7 hosted proof and Phase 6 custody bundle. It refuses to overwrite
-existing scaffold files; rerun with `--force` only when intentionally replacing
-local scaffold content. `product:launch-preflight --brief` checks whether the
-local launch workspace and required Phase 7 hosted proof environment values are
-ready before collection starts. `product:launch-checklist --brief` prints the
-exact remaining local validation, hosted proof, custody evidence, and combined
-status commands; pass the Phase 6 and Phase 7 evidence paths to show checked,
-blocked, or ready section statuses from real files. `product:status` reports the
-current Split402 phase, whether the public-alpha hosted proof and production
-custody evidence are checked, launch-gate percentages, and why the launch
-decision remains `no-go` until both machine-checkable gates are satisfied.
+Phase 7 hosted proof and Phase 6 custody bundle, including local env templates
+for attachment paths. It refuses to overwrite existing scaffold files; rerun
+with `--force` only when intentionally replacing local scaffold content.
+`product:launch-preflight --brief` checks whether the local launch workspace and
+required Phase 7 hosted proof environment values are ready before collection
+starts. `product:launch-checklist --brief` prints the exact remaining local
+validation, hosted proof, custody evidence, and combined status commands; pass
+the Phase 6 and Phase 7 evidence paths to show checked, blocked, or ready
+section statuses from real files. `product:status` reports the current Split402
+phase, whether the public-alpha hosted proof and production custody evidence are
+checked, launch-gate percentages, and why the launch decision remains `no-go`
+until both machine-checkable gates are satisfied.
 
 Generate the Phase 6 image provenance review record after building immutable
 signer and control-plane images:
@@ -427,11 +428,17 @@ List the Phase 6 evidence commands and check the current custody bundle:
 
 ```bash
 corepack pnpm phase6:evidence:bundle
+corepack pnpm phase6:evidence:env-template > split402-launch-evidence/phase6-evidence.env
 corepack pnpm phase6:evidence:assemble
 corepack pnpm phase6:evidence:status
 corepack pnpm phase6:evidence:status <evidence-bundle.txt>
 corepack pnpm phase6:evidence:bundle | corepack pnpm phase6:custody:check -
 ```
+
+Use `phase6:evidence:env-template` to create a local, commented `.env` helper
+for generated Phase 6 record paths before running `phase6:evidence:assemble`.
+Keep private URLs, secrets, private keys, and transaction bytes out of the file
+and out of Git.
 
 Run the optional live PostgreSQL harness against an empty test database:
 

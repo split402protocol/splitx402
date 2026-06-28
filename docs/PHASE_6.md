@@ -115,6 +115,9 @@ plus an unknown-outcome reconciliation queue and referrer payout views.
   commands and summarize custody-bundle blockers before production approval.
 - Added `corepack pnpm phase6:evidence:bundle` to scaffold the canonical Phase 6
   custody evidence bundle in validator field order with safe defaults.
+- Added `corepack pnpm phase6:evidence:env-template` to generate a local,
+  commented environment helper for Phase 6 custody record extraction and
+  attachment paths.
 - Added `corepack pnpm phase6:evidence:assemble` to assemble the canonical
   custody evidence bundle from generated evidence records, attachment paths, and
   explicit field overrides.
@@ -193,6 +196,7 @@ the merchant has enough funding.
 - `corepack pnpm phase6:custody:check <evidence-bundle.txt>`
 - `corepack pnpm phase6:evidence:assemble`
 - `corepack pnpm phase6:evidence:bundle`
+- `corepack pnpm phase6:evidence:env-template`
 - `corepack pnpm phase6:evidence:bundle | corepack pnpm phase6:custody:check -`
 - `corepack pnpm phase6:evidence:status <evidence-bundle.txt>`
 - `corepack pnpm phase6:emergency-revocation`
