@@ -26,7 +26,9 @@ describe("Phase 7 staging proof", () => {
   });
 
   it("keeps status command guidance aligned with local evidence capture", () => {
-    const commands = PHASE7_STAGING_COMMANDS.map((command) => command.command);
+    const commands: string[] = PHASE7_STAGING_COMMANDS.map(
+      (command) => command.command,
+    );
 
     expect(commands).toContain("corepack pnpm phase7:hosted:preflight");
     expect(commands).toContain("corepack pnpm phase7:staging:collect-reads");
@@ -36,11 +38,28 @@ describe("Phase 7 staging proof", () => {
     expect(commands).toContain(
       "corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log",
     );
-    expect(
-      commands.indexOf(
-        "corepack pnpm phase7:staging:manifest <phase7-staging-proof.txt> > phase7-staging-evidence/artifact-manifest.json",
-      ),
-    ).toBeLessThan(commands.indexOf("corepack pnpm phase7:staging:assemble"));
+    expect(commands).toContain(
+      "corepack pnpm phase7:staging:derive-receipt-verification",
+    );
+    const expectedCaptureOrder = [
+      "corepack pnpm phase7:hosted:preflight",
+      "corepack pnpm phase7:staging:collect-reads",
+      "run the payout-obligations read with SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc and attach covered/deficit evidence",
+      "corepack pnpm phase7:staging:collect-mcp-gateway",
+      "corepack pnpm demo:mcp-gateway:smoke",
+      "corepack pnpm demo:mcp-bundle > phase7-staging-evidence/mcp-bundle.json",
+      "corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log",
+      "corepack pnpm phase7:staging:derive-receipt-verification",
+      "corepack pnpm phase7:staging:manifest <phase7-staging-proof.txt> > phase7-staging-evidence/artifact-manifest.json",
+      "corepack pnpm phase7:staging:assemble",
+    ];
+    const commandPositions = expectedCaptureOrder.map((command) =>
+      commands.indexOf(command),
+    );
+    expect(commandPositions.every((position) => position >= 0)).toBe(true);
+    expect([...commandPositions].sort((left, right) => left - right)).toEqual(
+      commandPositions,
+    );
     expect(commands).not.toContain("corepack pnpm dashboard");
     expect(
       commands.some((command) => command.startsWith("curl the Phase 7")),

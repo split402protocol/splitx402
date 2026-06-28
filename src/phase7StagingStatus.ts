@@ -34,21 +34,10 @@ export const PHASE7_STAGING_COMMANDS = [
     evidenceField: "dashboard_summary_evidence",
   },
   {
-    gate: "artifact_manifest",
+    gate: "funding_balance",
     command:
-      "corepack pnpm phase7:staging:manifest <phase7-staging-proof.txt> > phase7-staging-evidence/artifact-manifest.json",
-    evidenceField: "artifact_manifest_evidence",
-  },
-  {
-    gate: "proof_assembly",
-    command: "corepack pnpm phase7:staging:assemble",
-    evidenceField: "commands_run",
-  },
-  {
-    gate: "mcp_bundle",
-    command:
-      "corepack pnpm demo:mcp-bundle > phase7-staging-evidence/mcp-bundle.json",
-    evidenceField: "mcp_bundle_evidence",
+      "run the payout-obligations read with SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc and attach covered/deficit evidence",
+    evidenceField: "funding_balance_evidence",
   },
   {
     gate: "mcp_gateway",
@@ -61,16 +50,32 @@ export const PHASE7_STAGING_COMMANDS = [
     evidenceField: "commands_run",
   },
   {
+    gate: "mcp_bundle",
+    command:
+      "corepack pnpm demo:mcp-bundle > phase7-staging-evidence/mcp-bundle.json",
+    evidenceField: "mcp_bundle_evidence",
+  },
+  {
     gate: "agent_paid_suite",
     command:
       "corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log",
     evidenceField: "paid_request_evidence",
   },
   {
-    gate: "funding_balance",
+    gate: "receipt_verification_derivation",
+    command: "corepack pnpm phase7:staging:derive-receipt-verification",
+    evidenceField: "receipt_verification_evidence",
+  },
+  {
+    gate: "artifact_manifest",
     command:
-      "run the payout-obligations read with SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc and attach covered/deficit evidence",
-    evidenceField: "funding_balance_evidence",
+      "corepack pnpm phase7:staging:manifest <phase7-staging-proof.txt> > phase7-staging-evidence/artifact-manifest.json",
+    evidenceField: "artifact_manifest_evidence",
+  },
+  {
+    gate: "proof_assembly",
+    command: "corepack pnpm phase7:staging:assemble",
+    evidenceField: "commands_run",
   },
   {
     gate: "proof_validation",
