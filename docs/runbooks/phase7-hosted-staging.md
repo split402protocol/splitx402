@@ -100,10 +100,13 @@ corepack pnpm phase7:staging:status phase7-staging-proof.txt
 ```
 
 `phase7:staging:collect-reads` writes both payout-obligation and
-funding-balance artifacts from the payout-obligations endpoint. The collector
-fails fast unless the funding artifact contains a merchant obligation summary
-with at least one asset in resolved `covered` or `deficit` state. If it fails
-with `fundingStatus is unknown`, rerun the staging stack with the Solana RPC
+funding-balance artifacts from the payout-obligations endpoint and validates
+all captured read artifacts before writing them. It fails fast unless route
+discovery has an active route, referrer balances show positive earnings,
+dashboard summary has active campaign/route ids, webhook evidence has a
+delivered event, payout obligations show a positive obligation, and funding
+has at least one resolved `covered` or `deficit` asset. If it fails with
+`fundingStatus is unknown`, rerun the staging stack with the Solana RPC
 funding-balance provider configured before assembling the proof.
 
 The status command must pass before Phase 7 can be marked ready for public-alpha
