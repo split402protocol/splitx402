@@ -103,7 +103,7 @@ export function formatSplit402ProductReadinessBrief(
         : "not checked";
     return `- ${gate.label}: ${status}`;
   });
-  const nextActions = report.nextActions.slice(0, 5).map((action) => `- ${action}`);
+  const nextActions = report.nextActions.slice(0, 6).map((action) => `- ${action}`);
 
   return [
     `Split402 status: ${report.launchDecision}`,
@@ -168,6 +168,7 @@ function createProductNextActions(
     return [
       "Create a combined launch evidence workspace with corepack pnpm product:evidence:init.",
       "Fill split402-launch-evidence/phase7-staging.env with hosted staging values.",
+      "Generate Phase 6 custody env guidance with corepack pnpm phase6:evidence:env-template split402-launch-evidence > split402-launch-evidence/phase6-evidence.env.",
       "Fill split402-launch-evidence/phase6-evidence.env with generated Phase 6 custody record paths.",
       "Fill split402-launch-evidence/phase6-custody-evidence.txt with generated Phase 6 custody records.",
       "Run corepack pnpm product:launch-preflight --brief split402-launch-evidence before collecting hosted proof.",
