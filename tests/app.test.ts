@@ -25,10 +25,10 @@ beforeEach(async () => {
     PORT: "4021",
     LOG_LEVEL: "silent",
     SPLIT402_PAYMENT_MODE: "mock",
-    SPLIT402_NETWORK: "eip155:84532",
-    SPLIT402_ASSET: "USDC",
+    SPLIT402_NETWORK: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+    SPLIT402_ASSET: "usdc-devnet",
     SPLIT402_PRICE_USD: "0.001",
-    SPLIT402_PAY_TO: "0x0000000000000000000000000000000000000000",
+    SPLIT402_PAY_TO: "11111111111111111111111111111111",
     SPLIT402_FACILITATOR_URL: "https://x402.org/facilitator",
     SPLIT402_SYNC_FACILITATOR: "false",
     SPLIT402_RESOURCE_BASE_URL: "http://localhost:4021",
@@ -71,9 +71,10 @@ describe("Split402 Phase 1 service", () => {
         expect(paymentRequired.x402Version).toBe(2);
         expect(paymentRequired.accepts[0]).toMatchObject({
           scheme: "exact",
-          network: "eip155:84532",
+          network: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+          asset: "usdc-devnet",
           amount: "1000",
-          payTo: "0x0000000000000000000000000000000000000000",
+          payTo: "11111111111111111111111111111111",
         });
         expect(paymentRequired.extensions?.[PAYMENT_IDENTIFIER]).toMatchObject({
           info: { required: true },
@@ -126,7 +127,7 @@ describe("Split402 Phase 1 service", () => {
       resource: paymentRequired.resource,
       accepted: firstAccept(paymentRequired),
       payload: {
-        payer: "0x1111111111111111111111111111111111111111",
+        payer: "BuyerWallet111111111111111111111111111",
       },
       extensions: {
         [PAYMENT_IDENTIFIER]: {
@@ -156,9 +157,20 @@ describe("Split402 Phase 1 service", () => {
       paymentId,
       status: "mock-settled",
       amount: "1000",
-      network: "eip155:84532",
+      network: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
       transaction: `mock:${paymentId}`,
     });
+  });
+
+  it("keeps live x402 mode explicit as the legacy EVM transitional path", () => {
+    const liveSolanaConfig = {
+      ...config,
+      paymentMode: "x402" as const,
+    };
+
+    expect(() => createApp(liveSolanaConfig)).toThrow(
+      "SPLIT402_PAYMENT_MODE=x402 is the legacy EVM transitional path",
+    );
   });
 
   it("exposes recorded payment settlement by payment id", async () => {
