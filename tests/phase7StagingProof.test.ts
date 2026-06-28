@@ -154,7 +154,43 @@ approval_decision: no-go
       "control_plane_url must be an http(s) URL",
     );
     expect(validation.invalidFields).toContain(
-      "agent_discovery_evidence must be an attached artifact or http(s) URL",
+      "agent_discovery_evidence must be an attached local artifact",
+    );
+  });
+
+  it("rejects remote evidence references at the proof validation layer", () => {
+    const validation = validatePhase7StagingProof(
+      createPhase7StagingProofRecord({
+        proof_id: "phase7-staging-2026-06-26",
+        proof_date: "2026-06-26",
+        reviewers: "Split402 operators",
+        source_commit: "fd88024",
+        staging_environment: "staging-us",
+        control_plane_url: "https://control.staging.example",
+        dashboard_url: "https://dashboard.staging.example",
+        demo_merchant_url: "https://merchant.staging.example",
+        webhook_receiver_url: "https://webhook.staging.example",
+        hosted_preflight_evidence:
+          "https://artifacts.example/hosted-preflight.json",
+        agent_discovery_evidence: "attached: agent-discovery.json",
+        paid_request_evidence: "attached: paid-suite.log",
+        receipt_verification_evidence: "attached: receipt-verification.json",
+        referrer_balance_evidence: "attached: referrer-balances.json",
+        dashboard_summary_evidence: "attached: dashboard-summary.json",
+        webhook_delivery_evidence: "attached: webhook-events.json",
+        payout_obligation_evidence: "attached: payout-obligations.json",
+        funding_balance_evidence: "attached: funding-balance.json",
+        mcp_bundle_evidence: "attached: mcp-bundle.json",
+        mcp_gateway_evidence: "attached: mcp-gateway.jsonl",
+        artifact_manifest_evidence: "attached: artifact-manifest.json",
+        commands_run: "attached: commands.log",
+        approval_decision: "approved",
+      }),
+    );
+
+    expect(validation.approved).toBe(false);
+    expect(validation.invalidFields).toContain(
+      "hosted_preflight_evidence must be an attached local artifact",
     );
   });
 
@@ -249,7 +285,7 @@ funding_balance_evidence: funding.json
       evidenceField: "funding_balance_evidence",
       status: "invalid",
       blockers: [
-        "funding_balance_evidence must be an attached artifact or http(s) URL",
+        "funding_balance_evidence must be an attached local artifact",
       ],
     });
     expect(report.gateStatuses).toContainEqual({
@@ -751,7 +787,7 @@ funding_balance_evidence: funding.json
       evidenceField: "artifact_manifest_evidence",
       status: "invalid",
       blockers: [
-        "artifact_manifest_evidence must be an attached local artifact for status validation",
+        "artifact_manifest_evidence must be an attached local artifact",
       ],
     });
   });

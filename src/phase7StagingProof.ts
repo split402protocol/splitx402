@@ -183,8 +183,12 @@ export function validatePhase7StagingProof(
   }
   for (const field of PHASE7_EVIDENCE_FIELDS) {
     const value = fields.get(field);
-    if (value !== undefined && value.length > 0 && !isEvidenceReference(value)) {
-      invalidFields.push(`${field} must be an attached artifact or http(s) URL`);
+    if (
+      value !== undefined &&
+      value.length > 0 &&
+      !isAttachedArtifactReference(value)
+    ) {
+      invalidFields.push(`${field} must be an attached local artifact`);
     }
   }
 
@@ -251,10 +255,7 @@ function isHttpUrl(value: string): boolean {
   }
 }
 
-function isEvidenceReference(value: string): boolean {
-  if (isHttpUrl(value)) {
-    return true;
-  }
+function isAttachedArtifactReference(value: string): boolean {
   const attachedPrefix = "attached:";
   return (
     value.startsWith(attachedPrefix) &&
