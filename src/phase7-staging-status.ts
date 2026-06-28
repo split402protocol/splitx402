@@ -2,6 +2,11 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
 
+import { isPhase7SourceWorktreeDirty } from "./phase7GitStatus.js";
+import {
+  PHASE7_EVIDENCE_FIELDS,
+  parsePhase7ProofRecord,
+} from "./phase7StagingProof.js";
 import { createPhase7StagingStatusReport } from "./phase7StagingStatus.js";
 
 const proofPath =
@@ -18,7 +23,7 @@ const artifactBaseDir =
     : dirname(resolve(proofPath));
 const report = createPhase7StagingStatusReport(proofText, {
   currentSourceCommit: readCurrentGitCommit(),
-  currentWorktreeDirty: readCurrentWorktreeDirty(),
+  currentWorktreeDirty: readCurrentWorktreeDirty(proofPath, proofText),
   ...(artifactBaseDir === undefined
     ? {}
     : {
@@ -42,9 +47,36 @@ function readCurrentGitCommit(): string {
   }).trim();
 }
 
-function readCurrentWorktreeDirty(): boolean {
-  return execFileSync("git", ["status", "--porcelain"], {
+function readCurrentWorktreeDirty(
+  proofFilePath: string | undefined,
+  checkedProofText: string | undefined,
+): boolean {
+  const porcelainStatus = execFileSync("git", ["status", "--porcelain"], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
-  }).trim().length > 0;
+  });
+  return isPhase7SourceWorktreeDirty({
+    porcelainStatus,
+    proofPath: proofFilePath,
+    allowedArtifactPaths: readAttachedArtifactPaths(checkedProofText),
+  });
+}
+
+function readAttachedArtifactPaths(checkedProofText: string | undefined): string[] {
+  if (checkedProofText === undefined) {
+    return [];
+  }
+  const fields = parsePhase7ProofRecord(checkedProofText);
+  return PHASE7_EVIDENCE_FIELDS.map((field) =>
+    readAttachedArtifactPath(fields.get(field)),
+  ).filter((path): path is string => path !== undefined);
+}
+
+function readAttachedArtifactPath(reference: string | undefined): string | undefined {
+  const prefix = "attached:";
+  if (reference === undefined || !reference.toLowerCase().startsWith(prefix)) {
+    return undefined;
+  }
+  const path = reference.slice(prefix.length).trim();
+  return path.length === 0 ? undefined : path;
 }
