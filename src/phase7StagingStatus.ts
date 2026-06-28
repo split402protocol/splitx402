@@ -763,8 +763,17 @@ function createPaidRequestStatus(
   }
 
   const blockers: string[] = [];
-  validatePaidSuiteReference(paidReference, options, blockers);
-  validateReceiptVerificationReference(receiptReference, options, blockers);
+  const paidSuite = validatePaidSuiteReference(paidReference, options, blockers);
+  const receiptVerification = validateReceiptVerificationReference(
+    receiptReference,
+    options,
+    blockers,
+  );
+  validateReceiptVerificationContinuity(
+    paidSuite,
+    receiptVerification,
+    blockers,
+  );
   return blockers.length === 0
     ? { status: "valid", blockers: [] }
     : { status: "invalid", blockers };
@@ -774,23 +783,23 @@ function validatePaidSuiteReference(
   reference: string | undefined,
   options: Phase7StagingStatusOptions,
   blockers: string[],
-): void {
+): Record<string, unknown> | undefined {
   if (reference === undefined || reference.length === 0) {
-    return;
+    return undefined;
   }
   if (isHttpUrl(reference)) {
     blockers.push(
       "paid_request_evidence must be an attached local artifact for status validation",
     );
-    return;
+    return undefined;
   }
   const artifactPath = readAttachedArtifactPath(reference);
   if (artifactPath === undefined) {
-    return;
+    return undefined;
   }
   const text = readTextArtifact("paid_request_evidence", artifactPath, options, blockers);
   if (text === undefined) {
-    return;
+    return undefined;
   }
   const paidSuite = extractJsonObjectWithMarker(
     text,
@@ -799,28 +808,29 @@ function validatePaidSuiteReference(
     blockers,
   );
   if (paidSuite === undefined) {
-    return;
+    return undefined;
   }
   validatePaidSuiteArtifact(paidSuite, blockers);
+  return readRecord(paidSuite);
 }
 
 function validateReceiptVerificationReference(
   reference: string | undefined,
   options: Phase7StagingStatusOptions,
   blockers: string[],
-): void {
+): Record<string, unknown> | undefined {
   if (reference === undefined || reference.length === 0) {
-    return;
+    return undefined;
   }
   if (isHttpUrl(reference)) {
     blockers.push(
       "receipt_verification_evidence must be an attached local artifact for status validation",
     );
-    return;
+    return undefined;
   }
   const artifactPath = readAttachedArtifactPath(reference);
   if (artifactPath === undefined) {
-    return;
+    return undefined;
   }
   const artifact = readJsonArtifact(
     "receipt_verification_evidence",
@@ -829,9 +839,10 @@ function validateReceiptVerificationReference(
     blockers,
   );
   if (artifact === undefined) {
-    return;
+    return undefined;
   }
   validateReceiptVerificationArtifact(artifact, blockers);
+  return readRecord(artifact);
 }
 
 function validatePaidSuiteArtifact(artifact: unknown, blockers: string[]): void {
@@ -942,6 +953,75 @@ function validateReceiptVerificationArtifact(
   if (Array.isArray(errors) && errors.length > 0) {
     blockers.push("receipt_verification_evidence errors must be empty");
   }
+}
+
+function validateReceiptVerificationContinuity(
+  paidSuite: Record<string, unknown> | undefined,
+  receiptVerification: Record<string, unknown> | undefined,
+  blockers: string[],
+): void {
+  if (paidSuite === undefined || receiptVerification === undefined) {
+    return;
+  }
+
+  const paidValidReceipt = readRecord(paidSuite.validReceipt);
+  const paidInvalidReceipt = readRecord(paidSuite.invalidReceipt);
+  const verifiedValidReceipt = readRecord(receiptVerification.validReceipt);
+  const verifiedInvalidReceipt = readRecord(
+    receiptVerification.invalidClaimReceipt,
+  );
+  if (
+    paidValidReceipt !== undefined &&
+    verifiedValidReceipt !== undefined &&
+    !receiptSummariesMatch(paidValidReceipt, verifiedValidReceipt, [
+      "receiptId",
+      "paymentId",
+      "commissionBps",
+      "commissionAmountAtomic",
+      "referrerCreditAtomic",
+      "settlementTxSignature",
+      "routeId",
+    ])
+  ) {
+    blockers.push(
+      "receipt_verification_evidence validReceipt does not match paid_request_evidence validReceipt",
+    );
+  }
+  if (
+    paidInvalidReceipt !== undefined &&
+    verifiedInvalidReceipt !== undefined &&
+    !receiptSummariesMatch(paidInvalidReceipt, verifiedInvalidReceipt, [
+      "receiptId",
+      "paymentId",
+      "commissionBps",
+      "commissionAmountAtomic",
+      "referrerCreditAtomic",
+      "settlementTxSignature",
+    ])
+  ) {
+    blockers.push(
+      "receipt_verification_evidence invalidClaimReceipt does not match paid_request_evidence invalidReceipt",
+    );
+  }
+  const topLevelReceiptId = readNonEmptyString(receiptVerification.receiptId);
+  const verifiedReceiptId = readNonEmptyString(verifiedValidReceipt?.receiptId);
+  if (
+    topLevelReceiptId !== undefined &&
+    verifiedReceiptId !== undefined &&
+    topLevelReceiptId !== verifiedReceiptId
+  ) {
+    blockers.push(
+      "receipt_verification_evidence receiptId does not match validReceipt.receiptId",
+    );
+  }
+}
+
+function receiptSummariesMatch(
+  left: Record<string, unknown>,
+  right: Record<string, unknown>,
+  fields: readonly string[],
+): boolean {
+  return fields.every((field) => left[field] === right[field]);
 }
 
 function validateAgentDiscoveryArtifact(
