@@ -6,8 +6,8 @@ Status: superseded by 0003 where it conflicts with the Split402 architecture spe
 ## Context
 
 This decision captured the first repository setup assumptions before the local
-Split402 architecture spec and the `splitx402/ffff` implementation baseline were
-made canonical for this repo.
+Split402 architecture spec and implementation baseline were made canonical for
+this repo.
 
 The original decision used temporary repo-name-based naming and chose a narrower
 Base/EVM-first skeleton. That helped get a runnable HTTP service started, but it is
@@ -16,7 +16,7 @@ not the canonical Split402 MVP scope.
 ## Superseded Choices
 
 The following choices are superseded by
-[`0003`](0003-adopt-architecture-and-ffff-baseline.md):
+[`0003`](0003-adopt-split402-architecture-baseline.md):
 
 - project/protocol naming that did not preserve Split402;
 - Base Sepolia as the first product network;
