@@ -191,6 +191,7 @@ export function createDemoProvider(
     merchantPublicKey: bundle.merchant.servicePublicKey,
     network: tool.x402.network,
     asset: tool.x402.asset,
+    payToWallet: tool.x402.payToWallet,
     amountAtomic: tool.x402.amountAtomic,
     reliability: {
       successRateBps: 9500,
@@ -659,7 +660,7 @@ function createDemoReceipt(
     network: provider.network,
     asset: provider.asset,
     payerWallet: sample.artifacts.receipt.payerWallet,
-    payToWallet: sample.artifacts.receipt.payToWallet,
+    payToWallet: provider.payToWallet,
     requiredAmountAtomic: provider.amountAtomic,
     settledAmountAtomic: provider.amountAtomic,
     settlementTxSignature: `demo-mcp-gateway-mock-settlement-${sequence}`,
@@ -709,6 +710,7 @@ function publicProviderView(provider: Split402CapabilityProvider) {
     campaignId: provider.campaignId,
     network: provider.network,
     asset: provider.asset,
+    payToWallet: provider.payToWallet,
     amountAtomic: provider.amountAtomic,
     reliability: provider.reliability ?? null
   };

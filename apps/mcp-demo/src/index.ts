@@ -12,6 +12,7 @@ export const MCP_DEMO_OPERATION_ID = "wallet-risk-score";
 export interface McpDemoBundleInput {
   merchantOrigin?: string;
   merchantPublicKey?: string;
+  payToWallet?: string;
   asset?: string;
   requiredAmountAtomic?: string;
   commissionBps?: number;
@@ -58,6 +59,7 @@ export interface McpDemoBundle {
           scheme: "exact";
           network: typeof MCP_DEMO_SOLANA_DEVNET;
           asset: string;
+          payToWallet: string;
           amountAtomic: string;
         };
         split402: {
@@ -119,6 +121,8 @@ export function createMcpDemoBundle(
     deriveEd25519PublicKey(
       hexToBytes(MCP_DEMO_DEFAULT_SERVICE_SEED_HEX)
     );
+  const payToWallet =
+    input.payToWallet ?? process.env.SPLIT402_PAY_TO_WALLET ?? servicePublicKey;
 
   return {
     schemaVersion: "split402.mcp-demo-bundle.v1",
@@ -160,6 +164,7 @@ export function createMcpDemoBundle(
             scheme: "exact",
             network: MCP_DEMO_SOLANA_DEVNET,
             asset,
+            payToWallet,
             amountAtomic: requiredAmountAtomic
           },
           split402: {

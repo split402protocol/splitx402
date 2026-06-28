@@ -382,7 +382,7 @@ Current slice:
   proof commands.
 - `@split402/router` public-alpha package with static providers, control-plane
   route discovery, budget enforcement, deterministic ranking, retry/fallback,
-  and fail-closed receipt verification.
+  pay-to wallet checks, and fail-closed receipt verification.
 - Router-backed MCP demo tools for capability search, demo execution results,
   and session receipt lookup, plus optional control-plane route discovery for
   live staging providers. The default execution path is explicitly demo/mock

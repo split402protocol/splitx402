@@ -57,7 +57,9 @@ merchant-signed demo receipt so agents can exercise discovery, execution result
 shape, and receipt verification without a live funded buyer wallet. It is not a
 claim of production MCP hosting or mainnet-ready payment execution.
 `split402.execute` always requires an explicit `budget.maxAmountAtomic`; the
-gateway never silently spends against a provider default.
+gateway never silently spends against a provider default. Capability search
+results include each provider's advertised `payToWallet`, and router execution
+rejects merchant offers or receipts that do not match that destination.
 
 Example `tools/call` request:
 
