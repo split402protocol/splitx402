@@ -130,6 +130,7 @@ function createPhase7Section(
       "corepack pnpm phase7:staging:collect-reads",
       "SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 corepack pnpm phase7:staging:collect-mcp-gateway",
       "corepack pnpm demo:mcp-gateway:smoke",
+      "corepack pnpm phase7:staging:commands-template > split402-launch-evidence/phase7-staging-evidence/commands.log",
       "corepack pnpm demo:mcp-bundle > split402-launch-evidence/phase7-staging-evidence/mcp-bundle.json",
       "corepack pnpm demo:paid-suite > split402-launch-evidence/phase7-staging-evidence/paid-suite.log",
       "corepack pnpm phase7:staging:derive-receipt-verification",

@@ -22,6 +22,7 @@ corepack pnpm phase7:hosted:preflight
 corepack pnpm phase7:staging:collect-reads
 corepack pnpm phase7:staging:collect-mcp-gateway
 corepack pnpm demo:mcp-gateway:smoke
+corepack pnpm phase7:staging:commands-template > phase7-staging-evidence/commands.log
 corepack pnpm demo:mcp-bundle > phase7-staging-evidence/mcp-bundle.json
 corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log
 corepack pnpm phase7:staging:derive-receipt-verification
