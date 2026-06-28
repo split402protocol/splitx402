@@ -169,6 +169,7 @@ function createProductNextActions(
       "Create a combined launch evidence workspace with corepack pnpm product:evidence:init.",
       "Fill split402-launch-evidence/phase7-staging.env with hosted staging values.",
       "Fill split402-launch-evidence/phase6-custody-evidence.txt with generated Phase 6 custody records.",
+      "Run corepack pnpm product:launch-preflight --brief split402-launch-evidence before collecting hosted proof.",
       "Run hosted Phase 7 staging proof collection and status validation.",
       "Run corepack pnpm product:status --brief split402-launch-evidence/phase6-custody-evidence.txt split402-launch-evidence/phase7-staging-proof.txt.",
     ];
@@ -178,7 +179,7 @@ function createProductNextActions(
     actions.push(
       phase7.proofChecked
         ? "Fix Phase 7 hosted proof blockers reported by corepack pnpm phase7:staging:status."
-        : "Run hosted Phase 7 staging proof collection and status validation.",
+        : "Run corepack pnpm product:launch-preflight --brief split402-launch-evidence before collecting hosted proof.",
     );
     actions.push(...phase7.nextActions.slice(0, 5));
   }
