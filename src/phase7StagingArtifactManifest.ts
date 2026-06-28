@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import {
   PHASE7_EVIDENCE_FIELDS,
+  PHASE7_LOCAL_ARTIFACT_EVIDENCE_FIELDS,
   parsePhase7ProofRecord,
 } from "./phase7StagingProof.js";
 
@@ -37,19 +38,12 @@ const MANIFEST_EVIDENCE_FIELDS = PHASE7_EVIDENCE_FIELDS.filter(
     field !== "artifact_manifest_evidence",
 );
 
-const LOCAL_ONLY_MANIFEST_EVIDENCE_FIELDS = new Set<Phase7ManifestEvidenceField>([
-  "hosted_preflight_evidence",
-  "paid_request_evidence",
-  "receipt_verification_evidence",
-  "referrer_balance_evidence",
-  "dashboard_summary_evidence",
-  "webhook_delivery_evidence",
-  "payout_obligation_evidence",
-  "funding_balance_evidence",
-  "mcp_bundle_evidence",
-  "mcp_gateway_evidence",
-  "commands_run",
-]);
+const LOCAL_ONLY_MANIFEST_EVIDENCE_FIELDS = new Set<Phase7ManifestEvidenceField>(
+  PHASE7_LOCAL_ARTIFACT_EVIDENCE_FIELDS.filter(
+    (field): field is Phase7ManifestEvidenceField =>
+      field !== "artifact_manifest_evidence",
+  ),
+);
 
 export function createPhase7StagingArtifactManifest(
   proofText: string,

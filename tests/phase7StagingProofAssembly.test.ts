@@ -66,4 +66,24 @@ describe("Phase 7 staging proof assembly", () => {
       "funding_balance_evidence: attached: reviewed-funding-balance.json\n",
     );
   });
+
+  it("rejects remote direct values for local-only evidence", () => {
+    expect(() =>
+      assemblePhase7StagingProof({
+        values: {
+          mcp_gateway_evidence: "https://artifacts.example/mcp-gateway.jsonl",
+        },
+      }),
+    ).toThrow("mcp_gateway_evidence must be an attached local artifact");
+  });
+
+  it("rejects URL attachment paths", () => {
+    expect(() =>
+      assemblePhase7StagingProof({
+        attachments: {
+          paid_request_evidence: "https://artifacts.example/paid-suite.log",
+        },
+      }),
+    ).toThrow("paid_request_evidence attachment path must be local, not a URL");
+  });
 });
