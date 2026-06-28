@@ -757,6 +757,83 @@ funding_balance_evidence: funding.json
     );
   });
 
+  it("blocks staged proof status when MCP execute evidence has no budget", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          includeExecuteBudget: false,
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute request missing budget.maxAmountAtomic",
+    );
+  });
+
+  it("blocks staged proof status when MCP execute budget differs from search", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          executeMaxAmountAtomic: "60000",
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute budget.maxAmountAtomic does not match search budget",
+    );
+  });
+
+  it("blocks staged proof status when MCP paid amount exceeds budget", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          searchMaxAmountAtomic: "9000",
+          executeMaxAmountAtomic: "9000",
+          amountPaidAtomic: "10000",
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute response amountPaidAtomic exceeds budget.maxAmountAtomic",
+    );
+  });
+
   it("blocks staged proof status when MCP execution evidence has no receipt lookup", () => {
     const proofText = createManifestProof();
     const artifacts = createManifestArtifacts(proofText);
@@ -1292,14 +1369,23 @@ function createValidCommandsLog(): string {
 function createValidMcpGatewayTranscript(
   options: {
     includeExecute?: boolean;
+    includeExecuteBudget?: boolean;
     includeReceiptLookup?: boolean;
     includeSearchBudget?: boolean;
+    searchMaxAmountAtomic?: string;
+    executeMaxAmountAtomic?: string;
+    amountPaidAtomic?: string;
     tools?: string[];
   } = {},
 ): string {
   const includeExecute = options.includeExecute ?? true;
+  const includeExecuteBudget = options.includeExecuteBudget ?? true;
   const includeReceiptLookup = options.includeReceiptLookup ?? true;
   const includeSearchBudget = options.includeSearchBudget ?? true;
+  const searchMaxAmountAtomic = options.searchMaxAmountAtomic ?? "50000";
+  const executeMaxAmountAtomic =
+    options.executeMaxAmountAtomic ?? searchMaxAmountAtomic;
+  const amountPaidAtomic = options.amountPaidAtomic ?? "10000";
   const tools = options.tools ?? [
     "split402.searchCapabilities",
     "split402.execute",
@@ -1342,7 +1428,7 @@ function createValidMcpGatewayTranscript(
           arguments: {
             capability: "solana.wallet-risk",
             ...(includeSearchBudget
-              ? { budget: { maxAmountAtomic: "50000" } }
+              ? { budget: { maxAmountAtomic: searchMaxAmountAtomic } }
               : {}),
           },
         },
@@ -1373,7 +1459,9 @@ function createValidMcpGatewayTranscript(
                 arguments: {
                   capability: "solana.wallet-risk",
                   input: { wallet: "wallet-demo" },
-                  budget: { maxAmountAtomic: "50000" },
+                  ...(includeExecuteBudget
+                    ? { budget: { maxAmountAtomic: executeMaxAmountAtomic } }
+                    : {}),
                 },
               },
             },
@@ -1386,7 +1474,7 @@ function createValidMcpGatewayTranscript(
               result: {
                 structuredContent: {
                   providerId: "split402-demo-merchant",
-                  amountPaidAtomic: "10000",
+                  amountPaidAtomic,
                   receiptId,
                   receiptVerificationStatus: "verified",
                   referrerCreditAtomic: "1800",
