@@ -78,8 +78,10 @@ describe("Phase 7 MCP gateway evidence collector", () => {
       artifactPath: "evidence/mcp-gateway.jsonl",
       executionMode: "router-demo-mock",
       capability: "solana.wallet-risk",
-      proofReady: true,
-      blockers: [],
+      proofReady: false,
+      blockers: [
+        "mcp_gateway_evidence requires router-live-agent-sdk execution mode for Phase 7 hosted proof",
+      ],
       executionCaptured: true,
       receiptLookupCaptured: true,
       providerId: "split402-demo-merchant",
