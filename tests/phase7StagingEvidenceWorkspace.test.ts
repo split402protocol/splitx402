@@ -143,20 +143,26 @@ describe("Phase 7 staging evidence workspace", () => {
       "report should include providerId, maxAmountAtomic, providerNetwork",
     );
     expect(workspace.readmeText).toContain("providerAsset");
+    expect(workspace.readmeText).toContain("providerMerchantOrigin");
+    expect(workspace.readmeText).toContain("providerOperationId");
+    expect(workspace.readmeText).toContain("providerCampaignId");
     expect(workspace.readmeText).toContain("providerPayToWallet");
     expect(workspace.readmeText).toContain("providerRouteId");
     expect(workspace.readmeText).toContain("providerReferrerWallet");
     expect(workspace.readmeText).toContain("providerPayoutWallet");
+    expect(workspace.readmeText).toContain("merchantOrigin");
+    expect(workspace.readmeText).toContain("operationId");
+    expect(workspace.readmeText).toContain("campaignId");
     expect(workspace.readmeText).toContain("requiredAmountAtomic");
     expect(workspace.readmeText).toContain("executeExecutionMode");
     expect(workspace.readmeText).toContain("receiptReferrerCreditAtomic");
     expect(workspace.readmeText).toContain("receiptReferrerWallet");
     expect(workspace.readmeText).toContain("receiptPayoutWallet");
     expect(workspace.readmeText).toContain(
-      "selected provider network, asset, and",
+      "selected provider network, asset,",
     );
     expect(workspace.readmeText).toContain(
-      "matching receipt network, asset, payToWallet, routeId",
+      "receipt network, asset, merchant origin, operation id, campaign id",
     );
     expect(workspace.readmeText).toContain(
       "collector rejects execute evidence with missing required fields",
