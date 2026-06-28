@@ -194,6 +194,9 @@ describe("MCP demo gateway", () => {
   });
 
   it("searches router capabilities through MCP tools/call", async () => {
+    const bundle = createMcpDemoBundle({
+      generatedAt: "2026-06-26T00:00:00.000Z"
+    });
     const response = await handleMcpGatewayLineAsync(
       JSON.stringify({
         jsonrpc: "2.0",
@@ -206,11 +209,7 @@ describe("MCP demo gateway", () => {
           }
         }
       }),
-      createMcpGatewayContext(
-        createMcpDemoBundle({
-          generatedAt: "2026-06-26T00:00:00.000Z"
-        })
-      )
+      createMcpGatewayContext(bundle)
     );
 
     expect(response).toMatchObject({
@@ -222,6 +221,7 @@ describe("MCP demo gateway", () => {
             expect.objectContaining({
               providerId: "split402-demo-merchant",
               capability: "solana.wallet-risk",
+              payToWallet: bundle.mcp.tools[0].x402.payToWallet,
               amountAtomic: "10000"
             })
           ]
@@ -588,6 +588,7 @@ describe("MCP demo gateway", () => {
         campaignId: sample.campaignId,
         network: "solana:expensive-devnet",
         asset: sample.asset,
+        payToWallet: sample.payToWallet,
         amountAtomic: "20000",
         reliability: {
           successRateBps: 10000,
@@ -604,6 +605,7 @@ describe("MCP demo gateway", () => {
         campaignId: sample.campaignId,
         network: sample.network,
         asset: sample.asset,
+        payToWallet: sample.payToWallet,
         amountAtomic: sample.requiredAmountAtomic,
         reliability: {
           successRateBps: 9000,
@@ -906,7 +908,7 @@ function mcpControlPlaneFetch(
                 network: bundle.mcp.tools[0].x402.network,
                 amount: bundle.mcp.tools[0].x402.amountAtomic,
                 asset: bundle.mcp.tools[0].x402.asset,
-                payTo: "merchant-pay-to-wallet"
+                payTo: bundle.mcp.tools[0].x402.payToWallet
               }
             ],
             metadata: {
