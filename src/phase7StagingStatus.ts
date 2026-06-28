@@ -1644,10 +1644,16 @@ function validateMcpGatewayTranscript(
     lines,
     (message) => readToolCallName(message) === "split402.searchCapabilities",
   );
+  let searchCapability: string | undefined;
+  let searchProviderIds = new Set<string>();
   if (searchRequest === undefined) {
     blockers.push("mcp_gateway_evidence missing split402.searchCapabilities request");
   } else {
     const searchArguments = readToolCallArguments(searchRequest.message);
+    searchCapability = readNonEmptyString(searchArguments?.capability);
+    if (searchCapability === undefined) {
+      blockers.push("mcp_gateway_evidence search request missing capability");
+    }
     const searchBudget = readRecord(searchArguments?.budget);
     if (readNonEmptyString(searchBudget?.maxAmountAtomic) === undefined) {
       blockers.push(
@@ -1658,6 +1664,13 @@ function validateMcpGatewayTranscript(
     const capabilities = readStructuredArray(searchResponse, "capabilities");
     if (capabilities === undefined || capabilities.length === 0) {
       blockers.push("mcp_gateway_evidence search response has no capabilities");
+    } else {
+      searchProviderIds = new Set(
+        capabilities
+          .map(readRecord)
+          .map((capability) => readNonEmptyString(capability?.providerId))
+          .filter((providerId): providerId is string => providerId !== undefined),
+      );
     }
   }
 
@@ -1675,6 +1688,17 @@ function validateMcpGatewayTranscript(
       : readRecord(readToolCallArguments(searchRequest.message)?.budget);
   const searchMaxAmountAtomic = readNonEmptyString(searchBudget?.maxAmountAtomic);
   const executeArguments = readToolCallArguments(executeRequest.message);
+  const executeCapability = readNonEmptyString(executeArguments?.capability);
+  if (executeCapability === undefined) {
+    blockers.push("mcp_gateway_evidence execute request missing capability");
+  } else if (
+    searchCapability !== undefined &&
+    executeCapability !== searchCapability
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence execute capability does not match search capability",
+    );
+  }
   const executeBudget = readRecord(executeArguments?.budget);
   const executeMaxAmountAtomic = readNonEmptyString(
     executeBudget?.maxAmountAtomic,
@@ -1712,6 +1736,16 @@ function validateMcpGatewayTranscript(
   if (executeContent.receiptVerificationStatus !== "verified") {
     blockers.push(
       "mcp_gateway_evidence execute response receiptVerificationStatus is not verified",
+    );
+  }
+  const providerId = readNonEmptyString(executeContent.providerId);
+  if (
+    providerId !== undefined &&
+    searchProviderIds.size > 0 &&
+    !searchProviderIds.has(providerId)
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence execute providerId was not returned by search",
     );
   }
   const amountPaidAtomic = readNonNegativeAtomicString(
