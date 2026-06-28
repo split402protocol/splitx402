@@ -18,6 +18,7 @@ const artifactBaseDir =
     : dirname(resolve(proofPath));
 const report = createPhase7StagingStatusReport(proofText, {
   currentSourceCommit: readCurrentGitCommit(),
+  currentWorktreeDirty: readCurrentWorktreeDirty(),
   ...(artifactBaseDir === undefined
     ? {}
     : {
@@ -39,4 +40,11 @@ function readCurrentGitCommit(): string {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
   }).trim();
+}
+
+function readCurrentWorktreeDirty(): boolean {
+  return execFileSync("git", ["status", "--porcelain"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  }).trim().length > 0;
 }
