@@ -229,6 +229,15 @@ export function formatSplit402LaunchPreflightBrief(
 }
 
 function createNextActions(checks: readonly Split402LaunchPreflightCheck[]): string[] {
+  const missingWorkspaceCheck = checks.find(
+    (check) => check.id === "launch_workspace_files" && !check.ok,
+  );
+  if (missingWorkspaceCheck !== undefined) {
+    return missingWorkspaceCheck.details.filter((detail) =>
+      detail.startsWith("Run "),
+    );
+  }
+
   return checks
     .filter((check) => check.severity === "required" && !check.ok)
     .flatMap((check) => check.details)
