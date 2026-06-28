@@ -37,6 +37,20 @@ const MANIFEST_EVIDENCE_FIELDS = PHASE7_EVIDENCE_FIELDS.filter(
     field !== "artifact_manifest_evidence",
 );
 
+const LOCAL_ONLY_MANIFEST_EVIDENCE_FIELDS = new Set<Phase7ManifestEvidenceField>([
+  "hosted_preflight_evidence",
+  "paid_request_evidence",
+  "receipt_verification_evidence",
+  "referrer_balance_evidence",
+  "dashboard_summary_evidence",
+  "webhook_delivery_evidence",
+  "payout_obligation_evidence",
+  "funding_balance_evidence",
+  "mcp_bundle_evidence",
+  "mcp_gateway_evidence",
+  "commands_run",
+]);
+
 export function createPhase7StagingArtifactManifest(
   proofText: string,
   options: Phase7StagingArtifactManifestOptions,
@@ -62,6 +76,9 @@ function createArtifactManifestEntry(
   options: Phase7StagingArtifactManifestOptions,
 ): Phase7StagingArtifactManifestEntry {
   if (isHttpUrl(reference)) {
+    if (LOCAL_ONLY_MANIFEST_EVIDENCE_FIELDS.has(field)) {
+      throw new Error(`${field} must be an attached local artifact`);
+    }
     return {
       evidenceField: field,
       reference,
