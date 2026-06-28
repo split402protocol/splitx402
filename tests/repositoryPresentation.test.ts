@@ -148,6 +148,7 @@ describe("repository presentation", () => {
 
     expect(readme).toContain("corepack pnpm product:evidence:init");
     expect(readme).toContain("corepack pnpm product:evidence:init --force");
+    expect(readme).toContain("corepack pnpm product:launch-preflight --brief");
     expect(readme).toContain("corepack pnpm product:launch-checklist --brief");
     expect(readme).toContain(
       "corepack pnpm product:launch-checklist --brief <phase6-custody-evidence.txt> <phase7-staging-proof.txt>",
@@ -157,10 +158,10 @@ describe("repository presentation", () => {
     expect(readme).toContain("creates a local evidence workspace");
     expect(readme).toContain("refuses to overwrite");
     expect(readme).toContain("existing scaffold files");
-    expect(readme).toContain("launch decision");
     expect(readme).toContain("remains `no-go`");
     expect(readme).toContain("launch-gate percentages");
     expect(currentState).toContain("corepack pnpm product:evidence:init");
+    expect(currentState).toContain("corepack pnpm product:launch-preflight");
     expect(currentState).toContain("corepack pnpm product:launch-checklist");
     expect(currentState).toContain("checked, blocked, or ready");
     expect(currentState).toContain("refuses to overwrite existing scaffold");

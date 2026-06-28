@@ -86,6 +86,9 @@ supplies all required evidence from the same source commit.
 Use `corepack pnpm product:evidence:init` to scaffold a local launch-evidence
 workspace. The initializer refuses to overwrite existing scaffold files unless
 `--force` is passed intentionally. Run
+`corepack pnpm product:launch-preflight --brief` to check whether the local
+launch workspace and required Phase 7 hosted proof environment values are ready
+before collection starts. Run
 `corepack pnpm product:launch-checklist --brief` for the exact remaining local
 validation, hosted proof, custody evidence, and combined status commands; pass
 the Phase 6 and Phase 7 evidence files to show checked, blocked, or ready
