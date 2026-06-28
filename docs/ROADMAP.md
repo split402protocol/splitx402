@@ -2,8 +2,7 @@
 
 This roadmap follows the Split402 protocol architecture v0.1 spec. The
 `split402protocol/splitx402` repository is the canonical public implementation
-line. The earlier `splitx402/ffff` repository remains a historical reference for
-the first implementation slices.
+line.
 
 ## Current Snapshot
 
@@ -62,8 +61,8 @@ Deliverables:
 
 Status: implemented.
 
-Goal: implement architecture Milestone 0 by importing and preserving the deterministic
-protocol package and test vectors from `ffff`.
+Goal: implement architecture Milestone 0 by preserving deterministic protocol
+package behavior and test vectors.
 
 Deliverables:
 
@@ -96,8 +95,8 @@ Deliverables:
 
 Current slice:
 
-- `@split402/x402-extension` package imported from `ffff`;
-- `@split402/express` request-context adapter imported from `ffff`;
+- `@split402/x402-extension` package;
+- `@split402/express` request-context adapter;
 - client payment payload enrichment;
 - resource-server offer enrichment;
 - Express request context capture for method, route template, params, query, body,
