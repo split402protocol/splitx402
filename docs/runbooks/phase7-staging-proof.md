@@ -63,10 +63,10 @@ set for hosted route discovery, also set
 `SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1` plus a funded buyer key in
 `SPLIT402_MCP_SVM_PRIVATE_KEY` or `SVM_PRIVATE_KEY` for the router-backed x402
 execution path.
-`phase7:hosted:preflight` captures `hosted-preflight.json` with control-plane
-health, dashboard health, dashboard session state, locked dashboard access
-without a viewer token, and successful dashboard access with the viewer token
-before the payment proof run.
+`phase7:hosted:preflight` captures `hosted-preflight.json` with the source
+commit, control-plane health, dashboard health, dashboard session state, locked
+dashboard access without a viewer token, and successful dashboard access with
+the viewer token before the payment proof run.
 `phase7:staging:derive-receipt-verification` derives
 `receipt-verification.json` from the captured `paid-suite.log`, preserving the
 verified commission-bearing receipt and the invalid-claim zero-commission path
@@ -153,7 +153,7 @@ The validator requires:
   proof file.
 - `hosted_preflight_evidence` must be a local attached
   `hosted-preflight.json` artifact whose checks passed against the proof's
-  control-plane and dashboard URLs.
+  source commit, control-plane URL, and dashboard URL.
 - `agent_discovery_evidence`, `referrer_balance_evidence`,
   `dashboard_summary_evidence`, `webhook_delivery_evidence`, and
   `payout_obligation_evidence` must be local attached JSON artifacts captured
