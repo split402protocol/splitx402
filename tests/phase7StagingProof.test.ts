@@ -959,6 +959,32 @@ funding_balance_evidence: funding.json
     );
   });
 
+  it("blocks staged proof status when MCP referrer credit is not positive", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          executeReferrerCreditAtomic: "0",
+          lookupReferrerCreditAtomic: "0",
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute response referrerCreditAtomic must be positive",
+    );
+  });
+
   it("blocks staged proof status when MCP receipt amount differs from execution", () => {
     const proofText = createManifestProof();
     const artifacts = createManifestArtifacts(proofText);
@@ -1529,6 +1555,7 @@ function createValidMcpGatewayTranscript(
     searchProviderId?: string;
     executeProviderId?: string;
     amountPaidAtomic?: string;
+    executeReferrerCreditAtomic?: string;
     lookupReceiptId?: string;
     lookupReferrerCreditAtomic?: string;
     lookupRequiredAmountAtomic?: string;
@@ -1548,6 +1575,8 @@ function createValidMcpGatewayTranscript(
   const executeMaxAmountAtomic =
     options.executeMaxAmountAtomic ?? searchMaxAmountAtomic;
   const amountPaidAtomic = options.amountPaidAtomic ?? "10000";
+  const executeReferrerCreditAtomic =
+    options.executeReferrerCreditAtomic ?? "1800";
   const tools = options.tools ?? [
     "split402.searchCapabilities",
     "split402.execute",
@@ -1556,7 +1585,7 @@ function createValidMcpGatewayTranscript(
   const receiptId = "rcp_00000000000000000000000000000005";
   const lookupReceiptId = options.lookupReceiptId ?? receiptId;
   const lookupReferrerCreditAtomic =
-    options.lookupReferrerCreditAtomic ?? "1800";
+    options.lookupReferrerCreditAtomic ?? executeReferrerCreditAtomic;
   const lookupRequiredAmountAtomic =
     options.lookupRequiredAmountAtomic ?? amountPaidAtomic;
   const includeLookupRouteId = options.includeLookupRouteId ?? true;
@@ -1645,7 +1674,7 @@ function createValidMcpGatewayTranscript(
                   amountPaidAtomic,
                   receiptId,
                   receiptVerificationStatus: "verified",
-                  referrerCreditAtomic: "1800",
+                  referrerCreditAtomic: executeReferrerCreditAtomic,
                 },
               },
             },

@@ -170,9 +170,10 @@ The validator requires:
   `split402.searchCapabilities`, `split402.execute`, and `split402.getReceipt`.
   The transcript must include `split402.execute` for the same capability and
   `budget.maxAmountAtomic`, using a provider id returned by the search response,
-  amount paid at or below that budget, verified receipt status, referrer credit,
-  and a matching `split402.getReceipt` response whose receipt payload has the
-  same receipt id, required amount, referrer credit, and route attribution.
+  amount paid at or below that budget, verified receipt status, positive
+  referrer credit, and a matching `split402.getReceipt` response whose receipt
+  payload has the same receipt id, required amount, referrer credit, and route
+  attribution.
 - `artifact_manifest_evidence` must be a local attached
   `artifact-manifest.json` artifact. Local `attached:` artifacts must match the
   generated manifest.
