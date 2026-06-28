@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import {
   PHASE7_EVIDENCE_FIELDS,
+  PHASE7_LOCAL_ARTIFACT_EVIDENCE_FIELDS,
   parsePhase7ProofRecord,
 } from "./phase7StagingProof.js";
 
@@ -37,6 +38,13 @@ const MANIFEST_EVIDENCE_FIELDS = PHASE7_EVIDENCE_FIELDS.filter(
     field !== "artifact_manifest_evidence",
 );
 
+const LOCAL_ONLY_MANIFEST_EVIDENCE_FIELDS = new Set<Phase7ManifestEvidenceField>(
+  PHASE7_LOCAL_ARTIFACT_EVIDENCE_FIELDS.filter(
+    (field): field is Phase7ManifestEvidenceField =>
+      field !== "artifact_manifest_evidence",
+  ),
+);
+
 export function createPhase7StagingArtifactManifest(
   proofText: string,
   options: Phase7StagingArtifactManifestOptions,
@@ -62,6 +70,9 @@ function createArtifactManifestEntry(
   options: Phase7StagingArtifactManifestOptions,
 ): Phase7StagingArtifactManifestEntry {
   if (isHttpUrl(reference)) {
+    if (LOCAL_ONLY_MANIFEST_EVIDENCE_FIELDS.has(field)) {
+      throw new Error(`${field} must be an attached local artifact`);
+    }
     return {
       evidenceField: field,
       reference,

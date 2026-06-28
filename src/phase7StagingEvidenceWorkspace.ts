@@ -71,6 +71,12 @@ const PHASE7_STAGING_EVIDENCE_ARTIFACTS: readonly Phase7StagingEvidenceArtifact[
       purpose: "MCP demo bundle output for the paid tool card.",
     },
     {
+      field: "mcp_gateway_evidence",
+      fileName: "mcp-gateway.jsonl",
+      purpose:
+        "MCP gateway stdio transcript showing router-backed discovery, execution, and receipt lookup.",
+    },
+    {
       field: "artifact_manifest_evidence",
       fileName: "artifact-manifest.json",
       purpose: "SHA-256 manifest for the reviewed local evidence files.",
@@ -78,7 +84,8 @@ const PHASE7_STAGING_EVIDENCE_ARTIFACTS: readonly Phase7StagingEvidenceArtifact[
     {
       field: "commands_run",
       fileName: "commands.log",
-      purpose: "Command transcript for the staging proof run.",
+      purpose:
+        "Command transcript containing Phase 7 evidence commands and the full validation suite.",
     },
   ];
 
@@ -129,9 +136,26 @@ function createReadmeText(directory: string): string {
     "Typical flow:",
     "",
     "```bash",
+    "corepack pnpm phase7:staging-proof > phase7-staging-proof.txt",
+    `corepack pnpm phase7:hosted:preflight > ${directory}/hosted-preflight.json`,
+    "corepack pnpm phase7:staging:collect-reads",
+    "corepack pnpm phase7:staging:collect-mcp-gateway",
+    "corepack pnpm demo:mcp-gateway:smoke",
+    `corepack pnpm demo:mcp-bundle > ${directory}/mcp-bundle.json`,
+    `corepack pnpm demo:paid-suite > ${directory}/paid-suite.log`,
+    "corepack pnpm phase7:staging:derive-receipt-verification",
+    "corepack pnpm phase7:staging:manifest phase7-staging-proof.txt",
     `corepack pnpm phase7:staging:assemble > phase7-staging-proof.txt`,
     `corepack pnpm phase7:staging:status phase7-staging-proof.txt`,
     "```",
+    "",
+    "Record the commands above plus lint, typecheck, test, build,",
+    "vectors:check, and audit in `commands.log`. The MCP gateway collector",
+    "report should include providerId, amountPaidAtomic, receiptId,",
+    "receiptVerificationStatus, referrerCreditAtomic, routeId, commissionBps,",
+    "protocolFeeBpsOfCommission, commissionAmountAtomic, and protocolFeeAtomic.",
+    "The proof remains no-go until",
+    "all artifacts are real hosted staging evidence from the same source commit.",
     "",
     `Expected evidence directory: \`${directory}\``,
     "",

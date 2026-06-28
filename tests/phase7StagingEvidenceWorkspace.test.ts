@@ -24,6 +24,9 @@ describe("Phase 7 staging evidence workspace", () => {
       "SPLIT402_PHASE7_ASSEMBLE_FUNDING_BALANCE_EVIDENCE=evidence/phase7/funding-balance.json",
     );
     expect(workspace.envText).toContain(
+      "SPLIT402_PHASE7_ASSEMBLE_MCP_GATEWAY_EVIDENCE=evidence/phase7/mcp-gateway.jsonl",
+    );
+    expect(workspace.envText).toContain(
       "SPLIT402_PHASE7_ASSEMBLE_ARTIFACT_MANIFEST_EVIDENCE=evidence/phase7/artifact-manifest.json",
     );
     expect(workspace.envText).toContain(
@@ -37,7 +40,26 @@ describe("Phase 7 staging evidence workspace", () => {
     expect(workspace.readmeText).toContain("# Phase 7 Staging Evidence");
     expect(workspace.readmeText).toContain("hosted-preflight.json");
     expect(workspace.readmeText).toContain("funding-balance.json");
+    expect(workspace.readmeText).toContain("mcp-gateway.jsonl");
     expect(workspace.readmeText).toContain("artifact-manifest.json");
+    expect(workspace.readmeText).toContain(
+      "router-backed discovery, execution, and receipt lookup",
+    );
+    expect(workspace.readmeText).toContain(
+      "corepack pnpm phase7:staging:collect-mcp-gateway",
+    );
+    expect(workspace.readmeText).toContain(
+      "corepack pnpm demo:mcp-gateway:smoke",
+    );
+    expect(workspace.readmeText).toContain("receiptVerificationStatus");
+    expect(workspace.readmeText).toContain("protocolFeeBpsOfCommission");
+    expect(workspace.readmeText).toContain(
+      "corepack pnpm phase7:staging:derive-receipt-verification",
+    );
+    expect(workspace.readmeText).toContain(
+      "corepack pnpm phase7:staging:manifest phase7-staging-proof.txt",
+    );
+    expect(workspace.readmeText).toContain("lint, typecheck, test, build");
     expect(workspace.readmeText).toContain(
       "Do not create\nplaceholder artifact files",
     );

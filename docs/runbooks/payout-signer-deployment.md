@@ -113,7 +113,7 @@ A starter Kubernetes manifest is provided at
 
 Before applying it:
 
-- replace the image tag with an immutable digest or release tag;
+- replace the placeholder image reference with an immutable `sha256:` digest;
 - replace the signer reference, network, and funding wallet;
 - move the auth key ring and signing key into the cluster secret manager;
 - ensure control-plane pods that may call the signer are labeled

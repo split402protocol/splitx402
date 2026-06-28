@@ -42,9 +42,9 @@ flowchart LR
 | Protocol primitives | Implemented: schemas, hashes, IDs, amount math, operation digests, signatures, and test vectors. |
 | x402 integration | Implemented: Split402 offers, referral claims, request digests, and receipts around standard x402 settlement. |
 | Demo path | Implemented for Solana Devnet paid-suite proof runs. |
-| Router alpha | Implemented public-alpha static-provider router with capability search, budget filtering, deterministic ranking, retry/fallback, and fail-closed receipt verification. |
-| MCP demo bundle and gateway | Implemented public-alpha demo bundle and narrow stdio gateway: paid tool card, x402 payment metadata, Split402 campaign metadata, expected referral economics, router-backed `split402.searchCapabilities`, `split402.execute`, `split402.getReceipt`, and proof commands. It is a runnable demo gateway, not production MCP hosting. |
-| Dashboard UI | Implemented public-alpha merchant/referrer operations UI with a narrow read proxy for dashboard summary, reliability, payout obligations, webhook delivery, referrer routes, balances, payouts, and an optional hosted-staging viewer gate with signed, expiring session cookies. |
+| Router alpha | Implemented public-alpha router with static providers, control-plane route discovery, capability search, budget filtering, deterministic ranking, retry/fallback, and fail-closed receipt verification. |
+| MCP demo bundle and gateway | Implemented public-alpha demo bundle and narrow stdio gateway: paid tool card, x402 payment metadata, Split402 campaign metadata, expected referral economics, router-backed `split402.searchCapabilities`, `split402.execute`, `split402.getReceipt`, optional control-plane route discovery, and proof commands. It is a runnable demo gateway, not production MCP hosting. |
+| Dashboard UI | Implemented public-alpha merchant/referrer operations UI with a narrow read proxy for dashboard summary, reliability, payout obligations, webhook delivery, referrer routes, balances, payouts, and an optional hosted-staging viewer gate with signed, expiring session cookies. The referrer views render the canonical control-plane `{ summary }` balance and `{ items }` payout response contracts. |
 | Phase 7 hosted staging | Implemented compose stack for PostgreSQL, control plane, migration job, dashboard, optional demo merchant, and optional workers. |
 | Phase 7 staging proof | Implemented proof scaffold, assembly, status validator, hosted preflight collector, read collector, artifact manifest validation, funding-balance semantic validation, template, and runbooks for hosted end-to-end evidence, including payout-obligation funding coverage. |
 | Agent SDK | Implemented for offer inspection, claim creation, paid calls, and receipt verification. |
@@ -71,9 +71,13 @@ flowchart LR
 The near-term objective is the correctness-router sprint. Protocol fee wiring,
 self-referral semantics, receipt policy gates, public approval boundaries,
 payout terminal states, signer byte verification, finalized transfer-content
-verification, transaction-to-item finality mapping, and safe allocation release
-are now implemented in the working branches. The static-provider router alpha
-and router-backed MCP demo gateway are also implemented. Next are dashboard
-contracts, deployment-proof honesty, and hosted proof evidence. The hosted
-staging proof remains `no-go` until a real hosted environment supplies all
-required evidence from the same source commit.
+verification, transaction-to-item finality mapping, safe allocation release,
+dashboard response-contract alignment, production-facing digest-pinned
+deployment examples, control-plane route discovery for the router, and
+control-plane discovery mode for the MCP gateway are now implemented in the
+repository. The Phase 7 proof validator also checks budgeted MCP discovery,
+router execution continuity, receipt lookup consistency, route attribution, and
+commission/protocol-fee arithmetic from the receipt bps fields. Next is hosted
+proof evidence from a real staging environment.
+The hosted staging proof remains `no-go` until a real hosted environment
+supplies all required evidence from the same source commit.

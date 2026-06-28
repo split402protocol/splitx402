@@ -22,6 +22,7 @@ describe("Phase 7 staging proof", () => {
     expect(record).toContain("approval_decision: no-go");
     expect(record).toContain("dashboard_summary_evidence:");
     expect(record).toContain("funding_balance_evidence:");
+    expect(record).toContain("mcp_gateway_evidence:");
   });
 
   it("reports missing and placeholder fields", () => {
@@ -59,6 +60,7 @@ approval_decision: no-go
         payout_obligation_evidence: "attached: payout-obligations.json",
         funding_balance_evidence: "attached: funding-balance.json",
         mcp_bundle_evidence: "attached: mcp-bundle.json",
+        mcp_gateway_evidence: "attached: mcp-gateway.jsonl",
         artifact_manifest_evidence: "attached: artifact-manifest.json",
         commands_run: "attached: commands.log",
         approval_decision: "approved",
@@ -95,6 +97,7 @@ approval_decision: no-go
         payout_obligation_evidence: "attached: payout-obligations.json",
         funding_balance_evidence: "attached: funding-balance.json",
         mcp_bundle_evidence: "attached: mcp-bundle.json",
+        mcp_gateway_evidence: "attached: mcp-gateway.jsonl",
         artifact_manifest_evidence: "attached: artifact-manifest.json",
         commands_run: "attached: commands.log",
         approval_decision: "approved",
@@ -144,6 +147,12 @@ approval_decision: no-go
     expect(report.commands.map((item) => item.evidenceField)).toContain(
       "funding_balance_evidence",
     );
+    expect(report.commands.map((item) => item.evidenceField)).toContain(
+      "mcp_gateway_evidence",
+    );
+    expect(report.commands.map((item) => item.command)).toContain(
+      "corepack pnpm demo:mcp-gateway:smoke",
+    );
     expect(report.gateStatuses.every((item) => item.status === "not_checked")).toBe(
       true,
     );
@@ -187,6 +196,12 @@ funding_balance_evidence: funding.json
       status: "missing",
       blockers: ["mcp_bundle_evidence is missing"],
     });
+    expect(report.gateStatuses).toContainEqual({
+      gate: "mcp_gateway",
+      evidenceField: "mcp_gateway_evidence",
+      status: "missing",
+      blockers: ["mcp_gateway_evidence is missing"],
+    });
   });
 
   it("blocks approved proof records when attached artifacts are missing", () => {
@@ -202,7 +217,7 @@ funding_balance_evidence: funding.json
         demo_merchant_url: "https://merchant.staging.example",
         webhook_receiver_url: "https://webhook.staging.example",
         hosted_preflight_evidence: "attached: hosted-preflight.json",
-        agent_discovery_evidence: "https://artifacts.example/discovery.json",
+        agent_discovery_evidence: "attached: agent-discovery.json",
         paid_request_evidence: "attached: paid-suite.log",
         receipt_verification_evidence: "attached: receipt-verification.json",
         referrer_balance_evidence: "attached: referrer-balances.json",
@@ -211,6 +226,7 @@ funding_balance_evidence: funding.json
         payout_obligation_evidence: "attached: payout-obligations.json",
         funding_balance_evidence: "attached: missing-funding-balance.json",
         mcp_bundle_evidence: "attached: mcp-bundle.json",
+        mcp_gateway_evidence: "attached: mcp-gateway.jsonl",
         artifact_manifest_evidence: "attached: artifact-manifest.json",
         commands_run: "attached: commands.log",
         approval_decision: "approved",
@@ -226,8 +242,9 @@ funding_balance_evidence: funding.json
     expect(report.readyForPublicAlphaDemo).toBe(false);
     expect(report.artifactStatuses).toContainEqual({
       evidenceField: "agent_discovery_evidence",
-      reference: "https://artifacts.example/discovery.json",
-      status: "remote",
+      reference: "attached: agent-discovery.json",
+      artifactPath: "evidence/agent-discovery.json",
+      status: "present",
       blockers: [],
     });
     expect(report.artifactStatuses).toContainEqual({
@@ -358,10 +375,818 @@ funding_balance_evidence: funding.json
       status: "valid",
       blockers: [],
     });
+    expect(report.controlPlaneReadStatus).toEqual({
+      status: "valid",
+      blockers: [],
+    });
+    expect(report.paidRequestStatus).toEqual({
+      status: "valid",
+      blockers: [],
+    });
     expect(report.fundingBalanceStatus).toEqual({
       status: "valid",
       blockers: [],
     });
+    expect(report.mcpBundleStatus).toEqual({
+      status: "valid",
+      blockers: [],
+    });
+    expect(report.mcpGatewayStatus).toEqual({
+      status: "valid",
+      blockers: [],
+    });
+    expect(report.commandEvidenceStatus).toEqual({
+      status: "valid",
+      blockers: [],
+    });
+  });
+
+  it("blocks staged proof status when paid-suite evidence did not pass", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/paid-suite.log",
+      encode(
+        [
+          "--- valid paid request ---",
+          JSON.stringify(
+            {
+              paidSuitePassed: false,
+              validReceipt: {
+                receiptId: "rcp_valid",
+                paymentId: "pay_valid",
+                commissionBps: 0,
+                commissionAmountAtomic: "0",
+                referrerCreditAtomic: "0",
+                settlementTxSignature: "tx_valid",
+              },
+              invalidReceipt: {
+                receiptId: "rcp_invalid",
+                paymentId: "pay_invalid",
+                commissionBps: 0,
+                commissionAmountAtomic: "0",
+                referrerCreditAtomic: "0",
+                settlementTxSignature: "tx_invalid",
+              },
+            },
+            null,
+            2,
+          ),
+          "",
+        ].join("\n"),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.paidRequestStatus.blockers).toContain(
+      "paid_request_evidence paidSuitePassed must be true",
+    );
+    expect(report.paidRequestStatus.blockers).toContain(
+      "paid_request_evidence validReceipt.commissionBps must be positive",
+    );
+  });
+
+  it("blocks staged proof status when command evidence omits required validation", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/commands.log",
+      encode(
+        [
+          "corepack pnpm phase7:staging:init",
+          "corepack pnpm phase7:staging-proof > phase7-staging-proof.txt",
+          "corepack pnpm demo:paid-suite",
+          "corepack pnpm phase7:staging:status phase7-staging-proof.txt",
+          "",
+        ].join("\n"),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.commandEvidenceStatus.blockers).toContain(
+      "commands_run missing required command: corepack pnpm lint",
+    );
+    expect(report.commandEvidenceStatus.blockers).toContain(
+      "commands_run missing required command: corepack pnpm audit --audit-level high",
+    );
+  });
+
+  it("blocks staged proof status when artifact manifest evidence is remote", () => {
+    const proofText = createPhase7StagingProofRecord({
+      proof_id: "phase7-staging-2026-06-26",
+      proof_date: "2026-06-26",
+      reviewers: "Split402 operators",
+      source_commit: "fd88024",
+      staging_environment: "staging-us",
+      control_plane_url: "https://control.staging.example",
+      dashboard_url: "https://dashboard.staging.example",
+      demo_merchant_url: "https://merchant.staging.example",
+      webhook_receiver_url: "https://webhook.staging.example",
+      hosted_preflight_evidence: "attached: hosted-preflight.json",
+      agent_discovery_evidence: "attached: agent-discovery.json",
+      paid_request_evidence: "attached: paid-suite.log",
+      receipt_verification_evidence: "attached: receipt-verification.json",
+      referrer_balance_evidence: "attached: referrer-balances.json",
+      dashboard_summary_evidence: "attached: dashboard-summary.json",
+      webhook_delivery_evidence: "attached: webhook-events.json",
+      payout_obligation_evidence: "attached: payout-obligations.json",
+      funding_balance_evidence: "attached: funding-balance.json",
+      mcp_bundle_evidence: "attached: mcp-bundle.json",
+      mcp_gateway_evidence: "attached: mcp-gateway.jsonl",
+      artifact_manifest_evidence: "https://artifacts.example/artifact-manifest.json",
+      commands_run: "attached: commands.log",
+      approval_decision: "approved",
+    });
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: () => true,
+      readArtifact: (path) => readTestArtifact(createManifestArtifacts(createManifestProof()), path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.manifestStatus).toEqual({
+      status: "invalid",
+      blockers: [
+        "artifact_manifest_evidence must be an attached local artifact for status validation",
+      ],
+    });
+    expect(report.gateStatuses).toContainEqual({
+      gate: "artifact_manifest",
+      evidenceField: "artifact_manifest_evidence",
+      status: "invalid",
+      blockers: [
+        "artifact_manifest_evidence must be an attached local artifact for status validation",
+      ],
+    });
+  });
+
+  it("blocks staged proof status when control-plane read evidence is empty", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/referrer-balances.json",
+      encode(
+        JSON.stringify({
+          summary: {
+            referrerWallet: "referrer-wallet",
+            generatedAt: "2026-06-26T00:00:00.000Z",
+            assets: [
+              {
+                asset: "usdc-devnet",
+                pendingAmountAtomic: "0",
+                availableAmountAtomic: "0",
+                heldAmountAtomic: "0",
+                inFlightAmountAtomic: "0",
+                paidAmountAtomic: "0",
+                totalEarnedAmountAtomic: "0",
+              },
+            ],
+          },
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.controlPlaneReadStatus.blockers).toContain(
+      "referrer_balance_evidence must show positive referrer earnings",
+    );
+  });
+
+  it("blocks staged proof status when MCP bundle economics are not useful", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-bundle.json",
+      encode(
+        JSON.stringify({
+          schemaVersion: "split402.mcp-demo-bundle.v1",
+          project: "Split402",
+          mcp: {
+            tools: [
+              {
+                name: "split402.walletRiskScore",
+                paidHttpCall: { method: "POST", url: "https://merchant.example/v1/risk" },
+                x402: {
+                  scheme: "exact",
+                  network: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+                  asset: "usdc-devnet",
+                  amountAtomic: "10000",
+                },
+                split402: {
+                  campaignId: "cmp_001",
+                  operationId: "wallet-risk-score",
+                  commissionBps: 2000,
+                  protocolFeeBpsOfCommission: 1000,
+                },
+              },
+            ],
+          },
+          expectedEconomics: {
+            paymentAmountAtomic: "10000",
+            referrerCommissionBps: 2000,
+            protocolFeeBpsOfCommission: 1000,
+            commissionAmountAtomic: "2000",
+            protocolFeeAtomic: "0",
+            referrerCreditAtomic: "2000",
+            merchantRetainsAtomic: "8000",
+          },
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpBundleStatus.blockers).toContain(
+      "mcp_bundle_evidence expectedEconomics.protocolFeeAtomic does not match protocol fee bps",
+    );
+    expect(report.gateStatuses).toContainEqual({
+      gate: "mcp_bundle",
+      evidenceField: "mcp_bundle_evidence",
+      status: "invalid",
+      blockers: expect.arrayContaining([
+        "mcp_bundle_evidence expectedEconomics.protocolFeeAtomic does not match protocol fee bps",
+      ]),
+    });
+  });
+
+  it("blocks staged proof status when MCP gateway evidence is not a useful transcript", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        [
+          JSON.stringify({
+            direction: "request",
+            message: { jsonrpc: "2.0", id: "tools", method: "tools/list" },
+          }),
+          JSON.stringify({
+            direction: "response",
+            message: { jsonrpc: "2.0", id: "tools", result: { tools: [] } },
+          }),
+          "",
+        ].join("\n"),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence missing split402.searchCapabilities request",
+    );
+    expect(report.gateStatuses).toContainEqual({
+      gate: "mcp_gateway",
+      evidenceField: "mcp_gateway_evidence",
+      status: "invalid",
+      blockers: expect.arrayContaining([
+        "mcp_gateway_evidence missing split402.searchCapabilities request",
+      ]),
+    });
+  });
+
+  it("blocks staged proof status when MCP gateway tools/list omits router tools", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          tools: ["split402.execute"],
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence tools/list missing split402.searchCapabilities",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence tools/list missing split402.getReceipt",
+    );
+  });
+
+  it("blocks staged proof status when MCP gateway evidence has no execution", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          includeExecute: false,
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence missing split402.execute request",
+    );
+  });
+
+  it("blocks staged proof status when MCP search evidence has no budget", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          includeSearchBudget: false,
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence search request missing budget.maxAmountAtomic",
+    );
+  });
+
+  it("blocks staged proof status when MCP execute evidence has no budget", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          includeExecuteBudget: false,
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute request missing budget.maxAmountAtomic",
+    );
+  });
+
+  it("blocks staged proof status when MCP execute budget differs from search", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          executeMaxAmountAtomic: "60000",
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute budget.maxAmountAtomic does not match search budget",
+    );
+  });
+
+  it("blocks staged proof status when MCP paid amount exceeds budget", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          searchMaxAmountAtomic: "9000",
+          executeMaxAmountAtomic: "9000",
+          amountPaidAtomic: "10000",
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute response amountPaidAtomic exceeds budget.maxAmountAtomic",
+    );
+  });
+
+  it("blocks staged proof status when MCP execute capability differs from search", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          executeCapability: "solana.other-risk",
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute capability does not match search capability",
+    );
+  });
+
+  it("blocks staged proof status when MCP execute provider was not discovered", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          searchProviderId: "split402-other-merchant",
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute providerId was not returned by search",
+    );
+  });
+
+  it("blocks staged proof status when MCP execution evidence has no receipt lookup", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          includeReceiptLookup: false,
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence missing split402.getReceipt request",
+    );
+  });
+
+  it("blocks staged proof status when MCP receipt lookup returns a different receipt", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          lookupReceiptId: "rcp_99999999999999999999999999999999",
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence getReceipt receipt.receiptId does not match execute receiptId",
+    );
+  });
+
+  it("blocks staged proof status when MCP receipt lookup credit differs from execution", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          lookupReferrerCreditAtomic: "1700",
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence getReceipt referrerCreditAtomic does not match execute response",
+    );
+  });
+
+  it("blocks staged proof status when MCP referrer credit is not positive", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          executeReferrerCreditAtomic: "0",
+          lookupReferrerCreditAtomic: "0",
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute response referrerCreditAtomic must be positive",
+    );
+  });
+
+  it("blocks staged proof status when MCP receipt amount differs from execution", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          lookupRequiredAmountAtomic: "9000",
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence getReceipt requiredAmountAtomic does not match execute amountPaidAtomic",
+    );
+  });
+
+  it("blocks staged proof status when MCP receipt lookup has no route", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          includeLookupRouteId: false,
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence getReceipt receipt.routeId is missing",
+    );
+  });
+
+  it("blocks staged proof status when MCP receipt lookup omits commission amount", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          includeLookupCommissionAmount: false,
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence getReceipt commissionAmountAtomic must be positive",
+    );
+  });
+
+  it("blocks staged proof status when MCP receipt lookup omits commission bps", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          includeLookupCommissionBps: false,
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence getReceipt commissionBps must be positive basis points",
+    );
+  });
+
+  it("blocks staged proof status when MCP receipt commission bps arithmetic is wrong", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          lookupCommissionAmountAtomic: "1900",
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence getReceipt commissionAmountAtomic does not match commissionBps",
+    );
+  });
+
+  it("blocks staged proof status when MCP receipt lookup omits protocol fee bps", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          includeLookupProtocolFeeBps: false,
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence getReceipt protocolFeeBpsOfCommission must be basis points",
+    );
+  });
+
+  it("blocks staged proof status when MCP receipt protocol fee bps arithmetic is wrong", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          executeReferrerCreditAtomic: "1900",
+          lookupReferrerCreditAtomic: "1900",
+          lookupCommissionAmountAtomic: "2000",
+          lookupProtocolFeeAtomic: "100",
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence getReceipt protocolFeeAtomic does not match protocolFeeBpsOfCommission",
+    );
+  });
+
+  it("blocks staged proof status when MCP receipt split arithmetic is wrong", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          lookupCommissionAmountAtomic: "2100",
+          lookupProtocolFeeAtomic: "200",
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence getReceipt referrerCreditAtomic does not equal commission minus protocol fee",
+    );
   });
 
   it("blocks staged proof status when funding balance evidence is unresolved", () => {
@@ -491,15 +1316,16 @@ function createManifestProof(): string {
     demo_merchant_url: "https://merchant.staging.example",
     webhook_receiver_url: "https://webhook.staging.example",
     hosted_preflight_evidence: "attached: hosted-preflight.json",
-    agent_discovery_evidence: "https://artifacts.example/discovery.json",
+    agent_discovery_evidence: "attached: agent-discovery.json",
     paid_request_evidence: "attached: paid-suite.log",
-    receipt_verification_evidence: "https://artifacts.example/receipt.json",
-    referrer_balance_evidence: "https://artifacts.example/balances.json",
-    dashboard_summary_evidence: "https://artifacts.example/dashboard.json",
-    webhook_delivery_evidence: "https://artifacts.example/webhooks.json",
-    payout_obligation_evidence: "https://artifacts.example/obligations.json",
+    receipt_verification_evidence: "attached: receipt-verification.json",
+    referrer_balance_evidence: "attached: referrer-balances.json",
+    dashboard_summary_evidence: "attached: dashboard-summary.json",
+    webhook_delivery_evidence: "attached: webhook-events.json",
+    payout_obligation_evidence: "attached: payout-obligations.json",
     funding_balance_evidence: "attached: funding-balance.json",
-    mcp_bundle_evidence: "https://artifacts.example/mcp.json",
+    mcp_bundle_evidence: "attached: mcp-bundle.json",
+    mcp_gateway_evidence: "attached: mcp-gateway.jsonl",
     artifact_manifest_evidence: "attached: artifact-manifest.json",
     commands_run: "attached: commands.log",
     approval_decision: "approved",
@@ -519,41 +1345,122 @@ function createManifestArtifacts(proofText: string): Map<string, Uint8Array> {
         }),
       ),
     ],
-    ["evidence/paid-suite.log", encode("paid proof\n")],
+    ["evidence/paid-suite.log", encode(createValidPaidSuiteLog())],
     [
-      "evidence/funding-balance.json",
+      "evidence/receipt-verification.json",
+      encode(
+        JSON.stringify({
+          receiptId: "rcp_001",
+          verificationStatus: "verified",
+          errors: [],
+        }),
+      ),
+    ],
+    [
+      "evidence/agent-discovery.json",
+      encode(
+        JSON.stringify({
+          routes: [
+            {
+              id: "rte_001",
+              status: "active",
+              campaignId: "cmp_001",
+              referrerWallet: "referrer-wallet",
+              payoutWallet: "payout-wallet",
+            },
+          ],
+        }),
+      ),
+    ],
+    [
+      "evidence/referrer-balances.json",
       encode(
         JSON.stringify({
           summary: {
-            schema: "split402.merchant_obligation_summary.v1",
-            merchantId: "mrc_001",
+            referrerWallet: "referrer-wallet",
             generatedAt: "2026-06-26T00:00:00.000Z",
             assets: [
               {
                 asset: "usdc-devnet",
-                fundingStatus: "covered",
-                fundingAmountAtomic: "1000",
-                fundingDeficitAtomic: "0",
                 pendingAmountAtomic: "0",
-                availableAmountAtomic: "1000",
+                availableAmountAtomic: "1800",
                 heldAmountAtomic: "0",
                 inFlightAmountAtomic: "0",
                 paidAmountAtomic: "0",
-                outstandingAmountAtomic: "1000",
-                totalAccruedAmountAtomic: "1000",
-                accrualCount: 1,
-                pendingAccrualCount: 0,
-                availableAccrualCount: 1,
-                heldAccrualCount: 0,
-                inFlightAccrualCount: 0,
-                paidAccrualCount: 0,
+                totalEarnedAmountAtomic: "1800",
               },
             ],
           },
         }),
       ),
     ],
-    ["evidence/commands.log", encode("commands\n")],
+    [
+      "evidence/dashboard-summary.json",
+      encode(
+        JSON.stringify({
+          summary: {
+            schema: "split402.merchant_dashboard_summary.v1",
+            generatedAt: "2026-06-26T00:00:00.000Z",
+            merchant: {
+              id: "mrc_001",
+              slug: "merchant",
+              displayName: "Merchant",
+              status: "active",
+            },
+            reliability: {
+              acceptsReceipts: true,
+              payoutReady: true,
+              webhookReady: true,
+              discoveryReady: true,
+              signals: {
+                verifiedOrigins: 1,
+                activeOfferReceiptKeys: 1,
+                activeWebhookKeys: 1,
+                activePayoutWallets: 1,
+              },
+            },
+            campaigns: {
+              total: 1,
+              byStatus: { draft: 0, active: 1, paused: 0, closed: 0 },
+              activeCampaignIds: ["cmp_001"],
+              operationCount: 1,
+            },
+            routes: {
+              total: 1,
+              byStatus: { active: 1, suspended: 0, expired: 0, revoked: 0 },
+              activeRouteIds: ["rte_001"],
+            },
+          },
+        }),
+      ),
+    ],
+    [
+      "evidence/webhook-events.json",
+      encode(
+        JSON.stringify({
+          events: [
+            {
+              id: "evt_001",
+              eventType: "webhook.receipt.accepted.v1",
+              status: "delivered",
+              attempts: 1,
+              payload: { merchantId: "mrc_001" },
+            },
+          ],
+        }),
+      ),
+    ],
+    [
+      "evidence/payout-obligations.json",
+      encode(JSON.stringify(createValidPayoutObligations())),
+    ],
+    ["evidence/mcp-bundle.json", encode(JSON.stringify(createValidMcpBundle()))],
+    ["evidence/mcp-gateway.jsonl", encode(createValidMcpGatewayTranscript())],
+    [
+      "evidence/funding-balance.json",
+      encode(JSON.stringify(createValidPayoutObligations())),
+    ],
+    ["evidence/commands.log", encode(createValidCommandsLog())],
   ]);
   const manifest = createPhase7StagingArtifactManifest(proofText, {
     artifactBaseDir: "evidence",
@@ -611,6 +1518,393 @@ function createPassingHostedPreflightChecks(): unknown[] {
       ok: true,
     },
   ];
+}
+
+function createValidMcpBundle(): unknown {
+  return {
+    schemaVersion: "split402.mcp-demo-bundle.v1",
+    project: "Split402",
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    merchant: {
+      merchantId: "mrc_001",
+      origin: "https://merchant.staging.example",
+      discoveryUrl: "https://merchant.staging.example/.well-known/split402.json",
+      servicePublicKey: "service-public-key",
+    },
+    mcp: {
+      serverName: "split402-demo",
+      transport: "stdio",
+      tools: [
+        {
+          name: "split402.walletRiskScore",
+          description: "Paid wallet-risk score demo tool.",
+          inputSchema: {
+            type: "object",
+            properties: { wallet: { type: "string" } },
+            required: ["wallet"],
+            additionalProperties: false,
+          },
+          paidHttpCall: {
+            method: "POST",
+            url: "https://merchant.staging.example/v1/risk",
+            bodyTemplate: { wallet: "{{wallet}}" },
+          },
+          x402: {
+            scheme: "exact",
+            network: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+            asset: "usdc-devnet",
+            amountAtomic: "10000",
+          },
+          split402: {
+            campaignId: "cmp_001",
+            operationId: "wallet-risk-score",
+            commissionBps: 2000,
+            protocolFeeBpsOfCommission: 1000,
+            referralClaimSources: ["mcp-config", "tool-argument", "http-header"],
+            receiptVerification: {
+              package: "@split402/agent-sdk",
+              method: "Split402AgentClient.verifyReceipt",
+            },
+          },
+        },
+      ],
+    },
+    expectedEconomics: {
+      paymentAmountAtomic: "10000",
+      referrerCommissionBps: 2000,
+      protocolFeeBpsOfCommission: 1000,
+      commissionAmountAtomic: "2000",
+      protocolFeeAtomic: "200",
+      referrerCreditAtomic: "1800",
+      merchantRetainsAtomic: "8000",
+    },
+  };
+}
+
+function createValidPayoutObligations(): unknown {
+  return {
+    summary: {
+      schema: "split402.merchant_obligation_summary.v1",
+      merchantId: "mrc_001",
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      assets: [
+        {
+          asset: "usdc-devnet",
+          fundingStatus: "covered",
+          fundingAmountAtomic: "1800",
+          fundingDeficitAtomic: "0",
+          pendingAmountAtomic: "0",
+          availableAmountAtomic: "1800",
+          heldAmountAtomic: "0",
+          inFlightAmountAtomic: "0",
+          paidAmountAtomic: "0",
+          outstandingAmountAtomic: "1800",
+          totalAccruedAmountAtomic: "1800",
+          accrualCount: 1,
+          pendingAccrualCount: 0,
+          availableAccrualCount: 1,
+          heldAccrualCount: 0,
+          inFlightAccrualCount: 0,
+          paidAccrualCount: 0,
+        },
+      ],
+    },
+  };
+}
+
+function createValidPaidSuiteLog(): string {
+  return [
+    "merchant ready at http://127.0.0.1:4021",
+    "",
+    "--- preflight ---",
+    JSON.stringify({ readyForPaidRun: true }),
+    "",
+    "--- valid paid request ---",
+    JSON.stringify({ risk: "low" }),
+    JSON.stringify({
+      split402ReceiptVerified: true,
+      errors: [],
+      receiptId: "rcp_valid",
+      referralCreditStatus: "credited",
+      commissionBps: 2000,
+      commissionAmountAtomic: "2000",
+      referrerCreditAtomic: "1800",
+      settlementTxSignature: "tx_valid",
+    }),
+    "",
+    "--- invalid-claim paid request ---",
+    JSON.stringify({ risk: "low" }),
+    JSON.stringify({
+      split402ReceiptVerified: true,
+      errors: [],
+      receiptId: "rcp_invalid",
+      referralCreditStatus: "zero",
+      commissionBps: 0,
+      commissionAmountAtomic: "0",
+      referrerCreditAtomic: "0",
+      settlementTxSignature: "tx_invalid",
+    }),
+    JSON.stringify(
+      {
+        paidSuitePassed: true,
+        validReceipt: {
+          receiptId: "rcp_valid",
+          paymentId: "pay_valid",
+          commissionBps: 2000,
+          commissionAmountAtomic: "2000",
+          referrerCreditAtomic: "1800",
+          settlementTxSignature: "tx_valid",
+          routeId: "rte_001",
+        },
+        invalidReceipt: {
+          receiptId: "rcp_invalid",
+          paymentId: "pay_invalid",
+          commissionBps: 0,
+          commissionAmountAtomic: "0",
+          referrerCreditAtomic: "0",
+          settlementTxSignature: "tx_invalid",
+        },
+      },
+      null,
+      2,
+    ),
+    "",
+  ].join("\n");
+}
+
+function createValidCommandsLog(): string {
+  return [
+    "$ corepack pnpm phase7:staging:init",
+    "$ corepack pnpm phase7:staging-proof > phase7-staging-proof.txt",
+    "$ corepack pnpm phase7:hosted:preflight",
+    "$ corepack pnpm phase7:staging:collect-reads",
+    "$ corepack pnpm phase7:staging:collect-mcp-gateway",
+    "$ corepack pnpm demo:mcp-gateway:smoke",
+    "$ corepack pnpm demo:mcp-bundle > phase7-staging-evidence/mcp-bundle.json",
+    "$ corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log",
+    "$ corepack pnpm phase7:staging:derive-receipt-verification",
+    "$ corepack pnpm phase7:staging:manifest phase7-staging-proof.txt > phase7-staging-evidence/artifact-manifest.json",
+    "$ corepack pnpm phase7:staging:assemble > phase7-staging-proof.txt",
+    "$ corepack pnpm phase7:staging:status phase7-staging-proof.txt",
+    "$ corepack pnpm lint",
+    "$ corepack pnpm typecheck",
+    "$ corepack pnpm test",
+    "$ corepack pnpm build",
+    "$ corepack pnpm vectors:check",
+    "$ corepack pnpm audit --audit-level high",
+    "",
+  ].join("\n");
+}
+
+function createValidMcpGatewayTranscript(
+  options: {
+    includeExecute?: boolean;
+    includeExecuteBudget?: boolean;
+    includeReceiptLookup?: boolean;
+    includeSearchBudget?: boolean;
+    searchMaxAmountAtomic?: string;
+    executeMaxAmountAtomic?: string;
+    searchCapability?: string;
+    executeCapability?: string;
+    searchProviderId?: string;
+    executeProviderId?: string;
+    amountPaidAtomic?: string;
+    executeReferrerCreditAtomic?: string;
+    lookupReceiptId?: string;
+    lookupReferrerCreditAtomic?: string;
+    lookupRequiredAmountAtomic?: string;
+    includeLookupRouteId?: boolean;
+    includeLookupCommissionAmount?: boolean;
+    lookupCommissionAmountAtomic?: string;
+    includeLookupCommissionBps?: boolean;
+    lookupCommissionBps?: number;
+    includeLookupProtocolFeeBps?: boolean;
+    lookupProtocolFeeBpsOfCommission?: number;
+    lookupProtocolFeeAtomic?: string;
+    tools?: string[];
+  } = {},
+): string {
+  const includeExecute = options.includeExecute ?? true;
+  const includeExecuteBudget = options.includeExecuteBudget ?? true;
+  const includeReceiptLookup = options.includeReceiptLookup ?? true;
+  const includeSearchBudget = options.includeSearchBudget ?? true;
+  const searchMaxAmountAtomic = options.searchMaxAmountAtomic ?? "50000";
+  const searchCapability = options.searchCapability ?? "solana.wallet-risk";
+  const executeCapability = options.executeCapability ?? searchCapability;
+  const searchProviderId = options.searchProviderId ?? "split402-demo-merchant";
+  const executeProviderId = options.executeProviderId ?? "split402-demo-merchant";
+  const executeMaxAmountAtomic =
+    options.executeMaxAmountAtomic ?? searchMaxAmountAtomic;
+  const amountPaidAtomic = options.amountPaidAtomic ?? "10000";
+  const executeReferrerCreditAtomic =
+    options.executeReferrerCreditAtomic ?? "1800";
+  const tools = options.tools ?? [
+    "split402.searchCapabilities",
+    "split402.execute",
+    "split402.getReceipt",
+  ];
+  const receiptId = "rcp_00000000000000000000000000000005";
+  const lookupReceiptId = options.lookupReceiptId ?? receiptId;
+  const lookupReferrerCreditAtomic =
+    options.lookupReferrerCreditAtomic ?? executeReferrerCreditAtomic;
+  const lookupRequiredAmountAtomic =
+    options.lookupRequiredAmountAtomic ?? amountPaidAtomic;
+  const includeLookupRouteId = options.includeLookupRouteId ?? true;
+  const includeLookupCommissionAmount =
+    options.includeLookupCommissionAmount ?? true;
+  const includeLookupCommissionBps = options.includeLookupCommissionBps ?? true;
+  const lookupCommissionBps = options.lookupCommissionBps ?? 2000;
+  const includeLookupProtocolFeeBps =
+    options.includeLookupProtocolFeeBps ?? true;
+  const lookupProtocolFeeBpsOfCommission =
+    options.lookupProtocolFeeBpsOfCommission ?? 1000;
+  const lookupProtocolFeeAtomic = options.lookupProtocolFeeAtomic ?? "200";
+  const lookupCommissionAmountAtomic =
+    options.lookupCommissionAmountAtomic ??
+    (BigInt(lookupReferrerCreditAtomic) + BigInt(lookupProtocolFeeAtomic)).toString();
+  const lines = [
+    {
+      direction: "request",
+      message: { jsonrpc: "2.0", id: "initialize", method: "initialize" },
+    },
+    {
+      direction: "response",
+      message: {
+        jsonrpc: "2.0",
+        id: "initialize",
+        result: { protocolVersion: "2024-11-05" },
+      },
+    },
+    {
+      direction: "request",
+      message: { jsonrpc: "2.0", id: "tools", method: "tools/list" },
+    },
+    {
+      direction: "response",
+      message: {
+        jsonrpc: "2.0",
+        id: "tools",
+        result: { tools: tools.map((name) => ({ name })) },
+      },
+    },
+    {
+      direction: "request",
+      message: {
+        jsonrpc: "2.0",
+        id: "search",
+        method: "tools/call",
+        params: {
+          name: "split402.searchCapabilities",
+          arguments: {
+            capability: searchCapability,
+            ...(includeSearchBudget
+              ? { budget: { maxAmountAtomic: searchMaxAmountAtomic } }
+              : {}),
+          },
+        },
+      },
+    },
+    {
+      direction: "response",
+      message: {
+        jsonrpc: "2.0",
+        id: "search",
+        result: {
+          structuredContent: {
+            capabilities: [{ providerId: searchProviderId }],
+          },
+        },
+      },
+    },
+    ...(includeExecute
+      ? [
+          {
+            direction: "request",
+            message: {
+              jsonrpc: "2.0",
+              id: "execute",
+              method: "tools/call",
+              params: {
+                name: "split402.execute",
+                arguments: {
+                  capability: executeCapability,
+                  input: { wallet: "wallet-demo" },
+                  ...(includeExecuteBudget
+                    ? { budget: { maxAmountAtomic: executeMaxAmountAtomic } }
+                    : {}),
+                },
+              },
+            },
+          },
+          {
+            direction: "response",
+            message: {
+              jsonrpc: "2.0",
+              id: "execute",
+              result: {
+                structuredContent: {
+                  providerId: executeProviderId,
+                  amountPaidAtomic,
+                  receiptId,
+                  receiptVerificationStatus: "verified",
+                  referrerCreditAtomic: executeReferrerCreditAtomic,
+                },
+              },
+            },
+          },
+          ...(includeReceiptLookup
+            ? [
+                {
+                  direction: "request",
+                  message: {
+                    jsonrpc: "2.0",
+                    id: "receipt",
+                    method: "tools/call",
+                    params: {
+                      name: "split402.getReceipt",
+                      arguments: { receiptId },
+                    },
+                  },
+                },
+                {
+                  direction: "response",
+                  message: {
+                    jsonrpc: "2.0",
+                    id: "receipt",
+                    result: {
+                      structuredContent: {
+                        receiptId,
+                        receipt: {
+                          receiptId: lookupReceiptId,
+                          referrerCreditAtomic: lookupReferrerCreditAtomic,
+                          requiredAmountAtomic: lookupRequiredAmountAtomic,
+                          ...(includeLookupRouteId
+                            ? { routeId: "rte_00000000000000000000000000000003" }
+                            : {}),
+                          ...(includeLookupCommissionAmount
+                            ? { commissionAmountAtomic: lookupCommissionAmountAtomic }
+                            : {}),
+                          ...(includeLookupCommissionBps
+                            ? { commissionBps: lookupCommissionBps }
+                            : {}),
+                          ...(includeLookupProtocolFeeBps
+                            ? {
+                                protocolFeeBpsOfCommission:
+                                  lookupProtocolFeeBpsOfCommission,
+                              }
+                            : {}),
+                          protocolFeeAtomic: lookupProtocolFeeAtomic,
+                        },
+                      },
+                    },
+                  },
+                },
+              ]
+            : []),
+        ]
+      : []),
+  ];
+  return `${lines.map((line) => JSON.stringify(line)).join("\n")}\n`;
 }
 
 function encode(value: string): Uint8Array {

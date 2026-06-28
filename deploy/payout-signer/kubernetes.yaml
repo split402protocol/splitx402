@@ -47,7 +47,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: payout-signer
-          image: ghcr.io/split402protocol/splitx402/payout-signer:latest
+          image: "ghcr.io/split402protocol/splitx402/payout-signer@sha256:<replace-with-image-digest>"
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

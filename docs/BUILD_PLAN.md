@@ -2,7 +2,8 @@
 
 This plan follows the Split402 protocol architecture v0.1 spec and the current
 `split402protocol/splitx402` implementation. The project is not changing names
-or directions: **Split402** is the protocol/product.
+or directions: **Split402** is the protocol/product and this repository is the
+canonical public implementation.
 
 Canonical sources:
 
@@ -37,15 +38,15 @@ until this loop works end to end and produces real paid API usage.
 
 ## Repository Phase 0: Setup And Direction
 
-Status: complete, with earlier Base/EVM assumptions superseded by the architecture
-baseline decision.
+Status: complete, with the earliest Base/EVM assumptions superseded by the
+architecture baseline decision.
 
 Deliverables:
 
 - GitHub repository setup;
 - initial security/contribution templates;
 - initial architecture notes;
-- initial implementation baseline reviewed.
+- architecture baseline reviewed and adopted for the implementation plan.
 
 Exit criteria:
 
@@ -58,7 +59,7 @@ Exit criteria:
 Status: implemented as a transitional slice.
 
 Purpose: keep a minimal x402-shaped HTTP host available while this repository
-ports the real Split402 protocol packages from the historical baseline.
+lands the full Split402 protocol packages.
 
 Deliverables:
 
@@ -84,8 +85,8 @@ Exit criteria:
 
 Status: implemented.
 
-Goal: implement the architecture spec's Milestone 0, using the initial
-implementation baseline for deterministic protocol artifacts.
+Goal: implement the architecture spec's Milestone 0 as the compatibility baseline
+for deterministic protocol artifacts.
 
 Deliverables:
 
@@ -104,7 +105,7 @@ Deliverables:
 
 Exit criteria:
 
-- offline code can create and verify the covered protocol artifacts;
+- offline code can create and verify the canonical protocol artifacts;
 - test vectors are deterministic across repeated runs;
 - monetary code contains no floating-point accounting;
 - root CI runs service and protocol checks together.
@@ -113,7 +114,7 @@ Exit criteria:
 
 Status: implemented with a recorded Devnet proof.
 
-Goal: evolve the merchant demo into a Solana/x402 Split402 demo.
+Goal: build the Solana/x402 Split402 merchant demo.
 
 Deliverables:
 
@@ -127,17 +128,17 @@ Deliverables:
 
 Current slice:
 
-- add `@split402/x402-extension`;
-- add `@split402/express`;
+- implement `@split402/x402-extension`;
+- implement `@split402/express`;
 - preserve client-side attribution enrichment behavior;
 - preserve resource-server offer and receipt hooks;
 - preserve request-context capture for operation digest inputs;
-- add `apps/demo-merchant`;
+- implement `apps/demo-merchant`;
 - expose health, discovery, debug receipts, and paid risk-score route;
-- add `@split402/agent-sdk`;
+- implement `@split402/agent-sdk`;
 - expose buyer-side offer inspection, referral-claim creation, paid JSON call, and
   receipt verification helpers;
-- add `apps/demo-agent`;
+- implement `apps/demo-agent`;
 - expose buyer setup, token setup, offer inspection, preflight, and paid-suite demo
   scripts;
 - support a separate disposable fee payer for demo mint setup;

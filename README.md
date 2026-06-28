@@ -1,6 +1,8 @@
 # Split402
 
 [![CI](https://github.com/split402protocol/splitx402/actions/workflows/ci.yml/badge.svg)](https://github.com/split402protocol/splitx402/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/split402protocol/splitx402/actions/workflows/codeql.yml/badge.svg)](https://github.com/split402protocol/splitx402/actions/workflows/codeql.yml)
+[![Secret Scan](https://github.com/split402protocol/splitx402/actions/workflows/secret-scan.yml/badge.svg)](https://github.com/split402protocol/splitx402/actions/workflows/secret-scan.yml)
 ![Status](https://img.shields.io/badge/status-public_alpha-orange)
 ![Runtime](https://img.shields.io/badge/node-%3E%3D22-339933)
 ![Protocol](https://img.shields.io/badge/x402-USDC-blue)
@@ -68,11 +70,11 @@ flowchart LR
 | Chain verification | Implemented as an outbox-driven Solana JSON-RPC worker for settlement signature and transfer checks. |
 | Webhooks | Implemented for accepted-receipt and payout lifecycle events with signed delivery envelopes and retry/dead-letter handling. |
 | Merchant SDK reliability boundary | Implemented with cached campaign lookup, service-key rotation helpers, payment identifiers, operation digests, and merchant-local receipt outbox primitives. |
-| Capability router | Implemented public-alpha static-provider router with budget filtering, deterministic ranking, fallback, and fail-closed receipt verification. |
+| Capability router | Implemented public-alpha router with static providers, control-plane route discovery, budget filtering, deterministic ranking, fallback, and fail-closed receipt verification. |
 | Dashboard and discovery | Implemented for public-alpha operations: reliability profiles, dashboard summaries, webhook feeds, referrer routes, balances, payouts, hosted-staging viewer sessions, and proof capture. |
 | Payout engine | In progress: preview, allocation, safe allocation release, Solana transfer planning, simulation, signer policy, local-dev signer, remote signer client, signer appliance scaffold, signer deployment artifacts, signed-byte persistence, broadcast boundary, finality monitor, rollup, payout lifecycle events, unknown-outcome reconciliation queue, referrer payout views, and idempotent ledger closure are implemented. |
 | Atomic split settlement | Later research. The MVP does not split the original x402 transaction onchain. |
-| `$SPLIT` bonding | Later research after the USDC accrual-and-payout loop is production ready. |
+| `$SPLIT` bonding | Later research after the USDC accrual-and-payout loop clears public-alpha proof and custody gates. |
 
 ## Commission Example
 
@@ -193,7 +195,7 @@ flowchart TB
 | `@split402/x402-extension` | Split402 offer, attribution, and receipt hooks around standard x402 settlement. |
 | `@split402/express` | Express request-context adapter for stable operation-digest inputs. |
 | `@split402/agent-sdk` | Buyer-side offer inspection, referral-claim creation, paid JSON calls, and receipt verification. |
-| `@split402/router` | Public-alpha static-provider capability router with budget enforcement, deterministic ranking, retry/fallback, and receipt verification for paid tools. |
+| `@split402/router` | Public-alpha capability router with static providers, control-plane route discovery, budget enforcement, deterministic ranking, retry/fallback, and receipt verification for paid tools. |
 | `@split402/merchant-sdk` | Merchant helpers for campaign caching, service-key rotation, payment IDs, operation digests, and durable receipt outbox delivery. |
 | `@split402/demo-merchant` | Solana Devnet merchant API used to prove the x402 plus Split402 flow. |
 | `@split402/demo-agent` | Runnable buyer/agent harness for setup, preflight, offer inspection, and paid-suite proof runs. |
@@ -210,14 +212,14 @@ stateDiagram-v2
   ReceiptSubmitted --> ReceiptAccepted: valid signature and unique evidence
   ReceiptAccepted --> PendingChainVerification: commission accrual created
   PendingChainVerification --> Available: settlement verified
-  PendingChainVerification --> Held: policy or risk hold
-  PendingChainVerification --> DeadLetter: verifier exhausted
+  PendingChainVerification --> Rejected: settlement rejected
   Available --> Allocated: payout batch allocation
+  Allocated --> Released: safe allocation release
   Allocated --> Submitted: payout transaction broadcast
   Submitted --> Finalized: chain finality
   Submitted --> OutcomeUnknown: timeout or ambiguous RPC outcome
   Submitted --> Failed: chain failure
-  Finalized --> LedgerClosed: payout ledger closes once
+  Finalized --> Paid: payout ledger closes once
 ```
 
 The current control plane exposes:
@@ -255,6 +257,7 @@ POST /v1/merchants/:merchantId/payouts/preview
 GET  /v1/merchants/:merchantId/payouts/reconciliation
 POST /v1/payout-batches/:batchId/reconcile
 POST /v1/merchants/:merchantId/payout-batches
+POST /v1/payout-batches/:batchId/release-allocations
 GET  /v1/referrers/:referrerWallet/balances
 GET  /v1/referrers/:referrerWallet/payouts
 GET  /v1/referrers/:referrerWallet/routes
@@ -281,7 +284,7 @@ flowchart LR
   Ledger[("ledger_transactions / ledger_entries")]
   Outbox[("outbox_events")]
   Batches[("payout_batches / items / allocations")]
-  Transactions[("payout_transactions")]
+  Transactions[("payout_transactions / payout_transaction_items")]
 
   API --> Registry
   API --> Auth
@@ -475,18 +478,20 @@ corepack pnpm phase7:staging:init
 corepack pnpm phase7:staging-proof > phase7-staging-proof.txt
 corepack pnpm phase7:hosted:preflight
 corepack pnpm phase7:staging:collect-reads
+corepack pnpm phase7:staging:collect-mcp-gateway
+corepack pnpm demo:mcp-gateway:smoke
+corepack pnpm demo:mcp-bundle > phase7-staging-evidence/mcp-bundle.json
+corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log
+corepack pnpm phase7:staging:derive-receipt-verification
 corepack pnpm phase7:staging:manifest phase7-staging-proof.txt > phase7-staging-evidence/artifact-manifest.json
 corepack pnpm phase7:staging:assemble > phase7-staging-proof.txt
 corepack pnpm phase7:staging:status phase7-staging-proof.txt
 ```
 
 The status check validates required proof fields, local attachment presence, and
-the attached artifact manifest hashes. It also verifies the hosted preflight
-artifact was captured against the same control-plane and dashboard URLs listed
-in the proof, including locked dashboard access without a viewer token and
-successful access with the viewer token. The funding-balance artifact is also
-parsed as a merchant obligation summary: every asset must report `covered` with
-zero deficit or `deficit` with a positive `fundingDeficitAtomic` value.
+the local attached artifact manifest hashes. It also parses hosted preflight,
+read API evidence, paid-suite receipt verification, MCP bundle/gateway evidence,
+command evidence, and funding-balance coverage before the proof can close.
 
 Run the demo merchant and agent flows:
 
@@ -502,6 +507,12 @@ Run the MCP stdio gateway for clients that want direct MCP tool discovery:
 
 ```bash
 corepack pnpm demo:mcp-gateway
+```
+
+Run the deterministic gateway smoke proof:
+
+```bash
+corepack pnpm demo:mcp-gateway:smoke
 ```
 
 ## Receipt Ingestion Example

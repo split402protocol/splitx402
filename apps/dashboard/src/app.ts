@@ -944,7 +944,7 @@ function renderDashboardHtml(config: DashboardConfig): string {
               loadJson("/api/referrers/" + encodeURIComponent(referrerWallet) + "/routes"),
               loadJson("/api/referrers/" + encodeURIComponent(referrerWallet) + "/payouts?limit=25")
             ]
-          : [undefined, { routes: [] }, { payouts: [] }];
+          : [undefined, { routes: [] }, { items: [] }];
         const [summary, profile, webhookEvents, obligations, balances, routes, payouts] =
           await Promise.all([...merchantRequests, ...referrerRequests]);
         renderSummary(summary);
@@ -952,8 +952,8 @@ function renderDashboardHtml(config: DashboardConfig): string {
         renderWebhooks(webhookEvents?.events ?? []);
         renderObligations(obligations?.summary?.assets ?? []);
         renderRoutes(routes?.routes ?? []);
-        renderPayouts(payouts?.payouts ?? []);
-        renderBalance(balances);
+        renderPayouts(payouts?.items ?? []);
+        renderBalance(balances?.summary);
         connectionStatus.textContent = "Live";
         connectionStatus.className = "status good";
       } catch (error) {
@@ -1000,12 +1000,14 @@ function renderDashboardHtml(config: DashboardConfig): string {
     }
 
     function renderBalance(value) {
-      const balance =
-        value?.balances?.availableAtomic ??
-        value?.balance?.availableAtomic ??
-        value?.availableAtomic ??
-        "-";
-      document.querySelector("#balanceMetric").textContent = String(balance);
+      const assets = Array.isArray(value?.assets) ? value.assets : [];
+      if (assets.length === 0) {
+        document.querySelector("#balanceMetric").textContent = "-";
+        return;
+      }
+      document.querySelector("#balanceMetric").textContent = assets
+        .map((asset) => formatAssetBalance(asset))
+        .join(" / ");
     }
 
     function renderWebhooks(events) {
@@ -1064,6 +1066,12 @@ function renderDashboardHtml(config: DashboardConfig): string {
       if (value === undefined || value === null) return "-";
       if (typeof value === "object") return JSON.stringify(value);
       return String(value);
+    }
+
+    function formatAssetBalance(asset) {
+      const available = asset?.availableAmountAtomic ?? "0";
+      const label = asset?.asset ?? "asset";
+      return String(available) + " " + String(label);
     }
 
     function pretty(value) {
