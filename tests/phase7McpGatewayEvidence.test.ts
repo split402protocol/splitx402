@@ -87,6 +87,11 @@ describe("Phase 7 MCP gateway evidence collector", () => {
       receiptId: "rcp_00000000000000000000000000000005",
       receiptVerificationStatus: "verified",
       referrerCreditAtomic: "1800",
+      routeId: "rte_00000000000000000000000000000003",
+      commissionBps: 2000,
+      protocolFeeBpsOfCommission: 1000,
+      commissionAmountAtomic: "2000",
+      protocolFeeAtomic: "200",
       requestCount: 5,
       responseCount: 5,
     });
@@ -99,6 +104,11 @@ describe("Phase 7 MCP gateway evidence collector", () => {
     expect(transcript).toContain('"receiptId":"rcp_00000000000000000000000000000005"');
     expect(transcript).toContain('"receiptVerificationStatus":"verified"');
     expect(transcript).toContain('"referrerCreditAtomic":"1800"');
+    expect(transcript).toContain('"routeId":"rte_00000000000000000000000000000003"');
+    expect(transcript).toContain('"commissionBps":2000');
+    expect(transcript).toContain('"protocolFeeBpsOfCommission":1000');
+    expect(transcript).toContain('"commissionAmountAtomic":"2000"');
+    expect(transcript).toContain('"protocolFeeAtomic":"200"');
   });
 });
 
