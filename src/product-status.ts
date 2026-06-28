@@ -7,12 +7,18 @@ import {
   PHASE7_EVIDENCE_FIELDS,
   parsePhase7ProofRecord,
 } from "./phase7StagingProof.js";
-import { createSplit402ProductReadinessReport } from "./productReadinessStatus.js";
+import {
+  createSplit402ProductReadinessReport,
+  formatSplit402ProductReadinessBrief,
+} from "./productReadinessStatus.js";
 
+const args = process.argv.slice(2);
+const brief = args.includes("--brief");
+const positionalArgs = args.filter((arg) => arg !== "--brief");
 const phase6EvidencePath =
-  process.argv[2] ?? process.env.SPLIT402_PHASE6_CUSTODY_EVIDENCE;
+  positionalArgs[0] ?? process.env.SPLIT402_PHASE6_CUSTODY_EVIDENCE;
 const phase7ProofPath =
-  process.argv[3] ?? process.env.SPLIT402_PHASE7_STAGING_PROOF;
+  positionalArgs[1] ?? process.env.SPLIT402_PHASE7_STAGING_PROOF;
 
 const phase6EvidenceText = readOptionalText(phase6EvidencePath);
 const phase7ProofText = readOptionalText(phase7ProofPath);
@@ -44,7 +50,11 @@ const report = createSplit402ProductReadinessReport({
   },
 });
 
-console.log(JSON.stringify(report, null, 2));
+console.log(
+  brief
+    ? formatSplit402ProductReadinessBrief(report)
+    : JSON.stringify(report, null, 2),
+);
 
 if (
   (report.phase6.evidenceBundleChecked || report.phase7.proofChecked) &&
