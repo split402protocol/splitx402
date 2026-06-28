@@ -1,15 +1,12 @@
-import {
-  createSplit402ProductReadinessReport,
-  formatSplit402ProductReadinessBrief,
-} from "./productReadinessStatus.js";
+import { readSplit402ProductReadinessCliInput } from "./productReadinessCli.js";
+import { formatSplit402ProductReadinessBrief } from "./productReadinessStatus.js";
 import {
   createSplit402LaunchChecklist,
   formatSplit402LaunchChecklistBrief,
 } from "./productLaunchChecklist.js";
 
-const args = process.argv.slice(2);
-const brief = args.includes("--brief");
-const readinessReport = createSplit402ProductReadinessReport();
+const { brief, report: readinessReport } =
+  readSplit402ProductReadinessCliInput(process.argv.slice(2));
 const checklist = createSplit402LaunchChecklist(readinessReport);
 
 console.log(

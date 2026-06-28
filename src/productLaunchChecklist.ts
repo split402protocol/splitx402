@@ -46,7 +46,7 @@ export function createSplit402LaunchChecklist(
       createLocalValidationSection(),
       createPhase7Section(report),
       createPhase6Section(report),
-      createFinalStatusSection(),
+      createFinalStatusSection(report),
     ],
     nextCommand: report.nextActions[0] ?? "corepack pnpm product:status --brief",
   };
@@ -179,10 +179,15 @@ function createPhase6Section(
   };
 }
 
-function createFinalStatusSection(): Split402LaunchChecklistSection {
+function createFinalStatusSection(
+  report: Split402ProductReadinessReport,
+): Split402LaunchChecklistSection {
+  const checked =
+    report.phase6.evidenceBundleChecked || report.phase7.proofChecked;
+
   return {
     title: "Check combined launch readiness",
-    status: "not_checked",
+    status: report.launchDecision === "go" ? "ready" : checked ? "blocked" : "not_checked",
     externalEvidenceRequired: false,
     commands: [
       "corepack pnpm product:status --brief split402-launch-evidence/phase6-custody-evidence.txt split402-launch-evidence/phase7-staging-proof.txt",
