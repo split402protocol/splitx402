@@ -52,6 +52,7 @@ describe("Phase 7 staging evidence workspace", () => {
       "corepack pnpm demo:mcp-gateway:smoke",
     );
     expect(workspace.readmeText).toContain("receiptVerificationStatus");
+    expect(workspace.readmeText).toContain("protocolFeeBpsOfCommission");
     expect(workspace.readmeText).toContain(
       "corepack pnpm phase7:staging:derive-receipt-verification",
     );
