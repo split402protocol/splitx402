@@ -23,7 +23,10 @@ available accruals. The first `@split402/router` alpha package is present with
 static providers, control-plane route discovery, budget enforcement, ranking,
 fallback, and receipt verification, and the MCP demo gateway now exposes router-backed
 `split402.searchCapabilities`, `split402.execute`, and `split402.getReceipt`
-tools in demo mode plus optional control-plane route discovery.
+tools in demo mode plus optional control-plane route discovery. The Phase 7
+proof validator now requires the MCP transcript to prove budgeted discovery,
+provider continuity, receipt lookup consistency, route attribution, positive
+referrer credit, and Split402 fee arithmetic derived from receipt bps fields.
 
 The MVP still uses normal x402 settlement to the merchant and records a
 commission liability for later merchant-funded payout. Protocol fee is a
