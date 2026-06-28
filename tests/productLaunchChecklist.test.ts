@@ -46,7 +46,7 @@ describe("Split402 launch checklist", () => {
       "corepack pnpm phase7:staging:commands-template > split402-launch-evidence/phase7-staging-evidence/commands.log",
     );
     expect(checklist.sections[3]?.commands).toContain(
-      "corepack pnpm phase6:evidence:env-template split402-launch-evidence > split402-launch-evidence/phase6-evidence.env",
+      "Review generated split402-launch-evidence/phase6-evidence.env before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template split402-launch-evidence > split402-launch-evidence/phase6-evidence.env",
     );
     expect(checklist.sections[3]?.commands).toContain(
       "Fill split402-launch-evidence/phase6-evidence.env with generated Phase 6 custody record paths.",
