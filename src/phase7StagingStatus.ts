@@ -1636,16 +1636,48 @@ function createCommandEvidenceStatus(
 }
 
 function validateCommandEvidence(text: string, blockers: string[]): void {
-  const normalizedText = normalizeCommandText(text);
-  if (normalizedText.trim().length === 0) {
+  if (text.trim().length === 0) {
     blockers.push("commands_run artifact is empty");
     return;
   }
+  const commandLines = extractCommandEvidenceLines(text);
+  if (commandLines.length === 0) {
+    blockers.push(
+      "commands_run artifact must include shell command lines, not only prose",
+    );
+  }
   for (const command of PHASE7_REQUIRED_COMMAND_EVIDENCE) {
-    if (!normalizedText.includes(normalizeCommandText(command))) {
+    const normalizedCommand = normalizeCommandText(command);
+    if (!commandLines.some((line) => line.includes(normalizedCommand))) {
       blockers.push(`commands_run missing required command: ${command}`);
     }
   }
+}
+
+function extractCommandEvidenceLines(text: string): string[] {
+  return text
+    .split(/\r?\n/u)
+    .map((line) => normalizeCommandText(stripCommandPrompt(line.trim())))
+    .filter((line) => line.length > 0 && isCommandEvidenceLine(line));
+}
+
+function stripCommandPrompt(line: string): string {
+  if (line.startsWith("$ ")) {
+    return line.slice(2);
+  }
+  const powershellPrompt = line.match(/^PS\s+[^>]+>\s*(?<command>.+)$/u);
+  return powershellPrompt?.groups?.command ?? line;
+}
+
+function isCommandEvidenceLine(line: string): boolean {
+  return (
+    line.startsWith("corepack ") ||
+    line.startsWith("git ") ||
+    line.startsWith("pnpm ") ||
+    line.startsWith("npm ") ||
+    line.startsWith("node ") ||
+    line.startsWith("SPLIT402_")
+  );
 }
 
 function parseMcpGatewayTranscript(
