@@ -12,6 +12,8 @@ proof sequence.
 ## Commands
 
 ```bash
+git rev-parse HEAD
+git status --short --branch
 corepack pnpm phase7:staging:init
 SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed
 corepack pnpm phase7:staging-proof > phase7-staging-proof.txt
@@ -175,7 +177,9 @@ The validator requires:
   names the verified receipt id and reports a verified Split402 receipt with no
   errors.
 - `commands_run` must be a local attached command transcript containing the
-  Phase 7 staging collection/status commands and the validation commands:
+  source commit/status commands, the Phase 7 staging collection/status commands,
+  and the validation commands:
+  `git rev-parse HEAD`, `git status --short --branch`,
   `corepack pnpm lint`, `corepack pnpm typecheck`, `corepack pnpm test`,
   `corepack pnpm build`, `corepack pnpm vectors:check`, and
   `corepack pnpm audit --audit-level high`.
