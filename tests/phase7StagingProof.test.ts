@@ -145,7 +145,7 @@ approval_decision: no-go
       "corepack pnpm phase7:staging:assemble",
     );
     expect(report.commands.map((item) => item.command)).toContain(
-      "corepack pnpm phase7:staging:manifest <phase7-staging-proof.txt>",
+      "corepack pnpm phase7:staging:manifest <phase7-staging-proof.txt> > phase7-staging-evidence/artifact-manifest.json",
     );
     expect(report.commands.map((item) => item.evidenceField)).toContain(
       "funding_balance_evidence",

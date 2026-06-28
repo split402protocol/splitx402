@@ -40,7 +40,8 @@ export const PHASE7_STAGING_COMMANDS = [
   },
   {
     gate: "artifact_manifest",
-    command: "corepack pnpm phase7:staging:manifest <phase7-staging-proof.txt>",
+    command:
+      "corepack pnpm phase7:staging:manifest <phase7-staging-proof.txt> > phase7-staging-evidence/artifact-manifest.json",
     evidenceField: "artifact_manifest_evidence",
   },
   {
@@ -1984,7 +1985,7 @@ function createNextActions(
       "Capture MCP gateway transcript evidence with corepack pnpm phase7:staging:collect-mcp-gateway.",
       "Run the hosted staging preflight with corepack pnpm phase7:hosted:preflight.",
       "Capture read API evidence with corepack pnpm phase7:staging:collect-reads.",
-      "Generate artifact hashes with corepack pnpm phase7:staging:manifest <phase7-staging-proof.txt>.",
+      "Generate artifact hashes with corepack pnpm phase7:staging:manifest <phase7-staging-proof.txt> > phase7-staging-evidence/artifact-manifest.json.",
       "Attach response URLs, logs, or artifact paths with corepack pnpm phase7:staging:assemble.",
       "Run corepack pnpm phase7:staging:status <phase7-staging-proof.txt>.",
     ];
