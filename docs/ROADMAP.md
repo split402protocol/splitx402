@@ -26,7 +26,8 @@ fallback, and receipt verification, and the MCP demo gateway now exposes router-
 tools in demo mode plus optional control-plane route discovery. The Phase 7
 proof validator now requires the MCP transcript to prove budgeted discovery,
 provider continuity, receipt lookup consistency, route attribution,
-route-discovery continuity, positive referrer credit, and Split402 fee
+route-discovery continuity, read-artifact continuity, paid-suite to
+receipt-verification continuity, positive referrer credit, and Split402 fee
 arithmetic derived from receipt bps fields.
 
 The MVP still uses normal x402 settlement to the merchant and records a
