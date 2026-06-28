@@ -282,6 +282,7 @@ funding_balance_evidence: funding.json
           schema: "split402.phase7_hosted_staging_preflight.v1",
           controlPlaneUrl: "https://control.staging.example",
           dashboardUrl: "https://dashboard.staging.example",
+          sourceCommit: "fd88024",
           checks: [
             {
               name: "control_plane_health",
@@ -348,6 +349,7 @@ funding_balance_evidence: funding.json
           schema: "split402.phase7_hosted_staging_preflight.v1",
           controlPlaneUrl: "https://other-control.staging.example",
           dashboardUrl: "https://dashboard.staging.example",
+          sourceCommit: "fd88024",
           checks: createPassingHostedPreflightChecks(),
         }),
       ),
@@ -363,6 +365,63 @@ funding_balance_evidence: funding.json
     expect(report.readyForPublicAlphaDemo).toBe(false);
     expect(report.hostedPreflightStatus.blockers).toContain(
       "hosted_preflight_evidence controlPlaneUrl does not match proof",
+    );
+  });
+
+  it("blocks approved proof records when hosted preflight omits source commit", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/hosted-preflight.json",
+      encode(
+        JSON.stringify({
+          schema: "split402.phase7_hosted_staging_preflight.v1",
+          controlPlaneUrl: "https://control.staging.example",
+          dashboardUrl: "https://dashboard.staging.example",
+          checks: createPassingHostedPreflightChecks(),
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.hostedPreflightStatus.blockers).toContain(
+      "hosted_preflight_evidence sourceCommit is missing",
+    );
+  });
+
+  it("blocks approved proof records when hosted preflight source commit differs", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/hosted-preflight.json",
+      encode(
+        JSON.stringify({
+          schema: "split402.phase7_hosted_staging_preflight.v1",
+          controlPlaneUrl: "https://control.staging.example",
+          dashboardUrl: "https://dashboard.staging.example",
+          sourceCommit: "abc1234",
+          checks: createPassingHostedPreflightChecks(),
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.hostedPreflightStatus.blockers).toContain(
+      "hosted_preflight_evidence sourceCommit does not match proof",
     );
   });
 
@@ -1350,6 +1409,7 @@ function createManifestArtifacts(proofText: string): Map<string, Uint8Array> {
           schema: "split402.phase7_hosted_staging_preflight.v1",
           controlPlaneUrl: "https://control.staging.example",
           dashboardUrl: "https://dashboard.staging.example",
+          sourceCommit: "fd88024",
           checks: createPassingHostedPreflightChecks(),
         }),
       ),
