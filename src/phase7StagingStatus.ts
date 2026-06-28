@@ -117,12 +117,14 @@ export interface Phase7StagingStatusOptions {
   readArtifact?: (path: string) => Uint8Array;
   resolveArtifactPath?: (path: string, baseDir: string) => string;
   currentSourceCommit?: string;
+  currentWorktreeDirty?: boolean;
 }
 
 export interface Phase7SourceCommitStatus {
   status: "not_checked" | "not_applicable" | "valid" | "invalid";
   proofSourceCommit?: string;
   currentSourceCommit?: string;
+  currentWorktreeDirty?: boolean;
   blockers: string[];
 }
 
@@ -416,10 +418,16 @@ function createSourceCommitStatus(
   } else if (!gitShasMatch(proofSourceCommit, currentSourceCommit)) {
     blockers.push("source_commit does not match current checkout");
   }
+  if (options.currentWorktreeDirty === true) {
+    blockers.push("current checkout has uncommitted changes");
+  }
   return {
     status: blockers.length === 0 ? "valid" : "invalid",
     proofSourceCommit,
     currentSourceCommit,
+    ...(options.currentWorktreeDirty === undefined
+      ? {}
+      : { currentWorktreeDirty: options.currentWorktreeDirty }),
     blockers,
   };
 }
