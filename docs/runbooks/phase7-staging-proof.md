@@ -39,7 +39,9 @@ referrer environment variables. It fails immediately if route discovery,
 referrer balances, dashboard summary, webhook delivery, payout obligations, or
 funding-balance coverage are missing the semantic fields required by the final
 status gate, so weak read evidence cannot slip through as a successful
-collection.
+collection. The collector writes the read artifact files only after every read
+artifact has passed validation, avoiding partial evidence directories from
+failed runs.
 `phase7:staging:collect-mcp-gateway` captures `mcp-gateway.jsonl` by sending
 `initialize`, `tools/list`, `split402.searchCapabilities`, `split402.execute`,
 and `split402.getReceipt` requests through the MCP gateway. The transcript must

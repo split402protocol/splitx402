@@ -94,6 +94,8 @@ describe("Phase 7 staging read collector", () => {
   });
 
   it("fails fast when funding balance evidence is unresolved", async () => {
+    const writes = new Map<string, string>();
+
     await expect(
       collectPhase7ReadArtifacts({
         controlPlaneUrl: "https://control.staging.example",
@@ -114,11 +116,12 @@ describe("Phase 7 staging read collector", () => {
                 )
               : JSON.stringify(createReadArtifact(url)),
         }),
-        writeArtifact: () => undefined,
+        writeArtifact: (path, text) => writes.set(path, text),
       }),
     ).rejects.toThrow(
       "funding_balance_evidence usdc-devnet fundingStatus is unknown",
     );
+    expect(writes.size).toBe(0);
   });
 
   it("fails fast when route discovery evidence has no active route", async () => {

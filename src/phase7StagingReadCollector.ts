@@ -47,11 +47,17 @@ interface ReadArtifactSpec {
   path: string;
 }
 
+interface PendingReadArtifactWrite {
+  path: string;
+  text: string;
+  capture: Phase7ReadArtifactCapture;
+}
+
 export async function collectPhase7ReadArtifacts(
   input: Phase7StagingReadCollectorInput,
 ): Promise<Phase7ReadCollectorReport> {
   const specs = createReadArtifactSpecs(input);
-  const captures: Phase7ReadArtifactCapture[] = [];
+  const pendingWrites: PendingReadArtifactWrite[] = [];
   for (const spec of specs) {
     const url = createUrl(input.controlPlaneUrl, spec.path);
     const response = await input.fetch(url, {
@@ -71,14 +77,21 @@ export async function collectPhase7ReadArtifacts(
     }
     assertUsefulReadArtifact(spec.field, text);
     const artifactPath = joinPath(input, spec.fileName);
-    input.writeArtifact(artifactPath, formatArtifact(text));
-    captures.push({
-      field: spec.field,
-      fileName: spec.fileName,
+    pendingWrites.push({
       path: artifactPath,
-      url,
-      status: response.status,
+      text: formatArtifact(text),
+      capture: {
+        field: spec.field,
+        fileName: spec.fileName,
+        path: artifactPath,
+        url,
+        status: response.status,
+      },
     });
+  }
+
+  for (const pendingWrite of pendingWrites) {
+    input.writeArtifact(pendingWrite.path, pendingWrite.text);
   }
 
   return {
@@ -87,7 +100,7 @@ export async function collectPhase7ReadArtifacts(
     merchantId: input.merchantId,
     referrerWallet: input.referrerWallet,
     outputDir: input.outputDir,
-    captures,
+    captures: pendingWrites.map((pendingWrite) => pendingWrite.capture),
   };
 }
 
