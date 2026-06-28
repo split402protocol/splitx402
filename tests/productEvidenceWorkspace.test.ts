@@ -1,5 +1,12 @@
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
+import {
+  createProductEvidenceInitWrites,
+  findExistingProductEvidenceInitWrites,
+  parseProductEvidenceInitArgs,
+} from "../src/productEvidenceInitPlan.js";
 import { createSplit402ProductEvidenceWorkspace } from "../src/productEvidenceWorkspace.js";
 
 describe("Split402 product evidence workspace", () => {
@@ -56,6 +63,52 @@ describe("Split402 product evidence workspace", () => {
     );
     expect(workspace.nextCommands).toContain(
       "corepack pnpm product:status --brief split402-launch-evidence/phase6-custody-evidence.txt split402-launch-evidence/phase7-staging-proof.txt",
+    );
+  });
+
+  it("plans every scaffold file written by the product evidence initializer", () => {
+    const workspace = createSplit402ProductEvidenceWorkspace({
+      directory: "evidence/launch",
+    });
+
+    expect(createProductEvidenceInitWrites(workspace).map((write) => write.path))
+      .toEqual([
+        join("evidence/launch", "README.md"),
+        join("evidence/launch", "phase6-custody-evidence.txt"),
+        join("evidence/launch", "phase7-staging-proof.txt"),
+        join("evidence/launch", "phase7-staging.env"),
+        join("evidence/launch/phase7-staging-evidence", "README.md"),
+      ]);
+  });
+
+  it("detects existing scaffold files before overwriting launch evidence", () => {
+    const workspace = createSplit402ProductEvidenceWorkspace();
+    const writes = createProductEvidenceInitWrites(workspace);
+
+    expect(
+      findExistingProductEvidenceInitWrites(writes, (path) =>
+        path.endsWith("phase7-staging-proof.txt"),
+      ),
+    ).toEqual([
+      join("split402-launch-evidence", "phase7-staging-proof.txt"),
+    ]);
+  });
+
+  it("parses an intentional force flag for evidence scaffold replacement", () => {
+    expect(parseProductEvidenceInitArgs(["--force", "evidence/launch"])).toEqual(
+      {
+        directory: "evidence/launch",
+        force: true,
+      },
+    );
+    expect(parseProductEvidenceInitArgs([])).toEqual({
+      directory: "split402-launch-evidence",
+      force: false,
+    });
+    expect(() =>
+      parseProductEvidenceInitArgs(["one", "two"]),
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: Usage: corepack pnpm product:evidence:init [--force] [directory]]`,
     );
   });
 });

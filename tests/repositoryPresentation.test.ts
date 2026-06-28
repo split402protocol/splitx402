@@ -147,12 +147,16 @@ describe("repository presentation", () => {
     const currentState = readFileSync("docs/CURRENT_STATE.md", "utf8");
 
     expect(readme).toContain("corepack pnpm product:evidence:init");
+    expect(readme).toContain("corepack pnpm product:evidence:init --force");
     expect(readme).toContain("corepack pnpm product:status");
     expect(readme).toContain("corepack pnpm product:status --brief");
     expect(readme).toContain("creates a local evidence workspace");
+    expect(readme).toContain("refuses to overwrite");
+    expect(readme).toContain("existing scaffold files");
     expect(readme).toContain("decision remains `no-go`");
     expect(readme).toContain("launch-gate percentages");
     expect(currentState).toContain("corepack pnpm product:evidence:init");
+    expect(currentState).toContain("refuses to overwrite existing scaffold");
     expect(currentState).toContain("corepack pnpm product:status");
   });
 });
