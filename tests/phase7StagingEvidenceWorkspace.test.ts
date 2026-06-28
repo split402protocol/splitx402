@@ -145,9 +145,13 @@ describe("Phase 7 staging evidence workspace", () => {
     expect(workspace.readmeText).toContain("providerAsset");
     expect(workspace.readmeText).toContain("providerPayToWallet");
     expect(workspace.readmeText).toContain("providerRouteId");
+    expect(workspace.readmeText).toContain("providerReferrerWallet");
+    expect(workspace.readmeText).toContain("providerPayoutWallet");
     expect(workspace.readmeText).toContain("requiredAmountAtomic");
     expect(workspace.readmeText).toContain("executeExecutionMode");
     expect(workspace.readmeText).toContain("receiptReferrerCreditAtomic");
+    expect(workspace.readmeText).toContain("receiptReferrerWallet");
+    expect(workspace.readmeText).toContain("receiptPayoutWallet");
     expect(workspace.readmeText).toContain(
       "selected provider network, asset, and",
     );

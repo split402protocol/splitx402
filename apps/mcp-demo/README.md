@@ -58,9 +58,9 @@ shape, and receipt verification without a live funded buyer wallet. It is not a
 claim of production MCP hosting or mainnet-ready payment execution.
 `split402.execute` always requires an explicit `budget.maxAmountAtomic`; the
 gateway never silently spends against a provider default. Capability search
-results include each provider's advertised `payToWallet` and route attribution
-when available, and router execution rejects merchant offers or receipts that do
-not match that destination.
+results include each provider's advertised `payToWallet`, route attribution,
+referrer wallet, and payout wallet when available, and router execution rejects
+merchant offers or receipts that do not match that destination.
 
 Example `tools/call` request:
 
