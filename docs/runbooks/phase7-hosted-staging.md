@@ -151,10 +151,11 @@ run has live x402 buyer configuration. Set `SPLIT402_MCP_SVM_PRIVATE_KEY` or
 `SVM_PRIVATE_KEY` to the funded buyer key, and set `SPLIT402_MCP_WALLET` and
 `SPLIT402_MCP_MAX_AMOUNT_ATOMIC` for the execution input and budget. The status
 validator requires the search and execute budgets to match, the selected
-provider network/asset/amount to match the receipt, and the reported paid amount
-to stay within that budget. If hosted execution is enabled without a buyer
-signer, the collector fails before producing misleading partial evidence. If the
-gateway falls back to `router-demo-mock`, the collector remains no-go.
+provider network/asset/amount/pay-to wallet to match the receipt, and the
+reported paid amount to stay within that budget. If hosted execution is enabled
+without a buyer signer, the collector fails before producing misleading partial
+evidence. If the gateway falls back to `router-demo-mock`, the collector remains
+no-go.
 The collector JSON report should echo the provider id, paid amount, receipt id,
 receipt verification status, referrer credit, route id, commission bps,
 protocol-fee bps, commission amount, and protocol-fee amount from the executed
