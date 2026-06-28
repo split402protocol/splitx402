@@ -11,6 +11,8 @@ export interface McpGatewaySmokeReport {
   serverName: string;
   tools: string[];
   providerId: string;
+  network: string;
+  asset: string;
   payToWallet: string;
   maxAmountAtomic: string;
   providerAmountAtomic: string;
@@ -137,6 +139,22 @@ export async function runMcpGatewaySmoke(): Promise<McpGatewaySmokeReport> {
       }
     }
   });
+  const receiptNetwork = readString(
+    receipt,
+    ["result", "structuredContent", "receipt", "network"],
+    "receipt network"
+  );
+  if (receiptNetwork !== selectedProvider.network) {
+    throw new Error("receipt network must match search provider network");
+  }
+  const receiptAsset = readString(
+    receipt,
+    ["result", "structuredContent", "receipt", "asset"],
+    "receipt asset"
+  );
+  if (receiptAsset !== selectedProvider.asset) {
+    throw new Error("receipt asset must match search provider asset");
+  }
   const receiptPayToWallet = readString(
     receipt,
     ["result", "structuredContent", "receipt", "payToWallet"],
@@ -151,6 +169,8 @@ export async function runMcpGatewaySmoke(): Promise<McpGatewaySmokeReport> {
     serverName,
     tools,
     providerId,
+    network: selectedProvider.network,
+    asset: selectedProvider.asset,
     payToWallet: selectedProvider.payToWallet,
     maxAmountAtomic,
     providerAmountAtomic: selectedProvider.amountAtomic,
@@ -165,7 +185,13 @@ export async function runMcpGatewaySmoke(): Promise<McpGatewaySmokeReport> {
 function readProvider(
   response: McpGatewayResponse,
   expectedProviderId: string
-): { providerId: string; payToWallet: string; amountAtomic: string } {
+): {
+  providerId: string;
+  network: string;
+  asset: string;
+  payToWallet: string;
+  amountAtomic: string;
+} {
   const capabilities = readPath(response, [
     "result",
     "structuredContent",
@@ -179,6 +205,8 @@ function readProvider(
     if (providerId === expectedProviderId) {
       return {
         providerId,
+        network: readString(capability, ["network"], "provider network"),
+        asset: readString(capability, ["asset"], "provider asset"),
         amountAtomic: readString(
           capability,
           ["amountAtomic"],

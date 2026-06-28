@@ -88,12 +88,16 @@ describe("Phase 7 MCP gateway evidence collector", () => {
       receiptLookupCaptured: true,
       providerId: "split402-demo-merchant",
       maxAmountAtomic: "50000",
+      providerNetwork: bundle.mcp.tools[0].x402.network,
+      providerAsset: bundle.mcp.tools[0].x402.asset,
       providerAmountAtomic: "10000",
       providerPayToWallet: bundle.mcp.tools[0].x402.payToWallet,
       amountPaidAtomic: "10000",
       receiptVerificationStatus: "verified",
       referrerCreditAtomic: "1800",
       routeId: "rte_00000000000000000000000000000003",
+      network: bundle.mcp.tools[0].x402.network,
+      asset: bundle.mcp.tools[0].x402.asset,
       payToWallet: bundle.mcp.tools[0].x402.payToWallet,
       commissionBps: 2000,
       protocolFeeBpsOfCommission: 1000,
@@ -113,6 +117,8 @@ describe("Phase 7 MCP gateway evidence collector", () => {
     expect(transcript).toContain('"receiptVerificationStatus":"verified"');
     expect(transcript).toContain('"referrerCreditAtomic":"1800"');
     expect(transcript).toContain('"routeId":"rte_00000000000000000000000000000003"');
+    expect(transcript).toContain(`"network":"${report.network}"`);
+    expect(transcript).toContain(`"asset":"${report.asset}"`);
     expect(transcript).toContain(`"payToWallet":"${report.payToWallet}"`);
     expect(transcript).toContain('"commissionBps":2000');
     expect(transcript).toContain('"protocolFeeBpsOfCommission":1000');

@@ -844,6 +844,8 @@ describe("MCP demo gateway", () => {
         "split402.getReceipt"
       ],
       providerId: "split402-demo-merchant",
+      network: expect.any(String),
+      asset: expect.any(String),
       payToWallet: expect.any(String),
       maxAmountAtomic: "50000",
       providerAmountAtomic: "10000",
