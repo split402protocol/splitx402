@@ -852,7 +852,9 @@ describe("MCP demo gateway", () => {
       executionMode: "router-demo-mock",
       amountPaidAtomic: "10000",
       receiptVerificationStatus: "verified",
-      referrerCreditAtomic: "1800"
+      referrerCreditAtomic: "1800",
+      receiptRequiredAmountAtomic: "10000",
+      receiptReferrerCreditAtomic: "1800"
     });
   });
 
