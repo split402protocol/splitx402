@@ -1095,6 +1095,72 @@ funding_balance_evidence: funding.json
     );
   });
 
+  it("blocks staged proof status when MCP selected provider omits payment details", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          includeSearchProviderNetwork: false,
+          includeSearchProviderAsset: false,
+          includeSearchProviderAmount: false,
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence selected provider network is missing",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence selected provider asset is missing",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence selected provider amountAtomic must be a positive atomic amount",
+    );
+  });
+
+  it("blocks staged proof status when MCP receipt does not match selected provider", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          lookupNetwork: "solana:wrong-network",
+          lookupAsset: "wrong-asset",
+          searchProviderAmountAtomic: "9000",
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence getReceipt network does not match selected provider",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence getReceipt asset does not match selected provider",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute amountPaidAtomic does not match selected provider amountAtomic",
+    );
+  });
+
   it("blocks staged proof status when MCP execution evidence has no receipt lookup", () => {
     const proofText = createManifestProof();
     const artifacts = createManifestArtifacts(proofText);
@@ -1926,11 +1992,19 @@ function createValidMcpGatewayTranscript(
     searchProviderId?: string;
     executeProviderId?: string;
     executeExecutionMode?: string;
+    includeSearchProviderNetwork?: boolean;
+    includeSearchProviderAsset?: boolean;
+    includeSearchProviderAmount?: boolean;
+    searchProviderNetwork?: string;
+    searchProviderAsset?: string;
+    searchProviderAmountAtomic?: string;
     amountPaidAtomic?: string;
     executeReferrerCreditAtomic?: string;
     lookupReceiptId?: string;
     lookupReferrerCreditAtomic?: string;
     lookupRequiredAmountAtomic?: string;
+    lookupNetwork?: string;
+    lookupAsset?: string;
     includeLookupRouteId?: boolean;
     includeLookupCommissionAmount?: boolean;
     lookupCommissionAmountAtomic?: string;
@@ -1956,6 +2030,15 @@ function createValidMcpGatewayTranscript(
   const executeMaxAmountAtomic =
     options.executeMaxAmountAtomic ?? searchMaxAmountAtomic;
   const amountPaidAtomic = options.amountPaidAtomic ?? "10000";
+  const includeSearchProviderNetwork =
+    options.includeSearchProviderNetwork ?? true;
+  const includeSearchProviderAsset = options.includeSearchProviderAsset ?? true;
+  const includeSearchProviderAmount = options.includeSearchProviderAmount ?? true;
+  const searchProviderNetwork =
+    options.searchProviderNetwork ?? "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
+  const searchProviderAsset = options.searchProviderAsset ?? "usdc-devnet";
+  const searchProviderAmountAtomic =
+    options.searchProviderAmountAtomic ?? amountPaidAtomic;
   const executeReferrerCreditAtomic =
     options.executeReferrerCreditAtomic ?? "1800";
   const tools = options.tools ?? [
@@ -1969,6 +2052,8 @@ function createValidMcpGatewayTranscript(
     options.lookupReferrerCreditAtomic ?? executeReferrerCreditAtomic;
   const lookupRequiredAmountAtomic =
     options.lookupRequiredAmountAtomic ?? amountPaidAtomic;
+  const lookupNetwork = options.lookupNetwork ?? searchProviderNetwork;
+  const lookupAsset = options.lookupAsset ?? searchProviderAsset;
   const includeLookupRouteId = options.includeLookupRouteId ?? true;
   const includeLookupCommissionAmount =
     options.includeLookupCommissionAmount ?? true;
@@ -2031,7 +2116,18 @@ function createValidMcpGatewayTranscript(
         id: "search",
         result: {
           structuredContent: {
-            capabilities: [{ providerId: searchProviderId }],
+            capabilities: [
+              {
+                providerId: searchProviderId,
+                ...(includeSearchProviderNetwork
+                  ? { network: searchProviderNetwork }
+                  : {}),
+                ...(includeSearchProviderAsset ? { asset: searchProviderAsset } : {}),
+                ...(includeSearchProviderAmount
+                  ? { amountAtomic: searchProviderAmountAtomic }
+                  : {}),
+              },
+            ],
           },
         },
       },
@@ -2097,6 +2193,8 @@ function createValidMcpGatewayTranscript(
                         receiptId,
                         receipt: {
                           receiptId: lookupReceiptId,
+                          network: lookupNetwork,
+                          asset: lookupAsset,
                           referrerCreditAtomic: lookupReferrerCreditAtomic,
                           requiredAmountAtomic: lookupRequiredAmountAtomic,
                           ...(includeLookupRouteId
