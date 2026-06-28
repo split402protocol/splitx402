@@ -438,6 +438,8 @@ corepack pnpm phase6:evidence:bundle | corepack pnpm phase6:custody:check -
 
 Use `phase6:evidence:env-template` to create a local, commented `.env` helper
 for generated Phase 6 record paths before running `phase6:evidence:assemble`.
+Pass a custom launch evidence directory when not using the default:
+`corepack pnpm phase6:evidence:env-template evidence/launch > evidence/launch/phase6-evidence.env`.
 Keep private URLs, secrets, private keys, and transaction bytes out of the file
 and out of Git.
 
