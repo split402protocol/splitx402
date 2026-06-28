@@ -1311,6 +1311,78 @@ funding_balance_evidence: funding.json
     );
   });
 
+  it("blocks staged proof status when MCP selected route is absent from discovery evidence", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/agent-discovery.json",
+      encode(
+        JSON.stringify({
+          routes: [
+            {
+              id: "rte_ffffffffffffffffffffffffffffffff",
+              status: "active",
+              campaignId: "cmp_00000000000000000000000000000002",
+              referrerWallet: "referrer-wallet",
+              payoutWallet: "payout-wallet",
+            },
+          ],
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence selected provider routeId was not found in agent_discovery_evidence",
+    );
+  });
+
+  it("blocks staged proof status when MCP selected route attribution differs from discovery evidence", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/agent-discovery.json",
+      encode(
+        JSON.stringify({
+          routes: [
+            {
+              id: "rte_00000000000000000000000000000003",
+              status: "active",
+              campaignId: "cmp_ffffffffffffffffffffffffffffffff",
+              referrerWallet: "other-referrer-wallet",
+              payoutWallet: "other-payout-wallet",
+            },
+          ],
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence selected provider campaignId does not match agent_discovery_evidence",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence selected provider referrerWallet does not match agent_discovery_evidence",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence selected provider payoutWallet does not match agent_discovery_evidence",
+    );
+  });
+
   it("blocks staged proof status when MCP receipt wallets differ from selected provider", () => {
     const proofText = createManifestProof();
     const artifacts = createManifestArtifacts(proofText);
@@ -1821,9 +1893,9 @@ function createManifestArtifacts(proofText: string): Map<string, Uint8Array> {
         JSON.stringify({
           routes: [
             {
-              id: "rte_001",
+              id: "rte_00000000000000000000000000000003",
               status: "active",
-              campaignId: "cmp_001",
+              campaignId: "cmp_00000000000000000000000000000002",
               referrerWallet: "referrer-wallet",
               payoutWallet: "payout-wallet",
             },
@@ -1881,13 +1953,13 @@ function createManifestArtifacts(proofText: string): Map<string, Uint8Array> {
             campaigns: {
               total: 1,
               byStatus: { draft: 0, active: 1, paused: 0, closed: 0 },
-              activeCampaignIds: ["cmp_001"],
+              activeCampaignIds: ["cmp_00000000000000000000000000000002"],
               operationCount: 1,
             },
             routes: {
               total: 1,
               byStatus: { active: 1, suspended: 0, expired: 0, revoked: 0 },
-              activeRouteIds: ["rte_001"],
+              activeRouteIds: ["rte_00000000000000000000000000000003"],
             },
           },
         }),

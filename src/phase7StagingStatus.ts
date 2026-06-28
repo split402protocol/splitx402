@@ -1565,9 +1565,103 @@ function createMcpGatewayStatus(
     return { status: "invalid", blockers };
   }
   validateMcpGatewayTranscript(lines, blockers);
+  validateMcpGatewayDiscoveryContinuity(fields, lines, options, blockers);
   return blockers.length === 0
     ? { status: "valid", blockers: [] }
     : { status: "invalid", blockers };
+}
+
+function validateMcpGatewayDiscoveryContinuity(
+  fields: Map<string, string>,
+  lines: readonly McpGatewayTranscriptLine[],
+  options: Phase7StagingStatusOptions,
+  blockers: string[],
+): void {
+  const selectedProvider = readMcpGatewaySelectedProvider(lines);
+  const selectedRouteId = readNonEmptyString(selectedProvider?.routeId);
+  if (selectedProvider === undefined || selectedRouteId === undefined) {
+    return;
+  }
+
+  const reference = fields.get("agent_discovery_evidence");
+  if (reference === undefined || reference.length === 0 || isHttpUrl(reference)) {
+    return;
+  }
+  const artifactPath = readAttachedArtifactPath(reference);
+  if (artifactPath === undefined) {
+    return;
+  }
+
+  const artifact = readJsonArtifact(
+    "agent_discovery_evidence",
+    artifactPath,
+    options,
+    blockers,
+  );
+  const routes = Array.isArray(readRecord(artifact)?.routes)
+    ? (readRecord(artifact)?.routes as unknown[])
+    : undefined;
+  if (routes === undefined) {
+    return;
+  }
+
+  const discoveredRoute = routes
+    .map(readRecord)
+    .find(
+      (route) =>
+        route !== undefined &&
+        (route.id === selectedRouteId || route.routeId === selectedRouteId),
+    );
+  if (discoveredRoute === undefined) {
+    blockers.push(
+      "mcp_gateway_evidence selected provider routeId was not found in agent_discovery_evidence",
+    );
+    return;
+  }
+
+  for (const field of ["campaignId", "referrerWallet", "payoutWallet"]) {
+    const selectedValue = readNonEmptyString(selectedProvider[field]);
+    const discoveredValue = readNonEmptyString(discoveredRoute[field]);
+    if (selectedValue !== undefined && discoveredValue !== selectedValue) {
+      blockers.push(
+        `mcp_gateway_evidence selected provider ${field} does not match agent_discovery_evidence`,
+      );
+    }
+  }
+}
+
+function readMcpGatewaySelectedProvider(
+  lines: readonly McpGatewayTranscriptLine[],
+): Record<string, unknown> | undefined {
+  const executeRequest = findRequest(
+    lines,
+    (message) => readToolCallName(message) === "split402.execute",
+  );
+  const executeContent = readStructuredContent(
+    executeRequest === undefined
+      ? undefined
+      : findResponse(lines, executeRequest.message.id),
+  );
+  const providerId = readNonEmptyString(executeContent?.providerId);
+  if (providerId === undefined) {
+    return undefined;
+  }
+
+  const searchRequest = findRequest(
+    lines,
+    (message) => readToolCallName(message) === "split402.searchCapabilities",
+  );
+  const searchResponse =
+    searchRequest === undefined
+      ? undefined
+      : findResponse(lines, searchRequest.message.id);
+  const capabilities = readStructuredArray(searchResponse, "capabilities");
+  if (capabilities === undefined) {
+    return undefined;
+  }
+  return capabilities
+    .map(readRecord)
+    .find((capability) => capability?.providerId === providerId);
 }
 
 const PHASE7_REQUIRED_COMMAND_EVIDENCE = [
