@@ -164,6 +164,16 @@ function createProductNextActions(
 ): string[] {
   const actions: string[] = [];
 
+  if (!phase7.proofChecked && !phase6.evidenceBundleChecked) {
+    return [
+      "Create a combined launch evidence workspace with corepack pnpm product:evidence:init.",
+      "Fill split402-launch-evidence/phase7-staging.env with hosted staging values.",
+      "Fill split402-launch-evidence/phase6-custody-evidence.txt with generated Phase 6 custody records.",
+      "Run hosted Phase 7 staging proof collection and status validation.",
+      "Run corepack pnpm product:status --brief split402-launch-evidence/phase6-custody-evidence.txt split402-launch-evidence/phase7-staging-proof.txt.",
+    ];
+  }
+
   if (!phase7.readyForPublicAlphaDemo) {
     actions.push(
       phase7.proofChecked
