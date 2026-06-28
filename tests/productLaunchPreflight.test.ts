@@ -30,7 +30,7 @@ describe("Split402 launch preflight", () => {
     );
   });
 
-  it("recognizes scaffold files but requires hosted Phase 7 env values", () => {
+  it("recognizes scaffold files but requires Phase 6 and hosted Phase 7 env values", () => {
     const workspace = createSplit402ProductEvidenceWorkspace();
     const files = createWorkspaceFileMap(workspace.phase7.envText);
     const report = createSplit402LaunchPreflightReport({
@@ -46,11 +46,24 @@ describe("Split402 launch preflight", () => {
         (check) => check.id === "phase7_attachment_env_mappings",
       ),
     ).toMatchObject({ ok: true });
+    expect(report.checks.find((check) => check.id === "phase6_evidence_env_values"))
+      .toMatchObject({ ok: false });
+    expect(
+      report.checks.find(
+        (check) => check.id === "phase6_evidence_env_mappings",
+      ),
+    ).toMatchObject({ ok: false });
+    expect(report.nextActions).toContain(
+      "Fill SPLIT402_PHASE6_EVIDENCE_REVIEW_ID in split402-launch-evidence\\phase6-evidence.env.",
+    );
+    expect(report.nextActions).toContain(
+      "Set SPLIT402_PHASE6_ASSEMBLE_IMAGE_PROVENANCE_RECORD=split402-launch-evidence/phase6-image-provenance.txt",
+    );
     expect(report.checks.find((check) => check.id === "phase7_hosted_env_values"))
       .toMatchObject({ ok: false });
   });
 
-  it("passes when scaffold and required hosted env values are filled", () => {
+  it("passes when scaffold and required Phase 6 and hosted Phase 7 env values are filled", () => {
     const workspace = createSplit402ProductEvidenceWorkspace();
     const files = createWorkspaceFileMap(
       [
@@ -67,6 +80,7 @@ describe("Split402 launch preflight", () => {
         "SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1",
         "SPLIT402_MCP_SVM_PRIVATE_KEY=funded-devnet-buyer-key",
       ].join("\n"),
+      createFilledPhase6EnvText(workspace.phase6EnvText),
     );
 
     const report = createSplit402LaunchPreflightReport({
@@ -79,6 +93,14 @@ describe("Split402 launch preflight", () => {
       .toEqual(
         expect.arrayContaining([
           expect.objectContaining({ id: "launch_workspace_files", ok: true }),
+          expect.objectContaining({
+            id: "phase6_evidence_env_values",
+            ok: true,
+          }),
+          expect.objectContaining({
+            id: "phase6_evidence_env_mappings",
+            ok: true,
+          }),
           expect.objectContaining({
             id: "phase7_attachment_env_mappings",
             ok: true,
@@ -93,7 +115,10 @@ describe("Split402 launch preflight", () => {
   });
 });
 
-function createWorkspaceFileMap(phase7EnvText: string): Map<string, string> {
+function createWorkspaceFileMap(
+  phase7EnvText: string,
+  phase6EnvText?: string,
+): Map<string, string> {
   const workspace = createSplit402ProductEvidenceWorkspace();
   return new Map([
     [join(workspace.directory, workspace.readmeFileName), workspace.readmeText],
@@ -103,7 +128,7 @@ function createWorkspaceFileMap(phase7EnvText: string): Map<string, string> {
     ],
     [
       join(workspace.directory, workspace.phase6EnvFileName),
-      workspace.phase6EnvText,
+      phase6EnvText ?? workspace.phase6EnvText,
     ],
     [
       join(workspace.directory, workspace.phase7ProofFileName),
@@ -115,4 +140,13 @@ function createWorkspaceFileMap(phase7EnvText: string): Map<string, string> {
       workspace.phase7.readmeText,
     ],
   ]);
+}
+
+function createFilledPhase6EnvText(template: string): string {
+  return template
+    .replaceAll("# SPLIT402_PHASE6_", "SPLIT402_PHASE6_")
+    .replace(
+      "SPLIT402_PHASE6_EVIDENCE_REVIEW_ID=phase6-custody-YYYY-MM-DD",
+      "SPLIT402_PHASE6_EVIDENCE_REVIEW_ID=phase6-custody-2026-06-29",
+    );
 }
