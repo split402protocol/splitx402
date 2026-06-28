@@ -36,7 +36,8 @@ artifact files; those must be captured from the hosted staging run.
 Use the same value for hosted preflight evidence so the same-source gate can
 close. `phase7:staging:status` also compares the proof `source_commit` with the
 current checkout's `git rev-parse HEAD`; rerun the proof after any source commit
-change instead of approving stale evidence.
+change instead of approving stale evidence. Run the final status check from a
+clean checkout because uncommitted changes also keep the proof no-go.
 `phase7:staging:seed` is an operator-only PostgreSQL seed for hosted Devnet
 staging. It creates or verifies the active demo merchant, verified origin,
 offer/receipt key, payout wallet, active campaign, and active referral route
