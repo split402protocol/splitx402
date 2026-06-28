@@ -481,6 +481,33 @@ funding_balance_evidence: funding.json
     );
   });
 
+  it("blocks approved proof status when the proof source commit is stale", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+      currentSourceCommit: "abc1234000000000000000000000000000000000",
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.sourceCommitStatus).toEqual({
+      status: "invalid",
+      proofSourceCommit: "fd88024",
+      currentSourceCommit: "abc1234000000000000000000000000000000000",
+      blockers: ["source_commit does not match current checkout"],
+    });
+    expect(report.gateStatuses).toContainEqual({
+      gate: "hosted_staging_preflight",
+      evidenceField: "hosted_preflight_evidence",
+      status: "invalid",
+      blockers: ["source_commit does not match current checkout"],
+    });
+  });
+
   it("approves staged proof status when local artifacts match the manifest", () => {
     const proofText = createManifestProof();
     const artifacts = createManifestArtifacts(proofText);
