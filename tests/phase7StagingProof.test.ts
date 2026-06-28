@@ -732,6 +732,31 @@ funding_balance_evidence: funding.json
     );
   });
 
+  it("blocks staged proof status when MCP search evidence has no budget", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          includeSearchBudget: false,
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence search request missing budget.maxAmountAtomic",
+    );
+  });
+
   it("blocks staged proof status when MCP execution evidence has no receipt lookup", () => {
     const proofText = createManifestProof();
     const artifacts = createManifestArtifacts(proofText);
@@ -1268,11 +1293,13 @@ function createValidMcpGatewayTranscript(
   options: {
     includeExecute?: boolean;
     includeReceiptLookup?: boolean;
+    includeSearchBudget?: boolean;
     tools?: string[];
   } = {},
 ): string {
   const includeExecute = options.includeExecute ?? true;
   const includeReceiptLookup = options.includeReceiptLookup ?? true;
+  const includeSearchBudget = options.includeSearchBudget ?? true;
   const tools = options.tools ?? [
     "split402.searchCapabilities",
     "split402.execute",
@@ -1312,7 +1339,12 @@ function createValidMcpGatewayTranscript(
         method: "tools/call",
         params: {
           name: "split402.searchCapabilities",
-          arguments: { capability: "solana.wallet-risk" },
+          arguments: {
+            capability: "solana.wallet-risk",
+            ...(includeSearchBudget
+              ? { budget: { maxAmountAtomic: "50000" } }
+              : {}),
+          },
         },
       },
     },

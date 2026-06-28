@@ -73,7 +73,10 @@ export async function collectPhase7McpGatewayEvidence(
       method: "tools/call",
       params: {
         name: "split402.searchCapabilities",
-        arguments: { capability },
+        arguments: {
+          capability,
+          budget: { maxAmountAtomic },
+        },
       },
     },
   ];

@@ -106,7 +106,8 @@ dashboard is locked without the viewer token while accepting the viewer-token
 path.
 Attach `phase7-staging-evidence/mcp-gateway.jsonl` as `mcp_gateway_evidence`.
 The collector runs the gateway with JSON-RPC `initialize`, `tools/list`, and
-`split402.searchCapabilities` requests. Set `SPLIT402_MCP_CONTROL_PLANE_URL` for
+budget-filtered `split402.searchCapabilities` requests using
+`SPLIT402_MCP_MAX_AMOUNT_ATOMIC`. Set `SPLIT402_MCP_CONTROL_PLANE_URL` for
 hosted route discovery. Phase 7 proof closure also requires
 `split402.execute` and `split402.getReceipt`, so keep
 `SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1` enabled only after the same staging run
