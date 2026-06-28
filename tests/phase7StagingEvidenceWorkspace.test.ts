@@ -153,6 +153,9 @@ describe("Phase 7 staging evidence workspace", () => {
       "matching receipt network, asset, payToWallet, required",
     );
     expect(workspace.readmeText).toContain(
+      "collector rejects receipt evidence when commission, protocol fee, or",
+    );
+    expect(workspace.readmeText).toContain(
       "`phase7:hosted:preflight` writes `hosted-preflight.json`",
     );
     expect(workspace.readmeText).toContain(
