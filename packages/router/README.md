@@ -55,8 +55,9 @@ const affordable = split402.searchCapabilities({
 ```
 
 Discovery fetches active routes, reads each route's Bazaar resource projection,
-resolves the campaign's active merchant service key, and only emits providers
-with enough information for fail-closed receipt verification by default.
+including the advertised `payToWallet`, resolves the campaign's active merchant
+service key, and only emits providers with enough information for fail-closed
+receipt verification by default.
 
 ## Current Behavior
 
@@ -70,6 +71,8 @@ with enough information for fail-closed receipt verification by default.
 - skips providers whose discovered route/referrer/payout metadata conflicts
   with the supplied `referralClaim`;
 - verifies receipts fail-closed by default;
+- requires merchant offers and receipts to match the provider's network, asset,
+  amount, and advertised `payToWallet`;
 - requires returned receipts to match the supplied `referralClaim` route, claim
   hash, referrer wallet, and payout wallet;
 - retries/falls back on network errors, HTTP 5xx, 408, 425, 429, missing

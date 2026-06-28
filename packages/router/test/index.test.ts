@@ -433,6 +433,15 @@ describe("Split402Router", () => {
           "receipt referrerWallet does not match referralClaim referrerWallet"
       },
       {
+        name: "pay-to wallet",
+        returnedReceipt: {
+          ...receipt,
+          payToWallet: sample.keys.payerWallet
+        },
+        expectedError:
+          "receipt payToWallet does not match provider payToWallet"
+      },
+      {
         name: "payout wallet",
         returnedReceipt: {
           ...receipt,
@@ -507,6 +516,7 @@ describe("Split402ControlPlaneDiscoveryClient", () => {
         merchantPublicKey,
         network: receipt.network,
         asset: receipt.asset,
+        payToWallet: receipt.payToWallet,
         amountAtomic: receipt.requiredAmountAtomic,
         metadata: expect.objectContaining({
           referrerWallet: receipt.referrerWallet,
@@ -558,6 +568,7 @@ function provider(
     campaignId: receipt.campaignId,
     network: receipt.network,
     asset: receipt.asset,
+    payToWallet: receipt.payToWallet,
     amountAtomic: receipt.requiredAmountAtomic
   } satisfies Omit<Split402CapabilityProvider, "merchantPublicKey">;
   return {
