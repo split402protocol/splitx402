@@ -1979,6 +1979,7 @@ function createNextActions(
       "Generate a proof scaffold with corepack pnpm phase7:staging-proof.",
       "Run the hosted staging preflight with corepack pnpm phase7:hosted:preflight.",
       "Capture read API evidence with corepack pnpm phase7:staging:collect-reads.",
+      "Capture funding-balance evidence by running corepack pnpm phase7:staging:collect-reads with SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc.",
       "Capture MCP gateway transcript evidence with corepack pnpm phase7:staging:collect-mcp-gateway.",
       "Run the MCP gateway smoke check with corepack pnpm demo:mcp-gateway:smoke.",
       "Capture MCP bundle evidence with corepack pnpm demo:mcp-bundle > phase7-staging-evidence/mcp-bundle.json.",

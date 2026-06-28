@@ -213,6 +213,9 @@ approval_decision: no-go
       "Run the hosted staging preflight with corepack pnpm phase7:hosted:preflight.",
     );
     expect(report.nextActions).toContain(
+      "Capture funding-balance evidence by running corepack pnpm phase7:staging:collect-reads with SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc.",
+    );
+    expect(report.nextActions).toContain(
       "Capture MCP bundle evidence with corepack pnpm demo:mcp-bundle > phase7-staging-evidence/mcp-bundle.json.",
     );
     expect(report.nextActions).toContain(
