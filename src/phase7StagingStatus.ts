@@ -1736,6 +1736,11 @@ function validateMcpGatewayTranscript(
       blockers.push(`mcp_gateway_evidence execute response missing ${field}`);
     }
   }
+  if (readPositiveAtomicString(executeContent.referrerCreditAtomic) === undefined) {
+    blockers.push(
+      "mcp_gateway_evidence execute response referrerCreditAtomic must be positive",
+    );
+  }
   if (executeContent.receiptVerificationStatus !== "verified") {
     blockers.push(
       "mcp_gateway_evidence execute response receiptVerificationStatus is not verified",
