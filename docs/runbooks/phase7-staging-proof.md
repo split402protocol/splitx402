@@ -114,15 +114,19 @@ The status report includes `gateStatuses`; each gate is marked `ready`,
 the evidence field that must be fixed. When a proof file path is supplied,
 `artifactStatuses` also verifies that local `attached:` artifact paths exist
 relative to the proof file directory, and `manifestStatus` verifies that local
-artifact sizes and SHA-256 hashes still match `artifact-manifest.json`. Remote
-`http(s)` artifact URLs are marked as remote references, except for evidence
-fields that require local machine parsing and the artifact manifest itself.
+artifact sizes and SHA-256 hashes still match `artifact-manifest.json`. Phase 7
+proof artifacts are local-only; remote `http(s)` evidence references do not
+close the status gate.
 `controlPlaneReadStatus`
 parses the local read-API artifacts and rejects empty route discovery, zero
 referrer earnings, empty dashboard activity, missing delivered webhooks, or
-missing payout obligations. `paidRequestStatus` parses the local paid-suite log
-and receipt-verification JSON so the x402 paid request and Split402 receipt
-verification gates cannot close on placeholder output. `commandEvidenceStatus`
+missing payout obligations. It also cross-checks that dashboard active
+campaign/route ids include the discovered route, referrer balances match the
+discovered referrer wallet, and payout obligation plus delivered webhook
+evidence match the dashboard merchant id. `paidRequestStatus` parses the local
+paid-suite log and receipt-verification JSON so the x402 paid request and
+Split402 receipt verification gates cannot close on placeholder output or
+receipt summaries from a different run. `commandEvidenceStatus`
 parses `commands.log` and requires the Phase 7 collection commands plus the
 full validation suite. `fundingBalanceStatus` parses the local funding-balance
 artifact and rejects unresolved funding so the proof shows whether each asset is
@@ -183,13 +187,15 @@ The validator requires:
   from the control-plane read APIs. The status checker validates that they show
   at least one active route, positive referrer earnings, at least one active
   campaign and route in the dashboard summary, a delivered webhook event, and a
-  positive payout obligation.
+  positive payout obligation. The active route/campaign/referrer/merchant
+  identities must match across those read artifacts.
 - `paid_request_evidence` must be a local attached `paid-suite.log` artifact
   whose final JSON summary reports `paidSuitePassed: true`, a commission-bearing
   valid referral receipt, and a zero-commission invalid-claim receipt.
 - `receipt_verification_evidence` must be a local attached JSON artifact that
   names the verified receipt id and reports a verified Split402 receipt with no
-  errors.
+  errors. Its valid and invalid-claim receipt summaries must match the receipts
+  in the paid-suite log.
 - `commands_run` must be a local attached command transcript containing the
   source commit/status commands, the Phase 7 staging collection/status commands,
   and the validation commands:
