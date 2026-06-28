@@ -15,7 +15,8 @@ Status: implemented as a transitional slice.
 - `GET /v1/paid-demo` protected by an x402 payment guard.
 - `GET /v1/payments/:paymentId` for inspecting recorded settlement events.
 - Deterministic mock payment mode for local tests without spending testnet funds.
-- Facilitator-backed x402 path from the earlier skeleton.
+- Legacy facilitator-backed EVM x402 path from the earlier skeleton. This is not
+  the canonical Solana Split402 product path.
 - Required `payment-identifier` declaration and validation.
 - File-backed settlement log in `.data/settlements.jsonl`.
 - Structured request logging.
@@ -35,16 +36,19 @@ Set these environment values for the temporary service:
 
 ```bash
 SPLIT402_PAYMENT_MODE=mock
-SPLIT402_PAY_TO=0xYourReceivingWallet
-SPLIT402_NETWORK=eip155:84532
+SPLIT402_PAY_TO=11111111111111111111111111111111
+SPLIT402_NETWORK=solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1
+SPLIT402_ASSET=usdc-devnet
 SPLIT402_FACILITATOR_URL=https://x402.org/facilitator
 ```
 
 `SPLIT402_SYNC_FACILITATOR=false` is useful for offline startup checks. Keep it
-`true` when proving the older facilitator-backed path.
+`true` only when explicitly proving the older facilitator-backed EVM path with
+`SPLIT402_PAYMENT_MODE=x402`, an `eip155:*` network, and an EVM `payTo` address.
 
 ## Scope Note
 
 This phase is not the final Split402 architecture. The Solana/USDC protocol scope,
-referral claims, signed offers/receipts, control plane, and payout flow are defined
-by the v0.1 architecture spec and start landing in Phase 2 and later.
+referral claims, signed offers/receipts, control plane, router, MCP gateway, and
+payout flow are defined by the v0.1 architecture spec and implemented in later
+workspace packages and apps.
