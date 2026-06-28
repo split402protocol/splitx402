@@ -343,9 +343,10 @@ corepack pnpm product:status <phase6-custody-evidence.txt> <phase7-staging-proof
 Phase 7 hosted proof and Phase 6 custody bundle, including local env templates
 for attachment paths. It refuses to overwrite existing scaffold files; rerun
 with `--force` only when intentionally replacing local scaffold content.
-`product:launch-preflight --brief` checks whether the local launch workspace and
-required Phase 7 hosted proof environment values are ready before collection
-starts. `product:launch-checklist --brief` prints the exact remaining local
+`product:launch-preflight --brief` checks whether the local launch workspace,
+Phase 6 custody evidence env paths, and required Phase 7 hosted proof
+environment values are ready before collection starts.
+`product:launch-checklist --brief` prints the exact remaining local
 validation, hosted proof, custody evidence, and combined status commands; pass
 the Phase 6 and Phase 7 evidence paths to show checked, blocked, or ready
 section statuses from real files. `product:status` reports the current Split402

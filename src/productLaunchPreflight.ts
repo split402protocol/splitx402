@@ -1,5 +1,9 @@
 import { join } from "node:path";
 
+import {
+  PHASE6_ATTACHMENT_ENV,
+  PHASE6_RECORD_EXTRACTION_ENV_ENTRIES,
+} from "./phase6EvidenceAssemblyEnv.js";
 import { createSplit402ProductEvidenceWorkspace } from "./productEvidenceWorkspace.js";
 
 export interface Split402LaunchPreflightInput {
@@ -43,6 +47,11 @@ const REQUIRED_MCP_LIVE_ENV_KEYS = [
   "SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE",
 ] as const;
 
+const REQUIRED_PHASE6_DIRECT_ENV_KEYS = [
+  "SPLIT402_PHASE6_EVIDENCE_REVIEW_ID",
+  "SPLIT402_PHASE6_EVIDENCE_STAGING_ENVIRONMENT",
+] as const;
+
 export function createSplit402LaunchPreflightReport(
   input: Split402LaunchPreflightInput,
 ): Split402LaunchPreflightReport {
@@ -58,28 +67,46 @@ export function createSplit402LaunchPreflightReport(
     join(workspace.phase7.directory, workspace.phase7.readmeFileName),
   ];
   const missingRequiredFiles = requiredFiles.filter((path) => !input.exists(path));
-  const envPath = join(workspace.directory, workspace.phase7EnvFileName);
-  const envText = input.exists(envPath) ? input.readText(envPath) : "";
-  const env = parseEnvText(envText);
+  const phase7EnvPath = join(workspace.directory, workspace.phase7EnvFileName);
+  const phase7EnvText = input.exists(phase7EnvPath)
+    ? input.readText(phase7EnvPath)
+    : "";
+  const phase7Env = parseEnvText(phase7EnvText);
+  const phase6EnvPath = join(workspace.directory, workspace.phase6EnvFileName);
+  const phase6EnvText = input.exists(phase6EnvPath)
+    ? input.readText(phase6EnvPath)
+    : "";
+  const phase6Env = parseEnvText(phase6EnvText);
+  const missingPhase6DirectKeys = REQUIRED_PHASE6_DIRECT_ENV_KEYS.filter(
+    (key) => !hasConfiguredEnvValue(phase6Env, key),
+  );
+  const missingPhase6Mappings = uniquePhase6EnvMappings().filter(
+    (mapping) => phase6Env.get(mapping.envName) !== mapping.examplePath,
+  );
   const missingAttachmentMappings = workspace.phase7.artifacts
     .map((artifact) => ({
       key: phase7AttachmentEnvName(artifact.field),
       expectedPath: `${workspace.phase7.directory}/${artifact.fileName}`,
     }))
-    .filter((attachment) => env.get(attachment.key) !== attachment.expectedPath);
+    .filter(
+      (attachment) =>
+        phase7Env.get(attachment.key) !== attachment.expectedPath,
+    );
   const missingHostedKeys = REQUIRED_PHASE7_HOSTED_ENV_KEYS.filter(
-    (key) => !hasConfiguredEnvValue(env, key),
+    (key) => !hasConfiguredEnvValue(phase7Env, key),
   );
   const missingMcpKeys = REQUIRED_MCP_LIVE_ENV_KEYS.filter(
-    (key) => !hasConfiguredEnvValue(env, key),
+    (key) => !hasConfiguredEnvValue(phase7Env, key),
   );
   const missingBuyerKey =
-    !hasConfiguredEnvValue(env, "SPLIT402_MCP_SVM_PRIVATE_KEY") &&
-    !hasConfiguredEnvValue(env, "SVM_PRIVATE_KEY");
+    !hasConfiguredEnvValue(phase7Env, "SPLIT402_MCP_SVM_PRIVATE_KEY") &&
+    !hasConfiguredEnvValue(phase7Env, "SVM_PRIVATE_KEY");
   const missingMcpDetails = [
-    ...missingMcpKeys.map((key) => `Fill ${key} in ${envPath}.`),
+    ...missingMcpKeys.map((key) => `Fill ${key} in ${phase7EnvPath}.`),
     ...(missingBuyerKey
-      ? [`Fill SPLIT402_MCP_SVM_PRIVATE_KEY or SVM_PRIVATE_KEY in ${envPath}.`]
+      ? [
+          `Fill SPLIT402_MCP_SVM_PRIVATE_KEY or SVM_PRIVATE_KEY in ${phase7EnvPath}.`,
+        ]
       : []),
   ];
 
@@ -96,6 +123,30 @@ export function createSplit402LaunchPreflightReport(
               "Run corepack pnpm product:evidence:init.",
               ...missingRequiredFiles.map((path) => `Missing ${path}`),
             ],
+    },
+    {
+      id: "phase6_evidence_env_values",
+      label: "Phase 6 custody env values are filled",
+      ok: missingPhase6DirectKeys.length === 0,
+      severity: "required",
+      details:
+        missingPhase6DirectKeys.length === 0
+          ? ["Required Phase 6 custody env values are configured."]
+          : missingPhase6DirectKeys.map(
+              (key) => `Fill ${key} in ${phase6EnvPath}.`,
+            ),
+    },
+    {
+      id: "phase6_evidence_env_mappings",
+      label: "Phase 6 custody record paths are configured",
+      ok: missingPhase6Mappings.length === 0,
+      severity: "required",
+      details:
+        missingPhase6Mappings.length === 0
+          ? ["Phase 6 custody record env paths point at the launch workspace."]
+          : missingPhase6Mappings.map(
+              (mapping) => `Set ${mapping.envName}=${mapping.examplePath}`,
+            ),
     },
     {
       id: "phase7_attachment_env_mappings",
@@ -118,7 +169,7 @@ export function createSplit402LaunchPreflightReport(
       details:
         missingHostedKeys.length === 0
           ? ["Required hosted proof values are configured."]
-          : missingHostedKeys.map((key) => `Fill ${key} in ${envPath}.`),
+          : missingHostedKeys.map((key) => `Fill ${key} in ${phase7EnvPath}.`),
     },
     {
       id: "phase7_mcp_live_execution_env",
@@ -182,7 +233,12 @@ function createNextActions(checks: readonly Split402LaunchPreflightCheck[]): str
   return checks
     .filter((check) => check.severity === "required" && !check.ok)
     .flatMap((check) => check.details)
-    .filter((detail) => detail.startsWith("Run ") || detail.startsWith("Fill "));
+    .filter(
+      (detail) =>
+        detail.startsWith("Run ") ||
+        detail.startsWith("Fill ") ||
+        detail.startsWith("Set "),
+    );
 }
 
 function parseEnvText(text: string): Map<string, string> {
@@ -216,4 +272,17 @@ function hasConfiguredEnvValue(env: ReadonlyMap<string, string>, key: string): b
 
 function phase7AttachmentEnvName(field: string): string {
   return `SPLIT402_PHASE7_ASSEMBLE_${field.toUpperCase()}`;
+}
+
+function uniquePhase6EnvMappings(): Array<{
+  envName: string;
+  examplePath: string;
+}> {
+  const mappings = [
+    ...PHASE6_RECORD_EXTRACTION_ENV_ENTRIES,
+    ...PHASE6_ATTACHMENT_ENV,
+  ];
+  return Array.from(
+    new Map(mappings.map((entry) => [entry.envName, entry])).values(),
+  );
 }
