@@ -125,6 +125,11 @@ docker build \
   .
 ```
 
+The `:dev` tag above is local/dev only. Do not use mutable or local tags for
+staging custody, production custody, or Kubernetes manifests. Push the image,
+resolve its immutable `sha256:` digest, and deploy only the
+`ghcr.io/split402protocol/splitx402/payout-signer@sha256:<digest>` reference.
+
 Run the image with non-secret policy config and secret auth/key material:
 
 ```bash
@@ -141,8 +146,10 @@ docker run --rm -p 4022:4022 \
 
 The Kubernetes starter manifest lives at
 [`deploy/payout-signer/kubernetes.yaml`](../../deploy/payout-signer/kubernetes.yaml).
-Replace the placeholder image tag, signer reference, network, funding wallet,
-auth key ring, and key material before applying it.
+Replace the placeholder image digest, signer reference, network, funding wallet,
+auth key ring, and key material before applying it. The manifest's placeholder
+image digest is intentional; it must be replaced with a real immutable digest
+from the exact reviewed image.
 
 ## Status
 

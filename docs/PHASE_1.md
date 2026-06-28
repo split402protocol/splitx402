@@ -1,7 +1,7 @@
 # Phase 1: Transitional Skeleton Service
 
 Phase 1 added a runnable HTTP service with a single paid route. It remains useful
-as a local host while the real Split402 protocol packages are built out.
+as a local host while the full Split402 protocol packages land in this repository.
 
 ## Current Status
 

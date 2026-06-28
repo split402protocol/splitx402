@@ -16,6 +16,7 @@ describe("Phase 7 staging proof assembly", () => {
         payout_obligation_evidence: "evidence/payout-obligations.json",
         funding_balance_evidence: "evidence/funding-balance.json",
         mcp_bundle_evidence: "evidence/mcp-bundle.json",
+        mcp_gateway_evidence: "evidence/mcp-gateway.jsonl",
         artifact_manifest_evidence: "evidence/artifact-manifest.json",
         commands_run: "evidence/commands.log",
       },
@@ -43,6 +44,9 @@ describe("Phase 7 staging proof assembly", () => {
       "funding_balance_evidence: attached: evidence/funding-balance.json\n",
     );
     expect(proof).toContain(
+      "mcp_gateway_evidence: attached: evidence/mcp-gateway.jsonl\n",
+    );
+    expect(proof).toContain(
       "artifact_manifest_evidence: attached: evidence/artifact-manifest.json\n",
     );
     expect(proof).toContain("approval_decision: no-go\n");
@@ -61,5 +65,25 @@ describe("Phase 7 staging proof assembly", () => {
     expect(proof).toContain(
       "funding_balance_evidence: attached: reviewed-funding-balance.json\n",
     );
+  });
+
+  it("rejects remote direct values for local-only evidence", () => {
+    expect(() =>
+      assemblePhase7StagingProof({
+        values: {
+          mcp_gateway_evidence: "https://artifacts.example/mcp-gateway.jsonl",
+        },
+      }),
+    ).toThrow("mcp_gateway_evidence must be an attached local artifact");
+  });
+
+  it("rejects URL attachment paths", () => {
+    expect(() =>
+      assemblePhase7StagingProof({
+        attachments: {
+          paid_request_evidence: "https://artifacts.example/paid-suite.log",
+        },
+      }),
+    ).toThrow("paid_request_evidence attachment path must be local, not a URL");
   });
 });

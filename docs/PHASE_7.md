@@ -15,7 +15,8 @@ Implemented:
   route status;
 - merchant webhook delivery feed for pending, processing, delivered, and
   dead-letter webhook outbox events;
-- MCP-facing demo bundle and stdio gateway at `@split402/mcp-demo`;
+- MCP-facing demo bundle and stdio gateway at `@split402/mcp-demo`, including
+  optional control-plane route discovery mode for hosted staging;
 - merchant/referrer operations dashboard at `@split402/dashboard`;
 - optional dashboard viewer gate with signed, expiring session cookies for
   hosted staging;
@@ -53,7 +54,9 @@ corepack pnpm demo:mcp-bundle
 ```
 
 Run `corepack pnpm demo:mcp-gateway` when an MCP client needs direct stdio
-tool discovery for the demo.
+tool discovery, router-backed demo execution, or receipt lookup. Set
+`SPLIT402_MCP_CONTROL_PLANE_URL` to capture hosted route discovery through the
+control plane.
 
 ## Dashboard UI
 
@@ -104,6 +107,9 @@ corepack pnpm phase7:staging:init
 corepack pnpm phase7:staging-proof > phase7-staging-proof.txt
 corepack pnpm phase7:hosted:preflight
 corepack pnpm phase7:staging:collect-reads
+corepack pnpm phase7:staging:collect-mcp-gateway
+corepack pnpm demo:mcp-gateway:smoke
+corepack pnpm phase7:staging:derive-receipt-verification
 corepack pnpm phase7:staging:manifest phase7-staging-proof.txt > phase7-staging-evidence/artifact-manifest.json
 corepack pnpm phase7:staging:assemble > phase7-staging-proof.txt
 corepack pnpm phase7:staging:status phase7-staging-proof.txt
@@ -112,12 +118,27 @@ corepack pnpm phase7:staging:status phase7-staging-proof.txt
 The proof must attach evidence for hosted preflight, route discovery, x402
 payment, Split402 receipt verification, referrer earnings, dashboard summary,
 webhook delivery, payout obligations, Solana RPC funding-balance coverage, MCP
-bundle output, and artifact manifest hashes from the same staging environment.
+bundle output, MCP gateway transcript evidence, and artifact manifest hashes
+from the same staging environment.
+The MCP gateway collection report must identify the provider used, paid amount,
+receipt id, verification status, referrer credit, route id, commission bps,
+protocol-fee bps, commission amount, and protocol-fee amount for the executed
+router call.
 The final status check verifies that local `attached:` artifacts still match the
-recorded manifest sizes and SHA-256 hashes, and that the hosted preflight checks
-passed against the same control-plane and dashboard URLs listed in the proof.
-It also validates the funding-balance artifact, requiring every asset to show a
-resolved `covered` or `deficit` state instead of unresolved funding.
+recorded local manifest sizes and SHA-256 hashes, and that the hosted preflight
+checks passed against the same control-plane and dashboard URLs listed in the
+proof.
+It also validates the control-plane read artifacts so route discovery, referrer
+earnings, dashboard summary, webhook delivery, and payout obligations must be
+present and non-empty. The paid-suite log and receipt-verification JSON are
+checked for a successful paid request, a verified commission-bearing receipt,
+and the invalid-claim zero-commission path. The MCP gateway transcript must
+prove budget-filtered capability discovery, verified execution, matching receipt
+lookup, route attribution, and commission/protocol-fee amounts derived from the
+receipt `commissionBps` and `protocolFeeBpsOfCommission` fields. The command
+transcript must include the Phase 7 evidence commands and full validation suite.
+The funding-balance artifact is checked separately, requiring every asset to
+show a resolved `covered` or `deficit` state instead of unresolved funding.
 
 ## Remaining Phase 7 Work
 

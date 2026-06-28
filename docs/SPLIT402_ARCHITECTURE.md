@@ -28,17 +28,16 @@ The MVP does not change x402 settlement semantics:
 
 Those are later milestones after the USDC referral-payment loop works end to end.
 
-## Historical Baseline
+## Implementation Baseline
 
-This repository is now the canonical public Split402 implementation repository.
-
-Phase 2 started by preserving deterministic protocol package behavior and test
-vectors. The current repository has since evolved the x402 extension, demo
-merchant, demo agent, agent SDK, control plane, merchant SDK, ledger, outbox
-workers, chain verification, and the first payout-engine boundaries, including
-payout lifecycle outbox/webhook events, local-dev signer wiring, remote signer
-client wiring, signer deployment artifacts, machine-checkable custody review
-gates, an unknown-outcome reconciliation queue, referrer payout views, Phase 7
-dashboard/discovery surfaces, hosted-staging proof tooling, and dashboard
-viewer-session gating for evidence capture. `$SPLIT` route bonding and
-`split-exact` atomic settlement remain later milestones.
+This repository is the canonical public Split402 implementation. Phase 2
+established the protocol package and deterministic test vectors. The current
+repository has since added the x402 extension, demo merchant, demo agent, agent
+SDK, control plane, merchant SDK, ledger, outbox workers, chain verification, and
+the first payout-engine boundaries, including payout lifecycle outbox/webhook
+events, local-dev signer wiring, remote signer client wiring, signer deployment
+artifacts, machine-checkable custody review gates, an unknown-outcome
+reconciliation queue, referrer payout views, Phase 7 dashboard/discovery
+surfaces, hosted-staging proof tooling, and dashboard viewer-session gating for
+evidence capture. `$SPLIT` route bonding and `split-exact` atomic settlement
+remain later milestones.

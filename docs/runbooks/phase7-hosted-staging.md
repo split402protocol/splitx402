@@ -84,21 +84,57 @@ corepack pnpm phase7:staging:init
 corepack pnpm phase7:staging-proof > phase7-staging-proof.txt
 corepack pnpm phase7:hosted:preflight
 corepack pnpm phase7:staging:collect-reads
+SPLIT402_MCP_CONTROL_PLANE_URL="$SPLIT402_PHASE7_CONTROL_PLANE_URL" \
+SPLIT402_MCP_CONTROL_PLANE_TOKEN="$SPLIT402_PHASE7_CONTROL_PLANE_TOKEN" \
+SPLIT402_MCP_CAPABILITY=solana.wallet-risk \
+SPLIT402_MCP_SVM_PRIVATE_KEY="$SVM_PRIVATE_KEY" \
+SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 \
+corepack pnpm phase7:staging:collect-mcp-gateway
+corepack pnpm demo:mcp-gateway:smoke
 corepack pnpm demo:mcp-bundle > phase7-staging-evidence/mcp-bundle.json
 corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log
+corepack pnpm phase7:staging:derive-receipt-verification
 corepack pnpm phase7:staging:manifest phase7-staging-proof.txt > phase7-staging-evidence/artifact-manifest.json
 corepack pnpm phase7:staging:assemble > phase7-staging-proof.txt
 corepack pnpm phase7:staging:status phase7-staging-proof.txt
 ```
+
+`phase7:staging:collect-reads` writes both payout-obligation and
+funding-balance artifacts from the payout-obligations endpoint and validates
+all captured read artifacts before writing them. It fails fast unless route
+discovery has an active route, referrer balances show positive earnings,
+dashboard summary has active campaign/route ids, webhook evidence has a
+delivered event, payout obligations show a positive obligation, and funding
+has at least one resolved `covered` or `deficit` asset. If it fails with
+`fundingStatus is unknown`, rerun the staging stack with the Solana RPC
+funding-balance provider configured before assembling the proof. Read artifacts
+are written only after the full read set passes validation, so failed collection
+runs do not leave partial evidence files to assemble by accident.
 
 The status command must pass before Phase 7 can be marked ready for public-alpha
 demo review. It verifies that the hosted preflight artifact was captured against
 the same control-plane and dashboard URLs listed in the proof, and that the
 dashboard is locked without the viewer token while accepting the viewer-token
 path.
-Run `corepack pnpm demo:mcp-gateway` from an MCP client stdio session when the
-review needs direct MCP tool discovery in addition to the captured bundle
-artifact.
+Attach `phase7-staging-evidence/mcp-gateway.jsonl` as `mcp_gateway_evidence`.
+The collector runs the gateway with JSON-RPC `initialize`, `tools/list`, and
+budget-filtered `split402.searchCapabilities` requests using
+`SPLIT402_MCP_MAX_AMOUNT_ATOMIC`. Set `SPLIT402_MCP_CONTROL_PLANE_URL` for
+hosted route discovery. Phase 7 proof closure also requires
+`split402.execute` and `split402.getReceipt`, so keep
+`SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1` enabled only after the same staging run
+has live x402 buyer configuration. Set `SPLIT402_MCP_SVM_PRIVATE_KEY` or
+`SVM_PRIVATE_KEY` to the funded buyer key, and set `SPLIT402_MCP_WALLET` and
+`SPLIT402_MCP_MAX_AMOUNT_ATOMIC` for the execution input and budget. The status
+validator requires the search and execute budgets to match and the reported paid
+amount to stay within that budget. If hosted execution is enabled without a
+buyer signer, the collector fails before producing misleading partial evidence.
+The collector JSON report should echo the provider id, paid amount, receipt id,
+receipt verification status, referrer credit, route id, commission bps,
+protocol-fee bps, commission amount, and protocol-fee amount from the executed
+router call.
+Run `corepack pnpm demo:mcp-gateway:smoke` as a deterministic local gateway
+contract check alongside the hosted transcript.
 
 ## Shutdown
 

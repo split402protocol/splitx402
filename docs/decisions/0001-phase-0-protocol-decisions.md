@@ -6,8 +6,7 @@ Status: superseded by 0003 where it conflicts with the Split402 architecture spe
 ## Context
 
 This decision captured the first repository setup assumptions before the local
-Split402 architecture spec and implementation baseline were made canonical for
-this repo.
+Split402 architecture spec was made canonical for this repo.
 
 The original decision used temporary repo-name-based naming and chose a narrower
 Base/EVM-first skeleton. That helped get a runnable HTTP service started, but it is

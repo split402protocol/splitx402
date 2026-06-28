@@ -26,6 +26,7 @@ const values = {
   funding_balance_evidence:
     process.env.SPLIT402_PHASE7_FUNDING_BALANCE_EVIDENCE,
   mcp_bundle_evidence: process.env.SPLIT402_PHASE7_MCP_BUNDLE_EVIDENCE,
+  mcp_gateway_evidence: process.env.SPLIT402_PHASE7_MCP_GATEWAY_EVIDENCE,
   artifact_manifest_evidence:
     process.env.SPLIT402_PHASE7_ARTIFACT_MANIFEST_EVIDENCE,
   commands_run: process.env.SPLIT402_PHASE7_COMMANDS_RUN,

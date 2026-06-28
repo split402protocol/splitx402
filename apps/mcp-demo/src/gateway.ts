@@ -1,6 +1,7 @@
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 
+import { createSvmSignerFromBase58 } from "@split402/agent-sdk";
 import {
   buildReceiptSigningBytes,
   calculateCommission,
@@ -8,13 +9,17 @@ import {
   hashProtocolObject,
   hexToBytes,
   parseAtomicAmount,
+  ReferralClaimV1Schema,
   serializeAtomicAmount,
   signEd25519Message,
+  type ReferralClaimV1,
   type Split402ReceiptV1
 } from "@split402/protocol";
 import {
   Split402Router,
+  Split402ControlPlaneDiscoveryClient,
   type Split402CapabilityProvider,
+  type Split402DiscoveryFetch,
   type Split402RouterExecuteResult,
   type Split402RouterExecutor
 } from "@split402/router";
@@ -64,6 +69,14 @@ export interface McpGatewayContext {
   bundle: McpDemoBundle;
   router: Split402Router;
   receipts: Map<string, Split402ReceiptV1>;
+  executionMode: "router-demo-mock" | "router-live-agent-sdk";
+}
+
+export interface McpGatewayRuntimeOptions {
+  bundle?: McpDemoBundle;
+  env?: NodeJS.ProcessEnv;
+  fetch?: Split402DiscoveryFetch;
+  requireSigner?: boolean;
 }
 
 export function handleMcpGatewayLine(
@@ -91,12 +104,67 @@ export async function handleMcpGatewayLineAsync(
 export function createMcpGatewayContext(
   bundle: McpDemoBundle = createMcpDemoBundle(),
   router: Split402Router = createMcpDemoRouter(bundle),
+  executionMode: McpGatewayContext["executionMode"] = "router-demo-mock",
 ): McpGatewayContext {
   return {
     bundle,
     router,
-    receipts: new Map()
+    receipts: new Map(),
+    executionMode
   };
+}
+
+export async function createMcpGatewayContextFromEnv(
+  options: McpGatewayRuntimeOptions = {}
+): Promise<McpGatewayContext> {
+  const env = options.env ?? process.env;
+  const bundle = options.bundle ?? createMcpDemoBundle();
+  const controlPlaneUrl = readOptionalEnvString(
+    env.SPLIT402_MCP_CONTROL_PLANE_URL
+  );
+  if (controlPlaneUrl === undefined) {
+    return createMcpGatewayContext(bundle);
+  }
+
+  const capabilityOverride = readOptionalEnvString(env.SPLIT402_MCP_CAPABILITY);
+  const bearerToken = readOptionalEnvString(env.SPLIT402_MCP_CONTROL_PLANE_TOKEN);
+  const discovery = new Split402ControlPlaneDiscoveryClient({
+    controlPlaneUrl,
+    ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+    ...(bearerToken === undefined ? {} : { bearerToken }),
+    ...(capabilityOverride === undefined
+      ? {}
+      : { capabilityMapper: () => capabilityOverride })
+  });
+  const resourceOrigin = readOptionalEnvString(env.SPLIT402_MCP_RESOURCE_ORIGIN);
+  const operationId = readOptionalEnvString(env.SPLIT402_MCP_OPERATION_ID);
+  const limit = readOptionalPositiveInteger(env.SPLIT402_MCP_DISCOVERY_LIMIT);
+  const providers = await discovery.discoverProviders({
+    ...(capabilityOverride === undefined ? {} : { capability: capabilityOverride }),
+    ...(resourceOrigin === undefined ? {} : { resourceOrigin }),
+    ...(operationId === undefined ? {} : { operationId }),
+    ...(limit === undefined ? {} : { limit })
+  });
+  const signerSecret =
+    readOptionalEnvString(env.SPLIT402_MCP_SVM_PRIVATE_KEY) ??
+    readOptionalEnvString(env.SVM_PRIVATE_KEY);
+  if (options.requireSigner === true && signerSecret === undefined) {
+    throw new Error(
+      "SPLIT402_MCP_SVM_PRIVATE_KEY or SVM_PRIVATE_KEY is required for live MCP gateway execution"
+    );
+  }
+  const signer =
+    signerSecret === undefined
+      ? undefined
+      : await createSvmSignerFromBase58(signerSecret);
+  return createMcpGatewayContext(
+    bundle,
+    new Split402Router({
+      providers,
+      ...(signer === undefined ? {} : { signer })
+    }),
+    "router-live-agent-sdk"
+  );
 }
 
 export function createMcpDemoRouter(
@@ -157,7 +225,7 @@ export async function runMcpGateway(
   input = process.stdin,
   output = process.stdout,
 ): Promise<void> {
-  const context = createMcpGatewayContext();
+  const context = await createMcpGatewayContextFromEnv();
   const reader = createInterface({
     input,
     crlfDelay: Number.POSITIVE_INFINITY,
@@ -265,10 +333,14 @@ async function handleToolCallAsync(
   }
   const record = params as Record<string, unknown>;
   if (record.name === "split402.searchCapabilities") {
+    const searchInput = readCapabilitySearchInput(record.arguments);
+    if ("message" in searchInput) {
+      return createErrorResponse(id, -32602, searchInput.message);
+    }
     return createResultResponse(id, {
       structuredContent: {
         capabilities: context.router
-          .searchCapabilities(readOptionalStringArgument(record.arguments, "capability"))
+          .searchCapabilities(searchInput)
           .map(publicProviderView)
       },
       isError: false
@@ -296,7 +368,15 @@ async function handleRouterExecuteTool(
   if (typeof capability !== "string") {
     return createErrorResponse(id, -32602, capability.message);
   }
-  const provider = context.router.searchCapabilities(capability)[0];
+  const budgetFilter = readOptionalBudgetFilter(record.budget);
+  if (budgetFilter !== undefined && "message" in budgetFilter) {
+    return createErrorResponse(id, -32602, budgetFilter.message);
+  }
+  const provider =
+    context.router.searchCapabilities({
+      capability,
+      ...(budgetFilter === undefined ? {} : { budget: budgetFilter })
+    })[0] ?? context.router.searchCapabilities(capability)[0];
   if (provider === undefined) {
     return createErrorResponse(id, -32602, `unknown capability: ${capability}`);
   }
@@ -304,18 +384,23 @@ async function handleRouterExecuteTool(
   if ("message" in budget) {
     return createErrorResponse(id, -32602, budget.message);
   }
+  const referralClaim = readOptionalReferralClaim(record.referralClaim);
+  if (referralClaim !== undefined && "message" in referralClaim) {
+    return createErrorResponse(id, -32602, referralClaim.message);
+  }
 
   try {
     const result = await context.router.execute({
       capability,
       input: record.input ?? {},
       budget,
+      ...(referralClaim === undefined ? {} : { referralClaim }),
       ...(typeof record.maxAttempts === "number"
         ? { maxAttempts: record.maxAttempts }
         : {})
     });
     context.receipts.set(result.receipt.receiptId, result.receipt);
-    return createRouterExecuteResponse(id, result);
+    return createRouterExecuteResponse(id, result, context.executionMode);
   } catch (error) {
     return createErrorResponse(id, -32000, errorMessage(error));
   }
@@ -383,10 +468,11 @@ function createToolResultResponse(
 function createRouterExecuteResponse(
   id: string | number | null,
   result: Split402RouterExecuteResult,
+  executionMode: McpGatewayContext["executionMode"],
 ): McpGatewayResponse {
   return createToolResultResponse(id, {
     status: "executed",
-    executionMode: "router-demo-mock",
+    executionMode,
     providerId: result.providerId,
     capability: result.capability,
     amountPaidAtomic: result.receipt.requiredAmountAtomic,
@@ -428,11 +514,20 @@ function routerToolCards() {
   return [
     {
       name: "split402.searchCapabilities",
-      description: "Search the demo Split402 router's static paid-tool providers.",
+      description: "Search the Split402 router's paid-tool providers.",
       inputSchema: {
         type: "object",
         properties: {
-          capability: { type: "string" }
+          capability: { type: "string" },
+          budget: {
+            type: "object",
+            properties: {
+              network: { type: "string" },
+              asset: { type: "string" },
+              maxAmountAtomic: { type: "string" }
+            },
+            additionalProperties: false
+          }
         },
         additionalProperties: false
       }
@@ -446,6 +541,7 @@ function routerToolCards() {
         properties: {
           capability: { type: "string" },
           input: { type: "object" },
+          referralClaim: { type: "object" },
           budget: {
             type: "object",
             properties: {
@@ -453,7 +549,7 @@ function routerToolCards() {
               asset: { type: "string" },
               maxAmountAtomic: { type: "string" }
             },
-            required: ["network", "asset", "maxAmountAtomic"],
+            required: ["maxAmountAtomic"],
             additionalProperties: false
           },
           maxAttempts: { type: "number" }
@@ -486,6 +582,10 @@ function createDemoRouterExecutor(bundle: McpDemoBundle): Split402RouterExecutor
           typeof input.body === "object" && input.body !== null
             ? ((input.body as Record<string, unknown>).wallet ?? null)
             : null,
+        referralClaimHash:
+          input.referralClaim === undefined
+            ? null
+            : hashProtocolObject(input.referralClaim),
         riskScore: 17,
         risk: "low"
       },
@@ -597,11 +697,17 @@ function readBudget(
     return { message: "budget must be an object" };
   }
   const record = value as Record<string, unknown>;
-  const network = readRequiredStringArgument(record.network, "budget.network");
+  const network =
+    record.network === undefined
+      ? provider.network
+      : readRequiredStringArgument(record.network, "budget.network");
   if (typeof network !== "string") {
     return network;
   }
-  const asset = readRequiredStringArgument(record.asset, "budget.asset");
+  const asset =
+    record.asset === undefined
+      ? provider.asset
+      : readRequiredStringArgument(record.asset, "budget.asset");
   if (typeof asset !== "string") {
     return asset;
   }
@@ -615,17 +721,102 @@ function readBudget(
   return { network, asset, maxAmountAtomic };
 }
 
-function readOptionalStringArgument(
+function readCapabilitySearchInput(
   args: unknown,
-  key: string,
-): string | undefined {
+):
+  | {
+      capability?: string;
+      budget?: {
+        network?: string;
+        asset?: string;
+        maxAmountAtomic?: string;
+      };
+    }
+  | { message: string } {
   if (typeof args !== "object" || args === null) {
+    return {};
+  }
+  const record = args as Record<string, unknown>;
+  const capability =
+    record.capability === undefined
+      ? undefined
+      : readRequiredStringArgument(record.capability, "capability");
+  if (capability !== undefined && typeof capability !== "string") {
+    return capability;
+  }
+  const budget = readOptionalBudgetFilter(record.budget);
+  if (budget !== undefined && "message" in budget) {
+    return budget;
+  }
+  return {
+    ...(capability === undefined ? {} : { capability }),
+    ...(budget === undefined ? {} : { budget })
+  };
+}
+
+function readOptionalBudgetFilter(
+  value: unknown,
+):
+  | {
+      network?: string;
+      asset?: string;
+      maxAmountAtomic?: string;
+    }
+  | undefined
+  | { message: string } {
+  if (value === undefined) {
     return undefined;
   }
-  const value = (args as Record<string, unknown>)[key];
-  return typeof value === "string" && value.trim().length > 0
-    ? value.trim()
-    : undefined;
+  if (typeof value !== "object" || value === null) {
+    return { message: "budget must be an object" };
+  }
+  const record = value as Record<string, unknown>;
+  const network =
+    record.network === undefined
+      ? undefined
+      : readRequiredStringArgument(record.network, "budget.network");
+  if (network !== undefined && typeof network !== "string") {
+    return network;
+  }
+  const asset =
+    record.asset === undefined
+      ? undefined
+      : readRequiredStringArgument(record.asset, "budget.asset");
+  if (asset !== undefined && typeof asset !== "string") {
+    return asset;
+  }
+  const maxAmountAtomic =
+    record.maxAmountAtomic === undefined
+      ? undefined
+      : readRequiredStringArgument(
+          record.maxAmountAtomic,
+          "budget.maxAmountAtomic"
+        );
+  if (maxAmountAtomic !== undefined && typeof maxAmountAtomic !== "string") {
+    return maxAmountAtomic;
+  }
+  return {
+    ...(network === undefined ? {} : { network }),
+    ...(asset === undefined ? {} : { asset }),
+    ...(maxAmountAtomic === undefined ? {} : { maxAmountAtomic })
+  };
+}
+
+function readOptionalReferralClaim(
+  value: unknown
+): ReferralClaimV1 | undefined | { message: string } {
+  if (value === undefined) {
+    return undefined;
+  }
+  const parsed = ReferralClaimV1Schema.safeParse(value);
+  if (!parsed.success) {
+    return {
+      message: `referralClaim is invalid: ${parsed.error.issues
+        .map((issue) => issue.message)
+        .join("; ")}`
+    };
+  }
+  return parsed.data;
 }
 
 function readRequiredStringArgument(
@@ -648,6 +839,21 @@ function readGatewayContext(
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function readOptionalEnvString(value: string | undefined): string | undefined {
+  return value === undefined || value.trim().length === 0
+    ? undefined
+    : value.trim();
+}
+
+function readOptionalPositiveInteger(value: string | undefined): number | undefined {
+  const normalized = readOptionalEnvString(value);
+  if (normalized === undefined) {
+    return undefined;
+  }
+  const parsed = Number.parseInt(normalized, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
