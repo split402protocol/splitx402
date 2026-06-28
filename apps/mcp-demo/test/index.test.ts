@@ -844,6 +844,7 @@ describe("MCP demo gateway", () => {
         "split402.getReceipt"
       ],
       providerId: "split402-demo-merchant",
+      payToWallet: expect.any(String),
       executionMode: "router-demo-mock",
       amountPaidAtomic: "10000",
       receiptVerificationStatus: "verified",

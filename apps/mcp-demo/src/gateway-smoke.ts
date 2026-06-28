@@ -11,6 +11,7 @@ export interface McpGatewaySmokeReport {
   serverName: string;
   tools: string[];
   providerId: string;
+  payToWallet: string;
   executionMode: string;
   amountPaidAtomic: string;
   receiptId: string;
@@ -43,7 +44,7 @@ export async function runMcpGatewaySmoke(): Promise<McpGatewaySmokeReport> {
   assertTool(tools, "split402.execute");
   assertTool(tools, "split402.getReceipt");
 
-  await callGateway(context, {
+  const searched = await callGateway(context, {
     jsonrpc: "2.0",
     id: "smoke-search",
     method: "tools/call",
@@ -54,6 +55,10 @@ export async function runMcpGatewaySmoke(): Promise<McpGatewaySmokeReport> {
       }
     }
   });
+  const selectedProvider = readProvider(
+    searched,
+    "split402-demo-merchant"
+  );
 
   const executed = await callGateway(context, {
     jsonrpc: "2.0",
@@ -77,6 +82,9 @@ export async function runMcpGatewaySmoke(): Promise<McpGatewaySmokeReport> {
     ["result", "structuredContent", "providerId"],
     "execute provider id"
   );
+  if (providerId !== selectedProvider.providerId) {
+    throw new Error("execute provider id must match search provider id");
+  }
   const executionMode = readString(
     executed,
     ["result", "structuredContent", "executionMode"],
@@ -103,7 +111,7 @@ export async function runMcpGatewaySmoke(): Promise<McpGatewaySmokeReport> {
     "execute referrer credit"
   );
 
-  await callGateway(context, {
+  const receipt = await callGateway(context, {
     jsonrpc: "2.0",
     id: "smoke-get-receipt",
     method: "tools/call",
@@ -114,18 +122,55 @@ export async function runMcpGatewaySmoke(): Promise<McpGatewaySmokeReport> {
       }
     }
   });
+  const receiptPayToWallet = readString(
+    receipt,
+    ["result", "structuredContent", "receipt", "payToWallet"],
+    "receipt pay-to wallet"
+  );
+  if (receiptPayToWallet !== selectedProvider.payToWallet) {
+    throw new Error("receipt pay-to wallet must match search provider pay-to wallet");
+  }
 
   return {
     status: "ok",
     serverName,
     tools,
     providerId,
+    payToWallet: selectedProvider.payToWallet,
     executionMode,
     amountPaidAtomic,
     receiptId,
     receiptVerificationStatus,
     referrerCreditAtomic
   };
+}
+
+function readProvider(
+  response: McpGatewayResponse,
+  expectedProviderId: string
+): { providerId: string; payToWallet: string } {
+  const capabilities = readPath(response, [
+    "result",
+    "structuredContent",
+    "capabilities"
+  ]);
+  if (!Array.isArray(capabilities)) {
+    throw new Error("search capabilities result must be an array");
+  }
+  for (const capability of capabilities) {
+    const providerId = readString(capability, ["providerId"], "provider id");
+    if (providerId === expectedProviderId) {
+      return {
+        providerId,
+        payToWallet: readString(
+          capability,
+          ["payToWallet"],
+          "provider pay-to wallet"
+        )
+      };
+    }
+  }
+  throw new Error(`search missing expected provider ${expectedProviderId}`);
 }
 
 async function callGateway(
