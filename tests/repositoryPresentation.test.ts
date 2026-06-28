@@ -148,6 +148,7 @@ describe("repository presentation", () => {
 
     expect(readme).toContain("corepack pnpm product:evidence:init");
     expect(readme).toContain("corepack pnpm product:evidence:init --force");
+    expect(readme).toContain("corepack pnpm product:launch-checklist --brief");
     expect(readme).toContain("corepack pnpm product:status");
     expect(readme).toContain("corepack pnpm product:status --brief");
     expect(readme).toContain("creates a local evidence workspace");
@@ -156,6 +157,7 @@ describe("repository presentation", () => {
     expect(readme).toContain("decision remains `no-go`");
     expect(readme).toContain("launch-gate percentages");
     expect(currentState).toContain("corepack pnpm product:evidence:init");
+    expect(currentState).toContain("corepack pnpm product:launch-checklist");
     expect(currentState).toContain("refuses to overwrite existing scaffold");
     expect(currentState).toContain("corepack pnpm product:status");
   });
