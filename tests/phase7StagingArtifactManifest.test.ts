@@ -55,4 +55,19 @@ describe("Phase 7 staging artifact manifest", () => {
       "artifact_manifest_evidence",
     );
   });
+
+  it("rejects remote references for proof artifacts that must be local", () => {
+    expect(() =>
+      createPhase7StagingArtifactManifest(
+        createPhase7StagingProofRecord({
+          paid_request_evidence: "https://artifacts.example/paid-suite.log",
+          artifact_manifest_evidence: "attached: artifact-manifest.json",
+        }),
+        {
+          artifactBaseDir: "evidence",
+          readArtifact: () => new Uint8Array(),
+        },
+      ),
+    ).toThrow("paid_request_evidence must be an attached local artifact");
+  });
 });
