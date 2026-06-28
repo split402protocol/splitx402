@@ -24,7 +24,34 @@ describe("Phase 7 staging evidence workspace", () => {
       "# SPLIT402_PHASE7_SOURCE_COMMIT defaults to git rev-parse HEAD when omitted.",
     );
     expect(workspace.envText).toContain(
+      "# SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging",
+    );
+    expect(workspace.envText).toContain(
+      "# SPLIT402_DATABASE_URL=postgresql://split402:split402@localhost:5432/split402",
+    );
+    expect(workspace.envText).toContain(
+      "# SPLIT402_PHASE7_MERCHANT_ID=<seed-output-merchant-id>",
+    );
+    expect(workspace.envText).toContain(
+      "# SPLIT402_PHASE7_REFERRER_WALLET=<seed-output-referrer-wallet>",
+    );
+    expect(workspace.envText).toContain(
+      "# SPLIT402_DASHBOARD_VIEWER_TOKEN=<dashboard-viewer-token>",
+    );
+    expect(workspace.envText).toContain(
+      "# SPLIT402_MCP_CONTROL_PLANE_URL=http://localhost:4021",
+    );
+    expect(workspace.envText).toContain(
+      "# SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1",
+    );
+    expect(workspace.envText).toContain(
+      "# SPLIT402_MCP_SVM_PRIVATE_KEY=<funded-devnet-buyer-private-key>",
+    );
+    expect(workspace.envText).toContain(
       "SPLIT402_PHASE7_EVIDENCE_DIR=evidence/phase7",
+    );
+    expect(workspace.envText).not.toContain(
+      "\nSPLIT402_MCP_SVM_PRIVATE_KEY=<funded-devnet-buyer-private-key>",
     );
     expect(workspace.envText).toContain(
       "SPLIT402_PHASE7_ASSEMBLE_HOSTED_PREFLIGHT_EVIDENCE=evidence/phase7/hosted-preflight.json",
@@ -82,6 +109,9 @@ describe("Phase 7 staging evidence workspace", () => {
     );
     expect(workspace.readmeText).toContain(
       "corepack pnpm phase7:staging:derive-receipt-verification",
+    );
+    expect(workspace.readmeText).toContain(
+      "The staging seed prints `proofEnv`; copy those values",
     );
     expect(workspace.readmeText).toContain(
       "corepack pnpm phase7:staging:manifest phase7-staging-proof.txt > phase7-staging-evidence/artifact-manifest.json",
