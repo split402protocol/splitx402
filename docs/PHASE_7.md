@@ -152,8 +152,10 @@ provider network/asset/merchant origin/operation id/campaign id/amount/pay-to
 wallet/route id, matching receipt lookup, selected-provider
 merchant/campaign/operation/route/referrer/payout attribution, and
 commission/protocol-fee amounts derived from the receipt
-`commissionBps` and `protocolFeeBpsOfCommission` fields. The command transcript
-must include the Phase 7 evidence commands and full validation suite.
+`commissionBps` and `protocolFeeBpsOfCommission` fields. It must also connect
+the selected provider route back to the collected route-discovery artifact. The
+command transcript must include the Phase 7 evidence commands and full
+validation suite.
 The funding-balance artifact is checked separately, requiring every asset to
 show a resolved `covered` or `deficit` state instead of unresolved funding.
 
