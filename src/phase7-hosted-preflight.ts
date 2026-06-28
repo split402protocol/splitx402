@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { execFileSync } from "node:child_process";
 
 import { runPhase7HostedStagingPreflight } from "./phase7HostedStagingPreflight.js";
 
@@ -15,6 +16,8 @@ try {
   const report = await runPhase7HostedStagingPreflight({
     controlPlaneUrl: readRequiredEnv("SPLIT402_PHASE7_CONTROL_PLANE_URL"),
     dashboardUrl: readRequiredEnv("SPLIT402_PHASE7_DASHBOARD_URL"),
+    sourceCommit:
+      readOptionalEnv("SPLIT402_PHASE7_SOURCE_COMMIT") ?? readCurrentGitCommit(),
     outputDir,
     ...(readOptionalEnv("SPLIT402_DASHBOARD_VIEWER_TOKEN") === undefined
       ? {}
@@ -35,6 +38,7 @@ try {
       "Required environment:",
       "  SPLIT402_PHASE7_CONTROL_PLANE_URL",
       "  SPLIT402_PHASE7_DASHBOARD_URL",
+      "  SPLIT402_PHASE7_SOURCE_COMMIT (optional; defaults to git rev-parse HEAD)",
       "Optional environment:",
       "  SPLIT402_DASHBOARD_VIEWER_TOKEN",
       "  SPLIT402_PHASE7_HOSTED_PREFLIGHT_OUTPUT_DIR",
@@ -58,4 +62,11 @@ function readOptionalEnv(envName: string): string | undefined {
     return undefined;
   }
   return value.trim();
+}
+
+function readCurrentGitCommit(): string {
+  return execFileSync("git", ["rev-parse", "HEAD"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  }).trim();
 }

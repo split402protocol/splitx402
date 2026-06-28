@@ -87,6 +87,7 @@ Set these values before collecting Phase 7 evidence:
 SPLIT402_PHASE7_CONTROL_PLANE_URL=http://localhost:4021
 SPLIT402_PHASE7_DASHBOARD_URL=http://localhost:4027
 SPLIT402_PHASE7_DEMO_MERCHANT_URL=http://localhost:4023
+SPLIT402_PHASE7_SOURCE_COMMIT=$(git rev-parse HEAD)
 SPLIT402_PHASE7_CONTROL_PLANE_TOKEN=<merchant-session-token>
 SPLIT402_PHASE7_MERCHANT_ID=<merchant-id>
 SPLIT402_PHASE7_REFERRER_WALLET=<referrer-wallet>

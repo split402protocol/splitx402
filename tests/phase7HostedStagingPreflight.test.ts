@@ -13,6 +13,7 @@ describe("Phase 7 hosted staging preflight", () => {
     const report = await runPhase7HostedStagingPreflight({
       controlPlaneUrl: "https://control.example/",
       dashboardUrl: "https://dashboard.example/",
+      sourceCommit: "cdf4f45",
       dashboardViewerToken: "viewer-secret",
       outputDir: "evidence",
       fetch: fakePreflightFetch(calls),
@@ -24,6 +25,7 @@ describe("Phase 7 hosted staging preflight", () => {
       schema: "split402.phase7_hosted_staging_preflight.v1",
       controlPlaneUrl: "https://control.example",
       dashboardUrl: "https://dashboard.example",
+      sourceCommit: "cdf4f45",
       artifactPath: "evidence/hosted-preflight.json",
     });
     expect(report.checks.map((check) => check.name)).toEqual([
@@ -40,6 +42,9 @@ describe("Phase 7 hosted staging preflight", () => {
     expect(writes.get("evidence/hosted-preflight.json")).toContain(
       "split402.phase7_hosted_staging_preflight.v1",
     );
+    expect(writes.get("evidence/hosted-preflight.json")).toContain(
+      '"sourceCommit": "cdf4f45"',
+    );
   });
 
   it("fails when dashboard viewer auth is not enabled for hosted staging", async () => {
@@ -47,12 +52,26 @@ describe("Phase 7 hosted staging preflight", () => {
       runPhase7HostedStagingPreflight({
         controlPlaneUrl: "https://control.example",
         dashboardUrl: "https://dashboard.example",
+        sourceCommit: "cdf4f45",
         dashboardViewerToken: "viewer-secret",
         outputDir: "evidence",
         fetch: fakePreflightFetch([], { dashboardRequiresAuth: false }),
         writeArtifact: () => undefined,
       }),
     ).rejects.toThrow("dashboard viewer auth is not required");
+  });
+
+  it("requires a source commit for same-commit proof evidence", async () => {
+    await expect(
+      runPhase7HostedStagingPreflight({
+        controlPlaneUrl: "https://control.example",
+        dashboardUrl: "https://dashboard.example",
+        sourceCommit: "main",
+        outputDir: "evidence",
+        fetch: fakePreflightFetch([]),
+        writeArtifact: () => undefined,
+      }),
+    ).rejects.toThrow("sourceCommit must be a 7-40 character git SHA");
   });
 });
 

@@ -104,6 +104,7 @@ evidence:
 
 ```bash
 corepack pnpm phase7:staging:init
+SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed
 corepack pnpm phase7:staging-proof > phase7-staging-proof.txt
 corepack pnpm phase7:hosted:preflight
 corepack pnpm phase7:staging:collect-reads
@@ -126,8 +127,8 @@ protocol-fee bps, commission amount, and protocol-fee amount for the executed
 router call.
 The final status check verifies that local `attached:` artifacts still match the
 recorded local manifest sizes and SHA-256 hashes, and that the hosted preflight
-checks passed against the same control-plane and dashboard URLs listed in the
-proof.
+checks passed against the same source commit, control-plane URL, and dashboard
+URL listed in the proof.
 It also validates the control-plane read artifacts so route discovery, referrer
 earnings, dashboard summary, webhook delivery, and payout obligations must be
 present and non-empty. The paid-suite log and receipt-verification JSON are
