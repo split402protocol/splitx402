@@ -1724,6 +1724,7 @@ function validateMcpGatewayTranscript(
   );
   let searchCapability: string | undefined;
   let searchProviderIds = new Set<string>();
+  let searchProvidersById = new Map<string, Record<string, unknown>>();
   if (searchRequest === undefined) {
     blockers.push("mcp_gateway_evidence missing split402.searchCapabilities request");
   } else {
@@ -1743,12 +1744,19 @@ function validateMcpGatewayTranscript(
     if (capabilities === undefined || capabilities.length === 0) {
       blockers.push("mcp_gateway_evidence search response has no capabilities");
     } else {
-      searchProviderIds = new Set(
+      searchProvidersById = new Map(
         capabilities
           .map(readRecord)
-          .map((capability) => readNonEmptyString(capability?.providerId))
-          .filter((providerId): providerId is string => providerId !== undefined),
+          .filter(
+            (capability): capability is Record<string, unknown> =>
+              capability !== undefined,
+          )
+          .flatMap((capability) => {
+            const providerId = readNonEmptyString(capability.providerId);
+            return providerId === undefined ? [] : [[providerId, capability]];
+          }),
       );
+      searchProviderIds = new Set(searchProvidersById.keys());
     }
   }
 
@@ -1830,6 +1838,8 @@ function validateMcpGatewayTranscript(
     );
   }
   const providerId = readNonEmptyString(executeContent.providerId);
+  const selectedProvider =
+    providerId === undefined ? undefined : searchProvidersById.get(providerId);
   if (
     providerId !== undefined &&
     searchProviderIds.size > 0 &&
@@ -1838,6 +1848,24 @@ function validateMcpGatewayTranscript(
     blockers.push(
       "mcp_gateway_evidence execute providerId was not returned by search",
     );
+  }
+  const selectedProviderNetwork = readNonEmptyString(selectedProvider?.network);
+  const selectedProviderAsset = readNonEmptyString(selectedProvider?.asset);
+  const selectedProviderAmount = readPositiveAtomicString(
+    selectedProvider?.amountAtomic,
+  );
+  if (providerId !== undefined && selectedProvider !== undefined) {
+    if (selectedProviderNetwork === undefined) {
+      blockers.push("mcp_gateway_evidence selected provider network is missing");
+    }
+    if (selectedProviderAsset === undefined) {
+      blockers.push("mcp_gateway_evidence selected provider asset is missing");
+    }
+    if (selectedProviderAmount === undefined) {
+      blockers.push(
+        "mcp_gateway_evidence selected provider amountAtomic must be a positive atomic amount",
+      );
+    }
   }
   const amountPaidAtomic = readNonNegativeAtomicString(
     executeContent.amountPaidAtomic,
@@ -1889,6 +1917,31 @@ function validateMcpGatewayTranscript(
   if (receiptRecord.requiredAmountAtomic !== executeContent.amountPaidAtomic) {
     blockers.push(
       "mcp_gateway_evidence getReceipt requiredAmountAtomic does not match execute amountPaidAtomic",
+    );
+  }
+  if (
+    selectedProviderNetwork !== undefined &&
+    receiptRecord.network !== selectedProviderNetwork
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt network does not match selected provider",
+    );
+  }
+  if (
+    selectedProviderAsset !== undefined &&
+    receiptRecord.asset !== selectedProviderAsset
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt asset does not match selected provider",
+    );
+  }
+  if (
+    selectedProviderAmount !== undefined &&
+    amountPaidAtomic !== undefined &&
+    selectedProviderAmount !== amountPaidAtomic
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence execute amountPaidAtomic does not match selected provider amountAtomic",
     );
   }
   if (readNonEmptyString(receiptRecord.routeId) === undefined) {
