@@ -114,6 +114,8 @@ describe("Phase 7 staging evidence workspace", () => {
     expect(workspace.readmeText).toContain(
       "SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",
     );
+    expect(workspace.readmeText).toContain("git rev-parse HEAD");
+    expect(workspace.readmeText).toContain("git status --short --branch");
     expect(workspace.readmeText).toContain(
       "corepack pnpm phase7:hosted:preflight",
     );

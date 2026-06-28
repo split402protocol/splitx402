@@ -178,6 +178,8 @@ function createReadmeText(directory: string): string {
     "Typical flow:",
     "",
     "```bash",
+    "git rev-parse HEAD",
+    "git status --short --branch",
     "SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",
     "corepack pnpm phase7:staging-proof > phase7-staging-proof.txt",
     "corepack pnpm phase7:hosted:preflight",
