@@ -663,6 +663,12 @@ funding_balance_evidence: funding.json
     expect(report.commandEvidenceStatus.blockers).toContain(
       "commands_run missing required command: corepack pnpm audit --audit-level high",
     );
+    expect(report.commandEvidenceStatus.blockers).toContain(
+      "commands_run missing required command: git rev-parse HEAD",
+    );
+    expect(report.commandEvidenceStatus.blockers).toContain(
+      "commands_run missing required command: git status --short --branch",
+    );
   });
 
   it("blocks staged proof status when artifact manifest evidence is remote", () => {
@@ -1855,6 +1861,10 @@ function createValidPaidSuiteLog(): string {
 
 function createValidCommandsLog(): string {
   return [
+    "$ git rev-parse HEAD",
+    "fd88024000000000000000000000000000000000",
+    "$ git status --short --branch",
+    "## main...origin/main",
     "$ corepack pnpm phase7:staging:init",
     "$ SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",
     "$ corepack pnpm phase7:staging-proof > phase7-staging-proof.txt",
