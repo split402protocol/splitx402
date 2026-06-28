@@ -201,7 +201,7 @@ function createReadmeText(directory: string): string {
     "report should include providerId, maxAmountAtomic, providerNetwork,",
     "providerAsset, providerAmountAtomic, providerPayToWallet, network, asset,",
     "requiredAmountAtomic, payToWallet, amountPaidAtomic, receiptId,",
-    "receiptVerificationStatus, referrerCreditAtomic,",
+    "receiptVerificationStatus, executeExecutionMode, referrerCreditAtomic,",
     "receiptReferrerCreditAtomic, routeId, commissionBps, protocolFeeBpsOfCommission,",
     "commissionAmountAtomic, and protocolFeeAtomic.",
     "The transcript should include the selected provider network, asset, and",
