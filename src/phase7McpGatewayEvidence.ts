@@ -29,6 +29,7 @@ export interface Phase7McpGatewayEvidenceReport {
   receiptVerificationStatus?: string;
   referrerCreditAtomic?: string;
   routeId?: string;
+  payToWallet?: string;
   commissionBps?: number;
   protocolFeeBpsOfCommission?: number;
   commissionAmountAtomic?: string;
@@ -214,6 +215,7 @@ export async function collectPhase7McpGatewayEvidence(
       ? {}
       : {
           routeId: receiptSummary.routeId,
+          payToWallet: receiptSummary.payToWallet,
           commissionBps: receiptSummary.commissionBps,
           protocolFeeBpsOfCommission:
             receiptSummary.protocolFeeBpsOfCommission,
@@ -255,6 +257,7 @@ interface McpGatewayExecutionSummary {
 
 interface McpGatewayReceiptSummary {
   routeId: string;
+  payToWallet: string;
   commissionBps: number;
   protocolFeeBpsOfCommission: number;
   commissionAmountAtomic: string;
@@ -300,6 +303,7 @@ function readReceiptSummary(
   const structuredContent = readRecord(result?.structuredContent);
   const receipt = readRecord(structuredContent?.receipt);
   const routeId = readNonEmptyString(receipt?.routeId);
+  const payToWallet = readNonEmptyString(receipt?.payToWallet);
   const commissionBps = readBasisPoints(receipt?.commissionBps);
   const protocolFeeBpsOfCommission = readBasisPoints(
     receipt?.protocolFeeBpsOfCommission,
@@ -310,6 +314,7 @@ function readReceiptSummary(
   const protocolFeeAtomic = readNonEmptyString(receipt?.protocolFeeAtomic);
   if (
     routeId === undefined ||
+    payToWallet === undefined ||
     commissionBps === undefined ||
     protocolFeeBpsOfCommission === undefined ||
     commissionAmountAtomic === undefined ||
@@ -319,6 +324,7 @@ function readReceiptSummary(
   }
   return {
     routeId,
+    payToWallet,
     commissionBps,
     protocolFeeBpsOfCommission,
     commissionAmountAtomic,

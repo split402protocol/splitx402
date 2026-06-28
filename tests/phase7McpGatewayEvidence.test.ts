@@ -60,6 +60,7 @@ describe("Phase 7 MCP gateway evidence collector", () => {
   });
 
   it("captures demo execution and receipt lookup when no live control plane is configured", async () => {
+    const bundle = createMcpDemoBundle();
     const writes = new Map<string, string>();
 
     const report = await collectPhase7McpGatewayEvidence({
@@ -89,6 +90,7 @@ describe("Phase 7 MCP gateway evidence collector", () => {
       receiptVerificationStatus: "verified",
       referrerCreditAtomic: "1800",
       routeId: "rte_00000000000000000000000000000003",
+      payToWallet: bundle.mcp.tools[0].x402.payToWallet,
       commissionBps: 2000,
       protocolFeeBpsOfCommission: 1000,
       commissionAmountAtomic: "2000",
@@ -107,6 +109,7 @@ describe("Phase 7 MCP gateway evidence collector", () => {
     expect(transcript).toContain('"receiptVerificationStatus":"verified"');
     expect(transcript).toContain('"referrerCreditAtomic":"1800"');
     expect(transcript).toContain('"routeId":"rte_00000000000000000000000000000003"');
+    expect(transcript).toContain(`"payToWallet":"${report.payToWallet}"`);
     expect(transcript).toContain('"commissionBps":2000');
     expect(transcript).toContain('"protocolFeeBpsOfCommission":1000');
     expect(transcript).toContain('"commissionAmountAtomic":"2000"');

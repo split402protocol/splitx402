@@ -198,7 +198,7 @@ function createReadmeText(directory: string): string {
     "",
     "Record the commands above plus lint, typecheck, test, build,",
     "vectors:check, and audit in `commands.log`. The MCP gateway collector",
-    "report should include providerId, amountPaidAtomic, receiptId,",
+    "report should include providerId, payToWallet, amountPaidAtomic, receiptId,",
     "receiptVerificationStatus, referrerCreditAtomic, routeId, commissionBps,",
     "protocolFeeBpsOfCommission, commissionAmountAtomic, and protocolFeeAtomic.",
     "The transcript should include the selected provider payToWallet and a",

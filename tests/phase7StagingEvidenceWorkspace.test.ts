@@ -139,6 +139,9 @@ describe("Phase 7 staging evidence workspace", () => {
     );
     expect(workspace.readmeText).toContain("receiptVerificationStatus");
     expect(workspace.readmeText).toContain("protocolFeeBpsOfCommission");
+    expect(workspace.readmeText).toContain(
+      "report should include providerId, payToWallet",
+    );
     expect(workspace.readmeText).toContain("selected provider payToWallet");
     expect(workspace.readmeText).toContain("matching receipt payToWallet");
     expect(workspace.readmeText).toContain(
