@@ -1889,6 +1889,7 @@ function validateMcpGatewayTranscript(
   const selectedProviderPayToWallet = readNonEmptyString(
     selectedProvider?.payToWallet,
   );
+  const selectedProviderRouteId = readNonEmptyString(selectedProvider?.routeId);
   const selectedProviderAmount = readPositiveAtomicString(
     selectedProvider?.amountAtomic,
   );
@@ -1908,6 +1909,9 @@ function validateMcpGatewayTranscript(
       blockers.push(
         "mcp_gateway_evidence selected provider amountAtomic must be a positive atomic amount",
       );
+    }
+    if (selectedProviderRouteId === undefined) {
+      blockers.push("mcp_gateway_evidence selected provider routeId is missing");
     }
   }
   const amountPaidAtomic = readNonNegativeAtomicString(
@@ -1995,8 +1999,16 @@ function validateMcpGatewayTranscript(
       "mcp_gateway_evidence execute amountPaidAtomic does not match selected provider amountAtomic",
     );
   }
-  if (readNonEmptyString(receiptRecord.routeId) === undefined) {
+  const receiptRouteId = readNonEmptyString(receiptRecord.routeId);
+  if (receiptRouteId === undefined) {
     blockers.push("mcp_gateway_evidence getReceipt receipt.routeId is missing");
+  } else if (
+    selectedProviderRouteId !== undefined &&
+    receiptRouteId !== selectedProviderRouteId
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt routeId does not match selected provider",
+    );
   }
   const receiptCommissionAmount = readPositiveAtomicString(
     receiptRecord.commissionAmountAtomic,
