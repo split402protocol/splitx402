@@ -1020,6 +1020,31 @@ funding_balance_evidence: funding.json
     );
   });
 
+  it("blocks staged proof status when MCP execution is demo mode", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          executeExecutionMode: "router-demo-mock",
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute response executionMode must be router-live-agent-sdk",
+    );
+  });
+
   it("blocks staged proof status when MCP execute capability differs from search", () => {
     const proofText = createManifestProof();
     const artifacts = createManifestArtifacts(proofText);
@@ -1900,6 +1925,7 @@ function createValidMcpGatewayTranscript(
     executeCapability?: string;
     searchProviderId?: string;
     executeProviderId?: string;
+    executeExecutionMode?: string;
     amountPaidAtomic?: string;
     executeReferrerCreditAtomic?: string;
     lookupReceiptId?: string;
@@ -1925,6 +1951,8 @@ function createValidMcpGatewayTranscript(
   const executeCapability = options.executeCapability ?? searchCapability;
   const searchProviderId = options.searchProviderId ?? "split402-demo-merchant";
   const executeProviderId = options.executeProviderId ?? "split402-demo-merchant";
+  const executeExecutionMode =
+    options.executeExecutionMode ?? "router-live-agent-sdk";
   const executeMaxAmountAtomic =
     options.executeMaxAmountAtomic ?? searchMaxAmountAtomic;
   const amountPaidAtomic = options.amountPaidAtomic ?? "10000";
@@ -2036,6 +2064,7 @@ function createValidMcpGatewayTranscript(
               result: {
                 structuredContent: {
                   providerId: executeProviderId,
+                  executionMode: executeExecutionMode,
                   amountPaidAtomic,
                   receiptId,
                   receiptVerificationStatus: "verified",

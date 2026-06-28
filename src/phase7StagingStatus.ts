@@ -1824,6 +1824,11 @@ function validateMcpGatewayTranscript(
       "mcp_gateway_evidence execute response receiptVerificationStatus is not verified",
     );
   }
+  if (executeContent.executionMode !== "router-live-agent-sdk") {
+    blockers.push(
+      "mcp_gateway_evidence execute response executionMode must be router-live-agent-sdk",
+    );
+  }
   const providerId = readNonEmptyString(executeContent.providerId);
   if (
     providerId !== undefined &&
