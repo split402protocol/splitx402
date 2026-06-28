@@ -8,7 +8,11 @@ import {
   signTransaction
 } from "@solana/kit";
 import { findAssociatedTokenPda } from "@solana-program/token";
-import { hashProtocolObject, type Split402ReceiptV1 } from "@split402/protocol";
+import {
+  base58Encode,
+  hashProtocolObject,
+  type Split402ReceiptV1
+} from "@split402/protocol";
 import { Buffer } from "node:buffer";
 import { createHmac } from "node:crypto";
 
@@ -17,6 +21,8 @@ import type {
   ReceiptChainVerifier
 } from "./workers.js";
 import type {
+  PayoutFinalizedTransferVerifier,
+  PayoutFinalizedTransferVerificationResult,
   PayoutFundingBalance,
   PayoutBatchRecord,
   PayoutItemRecord,
@@ -268,6 +274,17 @@ export interface SolanaPayoutSignerPolicy {
   expectedDestinationAmountListHash?: `sha256:${string}`;
 }
 
+export interface VerifySolanaPayoutTransactionBytesInput {
+  transactionBase64: string;
+  plannedTransaction: SolanaPayoutPlannedTransaction;
+  policy: SolanaPayoutSignerPolicy;
+}
+
+export interface VerifySolanaPayoutTransactionBytesResult {
+  ok: boolean;
+  errors: string[];
+}
+
 export interface SignSolanaPayoutTransactionsInput {
   plan: SolanaPayoutTransactionPlan;
   transactions: readonly SolanaSerializedPayoutTransaction[];
@@ -404,6 +421,16 @@ export interface SolanaRpcPayoutTransactionFinalityMonitorOptions {
   retryDelayMs?: number;
   unknownOutcomeAfterMs?: number;
   now?: () => Date;
+}
+
+export interface SolanaRpcPayoutFinalizedTransferVerifierOptions {
+  rpcUrl?: string;
+  rpcUrls?: string[];
+  network: string;
+  fundingWallet: string;
+  sourceTokenAccount: string;
+  tokenProgramId?: string;
+  fetch?: SolanaRpcFetch;
 }
 
 export interface MonitorSolanaPayoutTransactionInput {
@@ -570,6 +597,11 @@ export class SolanaRpcPayoutTransactionSimulator {
           `missing serialized transaction for payout plan index ${plannedTransaction.index}`
         );
       }
+      assertSolanaPayoutTransactionBytesMatchPlan({
+        transactionBase64,
+        plannedTransaction,
+        policy: policyFromPayoutPlan(input.plan)
+      });
       transactionResults.push(
         await this.simulateWithFailover(
           plannedTransaction.index,
@@ -784,7 +816,8 @@ export async function createLocalDevSolanaPayoutSigner(
     policy: input.policy,
     signTransaction: createLocalDevSolanaPayoutSigningDelegate({
       signerReference,
-      keyPair: signer.keyPair
+      keyPair: signer.keyPair,
+      policy: input.policy
     })
   });
 }
@@ -875,11 +908,17 @@ export function createRemoteSolanaPayoutSignerFromEnv(
 function createLocalDevSolanaPayoutSigningDelegate(input: {
   signerReference: string;
   keyPair: LocalDevSolanaKeyPair;
+  policy: SolanaPayoutSignerPolicy;
 }): SolanaPayoutTransactionSigningDelegate {
   return async (transactionInput) => {
     if (transactionInput.signerReference !== input.signerReference) {
       throw new Error("local-dev signer received an unexpected signerReference");
     }
+    assertSolanaPayoutTransactionBytesMatchPlan({
+      transactionBase64: transactionInput.transactionBase64,
+      plannedTransaction: transactionInput.plannedTransaction,
+      policy: input.policy
+    });
     const transactionBytes = Buffer.from(
       assertBase64Transaction(
         transactionInput.transactionBase64,
@@ -910,6 +949,11 @@ function createRemoteSolanaPayoutSigningDelegate(input: {
     if (transactionInput.signerReference !== input.signerReference) {
       throw new Error("remote signer received an unexpected signerReference");
     }
+    assertSolanaPayoutTransactionBytesMatchPlan({
+      transactionBase64: transactionInput.transactionBase64,
+      plannedTransaction: transactionInput.plannedTransaction,
+      policy: input.policy
+    });
     const payload = {
       schema: "split402.solana.remote_payout_sign_request.v1",
       batchId: transactionInput.batchId,
@@ -1341,6 +1385,163 @@ export class SolanaRpcPayoutTransactionFinalityMonitor {
 
   private now(): Date {
     return this.options.now?.() ?? new Date();
+  }
+
+  private fetch(): SolanaRpcFetch {
+    return this.options.fetch ?? fetch;
+  }
+
+  private rpcUrls(): string[] {
+    const urls = [
+      ...(this.options.rpcUrl === undefined ? [] : [this.options.rpcUrl]),
+      ...(this.options.rpcUrls ?? [])
+    ];
+    return Array.from(
+      new Set(urls.map((url) => url.trim()).filter((url) => url.length > 0))
+    );
+  }
+}
+
+export class SolanaRpcPayoutFinalizedTransferVerifier
+  implements PayoutFinalizedTransferVerifier {
+  constructor(
+    private readonly options: SolanaRpcPayoutFinalizedTransferVerifierOptions
+  ) {}
+
+  async verifyFinalizedPayout(input: {
+    batch: PayoutBatchRecord;
+    transactions: PayoutTransactionRecord[];
+  }): Promise<PayoutFinalizedTransferVerificationResult> {
+    const setupErrors = this.validateBatch(input.batch);
+    if (setupErrors.length > 0) {
+      return { ok: false, errors: setupErrors };
+    }
+
+    const errors: string[] = [];
+    for (const transaction of input.transactions) {
+      errors.push(
+        ...(await this.verifyTransaction(input.batch, transaction))
+      );
+    }
+    return {
+      ok: errors.length === 0,
+      errors
+    };
+  }
+
+  private validateBatch(batch: PayoutBatchRecord): string[] {
+    const errors: string[] = [];
+    if (batch.network !== this.options.network) {
+      errors.push(
+        `payout batch network ${batch.network} does not match verifier network ${this.options.network}`
+      );
+    }
+    if (batch.status !== "finalized") {
+      errors.push("payout batch must be finalized before transfer verification");
+    }
+    try {
+      assertSolanaAddress(this.options.fundingWallet, "fundingWallet");
+      assertSolanaAddress(this.options.sourceTokenAccount, "sourceTokenAccount");
+      assertSupportedTokenProgramId(
+        this.options.tokenProgramId ?? SOLANA_TOKEN_PROGRAM_ID
+      );
+    } catch (error) {
+      errors.push(readErrorMessage(error));
+    }
+    return errors;
+  }
+
+  private async verifyTransaction(
+    batch: PayoutBatchRecord,
+    transaction: PayoutTransactionRecord
+  ): Promise<string[]> {
+    const errors: string[] = [];
+    if (transaction.status !== "finalized") {
+      errors.push(`payout transaction ${transaction.id} is not finalized`);
+    }
+    const signature = transaction.expectedSignature;
+    if (signature === undefined) {
+      errors.push(`payout transaction ${transaction.id} is missing expectedSignature`);
+      return errors;
+    }
+    if (transaction.items.length === 0) {
+      errors.push(`payout transaction ${transaction.id} has no mapped payout items`);
+      return errors;
+    }
+
+    const response = await this.requestFinalizedTransaction(signature);
+    if (response.transaction === undefined) {
+      errors.push(...response.errors);
+      return errors;
+    }
+
+    const confirmed = response.transaction;
+    if (!confirmed.signatures.includes(signature)) {
+      errors.push(`finalized transaction ${signature} does not include expected signature`);
+    }
+    if (confirmed.metaErr !== null) {
+      errors.push(`finalized transaction ${signature} failed: ${JSON.stringify(confirmed.metaErr)}`);
+    }
+    errors.push(
+      ...(await verifyFinalizedPayoutTransfersForTransaction({
+        batch,
+        transaction,
+        confirmed,
+        fundingWallet: this.options.fundingWallet,
+        sourceTokenAccount: this.options.sourceTokenAccount,
+        tokenProgramId: this.options.tokenProgramId ?? SOLANA_TOKEN_PROGRAM_ID
+      }))
+    );
+    return errors.map((error) => `${transaction.id}: ${error}`);
+  }
+
+  private async requestFinalizedTransaction(
+    signature: string
+  ): Promise<{ transaction?: SolanaConfirmedTransaction; errors: string[] }> {
+    const errors: string[] = [];
+    for (const rpcUrl of this.rpcUrls()) {
+      try {
+        const response = await this.fetch()(rpcUrl, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: "split402-payout-finalized-transfer-verification",
+            method: "getTransaction",
+            params: [
+              signature,
+              {
+                commitment: "finalized",
+                encoding: "jsonParsed",
+                maxSupportedTransactionVersion: 0
+              }
+            ]
+          })
+        });
+        if (!response.ok) {
+          errors.push(`Solana RPC ${rpcUrl} returned HTTP ${response.status}`);
+          continue;
+        }
+        const body = await response.json();
+        const rpcError = readRpcError(body);
+        if (rpcError !== undefined) {
+          errors.push(`Solana RPC ${rpcUrl} returned error: ${rpcError}`);
+          continue;
+        }
+        const transaction = readConfirmedTransaction(body);
+        if (transaction === null) {
+          errors.push(`finalized transaction details not found: ${signature}`);
+          continue;
+        }
+        return { transaction, errors: [] };
+      } catch (error) {
+        errors.push(`Solana RPC finalized transaction lookup failed: ${readErrorMessage(error)}`);
+      }
+    }
+    if (errors.length === 0) {
+      errors.push("no Solana RPC URLs configured");
+    }
+    return { errors };
   }
 
   private fetch(): SolanaRpcFetch {
@@ -2029,6 +2230,442 @@ function assertPayoutSignerInstructionPolicy(input: {
   }
 }
 
+export function verifySolanaPayoutTransactionBytesAgainstPlan(
+  input: VerifySolanaPayoutTransactionBytesInput
+): VerifySolanaPayoutTransactionBytesResult {
+  const errors: string[] = [];
+  let message: DecodedSolanaTransactionMessage;
+  try {
+    message = decodeSolanaTransactionMessageBytes(input.transactionBase64);
+  } catch (error) {
+    return {
+      ok: false,
+      errors: [`transaction bytes are not a supported Solana transaction: ${readErrorMessage(error)}`]
+    };
+  }
+
+  const fundingWallet = safeSolanaAddress(input.policy.fundingWallet);
+  if (fundingWallet === undefined) {
+    errors.push("policy funding wallet is not a valid Solana address");
+  } else {
+    const requiredSigners = message.accountKeys.slice(
+      0,
+      message.numRequiredSignatures
+    );
+    if (message.numRequiredSignatures !== 1 || requiredSigners[0] !== fundingWallet) {
+      errors.push("transaction must require exactly the approved funding wallet signer");
+    }
+    if (message.accountKeys[0] !== fundingWallet) {
+      errors.push("transaction fee payer must be the approved funding wallet");
+    }
+  }
+
+  if (message.addressTableLookupCount !== 0) {
+    errors.push("address lookup tables are not supported for payout signing");
+  }
+  if (message.instructions.length !== input.plannedTransaction.instructions.length) {
+    errors.push("transaction instruction count does not match approved plan");
+  }
+
+  const plannedByPayoutItem = new Map(
+    input.plannedTransaction.items.map((item) => [item.payoutItemId, item])
+  );
+  for (
+    let index = 0;
+    index <
+    Math.max(message.instructions.length, input.plannedTransaction.instructions.length);
+    index += 1
+  ) {
+    const actual = message.instructions[index];
+    const planned = input.plannedTransaction.instructions[index];
+    if (actual === undefined || planned === undefined) {
+      continue;
+    }
+    const actualProgram = message.accountKeys[actual.programIdIndex];
+    if (actualProgram === undefined) {
+      errors.push(`instruction ${index} references an unknown program account`);
+      continue;
+    }
+    switch (planned.kind) {
+      case "createAssociatedTokenIdempotent":
+        errors.push(
+          ...verifyCompiledCreateAssociatedTokenInstruction({
+            index,
+            actual,
+            actualProgram,
+            accountKeys: message.accountKeys,
+            planned,
+            policy: input.policy
+          })
+        );
+        break;
+      case "transferChecked":
+        errors.push(
+          ...verifyCompiledTransferCheckedInstruction({
+            index,
+            actual,
+            actualProgram,
+            accountKeys: message.accountKeys,
+            planned,
+            plannedItem: plannedByPayoutItem.get(planned.payoutItemId),
+            policy: input.policy
+          })
+        );
+        break;
+    }
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors
+  };
+}
+
+function assertSolanaPayoutTransactionBytesMatchPlan(
+  input: VerifySolanaPayoutTransactionBytesInput
+): void {
+  const result = verifySolanaPayoutTransactionBytesAgainstPlan(input);
+  if (!result.ok) {
+    throw new Error(
+      `serialized payout transaction does not match approved plan: ${result.errors.join("; ")}`
+    );
+  }
+}
+
+interface DecodedSolanaTransactionMessage {
+  numRequiredSignatures: number;
+  accountKeys: string[];
+  instructions: DecodedCompiledInstruction[];
+  addressTableLookupCount: number;
+}
+
+interface DecodedCompiledInstruction {
+  programIdIndex: number;
+  accountIndexes: number[];
+  data: Uint8Array;
+}
+
+function decodeSolanaTransactionMessageBytes(
+  transactionBase64: string
+): DecodedSolanaTransactionMessage {
+  const transactionBytes = Buffer.from(
+    assertBase64Transaction(transactionBase64, "transactionBase64"),
+    "base64"
+  );
+  const transaction = getTransactionDecoder().decode(transactionBytes);
+  const messageBytes = readTransactionMessageBytes(transaction);
+  return decodeCompiledSolanaMessage(messageBytes);
+}
+
+function readTransactionMessageBytes(transaction: unknown): Uint8Array {
+  const messageBytes = readRecord(transaction).messageBytes;
+  if (
+    messageBytes instanceof Uint8Array ||
+    (typeof Buffer !== "undefined" && Buffer.isBuffer(messageBytes))
+  ) {
+    return new Uint8Array(messageBytes);
+  }
+  throw new Error("decoded transaction is missing message bytes");
+}
+
+function decodeCompiledSolanaMessage(messageBytes: Uint8Array): DecodedSolanaTransactionMessage {
+  const cursor = new ByteCursor(messageBytes);
+  const first = cursor.readByte("message header");
+  const versioned = (first & 0x80) !== 0;
+  if (versioned && (first & 0x7f) !== 0) {
+    throw new Error("only Solana v0 transactions are supported");
+  }
+  const numRequiredSignatures = versioned
+    ? cursor.readByte("message header numRequiredSignatures")
+    : first;
+  cursor.readByte("message header numReadonlySignedAccounts");
+  cursor.readByte("message header numReadonlyUnsignedAccounts");
+
+  const accountKeyCount = cursor.readShortVec("account key count");
+  const accountKeys: string[] = [];
+  for (let index = 0; index < accountKeyCount; index += 1) {
+    accountKeys.push(solanaAddressFromBytes(cursor.readBytes(32, `account key ${index}`)));
+  }
+  cursor.readBytes(32, "recent blockhash");
+
+  const instructionCount = cursor.readShortVec("instruction count");
+  const instructions: DecodedCompiledInstruction[] = [];
+  for (let index = 0; index < instructionCount; index += 1) {
+    const programIdIndex = cursor.readByte(`instruction ${index} programIdIndex`);
+    const accountIndexCount = cursor.readShortVec(
+      `instruction ${index} account index count`
+    );
+    const accountIndexes: number[] = [];
+    for (let accountIndex = 0; accountIndex < accountIndexCount; accountIndex += 1) {
+      accountIndexes.push(
+        cursor.readByte(`instruction ${index} account index ${accountIndex}`)
+      );
+    }
+    const dataLength = cursor.readShortVec(`instruction ${index} data length`);
+    const data = cursor.readBytes(dataLength, `instruction ${index} data`);
+    instructions.push({ programIdIndex, accountIndexes, data });
+  }
+
+  const addressTableLookupCount = versioned
+    ? cursor.readShortVec("address table lookup count")
+    : 0;
+  if (cursor.remaining() !== 0 && addressTableLookupCount === 0) {
+    throw new Error("transaction message has trailing bytes");
+  }
+
+  return {
+    numRequiredSignatures,
+    accountKeys,
+    instructions,
+    addressTableLookupCount
+  };
+}
+
+function solanaAddressFromBytes(bytes: Uint8Array): string {
+  if (bytes.every((byte) => byte === 0)) {
+    return "11111111111111111111111111111111";
+  }
+  return base58Encode(bytes);
+}
+
+class ByteCursor {
+  private offset = 0;
+
+  constructor(private readonly bytes: Uint8Array) {}
+
+  readByte(label: string): number {
+    if (this.offset >= this.bytes.length) {
+      throw new Error(`${label} is truncated`);
+    }
+    const value = this.bytes[this.offset] ?? 0;
+    this.offset += 1;
+    return value;
+  }
+
+  readBytes(length: number, label: string): Uint8Array {
+    if (length < 0 || this.offset + length > this.bytes.length) {
+      throw new Error(`${label} is truncated`);
+    }
+    const value = this.bytes.slice(this.offset, this.offset + length);
+    this.offset += length;
+    return value;
+  }
+
+  readShortVec(label: string): number {
+    let value = 0;
+    let shift = 0;
+    for (let byteIndex = 0; byteIndex < 3; byteIndex += 1) {
+      const byte = this.readByte(label);
+      value |= (byte & 0x7f) << shift;
+      if ((byte & 0x80) === 0) {
+        return value;
+      }
+      shift += 7;
+    }
+    throw new Error(`${label} is not a canonical Solana shortvec`);
+  }
+
+  remaining(): number {
+    return this.bytes.length - this.offset;
+  }
+}
+
+function verifyCompiledCreateAssociatedTokenInstruction(input: {
+  index: number;
+  actual: DecodedCompiledInstruction;
+  actualProgram: string;
+  accountKeys: string[];
+  planned: SolanaCreateAssociatedTokenInstructionPlan;
+  policy: SolanaPayoutSignerPolicy;
+}): string[] {
+  const errors: string[] = [];
+  if (input.actualProgram !== ASSOCIATED_TOKEN_PROGRAM_ID) {
+    errors.push(`instruction ${input.index} uses unsupported ATA program`);
+  }
+  if (input.actual.data.length !== 1 || input.actual.data[0] !== 1) {
+    errors.push(`instruction ${input.index} is not idempotent ATA creation`);
+  }
+  const accounts = input.actual.accountIndexes.map(
+    (accountIndex) => input.accountKeys[accountIndex]
+  );
+  if (accounts.length !== 6 || accounts.some((account) => account === undefined)) {
+    errors.push(`instruction ${input.index} ATA account layout is unsupported`);
+    return errors;
+  }
+  compareAccount(errors, input.index, "ATA payer", accounts[0], input.planned.payer);
+  compareAccount(
+    errors,
+    input.index,
+    "ATA account",
+    accounts[1],
+    input.planned.associatedTokenAccount
+  );
+  compareAccount(errors, input.index, "ATA owner", accounts[2], input.planned.owner);
+  compareAccount(errors, input.index, "ATA mint", accounts[3], input.planned.mint);
+  compareAccount(
+    errors,
+    input.index,
+    "ATA system program",
+    accounts[4],
+    "11111111111111111111111111111111"
+  );
+  compareAccount(
+    errors,
+    input.index,
+    "ATA token program",
+    accounts[5],
+    input.planned.tokenProgramId
+  );
+  if (input.planned.payer !== input.policy.fundingWallet) {
+    errors.push(`instruction ${input.index} ATA payer does not match policy funding wallet`);
+  }
+  if (input.planned.mint !== input.policy.mint) {
+    errors.push(`instruction ${input.index} ATA mint does not match policy mint`);
+  }
+  return errors;
+}
+
+function verifyCompiledTransferCheckedInstruction(input: {
+  index: number;
+  actual: DecodedCompiledInstruction;
+  actualProgram: string;
+  accountKeys: string[];
+  planned: SolanaTransferCheckedInstructionPlan;
+  plannedItem: SolanaPayoutPlannedItem | undefined;
+  policy: SolanaPayoutSignerPolicy;
+}): string[] {
+  const errors: string[] = [];
+  const allowedTokenProgramIds = readAllowedTokenProgramIds(
+    input.policy.allowedTokenProgramIds
+  );
+  if (!allowedTokenProgramIds.has(input.actualProgram)) {
+    errors.push(`instruction ${input.index} uses a token program outside signer policy`);
+  }
+  if (input.actualProgram !== input.planned.programId) {
+    errors.push(`instruction ${input.index} token program does not match approved plan`);
+  }
+  const accounts = input.actual.accountIndexes.map(
+    (accountIndex) => input.accountKeys[accountIndex]
+  );
+  if (accounts.length !== 4 || accounts.some((account) => account === undefined)) {
+    errors.push(`instruction ${input.index} transfer account layout is unsupported`);
+    return errors;
+  }
+  compareAccount(errors, input.index, "transfer source", accounts[0], input.planned.source);
+  compareAccount(errors, input.index, "transfer mint", accounts[1], input.planned.mint);
+  compareAccount(
+    errors,
+    input.index,
+    "transfer destination",
+    accounts[2],
+    input.planned.destination
+  );
+  compareAccount(
+    errors,
+    input.index,
+    "transfer authority",
+    accounts[3],
+    input.planned.authority
+  );
+  compareAccount(
+    errors,
+    input.index,
+    "policy source token account",
+    input.planned.source,
+    input.policy.sourceTokenAccount
+  );
+  compareAccount(
+    errors,
+    input.index,
+    "policy mint",
+    input.planned.mint,
+    input.policy.mint
+  );
+  compareAccount(
+    errors,
+    input.index,
+    "policy funding authority",
+    input.planned.authority,
+    input.policy.fundingWallet
+  );
+  if (input.plannedItem === undefined) {
+    errors.push(`instruction ${input.index} transfer payout item is missing from plan`);
+  } else {
+    compareAccount(
+      errors,
+      input.index,
+      "payout item destination token account",
+      input.planned.destination,
+      input.plannedItem.destinationTokenAccount
+    );
+    if (input.planned.amountAtomic !== input.plannedItem.amountAtomic) {
+      errors.push(`instruction ${input.index} transfer amount does not match payout item`);
+    }
+  }
+
+  const decoded = decodeTransferCheckedInstructionData(input.actual.data);
+  if (decoded === undefined) {
+    errors.push(`instruction ${input.index} is not transferChecked`);
+    return errors;
+  }
+  if (decoded.amountAtomic !== input.planned.amountAtomic) {
+    errors.push(`instruction ${input.index} transfer amount does not match approved plan`);
+  }
+  if (decoded.decimals !== input.planned.decimals) {
+    errors.push(`instruction ${input.index} transfer decimals do not match approved plan`);
+  }
+  return errors;
+}
+
+function decodeTransferCheckedInstructionData(
+  data: Uint8Array
+): { amountAtomic: string; decimals: number } | undefined {
+  if (data.length !== 10 || data[0] !== 12) {
+    return undefined;
+  }
+  let amount = 0n;
+  for (let index = 0; index < 8; index += 1) {
+    amount += BigInt(data[index + 1] ?? 0) << BigInt(index * 8);
+  }
+  return {
+    amountAtomic: amount.toString(),
+    decimals: data[9] ?? 0
+  };
+}
+
+function compareAccount(
+  errors: string[],
+  instructionIndex: number,
+  label: string,
+  actual: string | undefined,
+  expected: string
+): void {
+  if (actual !== expected) {
+    errors.push(`instruction ${instructionIndex} ${label} does not match approved plan`);
+  }
+}
+
+function safeSolanaAddress(value: string): string | undefined {
+  try {
+    return assertSolanaAddress(value, "address");
+  } catch {
+    return undefined;
+  }
+}
+
+function policyFromPayoutPlan(
+  plan: SolanaPayoutTransactionPlan
+): SolanaPayoutSignerPolicy {
+  return {
+    network: plan.network,
+    signerReference: "simulation",
+    fundingWallet: plan.fundingWallet,
+    sourceTokenAccount: plan.sourceTokenAccount,
+    mint: plan.asset,
+    allowedTokenProgramIds: [plan.tokenProgramId]
+  };
+}
+
 function assertPayoutSignerAmountLimits(input: {
   plan: SolanaPayoutTransactionPlan;
   maxTransactionAmountAtomic: string | undefined;
@@ -2295,6 +2932,95 @@ async function verifyReceiptTransaction(
     error:
       "settlement transaction does not contain a matching token transfer for receipt asset, payTo wallet, payer wallet, and amount"
   };
+}
+
+async function verifyFinalizedPayoutTransfersForTransaction(input: {
+  batch: PayoutBatchRecord;
+  transaction: PayoutTransactionRecord;
+  confirmed: SolanaConfirmedTransaction;
+  fundingWallet: string;
+  sourceTokenAccount: string;
+  tokenProgramId: string;
+}): Promise<string[]> {
+  const errors: string[] = [];
+  const expectedItems = input.transaction.items;
+  const matchedItemIds = new Set<string>();
+  const payoutTransfers = input.confirmed.transfers.filter(
+    (transfer) =>
+      transfer.mint === input.batch.asset &&
+      transfer.source === input.sourceTokenAccount &&
+      transfer.authority === input.fundingWallet
+  );
+
+  for (const transfer of payoutTransfers) {
+    if (transfer.programId !== input.tokenProgramId) {
+      errors.push("finalized transfer token program does not match funding policy");
+      continue;
+    }
+    const item = expectedItems.find(
+      (candidate) =>
+        !matchedItemIds.has(candidate.payoutItemId) &&
+        candidate.amountAtomic === transfer.amount &&
+        (candidate.destinationTokenAccount === undefined ||
+          candidate.destinationTokenAccount === transfer.destination)
+    );
+    if (item === undefined) {
+      errors.push(
+        `extra payout transfer from funding account to ${transfer.destination} for ${transfer.amount}`
+      );
+      continue;
+    }
+    matchedItemIds.add(item.payoutItemId);
+    if (
+      !(await transferRecipientMatchesPayoutItem({
+        transfer,
+        item,
+        tokenAccounts: input.confirmed.tokenAccounts,
+        mint: input.batch.asset,
+        tokenProgramId: input.tokenProgramId
+      }))
+    ) {
+      errors.push(
+        `recipient owner does not match payout item destination wallet: ${item.payoutItemId}`
+      );
+    }
+  }
+
+  for (const item of expectedItems) {
+    if (!matchedItemIds.has(item.payoutItemId)) {
+      errors.push(`missing finalized payout transfer for item ${item.payoutItemId}`);
+    }
+  }
+
+  return errors;
+}
+
+async function transferRecipientMatchesPayoutItem(input: {
+  transfer: SolanaTokenTransfer;
+  item: PayoutTransactionRecord["items"][number];
+  tokenAccounts: Map<string, SolanaTokenAccountEvidence>;
+  mint: string;
+  tokenProgramId: string;
+}): Promise<boolean> {
+  if (
+    input.item.destinationTokenAccount !== undefined &&
+    input.transfer.destination !== input.item.destinationTokenAccount
+  ) {
+    return false;
+  }
+  const destination = input.tokenAccounts.get(input.transfer.destination);
+  const ownerMatches = destination?.owner === input.item.destinationWallet;
+  const mintMatches = destination?.mint === undefined || destination.mint === input.mint;
+  const programMatches =
+    destination?.programId === undefined ||
+    destination.programId === input.transfer.programId;
+  const ataMatches = await isAssociatedTokenAccount({
+    account: input.transfer.destination,
+    owner: input.item.destinationWallet,
+    mint: input.mint,
+    tokenProgramId: input.tokenProgramId
+  });
+  return mintMatches && programMatches && (ownerMatches || ataMatches);
 }
 
 async function transferSatisfiesReceipt(

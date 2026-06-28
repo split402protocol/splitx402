@@ -6,8 +6,9 @@ accounting for x402-paid APIs.
 In simple words: an agent pays a merchant through normal x402 USDC settlement and
 attaches a signed Split402 referral claim. The merchant still receives the gross
 x402 payment. Split402 records the referral commission as an auditable payable,
-verifies the settlement, and later pays accumulated commissions from a
-merchant-funded payout flow.
+optionally separates a protocol fee from that commission, verifies the
+settlement, and later pays accumulated referrer credits from a merchant-funded
+payout flow.
 
 ## What Is Built
 
@@ -16,6 +17,7 @@ flowchart LR
   Protocol["Protocol core"]
   Demo["x402 demo flow"]
   SDKs["Agent and merchant SDKs"]
+  Router["Router alpha"]
   Mcp["MCP demo bundle and gateway"]
   Dashboard["Dashboard UI"]
   Control["Control plane"]
@@ -24,10 +26,12 @@ flowchart LR
 
   Protocol --> Demo
   Protocol --> SDKs
+  Protocol --> Router
   Demo --> Control
   Demo --> Mcp
   SDKs --> Control
   SDKs --> Mcp
+  SDKs --> Router
   Control --> Dashboard
   Control --> Verification
   Verification --> Payouts
@@ -38,14 +42,15 @@ flowchart LR
 | Protocol primitives | Implemented: schemas, hashes, IDs, amount math, operation digests, signatures, and test vectors. |
 | x402 integration | Implemented: Split402 offers, referral claims, request digests, and receipts around standard x402 settlement. |
 | Demo path | Implemented for Solana Devnet paid-suite proof runs. |
-| MCP demo bundle and gateway | Implemented public-alpha bundle and stdio gateway: paid tool card, x402 payment metadata, Split402 campaign metadata, expected referral economics, MCP `tools/list`, MCP `tools/call`, and proof commands. |
+| Router alpha | Implemented public-alpha static-provider router with capability search, budget filtering, deterministic ranking, retry/fallback, and fail-closed receipt verification. |
+| MCP demo bundle and gateway | Implemented public-alpha demo bundle and narrow stdio gateway: paid tool card, x402 payment metadata, Split402 campaign metadata, expected referral economics, MCP `tools/list`, MCP `tools/call`, and proof commands. A router-backed adoption-grade MCP gateway remains next work. |
 | Dashboard UI | Implemented public-alpha merchant/referrer operations UI with a narrow read proxy for dashboard summary, reliability, payout obligations, webhook delivery, referrer routes, balances, payouts, and an optional hosted-staging viewer gate with signed, expiring session cookies. |
 | Phase 7 hosted staging | Implemented compose stack for PostgreSQL, control plane, migration job, dashboard, optional demo merchant, and optional workers. |
 | Phase 7 staging proof | Implemented proof scaffold, assembly, status validator, hosted preflight collector, read collector, artifact manifest validation, funding-balance semantic validation, template, and runbooks for hosted end-to-end evidence, including payout-obligation funding coverage. |
 | Agent SDK | Implemented for offer inspection, claim creation, paid calls, and receipt verification. |
 | Merchant SDK | Implemented for campaign caching, service-key rotation helpers, payment identifiers, operation digests, and receipt outbox primitives. |
-| Control plane | Implemented foundation: receipt ingestion, merchant/campaign/route registries, wallet auth, PostgreSQL persistence, outbox workers, chain verification, public merchant reliability profiles, merchant dashboard summaries, payout-obligation summaries with optional Solana RPC funding balances, webhook delivery feeds, referrer balances/routes, Bazaar-compatible route metadata, and signed webhooks for accepted receipts and payout lifecycle events. |
-| Payout engine | In progress: preview, allocation, Solana transfer planning, simulation, signer policy, local-dev signer, remote signer client, signer appliance scaffold, signer deployment and private-network artifacts, custody evidence gates, signed-byte persistence, broadcast boundary, finality monitor, rollup, lifecycle events, unknown-outcome reconciliation queue, referrer payout views, and ledger closure are present. |
+| Control plane | Implemented foundation: receipt ingestion, merchant/campaign/route registries, wallet auth, PostgreSQL persistence, receipt economic-policy verification, pending-only public merchant/origin registration, outbox workers, chain verification, public merchant reliability profiles, merchant dashboard summaries, payout-obligation summaries with optional Solana RPC funding balances, webhook delivery feeds, referrer balances/routes, Bazaar-compatible route metadata, and signed webhooks for accepted receipts and payout lifecycle events. |
+| Payout engine | In progress: preview, allocation, safe allocation release, Solana transfer planning, simulation, signer policy, local-dev signer, remote signer client, signer appliance scaffold, signer deployment and private-network artifacts, custody evidence gates, signed-byte persistence, broadcast boundary, finality monitor, rollup, lifecycle events, terminal accrual states for chain rejection and paid payout closure, unknown-outcome reconciliation queue, referrer payout views, and ledger closure are present. |
 
 ## What Is Not Built Yet
 
@@ -54,6 +59,8 @@ flowchart LR
 - The dashboard UI is a public-alpha operations surface with a hosted-staging
   viewer gate and expiring sessions, not a production mainnet dashboard service
   yet.
+- Public merchant/origin approval workflows are not production admin workflows
+  yet; public registration creates pending state only.
 - Mainnet production operation is not approved.
 - Phase 6 still needs completed staging deployment evidence and all pending
   custody gates in `docs/checklists/phase6-custody-review.md` before any mainnet
@@ -61,9 +68,12 @@ flowchart LR
 
 ## Current Direction
 
-The near-term objective is to finish Phase 7 productization: a usable
-merchant/referrer dashboard, agent-demo gateway packaging, and staging proof that an
-agent can discover, pay, and verify Split402 earnings without manual database
-work. The hosted staging command surface now exists; the remaining gate is
-running it against a real hosted environment, collecting the required artifacts,
-and approving the evidence.
+The near-term objective is the correctness-router sprint. Protocol fee wiring,
+self-referral semantics, receipt policy gates, public approval boundaries,
+payout terminal states, signer byte verification, finalized transfer-content
+verification, transaction-to-item finality mapping, and safe allocation release
+are now implemented in the working branches. The static-provider router alpha is
+also implemented. Next are dashboard contracts, deployment-proof honesty, and a
+router-backed MCP gateway that agents can use to discover, pay for, verify, and
+monetize paid tools. The hosted staging proof remains `no-go` until a real
+hosted environment supplies all required evidence from the same source commit.

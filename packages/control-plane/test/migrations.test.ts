@@ -22,7 +22,9 @@ describe("control-plane migrations", () => {
       "0008_route_versions.sql",
       "0009_merchant_payout_wallets.sql",
       "0010_payout_batches.sql",
-      "0011_payout_transactions.sql"
+      "0011_payout_transactions.sql",
+      "0012_terminal_accrual_states.sql",
+      "0013_payout_transaction_items.sql"
     ]);
     expect(
       migrations.every((migration) =>

@@ -36,6 +36,7 @@ export interface DemoMerchantConfig {
   paymentAsset: string;
   requiredAmountAtomic: string;
   commissionBps: number;
+  protocolFeeBpsOfCommission: number;
   serviceSeed: Uint8Array;
   syncFacilitator: boolean;
   facilitatorUrl: string;
@@ -186,6 +187,9 @@ function readDemoMerchantConfig(
     commissionBps:
       overrides.commissionBps ??
       readCommissionBps(process.env.SPLIT402_COMMISSION_BPS ?? "2000"),
+    protocolFeeBpsOfCommission:
+      overrides.protocolFeeBpsOfCommission ??
+      readCommissionBps(process.env.SPLIT402_PROTOCOL_FEE_BPS_OF_COMMISSION ?? "0"),
     serviceSeed,
     syncFacilitator:
       overrides.syncFacilitator ??
@@ -230,10 +234,12 @@ function createCampaign(
       requiredAmountAtomic: config.requiredAmountAtomic,
       payToWallet: merchantPayTo,
       commissionBps: config.commissionBps,
+      protocolFeeBpsOfCommission: config.protocolFeeBpsOfCommission,
       commissionBase: "required_amount",
       settlementMode: "accrual"
     }),
     commissionBps: config.commissionBps,
+    protocolFeeBpsOfCommission: config.protocolFeeBpsOfCommission,
     attributionRequired: false,
     allowSelfReferral: false
   };

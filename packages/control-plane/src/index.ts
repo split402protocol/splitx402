@@ -1,6 +1,7 @@
 import {
   ReferralClaimV1Schema,
   Split402ReceiptV1Schema,
+  evaluateSelfReferralPolicy,
   hashProtocolObject,
   verifySplit402ReceiptObject,
   type ReferralClaimV1,
@@ -41,12 +42,10 @@ import {
   isMerchantRegistryValidationError,
   type MerchantKeyAlgorithm,
   type MerchantKeyPurpose,
-  type MerchantOriginStatus,
   type MerchantOriginVerificationMethod,
   type MerchantPayoutWalletRecord,
   type MerchantPayoutWalletStatus,
-  type MerchantRegistry,
-  type MerchantStatus
+  type MerchantRegistry
 } from "./merchants.js";
 import {
   RouteRegistryValidationError,
@@ -87,9 +86,12 @@ import {
   createPayoutReconciliationItem,
   createSignedPayoutTransactionRecords,
   createPayoutPreview,
+  attachPayoutTransactionItemMappings,
   filterPayoutEligibleAccruals,
   isPayoutTransactionOutcomeUnknown,
-  summarizePayoutBatchFinality,
+  releasePayoutBatchAllocationsForBatch,
+  summarizePayoutBatchTransactionItemFinality,
+  verifyPayoutFinalizedTransfersBeforeLedgerClosure,
   isPayoutBatchConflictError,
   isPayoutBatchValidationError,
   isPayoutPreviewValidationError,
@@ -109,18 +111,23 @@ import {
   type PayoutReconciliationStore,
   type MerchantObligationViewStore,
   type ReferrerPayoutViewStore,
+  type ReleasePayoutBatchAllocationsInput,
   type SaveSignedPayoutTransactionsInput
 } from "./payouts.js";
 
 export type ReceiptIngestSource = "buyer" | "merchant" | "relay" | "unknown";
 export type ReceiptVerificationState =
   | "signature_verified"
-  | "pending_chain_verification";
+  | "pending_chain_verification"
+  | "chain_rejected";
 export type AccrualStatus =
   | "pending_chain_verification"
   | "available"
   | "held"
-  | "allocated";
+  | "allocated"
+  | "paid"
+  | "rejected"
+  | "reversed";
 export type LedgerAccountType =
   | "merchant_commission_liability"
   | "referrer_payable"
@@ -152,6 +159,7 @@ export interface ReceiptRecord {
   receipt: Split402ReceiptV1;
   source: ReceiptIngestSource;
   verificationState: ReceiptVerificationState;
+  verificationReason?: string;
   ingestionState: "accepted";
   createdAt: string;
 }
@@ -259,12 +267,21 @@ export interface MarkReceiptChainVerifiedInput {
   verifiedAt: string;
 }
 
+export interface MarkReceiptChainRejectedInput {
+  receiptId: string;
+  rejectedAt: string;
+  reason: string;
+}
+
 export interface ReceiptChainVerificationStore {
   getReceiptForChainVerification(
     receiptId: string
   ): Promise<ReceiptIngestionSnapshot | undefined> | ReceiptIngestionSnapshot | undefined;
   markReceiptChainVerified(
     input: MarkReceiptChainVerifiedInput
+  ): Promise<ReceiptIngestionSnapshot | undefined> | ReceiptIngestionSnapshot | undefined;
+  markReceiptChainRejected(
+    input: MarkReceiptChainRejectedInput
   ): Promise<ReceiptIngestionSnapshot | undefined> | ReceiptIngestionSnapshot | undefined;
 }
 
@@ -301,10 +318,22 @@ export type ReceiptIngestResult =
       errors: string[];
     };
 
+export interface ReceiptPolicyVerificationResult {
+  ok: boolean;
+  errors: string[];
+}
+
+export interface ReceiptPolicyVerifier {
+  verify(
+    receipt: Split402ReceiptV1
+  ): Promise<ReceiptPolicyVerificationResult> | ReceiptPolicyVerificationResult;
+}
+
 export interface ReceiptIngestorOptions {
   resolveMerchantPublicKey: (
     receipt: Split402ReceiptV1
   ) => Promise<string | undefined> | string | undefined;
+  policyVerifier?: ReceiptPolicyVerifier;
   now?: () => Date;
   idFactory?: (prefix: "acr" | "ldg" | "lde") => string;
 }
@@ -336,7 +365,8 @@ export class InMemoryReceiptIngestionStore
     PayoutLedgerClosureStore,
     PayoutReconciliationStore,
     MerchantObligationViewStore,
-    ReferrerPayoutViewStore {
+    ReferrerPayoutViewStore,
+    ReceiptChainVerificationStore {
   private readonly receiptsById = new Map<string, ReceiptIngestionSnapshot>();
   private readonly receiptIdByHash = new Map<`sha256:${string}`, string>();
   private readonly receiptIdByPaymentId = new Map<string, string>();
@@ -368,6 +398,76 @@ export class InMemoryReceiptIngestionStore
   getBySettlementTxSignature(signature: string): ReceiptIngestionSnapshot | undefined {
     const receiptId = this.receiptIdBySettlementTx.get(signature);
     return receiptId === undefined ? undefined : this.receiptsById.get(receiptId);
+  }
+
+  getReceiptForChainVerification(receiptId: string): ReceiptIngestionSnapshot | undefined {
+    return this.getByReceiptId(receiptId);
+  }
+
+  markReceiptChainVerified(
+    input: MarkReceiptChainVerifiedInput
+  ): ReceiptIngestionSnapshot | undefined {
+    const snapshot = this.getByReceiptId(input.receiptId);
+    if (snapshot === undefined) {
+      return undefined;
+    }
+    const updated: ReceiptIngestionSnapshot = {
+      ...snapshot,
+      receipt: {
+        ...snapshot.receipt,
+        verificationState:
+          snapshot.receipt.verificationState === "pending_chain_verification"
+            ? "signature_verified"
+            : snapshot.receipt.verificationState
+      },
+      ...(snapshot.accrual === undefined
+        ? {}
+        : {
+            accrual: {
+              ...snapshot.accrual,
+              ...(snapshot.accrual.status === "pending_chain_verification"
+                ? {
+                    status: "available" as const,
+                    availableAt: input.verifiedAt
+                  }
+                : {})
+            }
+          })
+    };
+    this.save(updated);
+    return updated;
+  }
+
+  markReceiptChainRejected(
+    input: MarkReceiptChainRejectedInput
+  ): ReceiptIngestionSnapshot | undefined {
+    const snapshot = this.getByReceiptId(input.receiptId);
+    if (snapshot === undefined) {
+      return undefined;
+    }
+    const updated: ReceiptIngestionSnapshot = {
+      ...snapshot,
+      receipt: {
+        ...snapshot.receipt,
+        verificationState:
+          snapshot.receipt.verificationState === "pending_chain_verification"
+            ? "chain_rejected"
+            : snapshot.receipt.verificationState,
+        verificationReason: input.reason
+      },
+      ...(snapshot.accrual === undefined
+        ? {}
+        : {
+            accrual: {
+              ...snapshot.accrual,
+              ...(snapshot.accrual.status === "pending_chain_verification"
+                ? { status: "rejected" as const }
+                : {})
+            }
+          })
+    };
+    this.save(updated);
+    return updated;
   }
 
   save(snapshot: ReceiptIngestionSnapshot): void {
@@ -473,6 +573,42 @@ export class InMemoryReceiptIngestionStore
     return this.payoutBatchesById.get(batchId);
   }
 
+  releasePayoutBatchAllocations(
+    input: ReleasePayoutBatchAllocationsInput
+  ): PayoutBatchRecord | undefined {
+    const batch = this.payoutBatchesById.get(input.payoutBatchId);
+    if (batch === undefined) {
+      return undefined;
+    }
+    const released = releasePayoutBatchAllocationsForBatch({
+      batch,
+      reason: input.reason,
+      ...(input.now === undefined ? {} : { now: input.now })
+    });
+    const releasedAccrualIds = new Set(
+      released.items.flatMap((item) =>
+        item.allocations.map((allocation) => allocation.accrualId)
+      )
+    );
+    this.payoutBatchesById.set(released.id, released);
+    for (const snapshot of this.receiptsById.values()) {
+      if (
+        snapshot.accrual !== undefined &&
+        snapshot.accrual.status === "allocated" &&
+        releasedAccrualIds.has(snapshot.accrual.id)
+      ) {
+        this.save({
+          ...snapshot,
+          accrual: {
+            ...snapshot.accrual,
+            status: "available"
+          }
+        });
+      }
+    }
+    return released;
+  }
+
   saveSignedPayoutTransactions(
     input: SaveSignedPayoutTransactionsInput
   ): PayoutTransactionRecord[] {
@@ -481,7 +617,16 @@ export class InMemoryReceiptIngestionStore
         `unknown payout batch: ${input.payoutBatchId}`
       );
     }
-    const records = createSignedPayoutTransactionRecords(input);
+    const batch = this.payoutBatchesById.get(input.payoutBatchId);
+    if (batch === undefined) {
+      throw new PayoutBatchConflictError(
+        `unknown payout batch: ${input.payoutBatchId}`
+      );
+    }
+    const records = attachPayoutTransactionItemMappings(
+      createSignedPayoutTransactionRecords(input),
+      batch
+    );
     for (const record of records) {
       if (this.payoutTransactionsById.has(record.id)) {
         throw new PayoutBatchConflictError(
@@ -636,13 +781,16 @@ export class InMemoryReceiptIngestionStore
     if (batch === undefined) {
       return;
     }
-    const rollup = summarizePayoutBatchFinality(
-      this.listPayoutTransactions(payoutBatchId)
-    );
+    const rollup = summarizePayoutBatchTransactionItemFinality({
+      batch,
+      transactions: this.listPayoutTransactions(payoutBatchId)
+    });
     if (rollup === undefined) {
       return;
     }
-    const itemStatus = rollup.itemStatus;
+    const updatedItemsById = new Map(
+      rollup.updatedItems.map((item) => [item.payoutItemId, item.status])
+    );
     this.payoutBatchesById.set(payoutBatchId, {
       ...batch,
       status: rollup.batchStatus,
@@ -653,19 +801,16 @@ export class InMemoryReceiptIngestionStore
         ? {}
         : { failureMessage: rollup.failureMessage }),
       updatedAt,
-      items:
-        itemStatus === undefined
-          ? batch.items
-          : batch.items.map((item) => ({
-              ...item,
-              status: itemStatus
-            }))
+      items: batch.items.map((item) => ({
+        ...item,
+        status: updatedItemsById.get(item.id) ?? item.status
+      }))
     });
   }
 
-  closeFinalizedPayoutBatchLedger(
+  async closeFinalizedPayoutBatchLedger(
     input: ClosePayoutBatchLedgerInput
-  ): LedgerTransaction | undefined {
+  ): Promise<LedgerTransaction | undefined> {
     const existing = this.payoutLedgerTransactionsByBatchId.get(input.payoutBatchId);
     if (existing !== undefined) {
       return existing;
@@ -674,6 +819,11 @@ export class InMemoryReceiptIngestionStore
     if (batch === undefined) {
       return undefined;
     }
+    await verifyPayoutFinalizedTransfersBeforeLedgerClosure({
+      batch,
+      transactions: this.listPayoutTransactions(batch.id),
+      verifier: input.finalizedTransferVerifier
+    });
     const transaction = createPayoutFinalizationLedgerTransaction({
       batch,
       ...(input.now === undefined ? {} : { now: input.now }),
@@ -685,6 +835,26 @@ export class InMemoryReceiptIngestionStore
         : { entryIdFactory: input.entryIdFactory })
     });
     this.payoutLedgerTransactionsByBatchId.set(input.payoutBatchId, transaction);
+    const finalizedAccrualIds = new Set(
+      batch.items
+        .filter((item) => item.status === "finalized")
+        .flatMap((item) => item.allocations.map((allocation) => allocation.accrualId))
+    );
+    for (const snapshot of this.receiptsById.values()) {
+      if (
+        snapshot.accrual !== undefined &&
+        snapshot.accrual.status === "allocated" &&
+        finalizedAccrualIds.has(snapshot.accrual.id)
+      ) {
+        this.save({
+          ...snapshot,
+          accrual: {
+            ...snapshot.accrual,
+            status: "paid"
+          }
+        });
+      }
+    }
     return transaction;
   }
 }
@@ -734,6 +904,15 @@ export class ReceiptIngestor {
         status: "rejected",
         statusCode: 400,
         errors: verification.errors
+      };
+    }
+
+    const policyVerification = await this.options.policyVerifier?.verify(receipt);
+    if (policyVerification !== undefined && !policyVerification.ok) {
+      return {
+        status: "rejected",
+        statusCode: 400,
+        errors: policyVerification.errors
       };
     }
 
@@ -896,6 +1075,229 @@ export class ReceiptIngestor {
   }
 }
 
+export interface ControlPlaneReceiptPolicyVerifierOptions {
+  merchantRegistry: MerchantRegistry;
+  campaignRegistry: CampaignRegistry;
+  routeRegistry: RouteRegistry;
+}
+
+export class ControlPlaneReceiptPolicyVerifier implements ReceiptPolicyVerifier {
+  constructor(
+    private readonly options: ControlPlaneReceiptPolicyVerifierOptions
+  ) {}
+
+  async verify(
+    receipt: Split402ReceiptV1
+  ): Promise<ReceiptPolicyVerificationResult> {
+    const errors: string[] = [];
+    const merchant = await this.options.merchantRegistry.getMerchantProfile(
+      receipt.merchantId
+    );
+    if (merchant === undefined) {
+      errors.push("merchant does not exist");
+    } else {
+      if (merchant.status !== "active") {
+        errors.push("merchant is not active");
+      }
+      if (
+        !merchant.origins.some(
+          (origin) =>
+            origin.origin === receipt.merchantOrigin &&
+            origin.status === "verified"
+        )
+      ) {
+        errors.push("merchant origin is not verified");
+      }
+      const serviceKey = await this.options.merchantRegistry.resolveKey({
+        merchantId: receipt.merchantId,
+        kid: receipt.kid,
+        purpose: "offer_receipt",
+        at: receipt.issuedAt
+      });
+      if (serviceKey === undefined) {
+        errors.push("merchant service key is not active for receipt kid");
+      }
+    }
+
+    const campaign = await this.options.campaignRegistry.getCampaign(
+      receipt.campaignId
+    );
+    if (campaign === undefined) {
+      errors.push("campaign does not exist");
+    } else {
+      if (campaign.merchantId !== receipt.merchantId) {
+        errors.push("campaign merchantId does not match receipt merchantId");
+      }
+      if (campaign.status !== "active") {
+        errors.push("campaign is not active");
+      }
+    }
+
+    const version = await this.options.campaignRegistry.getCampaignVersion(
+      receipt.campaignId,
+      receipt.campaignVersion
+    );
+    if (version === undefined) {
+      errors.push("campaign version does not exist");
+    } else {
+      if (version.termsHash !== receipt.campaignTermsHash) {
+        errors.push("campaign terms hash does not match receipt");
+      }
+      if (
+        !version.terms.operations.some(
+          (operation) => operation.operationId === receipt.operationId
+        )
+      ) {
+        errors.push("operationId is not in campaign version terms");
+      }
+      expectReceiptField(
+        errors,
+        "merchantOrigin",
+        receipt.merchantOrigin,
+        version.terms.resourceOrigin
+      );
+      expectReceiptField(errors, "network", receipt.network, version.terms.network);
+      expectReceiptField(errors, "asset", receipt.asset, version.terms.asset);
+      expectReceiptField(
+        errors,
+        "payToWallet",
+        receipt.payToWallet,
+        version.terms.payToWallet
+      );
+      expectReceiptField(
+        errors,
+        "requiredAmountAtomic",
+        receipt.requiredAmountAtomic,
+        version.terms.requiredAmountAtomic
+      );
+      expectReceiptField(
+        errors,
+        "settlementMode",
+        receipt.settlementMode,
+        version.terms.settlementMode
+      );
+      if (receipt.routeId !== undefined) {
+        expectReceiptField(
+          errors,
+          "commissionBps",
+          receipt.commissionBps,
+          version.terms.commissionBps
+        );
+        expectReceiptField(
+          errors,
+          "protocolFeeBpsOfCommission",
+          receipt.protocolFeeBpsOfCommission,
+          version.terms.protocolFeeBpsOfCommission
+        );
+      }
+    }
+
+    if (receipt.offerNonce.length === 0) {
+      errors.push("offerNonce is empty");
+    }
+
+    if (receipt.routeId === undefined) {
+      if (
+        receipt.commissionAmountAtomic !== "0" ||
+        receipt.protocolFeeAtomic !== "0" ||
+        receipt.referrerCreditAtomic !== "0"
+      ) {
+        errors.push("unattributed receipt must have zero commission amounts");
+      }
+      return { ok: errors.length === 0, errors };
+    }
+
+    const route = await this.options.routeRegistry.getRoute(receipt.routeId);
+    if (route === undefined) {
+      errors.push("route does not exist");
+      return { ok: errors.length === 0, errors };
+    }
+
+    if (route.campaignId !== receipt.campaignId) {
+      errors.push("route campaignId does not match receipt campaignId");
+    }
+    if (route.status !== "active") {
+      errors.push("route is not active");
+    }
+    if (
+      Date.parse(route.activatedAt) > Date.parse(receipt.issuedAt) ||
+      Date.parse(route.issuedAt) > Date.parse(receipt.issuedAt) ||
+      Date.parse(route.expiresAt) <= Date.parse(receipt.issuedAt)
+    ) {
+      errors.push("route is not active at receipt time");
+    }
+    if (route.resourceOrigin !== receipt.merchantOrigin) {
+      errors.push("route resourceOrigin does not match receipt merchantOrigin");
+    }
+    if (!routeCoversOperation(route.operationIds, receipt.operationId)) {
+      errors.push("route does not cover receipt operationId");
+    }
+
+    const routeVersions = await this.options.routeRegistry.listRouteVersions(
+      receipt.routeId
+    );
+    const matchingRouteVersion = routeVersions.find(
+      (routeVersion) => routeVersion.claimHash === receipt.referralClaimHash
+    );
+    if (matchingRouteVersion === undefined) {
+      errors.push("receipt referralClaimHash does not match route claim hash");
+    } else {
+      if (matchingRouteVersion.campaignVersionMin > receipt.campaignVersion) {
+        errors.push("route campaignVersionMin is greater than receipt campaignVersion");
+      }
+      expectReceiptField(
+        errors,
+        "payoutWallet",
+        receipt.payoutWallet,
+        matchingRouteVersion.payoutWallet
+      );
+    }
+    expectReceiptField(
+      errors,
+      "referrerWallet",
+      receipt.referrerWallet,
+      route.referrerWallet
+    );
+
+    if (version !== undefined) {
+      const selfReferral = evaluateSelfReferralPolicy({
+        allowSelfReferral: version.terms.allowSelfReferral,
+        payerWallet: receipt.payerWallet,
+        ...(receipt.referrerWallet === undefined
+          ? {}
+          : { referrerWallet: receipt.referrerWallet }),
+        ...(receipt.payoutWallet === undefined
+          ? {}
+          : { payoutWallet: receipt.payoutWallet }),
+        ...(merchant === undefined ? {} : { merchantOwnerWallet: merchant.ownerWallet })
+      });
+      if (!selfReferral.allowed) {
+        errors.push(`self-referral policy violation: ${selfReferral.reason}`);
+      }
+    }
+
+    return { ok: errors.length === 0, errors };
+  }
+}
+
+function expectReceiptField(
+  errors: string[],
+  label: string,
+  actual: number | string | undefined,
+  expected: number | string | undefined
+): void {
+  if (actual !== expected) {
+    errors.push(`${label} does not match campaign policy`);
+  }
+}
+
+function routeCoversOperation(
+  operationIds: RouteOperationScope,
+  operationId: string
+): boolean {
+  return operationIds.some((candidate) => candidate === "*" || candidate === operationId);
+}
+
 export interface ControlPlaneAppOptions {
   ingestor: ReceiptIngestor;
   merchantRegistry?: MerchantRegistry;
@@ -999,7 +1401,12 @@ export function createControlPlaneRuntime(
   const receiptStore = new PostgresReceiptIngestionStore(options.db);
   const outboxStore = new PostgresOutboxEventStore(options.db);
   const ingestor = new ReceiptIngestor(receiptStore, {
-    resolveMerchantPublicKey: createMerchantReceiptKeyResolver(merchantRegistry)
+    resolveMerchantPublicKey: createMerchantReceiptKeyResolver(merchantRegistry),
+    policyVerifier: new ControlPlaneReceiptPolicyVerifier({
+      merchantRegistry,
+      campaignRegistry,
+      routeRegistry
+    })
   });
   const authenticator =
     authPolicy === "disabled"
@@ -1548,6 +1955,58 @@ export function createPayoutRouter(
     }
   });
 
+  router.post(
+    "/v1/payout-batches/:batchId/release-allocations",
+    async (req, res, next) => {
+      try {
+        if (options.payoutBatchStore === undefined) {
+          res.status(500).json({
+            error: "internal_server_error",
+            message: "payout batch store is required"
+          });
+          return;
+        }
+        const batchId = readRouteParam(req.params.batchId, "batchId");
+        const batch = await options.payoutBatchStore.getPayoutBatch(batchId);
+        if (batch === undefined) {
+          res.status(404).json({
+            error: "not_found",
+            message: "payout batch was not found"
+          });
+          return;
+        }
+        const session = await requireMerchantOwnerForMerchantId(
+          req,
+          res,
+          options,
+          batch.merchantId
+        );
+        if (session === undefined && isMerchantAuthRequired(options)) {
+          return;
+        }
+        const body = readJsonObject(req.body) ?? {};
+        const now = readOptionalString(body.now, "now");
+        const released = await options.payoutBatchStore.releasePayoutBatchAllocations({
+          payoutBatchId: batch.id,
+          reason: readRequiredString(body.reason, "reason"),
+          ...(now === undefined ? {} : { now })
+        });
+        if (released === undefined) {
+          res.status(404).json({
+            error: "not_found",
+            message: "payout batch was not found"
+          });
+          return;
+        }
+        res.json({ batch: released });
+      } catch (error) {
+        if (!sendPayoutBatchError(res, error) && !sendMerchantRegistryError(res, error)) {
+          next(error);
+        }
+      }
+    }
+  );
+
   router.get("/v1/referrers/:referrerWallet/balances", async (req, res, next) => {
     try {
       if (options.referrerPayoutViewStore === undefined) {
@@ -1631,7 +2090,7 @@ export function createMerchantRegistryRouter(
       }
       const body = requireJsonObject(req.body);
       const id = readOptionalString(body.id, "id");
-      const status = readOptionalMerchantStatus(body.status);
+      rejectPublicField(body, "status");
       const ownerWallet =
         readOptionalString(body.ownerWallet, "ownerWallet") ?? session?.wallet;
       if (ownerWallet === undefined) {
@@ -1648,8 +2107,7 @@ export function createMerchantRegistryRouter(
         slug: readRequiredString(body.slug, "slug"),
         displayName: readRequiredString(body.displayName, "displayName"),
         ownerWallet,
-        ...(id === undefined ? {} : { id }),
-        ...(status === undefined ? {} : { status })
+        ...(id === undefined ? {} : { id })
       });
       res.status(201).json({ merchant });
     } catch (error) {
@@ -1820,14 +2278,12 @@ export function createMerchantRegistryRouter(
       const verificationMethod = readOptionalOriginVerificationMethod(
         body.verificationMethod
       );
-      const status = readOptionalMerchantOriginStatus(body.status);
-      const verifiedAt = readOptionalString(body.verifiedAt, "verifiedAt");
+      rejectPublicField(body, "status");
+      rejectPublicField(body, "verifiedAt");
       const origin = await merchantRegistry.addOrigin({
         merchantId: req.params.merchantId,
         origin: readRequiredString(body.origin, "origin"),
-        ...(verificationMethod === undefined ? {} : { verificationMethod }),
-        ...(status === undefined ? {} : { status }),
-        ...(verifiedAt === undefined ? {} : { verifiedAt })
+        ...(verificationMethod === undefined ? {} : { verificationMethod })
       });
       res.status(201).json({ origin });
     } catch (error) {
@@ -2529,19 +2985,10 @@ function readOptionalString(value: unknown, label: string): string | undefined {
   return readRequiredString(value, label);
 }
 
-function readOptionalMerchantStatus(value: unknown): MerchantStatus | undefined {
-  if (value === undefined) {
-    return undefined;
+function rejectPublicField(body: Record<string, unknown>, field: string): void {
+  if (Object.prototype.hasOwnProperty.call(body, field)) {
+    throw new MerchantRegistryValidationError(`${field} is not accepted on this public endpoint`);
   }
-  if (
-    value === "pending" ||
-    value === "active" ||
-    value === "suspended" ||
-    value === "closed"
-  ) {
-    return value;
-  }
-  throw new MerchantRegistryValidationError("status must be a valid merchant status");
 }
 
 function readOptionalOriginVerificationMethod(
@@ -2556,23 +3003,6 @@ function readOptionalOriginVerificationMethod(
   throw new MerchantRegistryValidationError(
     "verificationMethod must be well_known or dns"
   );
-}
-
-function readOptionalMerchantOriginStatus(
-  value: unknown
-): MerchantOriginStatus | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-  if (
-    value === "pending" ||
-    value === "verified" ||
-    value === "failed" ||
-    value === "revoked"
-  ) {
-    return value;
-  }
-  throw new MerchantRegistryValidationError("status must be a valid origin status");
 }
 
 function readOptionalMerchantKeyAlgorithm(
@@ -2797,6 +3227,10 @@ function readReferralClaim(value: unknown): ReferralClaimV1 {
 
 function readCampaignTermsInput(body: Record<string, unknown>): CampaignTermsInput {
   const protocolFeeBps = readOptionalNumber(body.protocolFeeBps, "protocolFeeBps");
+  const protocolFeeBpsOfCommission = readOptionalNumber(
+    body.protocolFeeBpsOfCommission,
+    "protocolFeeBpsOfCommission"
+  );
   const commissionBase = readOptionalCampaignCommissionBase(body.commissionBase);
   const attributionRequired = readOptionalBoolean(
     body.attributionRequired,
@@ -2818,6 +3252,9 @@ function readCampaignTermsInput(body: Record<string, unknown>): CampaignTermsInp
     ),
     payToWallet: readRequiredString(body.payToWallet, "payToWallet"),
     commissionBps: readRequiredNumber(body.commissionBps, "commissionBps"),
+    ...(protocolFeeBpsOfCommission === undefined
+      ? {}
+      : { protocolFeeBpsOfCommission }),
     ...(protocolFeeBps === undefined ? {} : { protocolFeeBps }),
     ...(commissionBase === undefined ? {} : { commissionBase }),
     ...(attributionRequired === undefined ? {} : { attributionRequired }),

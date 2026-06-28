@@ -10,16 +10,24 @@ Split402 currently implements the USDC accrual-and-payout architecture up throug
 the first Phase 6 payout-engine boundaries. The protocol core, test vectors, x402
 extension, demo merchant, demo agent, agent SDK, merchant SDK primitives,
 control-plane ingestion, PostgreSQL adapters, outbox workers, Solana chain
-verification, payout preview/allocation, payout transaction persistence,
+verification, receipt economic-policy verification, public pending-only
+merchant/origin registration, payout preview/allocation, payout transaction persistence,
 broadcast/finality boundaries, local-dev signer, remote signer client, signer
 appliance scaffold, signer deployment artifacts, rollup, payout lifecycle
 outbox/webhook events, unknown-outcome reconciliation queue, referrer payout
 views, payout reconciliation decision tooling, and idempotent payout ledger
-closure are present.
+closure are present. Chain verification rejection now creates terminal rejected
+accrual state, finalized payout ledger closure marks allocated accruals paid,
+and safe release can cancel pre-submission/problem payout batches back to
+available accruals. The first `@split402/router` alpha package is present with
+static providers, budget enforcement, ranking, fallback, and receipt
+verification.
 
 The MVP still uses normal x402 settlement to the merchant and records a
-commission liability for later merchant-funded payout. Atomic split settlement and
-`$SPLIT` bonding remain later research.
+commission liability for later merchant-funded payout. Protocol fee is a
+percentage of the referral commission via `protocolFeeBpsOfCommission`, not a
+percentage of gross x402 payment. Atomic split settlement and `$SPLIT` bonding
+remain later research.
 
 ## Phase 0: Repository Setup
 
@@ -303,6 +311,8 @@ Current slice:
 - Solana payout transaction finality monitor with retry and outcome-unknown
   classification;
 - payout batch and item status rollup from transaction finality;
+- safe payout allocation release for draft, planned, signing, failed, and
+  cancelled batches;
 - idempotent payout-batch ledger closure for finalized payouts;
 - payout submitted, confirmed, finalized, failed, and outcome-unknown internal
   and webhook outbox events;
@@ -316,9 +326,24 @@ Current slice:
 - `POST /v1/merchants/:merchantId/payouts/preview`;
 - `GET /v1/merchants/:merchantId/payouts/reconciliation`;
 - `POST /v1/payout-batches/:batchId/reconcile`;
+- `POST /v1/payout-batches/:batchId/release-allocations`;
 - `POST /v1/merchants/:merchantId/payout-batches`;
 - `GET /v1/referrers/:referrerWallet/balances`;
 - `GET /v1/referrers/:referrerWallet/payouts`.
+
+Current hardening:
+
+- public merchant creation rejects caller-supplied approval status and creates
+  pending merchants;
+- public merchant-origin registration rejects caller-supplied approval status
+  and verification timestamps and creates pending origins;
+- receipt ingestion can run a control-plane policy verifier before accrual
+  creation.
+- chain-verification rejection moves pending accruals to `rejected`.
+- finalized payout ledger closure moves allocated accruals to `paid`.
+- allocation release cancels only safe pre-submission/problem batches and moves
+  their allocated accruals back to `available`; submitted, confirmed,
+  finalized, and outcome-unknown batches remain blocked.
 
 ## Phase 7: Dashboard And Discovery
 
@@ -331,7 +356,9 @@ Deliverables:
 - public reliability profile;
 - route search;
 - Bazaar metadata integration;
-- MCP demo bundle and stdio gateway;
+- MCP demo bundle and narrow stdio gateway;
+- Split402 capability router;
+- adoption-grade runnable MCP gateway;
 - webhook management.
 
 Current slice:
@@ -345,9 +372,12 @@ Current slice:
   route status rollups.
 - merchant webhook delivery feed for pending, processing, delivered, and
   dead-letter webhook outbox events.
-- MCP-facing paid-tool demo bundle and stdio gateway with tool metadata, x402
+- MCP-facing paid-tool demo bundle and narrow stdio gateway with tool metadata, x402
   payment details, Split402 campaign metadata, expected referral economics, and
   proof commands.
+- `@split402/router` public-alpha package with static providers, budget
+  enforcement, deterministic ranking, retry/fallback, and fail-closed receipt
+  verification.
 - merchant/referrer dashboard UI with a narrow control-plane read proxy for
   summaries, reliability profiles, webhook delivery, routes, balances, and
   payouts.
@@ -362,6 +392,11 @@ Current slice:
   available, held, in-flight, paid, and outstanding commission liabilities.
 - optional Solana RPC funding-balance provider so obligation views can report
   covered and deficit status for active payout wallets.
+
+Pending Phase 7 adoption layer:
+
+- Runnable MCP gateway backed by the router. Do not claim full MCP compatibility
+  beyond the implemented interface.
 
 ## Later: Token Bonding And Atomic Settlement
 

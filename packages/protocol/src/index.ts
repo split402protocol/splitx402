@@ -7,5 +7,6 @@ export * from "./operation.js";
 export * from "./origin.js";
 export * from "./sample.js";
 export * from "./schemas.js";
+export * from "./self-referral.js";
 export * from "./signing.js";
 export * from "./verification.js";

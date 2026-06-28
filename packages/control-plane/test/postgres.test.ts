@@ -85,7 +85,7 @@ describe("PostgresReceiptIngestionStore", () => {
     expect(loaded?.accrual).toEqual(
       expect.objectContaining({
         receiptId: bundle.artifacts.receipt.receiptId,
-        amountAtomic: "2000"
+        amountAtomic: bundle.artifacts.receipt.referrerCreditAtomic
       })
     );
     expect(loaded?.ledgerTransaction?.entries).toHaveLength(3);
@@ -364,6 +364,42 @@ describe("PostgresReceiptIngestionStore", () => {
     expect(replayed?.accrual?.availableAt).toBe("2026-06-24T00:04:00Z");
   });
 
+  it("marks rejected chain verification as a terminal rejected accrual", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const fakePool = new FakePostgresPool();
+    const store = new PostgresReceiptIngestionStore(fakePool);
+    const ingestor = new ReceiptIngestor(store, {
+      resolveMerchantPublicKey: () => bundle.keys.merchantPublicKey,
+      now: () => new Date("2026-06-24T00:02:00Z")
+    });
+    await ingestor.ingest({ receipt: bundle.artifacts.receipt, source: "merchant" });
+
+    const rejected = await store.markReceiptChainRejected({
+      receiptId: bundle.artifacts.receipt.receiptId,
+      rejectedAt: "2026-06-24T00:04:00Z",
+      reason: "settlement transfer did not match receipt"
+    });
+    const replayedConfirm = await store.markReceiptChainVerified({
+      receiptId: bundle.artifacts.receipt.receiptId,
+      verifiedAt: "2026-06-24T00:05:00Z"
+    });
+
+    expect(rejected?.receipt.verificationState).toBe("chain_rejected");
+    expect(rejected?.receipt.verificationReason).toBe(
+      "settlement transfer did not match receipt"
+    );
+    expect(rejected?.accrual?.status).toBe("rejected");
+    expect(replayedConfirm?.receipt.verificationState).toBe("chain_rejected");
+    expect(replayedConfirm?.accrual?.status).toBe("rejected");
+    await expect(
+      store.listPayoutEligibleAccruals({
+        merchantId: bundle.artifacts.receipt.merchantId,
+        asset: bundle.artifacts.receipt.asset,
+        now: "2026-06-24T00:05:00Z"
+      })
+    ).resolves.toEqual([]);
+  });
+
   it("persists payout batches and allocates selected accruals once", async () => {
     const bundle = createSampleProtocolArtifacts();
     const fakePool = new FakePostgresPool();
@@ -394,12 +430,14 @@ describe("PostgresReceiptIngestionStore", () => {
     const loaded = await store.getPayoutBatch(batch.id);
 
     expect(batch.status).toBe("planned");
-    expect(batch.totalAmountAtomic).toBe("2000");
+    expect(batch.totalAmountAtomic).toBe(
+      bundle.artifacts.receipt.referrerCreditAtomic
+    );
     expect(batch.items[0]?.allocations).toEqual([
       {
         payoutItemId: "pit_ffffffffffffffffffffffffffffffff",
         accrualId: verified.accrual.id,
-        amountAtomic: "2000"
+        amountAtomic: bundle.artifacts.receipt.referrerCreditAtomic
       }
     ]);
     expect(loaded).toEqual(batch);
@@ -449,7 +487,9 @@ describe("PostgresReceiptIngestionStore", () => {
       limit: 1
     });
 
-    expect(batch.totalAmountAtomic).toBe("2000");
+    expect(batch.totalAmountAtomic).toBe(
+      bundle.artifacts.receipt.referrerCreditAtomic
+    );
     expect(batch.accrualCount).toBe(1);
     expect(fakePool.database.accruals[0]?.status).toBe("allocated");
     expect(fakePool.client.commands).toContainEqual(
@@ -520,10 +560,12 @@ describe("PostgresReceiptIngestionStore", () => {
       entryIdFactory: sequence([
         "lde_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "lde_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-      ])
+      ]),
+      finalizedTransferVerifier: approvingFinalizedTransferVerifier()
     });
     const repeatedLedgerClose = await store.closeFinalizedPayoutBatchLedger({
-      payoutBatchId: batch.id
+      payoutBatchId: batch.id,
+      finalizedTransferVerifier: approvingFinalizedTransferVerifier()
     });
 
     expect(saved).toHaveLength(1);
@@ -563,18 +605,23 @@ describe("PostgresReceiptIngestionStore", () => {
           expect.objectContaining({
             accountType: "merchant_commission_liability",
             accountReference: bundle.artifacts.receipt.merchantId,
-            amountAtomic: "2000"
+            amountAtomic: bundle.artifacts.receipt.referrerCreditAtomic
           }),
           expect.objectContaining({
             accountType: "referrer_payable",
             accountReference: bundle.artifacts.receipt.payoutWallet,
-            amountAtomic: "-2000"
+            amountAtomic: `-${bundle.artifacts.receipt.referrerCreditAtomic}`
           })
         ]
       })
     );
     expect(repeatedLedgerClose?.id).toBe(ledgerClose?.id);
     expect(repeatedLedgerClose?.sourceType).toBe("payout_batch");
+    await expect(store.getByReceiptId(bundle.artifacts.receipt.receiptId)).resolves.toEqual(
+      expect.objectContaining({
+        accrual: expect.objectContaining({ status: "paid" })
+      })
+    );
     expect(fakePool.database.outboxEvents).toHaveLength(6);
     const payoutSubmittedEvent = findOutboxEvent(
       fakePool.database.outboxEvents,
@@ -605,7 +652,7 @@ describe("PostgresReceiptIngestionStore", () => {
         asset: bundle.artifacts.receipt.asset,
         status: "submitted",
         transactionStatus: "submitted",
-        totalAmountAtomic: "2000",
+        totalAmountAtomic: bundle.artifacts.receipt.referrerCreditAtomic,
         expectedSignature: "expected_sig_0",
         submittedAt: "2026-06-24T00:07:00.000Z",
         occurredAt: "2026-06-24T00:07:00.000Z"
@@ -649,7 +696,7 @@ describe("PostgresReceiptIngestionStore", () => {
         network: bundle.artifacts.receipt.network,
         asset: bundle.artifacts.receipt.asset,
         status: "finalized",
-        totalAmountAtomic: "2000",
+        totalAmountAtomic: bundle.artifacts.receipt.referrerCreditAtomic,
         itemCount: 1,
         accrualCount: 1,
         ledgerTransactionId: ledgerClose?.id,
@@ -658,7 +705,7 @@ describe("PostgresReceiptIngestionStore", () => {
           expect.objectContaining({
             payoutItemId: batch.items[0]?.id,
             destinationWallet: bundle.artifacts.receipt.payoutWallet,
-            amountAtomic: "2000",
+            amountAtomic: bundle.artifacts.receipt.referrerCreditAtomic,
             status: "finalized",
             accrualIds: [verified.accrual.id]
           })
@@ -679,6 +726,14 @@ describe("PostgresReceiptIngestionStore", () => {
     expect(fakePool.database.ledgerTransactions).toHaveLength(2);
     expect(fakePool.database.ledgerEntries).toHaveLength(5);
     expect(fakePool.database.payoutTransactions).toHaveLength(1);
+    expect(fakePool.database.payoutTransactionItems).toEqual([
+      expect.objectContaining({
+        payout_transaction_id: saved[0]?.id,
+        payout_item_id: batch.items[0]?.id,
+        amount_atomic: bundle.artifacts.receipt.referrerCreditAtomic,
+        destination_wallet: bundle.artifacts.receipt.payoutWallet
+      })
+    ]);
     await expect(
       store.saveSignedPayoutTransactions({
         payoutBatchId: batch.id,
@@ -687,6 +742,97 @@ describe("PostgresReceiptIngestionStore", () => {
         transactions: [{ sequence: 0, signedTransactionBase64: "BAUG" }]
       })
     ).rejects.toBeInstanceOf(PayoutBatchConflictError);
+  });
+
+  it("releases planned payout allocations back to available", async () => {
+    const fixture = await createPostgresPayoutTransactionFixture();
+
+    const released = await fixture.store.releasePayoutBatchAllocations({
+      payoutBatchId: fixture.batch.id,
+      reason: "transaction bytes failed verification",
+      now: "2026-06-24T00:07:00Z"
+    });
+    const loaded = await fixture.store.getPayoutBatch(fixture.batch.id);
+
+    expect(released).toEqual(
+      expect.objectContaining({
+        id: fixture.batch.id,
+        status: "cancelled",
+        failureCode: "allocations_released",
+        failureMessage: "transaction bytes failed verification",
+        updatedAt: "2026-06-24T00:07:00.000Z"
+      })
+    );
+    expect(released?.items[0]?.status).toBe("released");
+    expect(loaded?.status).toBe("cancelled");
+    expect(loaded?.items[0]?.status).toBe("released");
+    await expect(
+      fixture.store.getByReceiptId(fixture.bundle.artifacts.receipt.receiptId)
+    ).resolves.toEqual(
+      expect.objectContaining({
+        accrual: expect.objectContaining({ status: "available" })
+      })
+    );
+    await expect(
+      fixture.store.listPayoutEligibleAccruals({
+        merchantId: fixture.bundle.artifacts.receipt.merchantId,
+        asset: fixture.bundle.artifacts.receipt.asset,
+        now: "2026-06-24T00:07:00Z"
+      })
+    ).resolves.toHaveLength(1);
+  });
+
+  it("does not release submitted or outcome-unknown allocations", async () => {
+    const submitted = await createPostgresPayoutTransactionFixture();
+    await submitted.store.markPayoutTransactionSubmitted({
+      id: submitted.transaction.id,
+      submittedAt: "2026-06-24T00:07:00Z",
+      expectedSignature: "expected_sig_0"
+    });
+
+    await expect(
+      submitted.store.releasePayoutBatchAllocations({
+        payoutBatchId: submitted.batch.id,
+        reason: "manual release",
+        now: "2026-06-24T00:08:00Z"
+      })
+    ).rejects.toBeInstanceOf(PayoutBatchConflictError);
+    await expect(
+      submitted.store.getByReceiptId(
+        submitted.bundle.artifacts.receipt.receiptId
+      )
+    ).resolves.toEqual(
+      expect.objectContaining({
+        accrual: expect.objectContaining({ status: "allocated" })
+      })
+    );
+
+    const unknown = await createPostgresPayoutTransactionFixture();
+    await unknown.store.markPayoutTransactionSubmitted({
+      id: unknown.transaction.id,
+      submittedAt: "2026-06-24T00:07:00Z",
+      expectedSignature: "expected_sig_0"
+    });
+    await unknown.store.markPayoutTransactionFinality({
+      id: unknown.transaction.id,
+      status: "outcome_unknown",
+      observedAt: "2026-06-24T00:08:00Z"
+    });
+
+    await expect(
+      unknown.store.releasePayoutBatchAllocations({
+        payoutBatchId: unknown.batch.id,
+        reason: "manual release",
+        now: "2026-06-24T00:09:00Z"
+      })
+    ).rejects.toBeInstanceOf(PayoutBatchConflictError);
+    await expect(
+      unknown.store.getByReceiptId(unknown.bundle.artifacts.receipt.receiptId)
+    ).resolves.toEqual(
+      expect.objectContaining({
+        accrual: expect.objectContaining({ status: "allocated" })
+      })
+    );
   });
 
   it("emits idempotent payout finality lifecycle events", async () => {
@@ -817,6 +963,55 @@ describe("PostgresReceiptIngestionStore", () => {
     ).resolves.toEqual([]);
   });
 
+  it("gates payout ledger closure on finalized transfer verification", async () => {
+    const fixture = await createPostgresPayoutTransactionFixture();
+    await fixture.store.markPayoutTransactionFinality({
+      id: fixture.transaction.id,
+      status: "finalized",
+      observedAt: "2026-06-24T00:08:00Z"
+    });
+
+    await expect(
+      fixture.store.closeFinalizedPayoutBatchLedger({
+        payoutBatchId: fixture.batch.id,
+        now: "2026-06-24T00:09:00Z",
+        finalizedTransferVerifier: {
+          verifyFinalizedPayout: () => ({
+            ok: false,
+            errors: ["missing mapped transfer"]
+          })
+        }
+      })
+    ).rejects.toThrow("finalized payout transfer verification failed");
+
+    expect(fixture.fakePool.database.ledgerTransactions).toHaveLength(1);
+    await expect(
+      fixture.store.getByReceiptId(fixture.bundle.artifacts.receipt.receiptId)
+    ).resolves.toEqual(
+      expect.objectContaining({
+        accrual: expect.objectContaining({ status: "allocated" })
+      })
+    );
+
+    await expect(
+      fixture.store.closeFinalizedPayoutBatchLedger({
+        payoutBatchId: fixture.batch.id,
+        now: "2026-06-24T00:09:00Z",
+        finalizedTransferVerifier: {
+          verifyFinalizedPayout: ({ batch, transactions }) => ({
+            ok: batch.status === "finalized" && transactions.length === 1,
+            errors: []
+          })
+        }
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        sourceType: "payout_batch",
+        sourceId: fixture.batch.id
+      })
+    );
+  });
+
   it("loads referrer balances and payout history from payout allocations", async () => {
     const fixture = await createPostgresPayoutTransactionFixture();
     const accrual = fixture.verified.accrual;
@@ -845,8 +1040,9 @@ describe("PostgresReceiptIngestionStore", () => {
         availableAmountAtomic: "0",
         heldAmountAtomic: "0",
         inFlightAmountAtomic: "0",
-        paidAmountAtomic: "2000",
-        totalEarnedAmountAtomic: "2000"
+        paidAmountAtomic: fixture.bundle.artifacts.receipt.referrerCreditAtomic,
+        totalEarnedAmountAtomic:
+          fixture.bundle.artifacts.receipt.referrerCreditAtomic
       }
     ]);
     expect(history).toEqual([
@@ -876,9 +1072,11 @@ describe("PostgresReceiptIngestionStore", () => {
       expect.objectContaining({
         asset: fixture.bundle.artifacts.receipt.asset,
         fundingStatus: "unknown",
-        inFlightAmountAtomic: "2000",
-        outstandingAmountAtomic: "2000",
-        totalAccruedAmountAtomic: "2000",
+        inFlightAmountAtomic: fixture.bundle.artifacts.receipt.referrerCreditAtomic,
+        outstandingAmountAtomic:
+          fixture.bundle.artifacts.receipt.referrerCreditAtomic,
+        totalAccruedAmountAtomic:
+          fixture.bundle.artifacts.receipt.referrerCreditAtomic,
         inFlightAccrualCount: 1
       })
     ]);
@@ -1688,6 +1886,10 @@ class FakePostgresClient implements PostgresTransactionClient {
       this.database.insertPayoutTransaction(values);
       return result([]);
     }
+    if (normalized.startsWith("insert into payout_transaction_items")) {
+      this.database.insertPayoutTransactionItem(values);
+      return result([]);
+    }
     if (normalized.startsWith("insert into campaigns")) {
       this.database.insertCampaign(values);
       return result([]);
@@ -1751,8 +1953,18 @@ class FakePostgresClient implements PostgresTransactionClient {
         this.database.revokeWalletAuthRefreshToken(values) as unknown as Row[]
       );
     }
-    if (normalized.startsWith("update payment_receipts")) {
+    if (
+      normalized.startsWith("update payment_receipts") &&
+      normalized.includes("verification_state = 'signature_verified'")
+    ) {
       this.database.markReceiptChainVerified(values);
+      return result([]);
+    }
+    if (
+      normalized.startsWith("update payment_receipts") &&
+      normalized.includes("verification_state = 'chain_rejected'")
+    ) {
+      this.database.markReceiptChainRejected(values);
       return result([]);
     }
     if (
@@ -1760,6 +1972,20 @@ class FakePostgresClient implements PostgresTransactionClient {
       normalized.includes("set status = 'allocated'")
     ) {
       return result(this.database.allocateAccrual(values) as unknown as Row[]);
+    }
+    if (
+      normalized.startsWith("update commission_accruals") &&
+      normalized.includes("set status = 'rejected'")
+    ) {
+      this.database.rejectAccrualForReceipt(values);
+      return result([]);
+    }
+    if (
+      normalized.startsWith("update commission_accruals") &&
+      normalized.includes("set status = 'paid'")
+    ) {
+      this.database.markAccrualPaid(values);
+      return result([]);
     }
     if (
       normalized.startsWith("update payout_transactions") &&
@@ -1778,8 +2004,22 @@ class FakePostgresClient implements PostgresTransactionClient {
       this.database.updatePayoutBatchRollup(values);
       return result([]);
     }
+    if (
+      normalized.startsWith("update payout_items") &&
+      normalized.includes("where payout_batch_id = $1")
+    ) {
+      this.database.releasePayoutItemsForBatch(values);
+      return result([]);
+    }
     if (normalized.startsWith("update payout_items")) {
       this.database.updatePayoutItemsStatus(values);
+      return result([]);
+    }
+    if (
+      normalized.startsWith("update commission_accruals ca") &&
+      normalized.includes("set status = 'available'")
+    ) {
+      this.database.releaseAccrualsForPayoutBatch(values);
       return result([]);
     }
     if (normalized.startsWith("update commission_accruals")) {
@@ -1860,6 +2100,11 @@ class FakePostgresClient implements PostgresTransactionClient {
         this.database.selectPayoutTransactions(normalized, values) as unknown as Row[]
       );
     }
+    if (normalized.includes("from payout_transaction_items")) {
+      return result(
+        this.database.selectPayoutTransactionItems(values[0]) as unknown as Row[]
+      );
+    }
     if (normalized.includes("from campaigns")) {
       return result(
         this.database.selectCampaign(normalized, values) as unknown as Row[]
@@ -1917,6 +2162,7 @@ class FakePostgresDatabase {
   payoutItems: StoredPayoutItemRow[] = [];
   payoutAllocations: StoredPayoutAllocationRow[] = [];
   payoutTransactions: StoredPayoutTransactionRow[] = [];
+  payoutTransactionItems: StoredPayoutTransactionItemRow[] = [];
   campaigns: StoredCampaignRow[] = [];
   campaignVersions: StoredCampaignVersionRow[] = [];
   campaignOperations: StoredCampaignOperationRow[] = [];
@@ -1948,8 +2194,9 @@ class FakePostgresDatabase {
       receipt_json: readString(values[11]),
       source: readString(values[12]),
       verification_state: readString(values[13]),
-      ingestion_state: readString(values[14]),
-      created_at: readString(values[15])
+      verification_reason: readNullableString(values[14]),
+      ingestion_state: readString(values[15]),
+      created_at: readString(values[16])
     });
   }
 
@@ -2223,6 +2470,18 @@ class FakePostgresDatabase {
       receipt.verification_state === "pending_chain_verification"
     ) {
       receipt.verification_state = "signature_verified";
+      receipt.verification_reason = null;
+    }
+  }
+
+  markReceiptChainRejected(values: readonly unknown[]): void {
+    const receipt = this.receipts.find((row) => row.id === readString(values[0]));
+    if (
+      receipt !== undefined &&
+      receipt.verification_state === "pending_chain_verification"
+    ) {
+      receipt.verification_state = "chain_rejected";
+      receipt.verification_reason = readString(values[1]);
     }
   }
 
@@ -2236,6 +2495,44 @@ class FakePostgresDatabase {
     ) {
       accrual.status = "available";
       accrual.available_at = readString(values[1]);
+    }
+  }
+
+  rejectAccrualForReceipt(values: readonly unknown[]): void {
+    const accrual = this.accruals.find(
+      (row) => row.receipt_id === readString(values[0])
+    );
+    if (
+      accrual !== undefined &&
+      accrual.status === "pending_chain_verification"
+    ) {
+      accrual.status = "rejected";
+    }
+  }
+
+  markAccrualPaid(values: readonly unknown[]): void {
+    const accrual = this.accruals.find((row) => row.id === readString(values[0]));
+    if (accrual !== undefined && accrual.status === "allocated") {
+      accrual.status = "paid";
+    }
+  }
+
+  releaseAccrualsForPayoutBatch(values: readonly unknown[]): void {
+    const batchId = readString(values[0]);
+    const itemIds = new Set(
+      this.payoutItems
+        .filter((item) => item.payout_batch_id === batchId)
+        .map((item) => item.id)
+    );
+    const accrualIds = new Set(
+      this.payoutAllocations
+        .filter((allocation) => itemIds.has(allocation.payout_item_id))
+        .map((allocation) => allocation.accrual_id)
+    );
+    for (const accrual of this.accruals) {
+      if (accrual.status === "allocated" && accrualIds.has(accrual.id)) {
+        accrual.status = "available";
+      }
     }
   }
 
@@ -2393,6 +2690,15 @@ class FakePostgresDatabase {
     this.payoutAllocations.push(row);
   }
 
+  releasePayoutItemsForBatch(values: readonly unknown[]): void {
+    const batchId = readString(values[0]);
+    for (const item of this.payoutItems) {
+      if (item.payout_batch_id === batchId) {
+        item.status = "released";
+      }
+    }
+  }
+
   insertPayoutTransaction(values: readonly unknown[]): void {
     const row: StoredPayoutTransactionRow = {
       id: readString(values[0]),
@@ -2424,6 +2730,26 @@ class FakePostgresDatabase {
       throw Object.assign(new Error("duplicate key"), { code: "23505" });
     }
     this.payoutTransactions.push(row);
+  }
+
+  insertPayoutTransactionItem(values: readonly unknown[]): void {
+    const row: StoredPayoutTransactionItemRow = {
+      payout_transaction_id: readString(values[0]),
+      payout_item_id: readString(values[1]),
+      amount_atomic: readString(values[2]),
+      destination_wallet: readString(values[3]),
+      destination_token_account: readNullableString(values[4])
+    };
+    if (
+      this.payoutTransactionItems.some(
+        (item) =>
+          item.payout_transaction_id === row.payout_transaction_id &&
+          item.payout_item_id === row.payout_item_id
+      )
+    ) {
+      throw Object.assign(new Error("duplicate key"), { code: "23505" });
+    }
+    this.payoutTransactionItems.push(row);
   }
 
   markPayoutTransactionSubmitted(
@@ -2478,10 +2804,10 @@ class FakePostgresDatabase {
   }
 
   updatePayoutItemsStatus(values: readonly unknown[]): void {
-    const payoutBatchId = readString(values[0]);
+    const payoutItemId = readString(values[0]);
     const status = readString(values[1]);
     for (const item of this.payoutItems) {
-      if (item.payout_batch_id === payoutBatchId) {
+      if (item.id === payoutItemId) {
         item.status = status;
       }
     }
@@ -2636,6 +2962,19 @@ class FakePostgresDatabase {
           left.attempt - right.attempt ||
           left.created_at.localeCompare(right.created_at) ||
           left.id.localeCompare(right.id)
+      );
+  }
+
+  selectPayoutTransactionItems(value: unknown): StoredPayoutTransactionItemRow[] {
+    const ids = Array.isArray(value)
+      ? value.map((item) => readString(item))
+      : [readString(value)];
+    return this.payoutTransactionItems
+      .filter((row) => ids.includes(row.payout_transaction_id))
+      .sort(
+        (left, right) =>
+          left.payout_transaction_id.localeCompare(right.payout_transaction_id) ||
+          left.payout_item_id.localeCompare(right.payout_item_id)
       );
   }
 
@@ -3053,6 +3392,7 @@ type StoredReceiptRow = QueryResultRow & {
   receipt_json: string;
   source: string;
   verification_state: string;
+  verification_reason: string | null;
   ingestion_state: string;
   created_at: string;
 };
@@ -3194,6 +3534,14 @@ type StoredPayoutTransactionRow = QueryResultRow & {
   finalized_at: string | null;
   error_json: string | null;
   created_at: string;
+};
+
+type StoredPayoutTransactionItemRow = QueryResultRow & {
+  payout_transaction_id: string;
+  payout_item_id: string;
+  amount_atomic: string;
+  destination_wallet: string;
+  destination_token_account: string | null;
 };
 
 type StoredCampaignRow = QueryResultRow & {
@@ -3431,6 +3779,12 @@ function sequence(values: string[]): () => string {
       throw new Error("sequence exhausted");
     }
     return value;
+  };
+}
+
+function approvingFinalizedTransferVerifier() {
+  return {
+    verifyFinalizedPayout: () => ({ ok: true, errors: [] })
   };
 }
 

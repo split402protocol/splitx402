@@ -32,6 +32,7 @@ export interface MerchantCampaignConfig {
   campaignVersion: number;
   campaignTermsHash: `sha256:${string}`;
   commissionBps: number;
+  protocolFeeBpsOfCommission: number;
   attributionRequired: boolean;
   allowSelfReferral: boolean;
 }
@@ -947,6 +948,10 @@ function parseCampaignResponse(
     commissionBps: readBasisPoints(
       terms.commissionBps,
       "campaign.current.terms.commissionBps"
+    ),
+    protocolFeeBpsOfCommission: readBasisPoints(
+      terms.protocolFeeBpsOfCommission ?? terms.protocolFeeBps,
+      "campaign.current.terms.protocolFeeBpsOfCommission"
     ),
     attributionRequired: readRequiredBoolean(
       terms.attributionRequired,

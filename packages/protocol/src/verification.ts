@@ -121,7 +121,11 @@ export function verifyReceiptArithmetic(
     errors.push("commissionBaseAtomic must equal requiredAmountAtomic in v0.1");
   }
 
-  const expected = calculateCommission(requiredAmount, BigInt(receipt.commissionBps), 0n);
+  const expected = calculateCommission(
+    requiredAmount,
+    BigInt(receipt.commissionBps),
+    BigInt(receipt.protocolFeeBpsOfCommission)
+  );
   if (commissionAmount !== expected.commission) {
     errors.push("commissionAmountAtomic does not match commissionBps");
   }
@@ -134,4 +138,3 @@ export function verifyReceiptArithmetic(
 
   return { ok: errors.length === 0, errors };
 }
-
