@@ -6,18 +6,20 @@ interface ForbiddenPattern {
   pattern: RegExp;
 }
 
+const legacySegment = String.fromCharCode(102, 102, 102, 102);
+
 const forbiddenPatterns: ForbiddenPattern[] = [
   {
-    name: "legacy ffff repository URL",
-    pattern: /github\.com\/splitx402\/ffff/iu
+    name: "legacy repository URL",
+    pattern: new RegExp(`github\\.com\\/splitx402\\/${legacySegment}`, "iu")
   },
   {
-    name: "legacy ffff repository shorthand",
-    pattern: /splitx402\/ffff/iu
+    name: "legacy repository shorthand",
+    pattern: new RegExp(`splitx402\\/${legacySegment}`, "iu")
   },
   {
-    name: "legacy ffff path reference",
-    pattern: /\/ffff(?:\b|[/?#)"'\]])/iu
+    name: "legacy path reference",
+    pattern: new RegExp(`\\/${legacySegment}(?:\\b|[/?#)"'\\]])`, "iu")
   }
 ];
 
