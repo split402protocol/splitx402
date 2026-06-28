@@ -508,6 +508,35 @@ funding_balance_evidence: funding.json
     });
   });
 
+  it("blocks approved proof status when the current checkout is dirty", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+      currentSourceCommit: "fd88024000000000000000000000000000000000",
+      currentWorktreeDirty: true,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.sourceCommitStatus).toEqual({
+      status: "invalid",
+      proofSourceCommit: "fd88024",
+      currentSourceCommit: "fd88024000000000000000000000000000000000",
+      currentWorktreeDirty: true,
+      blockers: ["current checkout has uncommitted changes"],
+    });
+    expect(report.gateStatuses).toContainEqual({
+      gate: "hosted_staging_preflight",
+      evidenceField: "hosted_preflight_evidence",
+      status: "invalid",
+      blockers: ["current checkout has uncommitted changes"],
+    });
+  });
+
   it("approves staged proof status when local artifacts match the manifest", () => {
     const proofText = createManifestProof();
     const artifacts = createManifestArtifacts(proofText);
