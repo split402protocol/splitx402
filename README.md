@@ -588,8 +588,10 @@ Phase 6 production hardening remains a launch gate:
 - production payout custody and incident-response review;
 - production security review before any mainnet use.
 
-The latest Devnet proof is recorded in
+The recorded Phase 3 Devnet paid-suite proof is in
 [docs/proofs/phase3-paid-suite-2026-06-24.md](docs/proofs/phase3-paid-suite-2026-06-24.md).
+The current Phase 7 hosted proof remains pending until real staging evidence is
+assembled and approved.
 
 ## Documentation
 
