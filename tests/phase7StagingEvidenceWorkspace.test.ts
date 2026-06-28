@@ -140,11 +140,16 @@ describe("Phase 7 staging evidence workspace", () => {
     expect(workspace.readmeText).toContain("receiptVerificationStatus");
     expect(workspace.readmeText).toContain("protocolFeeBpsOfCommission");
     expect(workspace.readmeText).toContain(
-      "report should include providerId, maxAmountAtomic, providerAmountAtomic",
+      "report should include providerId, maxAmountAtomic, providerNetwork",
     );
+    expect(workspace.readmeText).toContain("providerAsset");
     expect(workspace.readmeText).toContain("providerPayToWallet");
-    expect(workspace.readmeText).toContain("selected provider payToWallet");
-    expect(workspace.readmeText).toContain("matching receipt payToWallet");
+    expect(workspace.readmeText).toContain(
+      "selected provider network, asset, and",
+    );
+    expect(workspace.readmeText).toContain(
+      "matching receipt network, asset, and payToWallet",
+    );
     expect(workspace.readmeText).toContain(
       "`phase7:hosted:preflight` writes `hosted-preflight.json`",
     );
