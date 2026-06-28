@@ -15,6 +15,7 @@ npm-debug.log*
 .env.*
 !.env.example
 deploy/phase7-staging/phase7-staging.env
+split402-launch-evidence/
 
 # Databases
 *.sqlite
