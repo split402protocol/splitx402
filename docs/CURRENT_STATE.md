@@ -88,8 +88,8 @@ workspace with Phase 6 and Phase 7 evidence files plus local env templates. The
 initializer refuses to overwrite existing scaffold files unless `--force` is
 passed intentionally. Run
 `corepack pnpm product:launch-preflight --brief` to check whether the local
-launch workspace and required Phase 7 hosted proof environment values are ready
-before collection starts. Run
+launch workspace, Phase 6 custody evidence env paths, and required Phase 7
+hosted proof environment values are ready before collection starts. Run
 `corepack pnpm product:launch-checklist --brief` for the exact remaining local
 validation, hosted proof, custody evidence, and combined status commands; pass
 the Phase 6 and Phase 7 evidence files to show checked, blocked, or ready
