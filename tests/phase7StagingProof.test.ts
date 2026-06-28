@@ -1060,6 +1060,109 @@ funding_balance_evidence: funding.json
     );
   });
 
+  it("blocks staged proof status when MCP receipt lookup omits commission bps", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          includeLookupCommissionBps: false,
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence getReceipt commissionBps must be positive basis points",
+    );
+  });
+
+  it("blocks staged proof status when MCP receipt commission bps arithmetic is wrong", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          lookupCommissionAmountAtomic: "1900",
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence getReceipt commissionAmountAtomic does not match commissionBps",
+    );
+  });
+
+  it("blocks staged proof status when MCP receipt lookup omits protocol fee bps", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          includeLookupProtocolFeeBps: false,
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence getReceipt protocolFeeBpsOfCommission must be basis points",
+    );
+  });
+
+  it("blocks staged proof status when MCP receipt protocol fee bps arithmetic is wrong", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          executeReferrerCreditAtomic: "1900",
+          lookupReferrerCreditAtomic: "1900",
+          lookupCommissionAmountAtomic: "2000",
+          lookupProtocolFeeAtomic: "100",
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence getReceipt protocolFeeAtomic does not match protocolFeeBpsOfCommission",
+    );
+  });
+
   it("blocks staged proof status when MCP receipt split arithmetic is wrong", () => {
     const proofText = createManifestProof();
     const artifacts = createManifestArtifacts(proofText);
@@ -1613,6 +1716,10 @@ function createValidMcpGatewayTranscript(
     includeLookupRouteId?: boolean;
     includeLookupCommissionAmount?: boolean;
     lookupCommissionAmountAtomic?: string;
+    includeLookupCommissionBps?: boolean;
+    lookupCommissionBps?: number;
+    includeLookupProtocolFeeBps?: boolean;
+    lookupProtocolFeeBpsOfCommission?: number;
     lookupProtocolFeeAtomic?: string;
     tools?: string[];
   } = {},
@@ -1645,6 +1752,12 @@ function createValidMcpGatewayTranscript(
   const includeLookupRouteId = options.includeLookupRouteId ?? true;
   const includeLookupCommissionAmount =
     options.includeLookupCommissionAmount ?? true;
+  const includeLookupCommissionBps = options.includeLookupCommissionBps ?? true;
+  const lookupCommissionBps = options.lookupCommissionBps ?? 2000;
+  const includeLookupProtocolFeeBps =
+    options.includeLookupProtocolFeeBps ?? true;
+  const lookupProtocolFeeBpsOfCommission =
+    options.lookupProtocolFeeBpsOfCommission ?? 1000;
   const lookupProtocolFeeAtomic = options.lookupProtocolFeeAtomic ?? "200";
   const lookupCommissionAmountAtomic =
     options.lookupCommissionAmountAtomic ??
@@ -1770,6 +1883,15 @@ function createValidMcpGatewayTranscript(
                             : {}),
                           ...(includeLookupCommissionAmount
                             ? { commissionAmountAtomic: lookupCommissionAmountAtomic }
+                            : {}),
+                          ...(includeLookupCommissionBps
+                            ? { commissionBps: lookupCommissionBps }
+                            : {}),
+                          ...(includeLookupProtocolFeeBps
+                            ? {
+                                protocolFeeBpsOfCommission:
+                                  lookupProtocolFeeBpsOfCommission,
+                              }
                             : {}),
                           protocolFeeAtomic: lookupProtocolFeeAtomic,
                         },
