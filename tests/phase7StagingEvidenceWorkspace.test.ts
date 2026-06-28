@@ -66,7 +66,7 @@ describe("Phase 7 staging evidence workspace", () => {
       "`phase7:hosted:preflight` writes `hosted-preflight.json`",
     );
     expect(workspace.readmeText).toContain(
-      "`phase7:staging-proof` fills `source_commit`",
+      "`phase7:staging-proof` and `phase7:staging:assemble` fill `source_commit`",
     );
     expect(workspace.readmeText).toContain(
       "corepack pnpm phase7:staging:derive-receipt-verification",

@@ -33,7 +33,7 @@ corepack pnpm phase7:staging:status phase7-staging-proof.txt
 `phase7:staging:init` creates a `phase7-staging-evidence/` directory README and
 `phase7-staging.env` attachment-path template. It does not create evidence
 artifact files; those must be captured from the hosted staging run.
-`phase7:staging-proof` fills `source_commit` from
+`phase7:staging-proof` and `phase7:staging:assemble` fill `source_commit` from
 `SPLIT402_PHASE7_SOURCE_COMMIT` when set, otherwise from `git rev-parse HEAD`.
 Use the same value for hosted preflight evidence so the same-source gate can
 close.
