@@ -85,6 +85,10 @@ MCP gateway evidence must run in `router-live-agent-sdk` mode: set
 `SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1`, and provide a funded buyer key in
 `SPLIT402_MCP_SVM_PRIVATE_KEY` or `SVM_PRIVATE_KEY` for the router-backed x402
 execution path.
+The status checker also compares `mcp_gateway_evidence` with
+`agent_discovery_evidence`: the selected provider route id must appear in route
+discovery, and the discovered campaign, referrer wallet, and payout wallet must
+match the MCP-selected provider.
 `phase7:hosted:preflight` captures `hosted-preflight.json` with the source
 commit, control-plane health, dashboard health, dashboard session state, locked
 dashboard access without a viewer token, and successful dashboard access with
@@ -222,7 +226,9 @@ The validator requires:
   details, selected-provider merchant origin, selected-provider operation id,
   selected-provider campaign id, selected-provider route attribution,
   selected-provider referrer wallet, and selected-provider payout wallet. The
-  receipt payload must also include positive
+  selected provider route id must also be present in
+  `agent_discovery_evidence` with matching campaign id, referrer wallet, and
+  payout wallet. The receipt payload must also include positive
   commission bps, `protocolFeeBpsOfCommission`, positive commission amount,
   non-negative protocol fee, commission and protocol fee amounts derived from
   those bps fields, and referrer credit equal to commission minus protocol fee.
