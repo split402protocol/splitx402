@@ -64,8 +64,8 @@ receipt verification by default.
 - filters providers by capability, network, asset, and maximum amount;
 - searches providers by capability plus optional network, asset, and maximum
   amount budget filters;
-- ignores provider records with malformed atomic prices during budgeted search
-  and execution ranking;
+- ignores provider records with malformed atomic prices during search and
+  execution ranking;
 - discovers active control-plane routes into provider records;
 - ranks by success rate, then price, then latency, then provider id;
 - executes through `Split402AgentClient` by default;

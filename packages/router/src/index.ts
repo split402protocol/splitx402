@@ -235,6 +235,7 @@ export class Split402Router {
           search.budget?.asset === undefined ||
           provider.asset === search.budget.asset
       )
+      .filter((provider) => readProviderAtomicAmount(provider) !== undefined)
       .filter((provider) => {
         if (search.budget?.maxAmountAtomic === undefined) {
           return true;
