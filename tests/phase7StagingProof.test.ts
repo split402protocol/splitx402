@@ -834,6 +834,56 @@ funding_balance_evidence: funding.json
     );
   });
 
+  it("blocks staged proof status when MCP execute capability differs from search", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          executeCapability: "solana.other-risk",
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute capability does not match search capability",
+    );
+  });
+
+  it("blocks staged proof status when MCP execute provider was not discovered", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          searchProviderId: "split402-other-merchant",
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute providerId was not returned by search",
+    );
+  });
+
   it("blocks staged proof status when MCP execution evidence has no receipt lookup", () => {
     const proofText = createManifestProof();
     const artifacts = createManifestArtifacts(proofText);
@@ -1374,6 +1424,10 @@ function createValidMcpGatewayTranscript(
     includeSearchBudget?: boolean;
     searchMaxAmountAtomic?: string;
     executeMaxAmountAtomic?: string;
+    searchCapability?: string;
+    executeCapability?: string;
+    searchProviderId?: string;
+    executeProviderId?: string;
     amountPaidAtomic?: string;
     tools?: string[];
   } = {},
@@ -1383,6 +1437,10 @@ function createValidMcpGatewayTranscript(
   const includeReceiptLookup = options.includeReceiptLookup ?? true;
   const includeSearchBudget = options.includeSearchBudget ?? true;
   const searchMaxAmountAtomic = options.searchMaxAmountAtomic ?? "50000";
+  const searchCapability = options.searchCapability ?? "solana.wallet-risk";
+  const executeCapability = options.executeCapability ?? searchCapability;
+  const searchProviderId = options.searchProviderId ?? "split402-demo-merchant";
+  const executeProviderId = options.executeProviderId ?? "split402-demo-merchant";
   const executeMaxAmountAtomic =
     options.executeMaxAmountAtomic ?? searchMaxAmountAtomic;
   const amountPaidAtomic = options.amountPaidAtomic ?? "10000";
@@ -1426,7 +1484,7 @@ function createValidMcpGatewayTranscript(
         params: {
           name: "split402.searchCapabilities",
           arguments: {
-            capability: "solana.wallet-risk",
+            capability: searchCapability,
             ...(includeSearchBudget
               ? { budget: { maxAmountAtomic: searchMaxAmountAtomic } }
               : {}),
@@ -1441,7 +1499,7 @@ function createValidMcpGatewayTranscript(
         id: "search",
         result: {
           structuredContent: {
-            capabilities: [{ providerId: "split402-demo-merchant" }],
+            capabilities: [{ providerId: searchProviderId }],
           },
         },
       },
@@ -1457,7 +1515,7 @@ function createValidMcpGatewayTranscript(
               params: {
                 name: "split402.execute",
                 arguments: {
-                  capability: "solana.wallet-risk",
+                  capability: executeCapability,
                   input: { wallet: "wallet-demo" },
                   ...(includeExecuteBudget
                     ? { budget: { maxAmountAtomic: executeMaxAmountAtomic } }
@@ -1473,7 +1531,7 @@ function createValidMcpGatewayTranscript(
               id: "execute",
               result: {
                 structuredContent: {
-                  providerId: "split402-demo-merchant",
+                  providerId: executeProviderId,
                   amountPaidAtomic,
                   receiptId,
                   receiptVerificationStatus: "verified",
