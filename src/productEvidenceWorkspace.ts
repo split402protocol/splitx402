@@ -117,6 +117,7 @@ function createNextCommands(input: {
   return [
     `Fill ${input.directory}/${input.phase7EnvFileName} with hosted staging values.`,
     `Fill ${input.directory}/${input.phase6EvidenceFileName} with generated Phase 6 custody records.`,
+    `corepack pnpm product:launch-preflight --brief ${input.directory}`,
     "SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",
     `Review ${input.directory}/${input.phase7ProofFileName} and fill direct hosted proof fields.`,
     "corepack pnpm phase7:hosted:preflight",
