@@ -30,6 +30,8 @@ export interface Phase7McpGatewayEvidenceReport {
   providerAmountAtomic?: string;
   providerPayToWallet?: string;
   providerRouteId?: string;
+  providerReferrerWallet?: string;
+  providerPayoutWallet?: string;
   amountPaidAtomic?: string;
   receiptId?: string;
   receiptVerificationStatus?: string;
@@ -41,6 +43,8 @@ export interface Phase7McpGatewayEvidenceReport {
   requiredAmountAtomic?: string;
   payToWallet?: string;
   receiptReferrerCreditAtomic?: string;
+  receiptReferrerWallet?: string;
+  receiptPayoutWallet?: string;
   commissionBps?: number;
   protocolFeeBpsOfCommission?: number;
   commissionAmountAtomic?: string;
@@ -273,6 +277,16 @@ export async function collectPhase7McpGatewayEvidence(
             "mcp_gateway_evidence getReceipt routeId does not match selected provider",
           );
         }
+        if (receiptSummary.referrerWallet !== providerSummary.referrerWallet) {
+          blockers.push(
+            "mcp_gateway_evidence getReceipt referrerWallet does not match selected provider",
+          );
+        }
+        if (receiptSummary.payoutWallet !== providerSummary.payoutWallet) {
+          blockers.push(
+            "mcp_gateway_evidence getReceipt payoutWallet does not match selected provider",
+          );
+        }
       }
     }
     const amountPaid = readAtomicAmount(executionSummary.amountPaidAtomic);
@@ -313,6 +327,8 @@ export async function collectPhase7McpGatewayEvidence(
           providerAmountAtomic: providerSummary.amountAtomic,
           providerPayToWallet: providerSummary.payToWallet,
           providerRouteId: providerSummary.routeId,
+          providerReferrerWallet: providerSummary.referrerWallet,
+          providerPayoutWallet: providerSummary.payoutWallet,
         }),
     ...(executionSummary === undefined
       ? {}
@@ -333,6 +349,8 @@ export async function collectPhase7McpGatewayEvidence(
           requiredAmountAtomic: receiptSummary.requiredAmountAtomic,
           payToWallet: receiptSummary.payToWallet,
           receiptReferrerCreditAtomic: receiptSummary.referrerCreditAtomic,
+          receiptReferrerWallet: receiptSummary.referrerWallet,
+          receiptPayoutWallet: receiptSummary.payoutWallet,
           commissionBps: receiptSummary.commissionBps,
           protocolFeeBpsOfCommission:
             receiptSummary.protocolFeeBpsOfCommission,
@@ -380,6 +398,8 @@ interface McpGatewayReceiptSummary {
   requiredAmountAtomic: string;
   payToWallet: string;
   referrerCreditAtomic: string;
+  referrerWallet: string;
+  payoutWallet: string;
   commissionBps: number;
   protocolFeeBpsOfCommission: number;
   commissionAmountAtomic: string;
@@ -392,6 +412,8 @@ interface McpGatewaySearchProviderSummary {
   amountAtomic: string;
   payToWallet: string;
   routeId: string;
+  referrerWallet: string;
+  payoutWallet: string;
 }
 
 function readExecutionSummary(
@@ -484,6 +506,8 @@ function readReceiptSummary(
   const requiredAmountAtomic = readNonEmptyString(receipt?.requiredAmountAtomic);
   const payToWallet = readNonEmptyString(receipt?.payToWallet);
   const referrerCreditAtomic = readNonEmptyString(receipt?.referrerCreditAtomic);
+  const referrerWallet = readNonEmptyString(receipt?.referrerWallet);
+  const payoutWallet = readNonEmptyString(receipt?.payoutWallet);
   const commissionBps = readBasisPoints(receipt?.commissionBps);
   const protocolFeeBpsOfCommission = readBasisPoints(
     receipt?.protocolFeeBpsOfCommission,
@@ -499,6 +523,8 @@ function readReceiptSummary(
     requiredAmountAtomic === undefined ||
     payToWallet === undefined ||
     referrerCreditAtomic === undefined ||
+    referrerWallet === undefined ||
+    payoutWallet === undefined ||
     commissionBps === undefined ||
     protocolFeeBpsOfCommission === undefined ||
     commissionAmountAtomic === undefined ||
@@ -513,6 +539,8 @@ function readReceiptSummary(
     requiredAmountAtomic,
     payToWallet,
     referrerCreditAtomic,
+    referrerWallet,
+    payoutWallet,
     commissionBps,
     protocolFeeBpsOfCommission,
     commissionAmountAtomic,
@@ -539,16 +567,28 @@ function readSearchProviderSummary(
     const amountAtomic = readNonEmptyString(capability.amountAtomic);
     const payToWallet = readNonEmptyString(capability.payToWallet);
     const routeId = readNonEmptyString(capability.routeId);
+    const referrerWallet = readNonEmptyString(capability.referrerWallet);
+    const payoutWallet = readNonEmptyString(capability.payoutWallet);
     if (
       network === undefined ||
       asset === undefined ||
       amountAtomic === undefined ||
       payToWallet === undefined ||
-      routeId === undefined
+      routeId === undefined ||
+      referrerWallet === undefined ||
+      payoutWallet === undefined
     ) {
       return undefined;
     }
-    return { network, asset, amountAtomic, payToWallet, routeId };
+    return {
+      network,
+      asset,
+      amountAtomic,
+      payToWallet,
+      routeId,
+      referrerWallet,
+      payoutWallet,
+    };
   }
   return undefined;
 }

@@ -1166,6 +1166,8 @@ funding_balance_evidence: funding.json
           includeSearchProviderPayToWallet: false,
           includeSearchProviderAmount: false,
           includeSearchProviderRouteId: false,
+          includeSearchProviderReferrerWallet: false,
+          includeSearchProviderPayoutWallet: false,
         }),
       ),
     );
@@ -1192,6 +1194,12 @@ funding_balance_evidence: funding.json
     );
     expect(report.mcpGatewayStatus.blockers).toContain(
       "mcp_gateway_evidence selected provider routeId is missing",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence selected provider referrerWallet is missing",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence selected provider payoutWallet is missing",
     );
   });
 
@@ -1255,6 +1263,37 @@ funding_balance_evidence: funding.json
     expect(report.readyForPublicAlphaDemo).toBe(false);
     expect(report.mcpGatewayStatus.blockers).toContain(
       "mcp_gateway_evidence getReceipt routeId does not match selected provider",
+    );
+  });
+
+  it("blocks staged proof status when MCP receipt wallets differ from selected provider", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          searchProviderReferrerWallet: "referrer-wallet",
+          searchProviderPayoutWallet: "payout-wallet",
+          lookupReferrerWallet: "other-referrer-wallet",
+          lookupPayoutWallet: "other-payout-wallet",
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence getReceipt referrerWallet does not match selected provider",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence getReceipt payoutWallet does not match selected provider",
     );
   });
 
@@ -2095,11 +2134,15 @@ function createValidMcpGatewayTranscript(
     includeSearchProviderPayToWallet?: boolean;
     includeSearchProviderAmount?: boolean;
     includeSearchProviderRouteId?: boolean;
+    includeSearchProviderReferrerWallet?: boolean;
+    includeSearchProviderPayoutWallet?: boolean;
     searchProviderNetwork?: string;
     searchProviderAsset?: string;
     searchProviderPayToWallet?: string;
     searchProviderAmountAtomic?: string;
     searchProviderRouteId?: string;
+    searchProviderReferrerWallet?: string;
+    searchProviderPayoutWallet?: string;
     amountPaidAtomic?: string;
     executeReferrerCreditAtomic?: string;
     lookupReceiptId?: string;
@@ -2109,6 +2152,10 @@ function createValidMcpGatewayTranscript(
     lookupAsset?: string;
     lookupPayToWallet?: string;
     lookupRouteId?: string;
+    lookupReferrerWallet?: string;
+    lookupPayoutWallet?: string;
+    includeLookupReferrerWallet?: boolean;
+    includeLookupPayoutWallet?: boolean;
     includeLookupRouteId?: boolean;
     includeLookupCommissionAmount?: boolean;
     lookupCommissionAmountAtomic?: string;
@@ -2143,6 +2190,10 @@ function createValidMcpGatewayTranscript(
   const includeSearchProviderAmount = options.includeSearchProviderAmount ?? true;
   const includeSearchProviderRouteId =
     options.includeSearchProviderRouteId ?? true;
+  const includeSearchProviderReferrerWallet =
+    options.includeSearchProviderReferrerWallet ?? true;
+  const includeSearchProviderPayoutWallet =
+    options.includeSearchProviderPayoutWallet ?? true;
   const searchProviderNetwork =
     options.searchProviderNetwork ?? "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
   const searchProviderAsset = options.searchProviderAsset ?? "usdc-devnet";
@@ -2152,6 +2203,10 @@ function createValidMcpGatewayTranscript(
     options.searchProviderAmountAtomic ?? amountPaidAtomic;
   const searchProviderRouteId =
     options.searchProviderRouteId ?? "rte_00000000000000000000000000000003";
+  const searchProviderReferrerWallet =
+    options.searchProviderReferrerWallet ?? "referrer-wallet";
+  const searchProviderPayoutWallet =
+    options.searchProviderPayoutWallet ?? "payout-wallet";
   const executeReferrerCreditAtomic =
     options.executeReferrerCreditAtomic ?? "1800";
   const tools = options.tools ?? [
@@ -2170,7 +2225,14 @@ function createValidMcpGatewayTranscript(
   const lookupPayToWallet =
     options.lookupPayToWallet ?? searchProviderPayToWallet;
   const lookupRouteId = options.lookupRouteId ?? searchProviderRouteId;
+  const lookupReferrerWallet =
+    options.lookupReferrerWallet ?? searchProviderReferrerWallet;
+  const lookupPayoutWallet =
+    options.lookupPayoutWallet ?? searchProviderPayoutWallet;
   const includeLookupRouteId = options.includeLookupRouteId ?? true;
+  const includeLookupReferrerWallet =
+    options.includeLookupReferrerWallet ?? true;
+  const includeLookupPayoutWallet = options.includeLookupPayoutWallet ?? true;
   const includeLookupCommissionAmount =
     options.includeLookupCommissionAmount ?? true;
   const includeLookupCommissionBps = options.includeLookupCommissionBps ?? true;
@@ -2248,6 +2310,12 @@ function createValidMcpGatewayTranscript(
                 ...(includeSearchProviderRouteId
                   ? { routeId: searchProviderRouteId }
                   : {}),
+                ...(includeSearchProviderReferrerWallet
+                  ? { referrerWallet: searchProviderReferrerWallet }
+                  : {}),
+                ...(includeSearchProviderPayoutWallet
+                  ? { payoutWallet: searchProviderPayoutWallet }
+                  : {}),
               },
             ],
           },
@@ -2322,6 +2390,12 @@ function createValidMcpGatewayTranscript(
                           requiredAmountAtomic: lookupRequiredAmountAtomic,
                           ...(includeLookupRouteId
                             ? { routeId: lookupRouteId }
+                            : {}),
+                          ...(includeLookupReferrerWallet
+                            ? { referrerWallet: lookupReferrerWallet }
+                            : {}),
+                          ...(includeLookupPayoutWallet
+                            ? { payoutWallet: lookupPayoutWallet }
                             : {}),
                           ...(includeLookupCommissionAmount
                             ? { commissionAmountAtomic: lookupCommissionAmountAtomic }

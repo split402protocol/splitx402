@@ -1890,6 +1890,12 @@ function validateMcpGatewayTranscript(
     selectedProvider?.payToWallet,
   );
   const selectedProviderRouteId = readNonEmptyString(selectedProvider?.routeId);
+  const selectedProviderReferrerWallet = readNonEmptyString(
+    selectedProvider?.referrerWallet,
+  );
+  const selectedProviderPayoutWallet = readNonEmptyString(
+    selectedProvider?.payoutWallet,
+  );
   const selectedProviderAmount = readPositiveAtomicString(
     selectedProvider?.amountAtomic,
   );
@@ -1912,6 +1918,16 @@ function validateMcpGatewayTranscript(
     }
     if (selectedProviderRouteId === undefined) {
       blockers.push("mcp_gateway_evidence selected provider routeId is missing");
+    }
+    if (selectedProviderReferrerWallet === undefined) {
+      blockers.push(
+        "mcp_gateway_evidence selected provider referrerWallet is missing",
+      );
+    }
+    if (selectedProviderPayoutWallet === undefined) {
+      blockers.push(
+        "mcp_gateway_evidence selected provider payoutWallet is missing",
+      );
     }
   }
   const amountPaidAtomic = readNonNegativeAtomicString(
@@ -2008,6 +2024,30 @@ function validateMcpGatewayTranscript(
   ) {
     blockers.push(
       "mcp_gateway_evidence getReceipt routeId does not match selected provider",
+    );
+  }
+  const receiptReferrerWallet = readNonEmptyString(receiptRecord.referrerWallet);
+  if (receiptReferrerWallet === undefined) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt receipt.referrerWallet is missing",
+    );
+  } else if (
+    selectedProviderReferrerWallet !== undefined &&
+    receiptReferrerWallet !== selectedProviderReferrerWallet
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt referrerWallet does not match selected provider",
+    );
+  }
+  const receiptPayoutWallet = readNonEmptyString(receiptRecord.payoutWallet);
+  if (receiptPayoutWallet === undefined) {
+    blockers.push("mcp_gateway_evidence getReceipt receipt.payoutWallet is missing");
+  } else if (
+    selectedProviderPayoutWallet !== undefined &&
+    receiptPayoutWallet !== selectedProviderPayoutWallet
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt payoutWallet does not match selected provider",
     );
   }
   const receiptCommissionAmount = readPositiveAtomicString(

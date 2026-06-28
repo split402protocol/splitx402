@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createMcpDemoBundle } from "../apps/mcp-demo/src/index.js";
+import { createSampleProtocolArtifacts } from "../packages/protocol/src/index.js";
 import { collectPhase7McpGatewayEvidence } from "../src/phase7McpGatewayEvidence.js";
 import type {
   Split402DiscoveryFetch,
@@ -62,6 +63,7 @@ describe("Phase 7 MCP gateway evidence collector", () => {
 
   it("captures demo execution and receipt lookup when no live control plane is configured", async () => {
     const bundle = createMcpDemoBundle();
+    const sample = createSampleProtocolArtifacts();
     const writes = new Map<string, string>();
 
     const report = await collectPhase7McpGatewayEvidence({
@@ -93,6 +95,8 @@ describe("Phase 7 MCP gateway evidence collector", () => {
       providerAmountAtomic: "10000",
       providerPayToWallet: bundle.mcp.tools[0].x402.payToWallet,
       providerRouteId: "rte_00000000000000000000000000000003",
+      providerReferrerWallet: sample.artifacts.receipt.referrerWallet,
+      providerPayoutWallet: sample.artifacts.receipt.payoutWallet,
       amountPaidAtomic: "10000",
       receiptVerificationStatus: "verified",
       executeExecutionMode: "router-demo-mock",
@@ -103,6 +107,8 @@ describe("Phase 7 MCP gateway evidence collector", () => {
       requiredAmountAtomic: "10000",
       payToWallet: bundle.mcp.tools[0].x402.payToWallet,
       receiptReferrerCreditAtomic: "1800",
+      receiptReferrerWallet: sample.artifacts.receipt.referrerWallet,
+      receiptPayoutWallet: sample.artifacts.receipt.payoutWallet,
       commissionBps: 2000,
       protocolFeeBpsOfCommission: 1000,
       commissionAmountAtomic: "2000",
