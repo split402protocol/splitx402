@@ -125,7 +125,7 @@ function createNextCommands(input: {
 }): string[] {
   return [
     `Fill ${input.directory}/${input.phase7EnvFileName} with hosted staging values.`,
-    `corepack pnpm phase6:evidence:env-template ${input.directory} > ${input.directory}/${input.phase6EnvFileName}`,
+    `Review generated ${input.directory}/${input.phase6EnvFileName} before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template ${input.directory} > ${input.directory}/${input.phase6EnvFileName}`,
     `Fill ${input.directory}/${input.phase6EnvFileName} with Phase 6 custody record paths.`,
     `Fill ${input.directory}/${input.phase6EvidenceFileName} with generated Phase 6 custody records.`,
     `corepack pnpm product:launch-preflight --brief ${input.directory}`,
