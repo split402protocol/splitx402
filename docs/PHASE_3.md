@@ -2,7 +2,7 @@
 
 Phase 3 starts architecture Milestone 1, the single-merchant Devnet demo path.
 The first slices port the x402 extension, Express request-context adapter, demo
-merchant runtime, agent SDK, and demo agent from `ffff`.
+merchant runtime, agent SDK, and demo agent into this repository.
 
 ## Current Status
 
