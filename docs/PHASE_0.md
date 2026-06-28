@@ -13,7 +13,7 @@ GitHub status: live at `split402protocol/splitx402`.
 The earliest Phase 0 notes treated this as a narrower repo-name-based Base/EVM
 experiment.
 That is superseded by
-[`0003`](decisions/0003-adopt-architecture-and-ffff-baseline.md).
+[`0003`](decisions/0003-adopt-split402-architecture-baseline.md).
 
 The canonical project direction is Split402:
 

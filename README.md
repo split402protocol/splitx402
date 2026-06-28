@@ -27,9 +27,7 @@ The important money model is simple:
 
 Split402 is the protocol and product name. This repository,
 `split402protocol/splitx402`, is the canonical public implementation repository.
-The earlier [`splitx402/ffff`](https://github.com/splitx402/ffff) repository is a
-historical implementation reference, not a separate product direction. The
-canonical protocol scope is captured in the
+The canonical protocol scope is captured in the
 [Split402 protocol architecture v0.1 spec](docs/reference/split402_protocol_architecture_v0.1.md).
 
 ## Protocol In One Picture
@@ -617,5 +615,5 @@ The latest Devnet proof is recorded in
 - [Phase 7 status](docs/PHASE_7.md)
 - [Phase 7 staging proof runbook](docs/runbooks/phase7-staging-proof.md)
 - [Phase 7 staging proof template](docs/templates/phase7-staging-proof.txt)
-- [Architecture baseline decision](docs/decisions/0003-adopt-architecture-and-ffff-baseline.md)
+- [Architecture baseline decision](docs/decisions/0003-adopt-split402-architecture-baseline.md)
 - [Security policy](SECURITY.md)
