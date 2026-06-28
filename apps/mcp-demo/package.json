@@ -9,11 +9,13 @@
     "build": "tsc -p tsconfig.build.json",
     "bundle": "tsx src/bundle.ts",
     "gateway": "tsx src/gateway.ts",
+    "gateway:smoke": "tsx src/gateway-smoke.ts",
     "lint": "eslint .",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@split402/agent-sdk": "workspace:*",
     "@split402/protocol": "workspace:*",
     "@split402/router": "workspace:*"
   },

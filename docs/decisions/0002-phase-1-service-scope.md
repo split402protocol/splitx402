@@ -9,9 +9,9 @@ Phase 1 needed a runnable service that proved the x402 HTTP skeleton before the
 project expanded into full Split402 protocol packages, referral claims, receipts,
 control-plane storage, or payout logic.
 
-The local architecture spec defines the broader Split402 direction: Solana
-Devnet demos, signed offers, referral claims, receipts, deterministic test
-vectors, persistent ingestion, ledger accounting, and merchant-funded payouts.
+The local architecture spec defines the broader Split402 direction: Solana Devnet
+demos, signed offers, referral claims, receipts, deterministic test vectors,
+persistent ingestion, ledger accounting, and merchant-funded payouts.
 
 ## Decision
 
@@ -27,7 +27,7 @@ The Phase 1 service should use the canonical Split402 name in visible metadata:
 ## Consequences
 
 - Phase 1 remains useful for local handshake tests.
-- Phase 2 can add the protocol package and test vectors without being blocked by
+- Phase 2 can land the protocol package and test vectors without being blocked by
   the service skeleton.
 - Later phases should replace or absorb the skeleton into the Solana Devnet merchant
   demo described by the architecture spec.

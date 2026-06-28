@@ -16,8 +16,8 @@ Status: implemented as the protocol-core baseline.
 
 - Vendored the canonical architecture spec into
   `docs/reference/split402_protocol_architecture_v0.1.md`.
-- Added `packages/protocol` from the initial compatibility baseline.
-- Added `packages/test-vectors` from the initial compatibility baseline.
+- Added `packages/protocol` as the compatibility baseline.
+- Added `packages/test-vectors`.
 - Converted the repo to a pnpm workspace.
 - Added root scripts for protocol vector generation and vector checking.
 - Updated CI to install and test through pnpm.

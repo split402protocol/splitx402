@@ -1,5 +1,6 @@
 import { Split402AgentClient } from "@split402/agent-sdk";
 import {
+  hashProtocolObject,
   Split402ReceiptV1Schema,
   verifySplit402Receipt,
   type ReferralClaimV1,
@@ -10,6 +11,7 @@ import type { KeyPairSigner } from "@solana/kit";
 export interface Split402CapabilityProvider {
   providerId: string;
   capability: string;
+  routeId?: string;
   merchantOrigin: string;
   path: string;
   method: "POST";
@@ -22,6 +24,11 @@ export interface Split402CapabilityProvider {
   reliability?: {
     successRateBps?: number;
     medianLatencyMs?: number;
+  };
+  metadata?: {
+    inputSchema?: unknown;
+    referrerWallet?: string;
+    payoutWallet?: string;
   };
 }
 
@@ -45,6 +52,15 @@ export interface Split402RouterExecuteResult<T = unknown> {
   attempts: Split402RouterAttempt[];
 }
 
+export interface Split402RouterSearchInput {
+  capability?: string;
+  budget?: {
+    network?: string;
+    asset?: string;
+    maxAmountAtomic?: string;
+  };
+}
+
 export interface Split402RouterAttempt {
   providerId: string;
   capability: string;
@@ -59,6 +75,70 @@ export interface Split402RouterOptions {
   signer?: KeyPairSigner;
   executor?: Split402RouterExecutor;
   verifyReceipts?: boolean;
+}
+
+export type Split402DiscoveryFetch = (
+  url: string,
+  init?: {
+    headers?: Record<string, string>;
+  }
+) => Promise<Split402DiscoveryFetchResponse>;
+
+export interface Split402DiscoveryFetchResponse {
+  status: number;
+  text(): Promise<string>;
+}
+
+export interface Split402ControlPlaneDiscoveryOptions {
+  controlPlaneUrl: string;
+  fetch?: Split402DiscoveryFetch;
+  bearerToken?: string;
+  capabilityMapper?: (resource: Split402BazaarResourceDiscoveryRecord) => string | undefined;
+  requireMerchantPublicKey?: boolean;
+  now?: () => Date;
+}
+
+export interface Split402ControlPlaneDiscoveryInput {
+  capability?: string;
+  resourceOrigin?: string;
+  operationId?: string;
+  limit?: number;
+}
+
+export interface Split402BazaarResourceDiscoveryRecord {
+  schema: "split402.bazaar_resource.v1";
+  resource: string;
+  type: "http";
+  x402Version: 2;
+  accepts: [
+    {
+      scheme: "exact";
+      network: string;
+      amount: string;
+      asset: string;
+      payTo: string;
+    },
+  ];
+  metadata: {
+    method: string;
+    operationId: string;
+    input?: {
+      schema: unknown;
+    };
+    split402: {
+      routeId: string;
+      campaignId: string;
+      referrerWallet?: string;
+      payoutWallet?: string;
+    };
+  };
+}
+
+export class Split402DiscoveryError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "Split402DiscoveryError";
+  }
 }
 
 export interface Split402RouterExecutor {
@@ -134,9 +214,35 @@ export class Split402Router {
     }
   }
 
-  searchCapabilities(capability?: string): Split402CapabilityProvider[] {
+  searchCapabilities(
+    input?: string | Split402RouterSearchInput
+  ): Split402CapabilityProvider[] {
+    const search = normalizeSearchInput(input);
     return this.providers
-      .filter((provider) => capability === undefined || provider.capability === capability)
+      .filter(
+        (provider) =>
+          search.capability === undefined ||
+          provider.capability === search.capability
+      )
+      .filter(
+        (provider) =>
+          search.budget?.network === undefined ||
+          provider.network === search.budget.network
+      )
+      .filter(
+        (provider) =>
+          search.budget?.asset === undefined ||
+          provider.asset === search.budget.asset
+      )
+      .filter(
+        (provider) =>
+          search.budget?.maxAmountAtomic === undefined ||
+          readAtomicAmount(provider.amountAtomic, "provider.amountAtomic") <=
+            readAtomicAmount(
+              search.budget.maxAmountAtomic,
+              "budget.maxAmountAtomic"
+            )
+      )
       .sort(compareProviders);
   }
 
@@ -179,9 +285,28 @@ export class Split402Router {
       );
     }
 
-    const maxAttempts = normalizeMaxAttempts(input.maxAttempts, providers.length);
+    const eligibleProviders = providers.filter(
+      (provider) =>
+        validateProviderAcceptsReferralClaim(provider, input.referralClaim)
+          .length === 0
+    );
+    if (eligibleProviders.length === 0) {
+      throw new Split402RouterError(
+        "execution_failed",
+        `no providers match the supplied referralClaim for ${input.capability}`,
+        providers.map((provider) => ({
+          providerId: provider.providerId,
+          capability: provider.capability,
+          status: "failed",
+          retryable: false,
+          error: `provider does not match referralClaim: ${validateProviderAcceptsReferralClaim(provider, input.referralClaim).join("; ")}`
+        }))
+      );
+    }
+
+    const maxAttempts = normalizeMaxAttempts(input.maxAttempts, eligibleProviders.length);
     const attempts: Split402RouterAttempt[] = [];
-    for (const provider of providers.slice(0, maxAttempts)) {
+    for (const provider of eligibleProviders.slice(0, maxAttempts)) {
       try {
         const result = await this.executor.execute({
           provider,
@@ -191,7 +316,11 @@ export class Split402Router {
             : { referralClaim: input.referralClaim }),
           ...(this.signer === undefined ? {} : { signer: this.signer })
         });
-        const receipt = this.verifyProviderReceipt(provider, result.receipt);
+        const receipt = this.verifyProviderReceipt(
+          provider,
+          result.receipt,
+          input.referralClaim
+        );
         attempts.push({
           providerId: provider.providerId,
           capability: provider.capability,
@@ -234,7 +363,8 @@ export class Split402Router {
 
   private verifyProviderReceipt(
     provider: Split402CapabilityProvider,
-    value: Split402ReceiptV1 | undefined
+    value: Split402ReceiptV1 | undefined,
+    referralClaim: ReferralClaimV1 | undefined
   ): Split402ReceiptV1 {
     if (value === undefined) {
       throw new Split402RouterProviderError("missing Split402 receipt", {
@@ -251,7 +381,10 @@ export class Split402Router {
       );
     }
     const receipt = parsed.data;
-    const errors = validateReceiptMatchesProvider(receipt, provider);
+    const errors = [
+      ...validateReceiptMatchesProvider(receipt, provider),
+      ...validateReceiptMatchesReferralClaim(receipt, referralClaim)
+    ];
     if (this.verifyReceipts) {
       if (provider.merchantPublicKey === undefined) {
         errors.push("provider merchantPublicKey is required for receipt verification");
@@ -270,6 +403,196 @@ export class Split402Router {
       );
     }
     return receipt;
+  }
+}
+
+export class Split402ControlPlaneDiscoveryClient {
+  private readonly controlPlaneUrl: string;
+  private readonly fetchJson: Split402DiscoveryFetch;
+  private readonly capabilityMapper: (
+    resource: Split402BazaarResourceDiscoveryRecord
+  ) => string | undefined;
+  private readonly requireMerchantPublicKey: boolean;
+  private readonly now: () => Date;
+  private readonly bearerToken?: string;
+  private readonly merchantPublicKeysByCampaignId = new Map<
+    string,
+    string | undefined
+  >();
+
+  constructor(options: Split402ControlPlaneDiscoveryOptions) {
+    this.controlPlaneUrl = normalizeBaseUrl(options.controlPlaneUrl);
+    this.fetchJson = options.fetch ?? defaultDiscoveryFetch;
+    this.capabilityMapper =
+      options.capabilityMapper ??
+      ((resource) => resource.metadata.operationId);
+    this.requireMerchantPublicKey = options.requireMerchantPublicKey ?? true;
+    this.now = options.now ?? (() => new Date());
+    if (options.bearerToken !== undefined) {
+      this.bearerToken = options.bearerToken;
+    }
+  }
+
+  async discoverProviders(
+    input: Split402ControlPlaneDiscoveryInput = {}
+  ): Promise<Split402CapabilityProvider[]> {
+    const routesResponse = await this.getJson<{
+      routes?: Array<{ id?: unknown; campaignId?: unknown }>;
+    }>("/v1/routes/search", {
+      status: "active",
+      ...(input.resourceOrigin === undefined
+        ? {}
+        : { resourceOrigin: input.resourceOrigin }),
+      ...(input.operationId === undefined ? {} : { operationId: input.operationId }),
+      ...(input.limit === undefined ? {} : { limit: String(input.limit) })
+    });
+    const routes = Array.isArray(routesResponse.routes)
+      ? routesResponse.routes
+      : [];
+    const providers: Split402CapabilityProvider[] = [];
+    for (const route of routes) {
+      const routeId = readOptionalString(route.id);
+      if (routeId === undefined) {
+        continue;
+      }
+      const resources = await this.discoverRouteResources(routeId);
+      for (const resource of resources) {
+        const provider = await this.providerFromResource(resource);
+        if (provider === undefined) {
+          continue;
+        }
+        if (input.capability !== undefined && provider.capability !== input.capability) {
+          continue;
+        }
+        providers.push(provider);
+      }
+    }
+    return providers.sort(compareProviders);
+  }
+
+  private async discoverRouteResources(
+    routeId: string
+  ): Promise<Split402BazaarResourceDiscoveryRecord[]> {
+    const response = await this.getJson<{ resources?: unknown[] }>(
+      `/v1/routes/${encodeURIComponent(routeId)}/bazaar-resources`
+    );
+    const resources = Array.isArray(response.resources) ? response.resources : [];
+    return resources
+      .map(parseBazaarResource)
+      .filter((resource): resource is Split402BazaarResourceDiscoveryRecord =>
+        resource !== undefined
+      );
+  }
+
+  private async providerFromResource(
+    resource: Split402BazaarResourceDiscoveryRecord
+  ): Promise<Split402CapabilityProvider | undefined> {
+    const capability = this.capabilityMapper(resource);
+    if (capability === undefined || capability.trim().length === 0) {
+      return undefined;
+    }
+    const accept = resource.accepts[0];
+    const method = resource.metadata.method.toUpperCase();
+    if (method !== "POST") {
+      return undefined;
+    }
+    const resourceUrl = parseUrl(resource.resource);
+    if (resourceUrl === undefined) {
+      return undefined;
+    }
+    const merchantPublicKey = await this.resolveMerchantPublicKey(
+      resource.metadata.split402.campaignId
+    );
+    if (merchantPublicKey === undefined && this.requireMerchantPublicKey) {
+      return undefined;
+    }
+    return {
+      providerId: [
+        resource.metadata.split402.routeId,
+        resource.metadata.operationId
+      ].join(":"),
+      capability,
+      routeId: resource.metadata.split402.routeId,
+      merchantOrigin: resourceUrl.origin,
+      path: `${resourceUrl.pathname}${resourceUrl.search}`,
+      method: "POST",
+      operationId: resource.metadata.operationId,
+      campaignId: resource.metadata.split402.campaignId,
+      ...(merchantPublicKey === undefined ? {} : { merchantPublicKey }),
+      network: accept.network,
+      asset: accept.asset,
+      amountAtomic: accept.amount,
+      metadata: {
+        ...(resource.metadata.input === undefined
+          ? {}
+          : { inputSchema: resource.metadata.input.schema }),
+        ...(resource.metadata.split402.referrerWallet === undefined
+          ? {}
+          : { referrerWallet: resource.metadata.split402.referrerWallet }),
+        ...(resource.metadata.split402.payoutWallet === undefined
+          ? {}
+          : { payoutWallet: resource.metadata.split402.payoutWallet })
+      }
+    };
+  }
+
+  private async resolveMerchantPublicKey(
+    campaignId: string
+  ): Promise<string | undefined> {
+    if (this.merchantPublicKeysByCampaignId.has(campaignId)) {
+      return this.merchantPublicKeysByCampaignId.get(campaignId);
+    }
+    const campaignResponse = await this.getJson<{ campaign?: unknown }>(
+      `/v1/campaigns/${encodeURIComponent(campaignId)}`
+    );
+    const campaign = readRecord(campaignResponse.campaign);
+    const merchantId = readOptionalString(campaign?.merchantId);
+    const current = readRecord(campaign?.current);
+    const merchantKid = readOptionalString(current?.merchantKid);
+    if (merchantId === undefined || merchantKid === undefined) {
+      this.merchantPublicKeysByCampaignId.set(campaignId, undefined);
+      return undefined;
+    }
+    const merchantResponse = await this.getJson<{ merchant?: unknown }>(
+      `/v1/merchants/${encodeURIComponent(merchantId)}`
+    );
+    const merchant = readRecord(merchantResponse.merchant);
+    const keys = Array.isArray(merchant?.keys) ? merchant.keys : [];
+    const now = this.now().getTime();
+    const publicKey = keys
+      .map(readRecord)
+      .find((key) => isActiveOfferReceiptKey(key, merchantKid, now))?.publicKey;
+    const value = readOptionalString(publicKey);
+    this.merchantPublicKeysByCampaignId.set(campaignId, value);
+    return value;
+  }
+
+  private async getJson<T>(
+    path: string,
+    query: Record<string, string> = {}
+  ): Promise<T> {
+    const url = new URL(path, this.controlPlaneUrl);
+    for (const [key, value] of Object.entries(query)) {
+      url.searchParams.set(key, value);
+    }
+    const headers: Record<string, string> = { accept: "application/json" };
+    if (this.bearerToken !== undefined) {
+      headers.authorization = `Bearer ${this.bearerToken}`;
+    }
+    const response = await this.fetchJson(url.toString(), { headers });
+    const text = await response.text();
+    if (response.status < 200 || response.status >= 300) {
+      throw new Split402DiscoveryError(
+        `control plane request failed: ${response.status} ${url.pathname}`
+      );
+    }
+    try {
+      return (text.length === 0 ? {} : JSON.parse(text)) as T;
+    } catch (error) {
+      throw new Split402DiscoveryError(
+        `control plane returned invalid JSON for ${url.pathname}: ${errorMessage(error)}`
+      );
+    }
   }
 }
 
@@ -328,6 +651,26 @@ function compareProviders(
   );
 }
 
+function normalizeSearchInput(
+  input: string | Split402RouterSearchInput | undefined
+): Split402RouterSearchInput {
+  if (typeof input === "string") {
+    return input.length === 0 ? {} : { capability: input };
+  }
+  if (input === undefined) {
+    return {};
+  }
+  if (input.capability !== undefined && input.capability.trim().length === 0) {
+    throw new Split402RouterError("invalid_request", "capability must not be empty");
+  }
+  if (
+    input.budget?.maxAmountAtomic !== undefined
+  ) {
+    readAtomicAmount(input.budget.maxAmountAtomic, "budget.maxAmountAtomic");
+  }
+  return input;
+}
+
 function validateOfferMatchesProvider(
   offer: {
     merchantId: string;
@@ -378,6 +721,56 @@ function validateReceiptMatchesProvider(
     },
     provider
   ).map((error) => error.replace(/^offer/u, "receipt"));
+}
+
+function validateProviderAcceptsReferralClaim(
+  provider: Split402CapabilityProvider,
+  referralClaim: ReferralClaimV1 | undefined
+): string[] {
+  if (referralClaim === undefined) {
+    return [];
+  }
+  const errors: string[] = [];
+  if (provider.routeId !== undefined && provider.routeId !== referralClaim.routeId) {
+    errors.push("provider routeId does not match referralClaim routeId");
+  }
+  if (
+    provider.metadata?.referrerWallet !== undefined &&
+    provider.metadata.referrerWallet !== referralClaim.referrerWallet
+  ) {
+    errors.push("provider referrerWallet does not match referralClaim referrerWallet");
+  }
+  if (
+    provider.metadata?.payoutWallet !== undefined &&
+    provider.metadata.payoutWallet !== referralClaim.payoutWallet
+  ) {
+    errors.push("provider payoutWallet does not match referralClaim payoutWallet");
+  }
+  return errors;
+}
+
+function validateReceiptMatchesReferralClaim(
+  receipt: Split402ReceiptV1,
+  referralClaim: ReferralClaimV1 | undefined
+): string[] {
+  if (referralClaim === undefined) {
+    return [];
+  }
+  const errors: string[] = [];
+  const expectedHash = hashProtocolObject(referralClaim);
+  if (receipt.routeId !== referralClaim.routeId) {
+    errors.push("receipt routeId does not match referralClaim routeId");
+  }
+  if (receipt.referralClaimHash !== expectedHash) {
+    errors.push("receipt referralClaimHash does not match referralClaim");
+  }
+  if (receipt.referrerWallet !== referralClaim.referrerWallet) {
+    errors.push("receipt referrerWallet does not match referralClaim referrerWallet");
+  }
+  if (receipt.payoutWallet !== referralClaim.payoutWallet) {
+    errors.push("receipt payoutWallet does not match referralClaim payoutWallet");
+  }
+  return errors;
 }
 
 function readReliabilityBps(provider: Split402CapabilityProvider): number {
@@ -487,4 +880,128 @@ function readErrorStatus(error: unknown): number | undefined {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function normalizeBaseUrl(value: string): string {
+  const url = new URL(value);
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Split402DiscoveryError("controlPlaneUrl must be an http(s) URL");
+  }
+  return url.toString();
+}
+
+async function defaultDiscoveryFetch(
+  url: string,
+  init?: {
+    headers?: Record<string, string>;
+  }
+): Promise<Split402DiscoveryFetchResponse> {
+  return fetch(url, init);
+}
+
+function parseBazaarResource(
+  value: unknown
+): Split402BazaarResourceDiscoveryRecord | undefined {
+  const resource = readRecord(value);
+  if (
+    resource?.schema !== "split402.bazaar_resource.v1" ||
+    resource.type !== "http" ||
+    resource.x402Version !== 2
+  ) {
+    return undefined;
+  }
+  const resourceUrl = readOptionalString(resource.resource);
+  const accepts = Array.isArray(resource.accepts) ? resource.accepts : [];
+  const accept = readRecord(accepts[0]);
+  const metadata = readRecord(resource.metadata);
+  const split402 = readRecord(metadata?.split402);
+  const input = readRecord(metadata?.input);
+  const method = readOptionalString(metadata?.method);
+  const operationId = readOptionalString(metadata?.operationId);
+  const routeId = readOptionalString(split402?.routeId);
+  const campaignId = readOptionalString(split402?.campaignId);
+  const referrerWallet = readOptionalString(split402?.referrerWallet);
+  const payoutWallet = readOptionalString(split402?.payoutWallet);
+  if (
+    resourceUrl === undefined ||
+    accept?.scheme !== "exact" ||
+    readOptionalString(accept.network) === undefined ||
+    readOptionalString(accept.amount) === undefined ||
+    readOptionalString(accept.asset) === undefined ||
+    readOptionalString(accept.payTo) === undefined ||
+    method === undefined ||
+    operationId === undefined ||
+    routeId === undefined ||
+    campaignId === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    schema: "split402.bazaar_resource.v1",
+    resource: resourceUrl,
+    type: "http",
+    x402Version: 2,
+    accepts: [
+      {
+        scheme: "exact",
+        network: accept.network as string,
+        amount: accept.amount as string,
+        asset: accept.asset as string,
+        payTo: accept.payTo as string
+      }
+    ],
+    metadata: {
+      method,
+      operationId,
+      ...(input === undefined || input.schema === undefined
+        ? {}
+        : { input: { schema: input.schema } }),
+      split402: {
+        routeId,
+        campaignId,
+        ...(referrerWallet === undefined ? {} : { referrerWallet }),
+        ...(payoutWallet === undefined ? {} : { payoutWallet })
+      }
+    }
+  };
+}
+
+function isActiveOfferReceiptKey(
+  key: Record<string, unknown> | undefined,
+  kid: string,
+  nowMs: number
+): key is Record<string, unknown> & { publicKey: string } {
+  if (
+    key === undefined ||
+    key.kid !== kid ||
+    key.purpose !== "offer_receipt" ||
+    typeof key.publicKey !== "string" ||
+    key.revokedAt !== undefined
+  ) {
+    return false;
+  }
+  const validFrom = readOptionalString(key.validFrom);
+  if (validFrom !== undefined && Date.parse(validFrom) > nowMs) {
+    return false;
+  }
+  const validUntil = readOptionalString(key.validUntil);
+  return validUntil === undefined || Date.parse(validUntil) > nowMs;
+}
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function readOptionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function parseUrl(value: string): URL | undefined {
+  try {
+    return new URL(value);
+  } catch {
+    return undefined;
+  }
 }
