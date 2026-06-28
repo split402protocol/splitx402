@@ -14,7 +14,7 @@
     "build": "corepack pnpm -r --if-present build && tsc -p tsconfig.json",
     "typecheck": "corepack pnpm -r --if-present build && tsc --noEmit -p tsconfig.json && corepack pnpm -r --if-present typecheck",
     "lint": "eslint .",
-    "test": "vitest run && corepack pnpm -r --if-present test",
+    "test": "corepack pnpm -r --if-present build && vitest run && corepack pnpm -r --if-present test",
     "test:postgres": "corepack pnpm --filter @split402/control-plane test:postgres",
     "test:watch": "vitest",
     "vectors": "corepack pnpm --filter @split402/protocol vectors",
