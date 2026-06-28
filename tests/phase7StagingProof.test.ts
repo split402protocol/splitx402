@@ -671,6 +671,40 @@ funding_balance_evidence: funding.json
     );
   });
 
+  it("blocks staged proof status when command evidence only mentions commands in prose", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/commands.log",
+      encode(
+        [
+          "The operator reported running git rev-parse HEAD and git status --short --branch.",
+          "The notes mention corepack pnpm lint, corepack pnpm test, corepack pnpm build, and corepack pnpm audit --audit-level high.",
+          "The checklist also names corepack pnpm phase7:staging:init, corepack pnpm phase7:staging:seed, corepack pnpm phase7:staging-proof, corepack pnpm phase7:hosted:preflight, corepack pnpm phase7:staging:collect-reads, corepack pnpm phase7:staging:collect-mcp-gateway, corepack pnpm demo:mcp-gateway:smoke, corepack pnpm demo:mcp-bundle, corepack pnpm demo:paid-suite, corepack pnpm phase7:staging:derive-receipt-verification, corepack pnpm phase7:staging:manifest, corepack pnpm phase7:staging:assemble, corepack pnpm phase7:staging:status, corepack pnpm typecheck, and corepack pnpm vectors:check.",
+          "",
+        ].join("\n"),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.commandEvidenceStatus.blockers).toContain(
+      "commands_run artifact must include shell command lines, not only prose",
+    );
+    expect(report.commandEvidenceStatus.blockers).toContain(
+      "commands_run missing required command: corepack pnpm lint",
+    );
+    expect(report.commandEvidenceStatus.blockers).toContain(
+      "commands_run missing required command: git rev-parse HEAD",
+    );
+  });
+
   it("blocks staged proof status when artifact manifest evidence is remote", () => {
     const proofText = createPhase7StagingProofRecord({
       proof_id: "phase7-staging-2026-06-26",
