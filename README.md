@@ -351,8 +351,9 @@ validation, hosted proof, custody evidence, and combined status commands; pass
 the Phase 6 and Phase 7 evidence paths to show checked, blocked, or ready
 section statuses from real files. `product:status` reports the current Split402
 phase, whether the public-alpha hosted proof and production custody evidence are
-checked, launch-gate percentages, and why the launch decision remains `no-go`
-until both machine-checkable gates are satisfied.
+checked, launch-gate percentages, exact evidence-env setup commands, and why the
+launch decision remains `no-go` until both machine-checkable gates are
+satisfied.
 
 Generate the Phase 6 image provenance review record after building immutable
 signer and control-plane images:
