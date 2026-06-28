@@ -666,6 +666,83 @@ funding_balance_evidence: funding.json
     );
   });
 
+  it("blocks staged proof status when receipt verification differs from paid-suite valid receipt", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/receipt-verification.json",
+      encode(
+        JSON.stringify(
+          createValidReceiptVerificationEvidence({
+            validReceipt: { receiptId: "rcp_other" },
+          }),
+        ),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.paidRequestStatus.blockers).toContain(
+      "receipt_verification_evidence validReceipt does not match paid_request_evidence validReceipt",
+    );
+  });
+
+  it("blocks staged proof status when receipt verification differs from paid-suite invalid claim receipt", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/receipt-verification.json",
+      encode(
+        JSON.stringify(
+          createValidReceiptVerificationEvidence({
+            invalidClaimReceipt: { settlementTxSignature: "tx_other" },
+          }),
+        ),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.paidRequestStatus.blockers).toContain(
+      "receipt_verification_evidence invalidClaimReceipt does not match paid_request_evidence invalidReceipt",
+    );
+  });
+
+  it("blocks staged proof status when receipt verification top-level receipt id drifts", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/receipt-verification.json",
+      encode(
+        JSON.stringify(createValidReceiptVerificationEvidence({ receiptId: "rcp_other" })),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.paidRequestStatus.blockers).toContain(
+      "receipt_verification_evidence receiptId does not match validReceipt.receiptId",
+    );
+  });
+
   it("blocks staged proof status when command evidence omits required validation", () => {
     const proofText = createManifestProof();
     const artifacts = createManifestArtifacts(proofText);
@@ -1915,13 +1992,7 @@ function createManifestArtifacts(proofText: string): Map<string, Uint8Array> {
     ["evidence/paid-suite.log", encode(createValidPaidSuiteLog())],
     [
       "evidence/receipt-verification.json",
-      encode(
-        JSON.stringify({
-          receiptId: "rcp_001",
-          verificationStatus: "verified",
-          errors: [],
-        }),
-      ),
+      encode(JSON.stringify(createValidReceiptVerificationEvidence())),
     ],
     [
       "evidence/agent-discovery.json",
@@ -2237,6 +2308,45 @@ function createValidPaidSuiteLog(): string {
     ),
     "",
   ].join("\n");
+}
+
+function createValidReceiptVerificationEvidence(
+  overrides: {
+    receiptId?: string;
+    validReceipt?: Partial<Record<string, unknown>>;
+    invalidClaimReceipt?: Partial<Record<string, unknown>>;
+  } = {},
+): unknown {
+  const validReceipt = {
+    receiptId: "rcp_valid",
+    paymentId: "pay_valid",
+    commissionBps: 2000,
+    commissionAmountAtomic: "2000",
+    referrerCreditAtomic: "1800",
+    settlementTxSignature: "tx_valid",
+    routeId: "rte_001",
+    ...(overrides.validReceipt ?? {}),
+  };
+  const invalidClaimReceipt = {
+    receiptId: "rcp_invalid",
+    paymentId: "pay_invalid",
+    commissionBps: 0,
+    commissionAmountAtomic: "0",
+    referrerCreditAtomic: "0",
+    settlementTxSignature: "tx_invalid",
+    ...(overrides.invalidClaimReceipt ?? {}),
+  };
+  return {
+    schema: "split402.phase7_receipt_verification_evidence.v1",
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    sourceLogPath: "evidence/paid-suite.log",
+    receiptId: overrides.receiptId ?? validReceipt.receiptId,
+    verificationStatus: "verified",
+    split402ReceiptVerified: true,
+    errors: [],
+    validReceipt,
+    invalidClaimReceipt,
+  };
 }
 
 function createValidCommandsLog(): string {
