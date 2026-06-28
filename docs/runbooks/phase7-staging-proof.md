@@ -172,7 +172,7 @@ The validator requires:
   `budget.maxAmountAtomic`, using a provider id returned by the search response,
   amount paid at or below that budget, verified receipt status, referrer credit,
   and a matching `split402.getReceipt` response whose receipt payload has the
-  same receipt id and referrer credit.
+  same receipt id, required amount, referrer credit, and route attribution.
 - `artifact_manifest_evidence` must be a local attached
   `artifact-manifest.json` artifact. Local `attached:` artifacts must match the
   generated manifest.
