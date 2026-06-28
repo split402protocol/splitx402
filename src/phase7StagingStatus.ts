@@ -88,6 +88,7 @@ export interface Phase7StagingStatusReport {
   schema: "split402.phase7_staging_status.v1";
   readyForPublicAlphaDemo: boolean;
   proofChecked: boolean;
+  sourceCommitStatus: Phase7SourceCommitStatus;
   commands: typeof PHASE7_STAGING_COMMANDS;
   gateStatuses: Phase7StagingGateStatus[];
   artifactStatuses: Phase7StagingArtifactStatus[];
@@ -115,6 +116,14 @@ export interface Phase7StagingStatusOptions {
   artifactExists?: (path: string) => boolean;
   readArtifact?: (path: string) => Uint8Array;
   resolveArtifactPath?: (path: string, baseDir: string) => string;
+  currentSourceCommit?: string;
+}
+
+export interface Phase7SourceCommitStatus {
+  status: "not_checked" | "not_applicable" | "valid" | "invalid";
+  proofSourceCommit?: string;
+  currentSourceCommit?: string;
+  blockers: string[];
 }
 
 export interface Phase7StagingArtifactStatus {
@@ -171,6 +180,7 @@ export function createPhase7StagingStatusReport(
 ): Phase7StagingStatusReport {
   const validation =
     proofText === undefined ? undefined : validatePhase7StagingProof(proofText);
+  const sourceCommitStatus = createSourceCommitStatus(proofText, options);
   const artifactStatuses = createArtifactStatuses(proofText, options);
   const manifestStatus = createManifestStatus(proofText, options);
   const hostedPreflightStatus = createHostedPreflightStatus(proofText, options);
@@ -189,8 +199,10 @@ export function createPhase7StagingStatusReport(
   const mcpBundleBlockers = mcpBundleStatus.blockers;
   const mcpGatewayBlockers = mcpGatewayStatus.blockers;
   const commandEvidenceBlockers = commandEvidenceStatus.blockers;
+  const sourceCommitBlockers = sourceCommitStatus.blockers;
   const readyForPublicAlphaDemo =
     (validation?.approved ?? false) &&
+    sourceCommitBlockers.length === 0 &&
     artifactBlockers.length === 0 &&
     manifestBlockers.length === 0 &&
     hostedPreflightBlockers.length === 0 &&
@@ -205,10 +217,12 @@ export function createPhase7StagingStatusReport(
     schema: "split402.phase7_staging_status.v1",
     readyForPublicAlphaDemo,
     proofChecked: validation !== undefined,
+    sourceCommitStatus,
     commands: PHASE7_STAGING_COMMANDS,
     gateStatuses: createGateStatuses(
       validation,
       artifactStatuses,
+      sourceCommitBlockers,
       manifestBlockers,
       hostedPreflightBlockers,
       controlPlaneReadBlockers,
@@ -229,6 +243,7 @@ export function createPhase7StagingStatusReport(
     commandEvidenceStatus,
     validation,
     nextActions: createNextActions(validation, [
+      ...sourceCommitBlockers,
       ...artifactBlockers,
       ...manifestBlockers,
       ...hostedPreflightBlockers,
@@ -245,6 +260,7 @@ export function createPhase7StagingStatusReport(
 function createGateStatuses(
   validation: Phase7StagingProofValidation | undefined,
   artifactStatuses: readonly Phase7StagingArtifactStatus[],
+  sourceCommitBlockers: readonly string[],
   manifestBlockers: readonly string[],
   hostedPreflightBlockers: readonly string[],
   controlPlaneReadBlockers: readonly string[],
@@ -273,6 +289,7 @@ function createGateStatuses(
     const gateArtifactBlockers = createGateArtifactBlockers(
       command.evidenceField,
       artifactBlockers,
+      sourceCommitBlockers,
       manifestBlockers,
       hostedPreflightBlockers,
       controlPlaneReadBlockers,
@@ -326,6 +343,7 @@ function createGateStatuses(
 function createGateArtifactBlockers(
   evidenceField: Phase7StagingGateStatus["evidenceField"],
   artifactBlockers: readonly string[],
+  sourceCommitBlockers: readonly string[],
   manifestBlockers: readonly string[],
   hostedPreflightBlockers: readonly string[],
   controlPlaneReadBlockers: readonly string[],
@@ -339,7 +357,11 @@ function createGateArtifactBlockers(
     return [...artifactBlockers, ...manifestBlockers];
   }
   if (evidenceField === "hosted_preflight_evidence") {
-    return [...artifactBlockers, ...hostedPreflightBlockers];
+    return [
+      ...artifactBlockers,
+      ...sourceCommitBlockers,
+      ...hostedPreflightBlockers,
+    ];
   }
   const readEvidenceBlockers = controlPlaneReadBlockers.filter((blocker) =>
     blocker.startsWith(`${evidenceField} `),
@@ -366,6 +388,40 @@ function createGateArtifactBlockers(
     return [...artifactBlockers, ...commandEvidenceBlockers];
   }
   return [...artifactBlockers];
+}
+
+function createSourceCommitStatus(
+  proofText: string | undefined,
+  options: Phase7StagingStatusOptions,
+): Phase7SourceCommitStatus {
+  if (proofText === undefined) {
+    return { status: "not_checked", blockers: [] };
+  }
+  const fields = parsePhase7ProofRecord(proofText);
+  const proofSourceCommit = fields.get("source_commit");
+  if (proofSourceCommit === undefined || proofSourceCommit.length === 0) {
+    return { status: "not_applicable", blockers: [] };
+  }
+  if (options.currentSourceCommit === undefined) {
+    return {
+      status: "not_checked",
+      proofSourceCommit,
+      blockers: [],
+    };
+  }
+  const currentSourceCommit = options.currentSourceCommit.trim();
+  const blockers: string[] = [];
+  if (!/^[0-9a-f]{7,40}$/u.test(currentSourceCommit)) {
+    blockers.push("current source commit must be a 7-40 character git SHA");
+  } else if (!gitShasMatch(proofSourceCommit, currentSourceCommit)) {
+    blockers.push("source_commit does not match current checkout");
+  }
+  return {
+    status: blockers.length === 0 ? "valid" : "invalid",
+    proofSourceCommit,
+    currentSourceCommit,
+    blockers,
+  };
 }
 
 function createManifestStatus(
