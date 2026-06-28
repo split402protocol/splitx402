@@ -2,6 +2,7 @@ export interface Phase7HostedStagingPreflightInput {
   controlPlaneUrl: string;
   dashboardUrl: string;
   outputDir: string;
+  sourceCommit: string;
   dashboardViewerToken?: string;
   fetch: Phase7HostedStagingPreflightFetch;
   writeArtifact: (path: string, text: string) => void;
@@ -33,6 +34,7 @@ export interface Phase7HostedStagingPreflightReport {
   schema: "split402.phase7_hosted_staging_preflight.v1";
   controlPlaneUrl: string;
   dashboardUrl: string;
+  sourceCommit: string;
   outputDir: string;
   artifactPath: string;
   checks: Phase7HostedStagingPreflightCheck[];
@@ -51,6 +53,7 @@ export async function runPhase7HostedStagingPreflight(
 ): Promise<Phase7HostedStagingPreflightReport> {
   const controlPlaneUrl = normalizeBaseUrl(input.controlPlaneUrl, "controlPlaneUrl");
   const dashboardUrl = normalizeBaseUrl(input.dashboardUrl, "dashboardUrl");
+  const sourceCommit = assertGitSha(input.sourceCommit, "sourceCommit");
   const specs = createPreflightSpecs(input, controlPlaneUrl, dashboardUrl);
   const checks: Phase7HostedStagingPreflightCheck[] = [];
   const responses: unknown[] = [];
@@ -89,6 +92,7 @@ export async function runPhase7HostedStagingPreflight(
     schema: "split402.phase7_hosted_staging_preflight.v1",
     controlPlaneUrl,
     dashboardUrl,
+    sourceCommit,
     outputDir: input.outputDir,
     artifactPath,
     checks,
@@ -176,6 +180,14 @@ function normalizeBaseUrl(value: string, label: string): string {
     throw new Error(`${label} must be an http(s) URL`);
   }
   return url.toString().replace(/\/$/u, "");
+}
+
+function assertGitSha(value: string, label: string): string {
+  const trimmed = value.trim();
+  if (!/^[0-9a-f]{7,40}$/u.test(trimmed)) {
+    throw new Error(`${label} must be a 7-40 character git SHA`);
+  }
+  return trimmed;
 }
 
 function joinPath(

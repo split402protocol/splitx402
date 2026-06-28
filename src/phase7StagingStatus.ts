@@ -540,6 +540,7 @@ function createHostedPreflightStatus(
   }
   const proofControlPlaneUrl = fields.get("control_plane_url");
   const proofDashboardUrl = fields.get("dashboard_url");
+  const proofSourceCommit = fields.get("source_commit");
   if (typeof preflight.controlPlaneUrl !== "string") {
     blockers.push("hosted_preflight_evidence controlPlaneUrl is missing");
   } else if (
@@ -555,6 +556,14 @@ function createHostedPreflightStatus(
     normalizeHttpUrl(preflight.dashboardUrl) !== normalizeHttpUrl(proofDashboardUrl)
   ) {
     blockers.push("hosted_preflight_evidence dashboardUrl does not match proof");
+  }
+  if (typeof preflight.sourceCommit !== "string") {
+    blockers.push("hosted_preflight_evidence sourceCommit is missing");
+  } else if (
+    proofSourceCommit !== undefined &&
+    !gitShasMatch(preflight.sourceCommit, proofSourceCommit)
+  ) {
+    blockers.push("hosted_preflight_evidence sourceCommit does not match proof");
   }
   if (!Array.isArray(preflight.checks)) {
     blockers.push("hosted_preflight_evidence checks must be an array");
@@ -2149,6 +2158,21 @@ function normalizeHttpUrl(value: unknown): string | undefined {
   }
 }
 
+function gitShasMatch(left: string, right: string): boolean {
+  const normalizedLeft = left.trim().toLowerCase();
+  const normalizedRight = right.trim().toLowerCase();
+  if (
+    !/^[0-9a-f]{7,40}$/u.test(normalizedLeft) ||
+    !/^[0-9a-f]{7,40}$/u.test(normalizedRight)
+  ) {
+    return false;
+  }
+  return (
+    normalizedLeft.startsWith(normalizedRight) ||
+    normalizedRight.startsWith(normalizedLeft)
+  );
+}
+
 interface Phase7ArtifactManifest {
   schema?: unknown;
   artifacts?: unknown;
@@ -2167,6 +2191,7 @@ interface Phase7HostedPreflightArtifact {
   schema?: unknown;
   controlPlaneUrl?: unknown;
   dashboardUrl?: unknown;
+  sourceCommit?: unknown;
   checks?: unknown;
 }
 
