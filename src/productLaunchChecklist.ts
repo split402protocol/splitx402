@@ -9,6 +9,7 @@ export interface Split402LaunchChecklist {
   workspace: {
     directory: "split402-launch-evidence";
     phase6EvidenceFile: "split402-launch-evidence/phase6-custody-evidence.txt";
+    phase6EnvFile: "split402-launch-evidence/phase6-evidence.env";
     phase7ProofFile: "split402-launch-evidence/phase7-staging-proof.txt";
     phase7EnvFile: "split402-launch-evidence/phase7-staging.env";
     phase7EvidenceDirectory: "split402-launch-evidence/phase7-staging-evidence";
@@ -37,6 +38,7 @@ export function createSplit402LaunchChecklist(
     workspace: {
       directory: "split402-launch-evidence",
       phase6EvidenceFile: "split402-launch-evidence/phase6-custody-evidence.txt",
+      phase6EnvFile: "split402-launch-evidence/phase6-evidence.env",
       phase7ProofFile: "split402-launch-evidence/phase7-staging-proof.txt",
       phase7EnvFile: "split402-launch-evidence/phase7-staging.env",
       phase7EvidenceDirectory: "split402-launch-evidence/phase7-staging-evidence",
@@ -157,6 +159,8 @@ function createPhase6Section(
         : "not_checked",
     externalEvidenceRequired: true,
     commands: [
+      "corepack pnpm phase6:evidence:env-template > split402-launch-evidence/phase6-evidence.env",
+      "Fill split402-launch-evidence/phase6-evidence.env with generated Phase 6 custody record paths.",
       "Fill split402-launch-evidence/phase6-custody-evidence.txt with generated Phase 6 custody records.",
       "corepack pnpm phase6:image-provenance",
       "corepack pnpm phase6:signer-policy",

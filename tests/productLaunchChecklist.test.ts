@@ -24,6 +24,7 @@ describe("Split402 launch checklist", () => {
         directory: "split402-launch-evidence",
         phase6EvidenceFile:
           "split402-launch-evidence/phase6-custody-evidence.txt",
+        phase6EnvFile: "split402-launch-evidence/phase6-evidence.env",
         phase7ProofFile: "split402-launch-evidence/phase7-staging-proof.txt",
       },
     });
@@ -43,6 +44,12 @@ describe("Split402 launch checklist", () => {
     );
     expect(checklist.sections[2]?.commands).toContain(
       "corepack pnpm phase7:staging:commands-template > split402-launch-evidence/phase7-staging-evidence/commands.log",
+    );
+    expect(checklist.sections[3]?.commands).toContain(
+      "corepack pnpm phase6:evidence:env-template > split402-launch-evidence/phase6-evidence.env",
+    );
+    expect(checklist.sections[3]?.commands).toContain(
+      "Fill split402-launch-evidence/phase6-evidence.env with generated Phase 6 custody record paths.",
     );
     expect(checklist.sections[3]?.commands).toContain(
       "corepack pnpm phase6:evidence:status split402-launch-evidence/phase6-custody-evidence.txt",

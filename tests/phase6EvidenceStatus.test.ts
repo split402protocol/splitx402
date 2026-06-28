@@ -22,6 +22,9 @@ describe("Phase 6 evidence status", () => {
       "corepack pnpm phase6:evidence:assemble",
     );
     expect(report.commands.map((item) => item.command)).toContain(
+      "corepack pnpm phase6:evidence:env-template",
+    );
+    expect(report.commands.map((item) => item.command)).toContain(
       "corepack pnpm phase6:network-policy",
     );
     expect(report.commands.map((item) => item.command)).toContain(
@@ -38,6 +41,9 @@ describe("Phase 6 evidence status", () => {
     );
     expect(report.nextActions).toContain(
       "Generate a bundle scaffold with corepack pnpm phase6:evidence:bundle.",
+    );
+    expect(report.nextActions).toContain(
+      "Generate local assembly env guidance with corepack pnpm phase6:evidence:env-template.",
     );
   });
 

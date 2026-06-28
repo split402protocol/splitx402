@@ -45,6 +45,7 @@ console.log(
         workspace.directory,
         workspace.phase6EvidenceFileName,
       ),
+      phase6EnvFile: join(workspace.directory, workspace.phase6EnvFileName),
       phase7ProofFile: join(workspace.directory, workspace.phase7ProofFileName),
       phase7EnvFile: join(workspace.directory, workspace.phase7EnvFileName),
       phase7EvidenceDirectory: workspace.phase7.directory,

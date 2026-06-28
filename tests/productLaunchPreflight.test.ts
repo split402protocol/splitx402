@@ -102,6 +102,10 @@ function createWorkspaceFileMap(phase7EnvText: string): Map<string, string> {
       workspace.phase6EvidenceText,
     ],
     [
+      join(workspace.directory, workspace.phase6EnvFileName),
+      workspace.phase6EnvText,
+    ],
+    [
       join(workspace.directory, workspace.phase7ProofFileName),
       workspace.phase7ProofText,
     ],

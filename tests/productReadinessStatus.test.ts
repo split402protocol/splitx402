@@ -35,6 +35,9 @@ describe("Split402 product readiness status", () => {
       "Run corepack pnpm product:launch-preflight --brief split402-launch-evidence before collecting hosted proof.",
     );
     expect(report.nextActions).toContain(
+      "Fill split402-launch-evidence/phase6-evidence.env with generated Phase 6 custody record paths.",
+    );
+    expect(report.nextActions).toContain(
       "Run hosted Phase 7 staging proof collection and status validation.",
     );
     expect(report.nextActions).not.toContain(

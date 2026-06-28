@@ -34,6 +34,7 @@ and fill every field. Then run:
 
 ```bash
 corepack pnpm phase6:evidence:bundle > phase6-custody-evidence.txt
+corepack pnpm phase6:evidence:env-template > split402-launch-evidence/phase6-evidence.env
 corepack pnpm phase6:evidence:assemble > phase6-custody-evidence.txt
 corepack pnpm phase6:evidence:status <evidence-bundle.txt>
 corepack pnpm phase6:custody:check <evidence-bundle.txt>
@@ -41,10 +42,12 @@ corepack pnpm phase6:evidence:bundle | corepack pnpm phase6:custody:check -
 ```
 
 Use `phase6:evidence:bundle` for a blank scaffold and
-`phase6:evidence:assemble` after generated evidence record files exist. The
-validator fails while any required field is empty, placeholder-like, uses a
-mutable image tag instead of a `sha256:` digest, or leaves `approval_decision`
-as anything other than `approved`.
+`phase6:evidence:env-template` for a local, commented attachment-path helper.
+Use `phase6:evidence:assemble` after generated evidence record files exist and
+the required environment values are set. The validator fails while any required
+field is empty, placeholder-like, uses a mutable image tag instead of a
+`sha256:` digest, or leaves `approval_decision` as anything other than
+`approved`.
 
 ```text
 review_id:
