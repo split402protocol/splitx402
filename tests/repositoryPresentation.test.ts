@@ -146,10 +146,13 @@ describe("repository presentation", () => {
     const readme = readFileSync("README.md", "utf8");
     const currentState = readFileSync("docs/CURRENT_STATE.md", "utf8");
 
+    expect(readme).toContain("corepack pnpm product:evidence:init");
     expect(readme).toContain("corepack pnpm product:status");
     expect(readme).toContain("corepack pnpm product:status --brief");
-    expect(readme).toContain("launch decision remains");
+    expect(readme).toContain("creates a local evidence workspace");
+    expect(readme).toContain("decision remains `no-go`");
     expect(readme).toContain("launch-gate percentages");
+    expect(currentState).toContain("corepack pnpm product:evidence:init");
     expect(currentState).toContain("corepack pnpm product:status");
   });
 });
