@@ -19,9 +19,8 @@ corepack pnpm phase7:hosted:preflight
 corepack pnpm phase7:staging:collect-reads
 corepack pnpm phase7:staging:collect-mcp-gateway
 corepack pnpm demo:mcp-gateway:smoke
-corepack pnpm dashboard
-corepack pnpm demo:mcp-bundle
-corepack pnpm demo:paid-suite
+corepack pnpm demo:mcp-bundle > phase7-staging-evidence/mcp-bundle.json
+corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log
 corepack pnpm phase7:staging:derive-receipt-verification
 # Capture payout obligations with SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc
 # and attach covered/deficit funding evidence to funding_balance_evidence.
