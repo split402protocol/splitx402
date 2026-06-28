@@ -64,4 +64,47 @@ describe("Split402 launch checklist", () => {
       "The combined status remains no-go until both machine-checkable gates pass.",
     );
   });
+
+  it("marks checked but incomplete evidence sections as blocked", () => {
+    const checklist = createSplit402LaunchChecklist(
+      createSplit402ProductReadinessReport({
+        phase6EvidenceText: `review_id: pending
+approval_decision: no-go
+`,
+        phase7ProofText: `proof_id: pending
+approval_decision: no-go
+proof_date: 2026-06-29
+source_commit: 21113e7
+control_plane_url: https://control.example
+dashboard_url: https://dashboard.example
+demo_merchant_url: https://merchant.example
+hosted_preflight_evidence: attached: hosted-preflight.json
+agent_discovery_evidence: attached: agent-discovery.json
+paid_request_evidence: attached: paid-suite.log
+receipt_verification_evidence: attached: receipt-verification.json
+referrer_balance_evidence: attached: referrer-balance.json
+dashboard_summary_evidence: attached: dashboard-summary.json
+webhook_delivery_evidence: attached: webhook-delivery.json
+payout_obligation_evidence: attached: payout-obligation.json
+funding_balance_evidence: attached: funding-balance.json
+mcp_bundle_evidence: attached: mcp-bundle.json
+mcp_gateway_evidence: attached: mcp-gateway.jsonl
+artifact_manifest_evidence: attached: artifact-manifest.json
+commands_run: attached: commands.log
+approval_notes: checked evidence is intentionally incomplete
+`,
+      }),
+    );
+
+    expect(checklist.sections.map((section) => section.status)).toEqual([
+      "ready",
+      "not_checked",
+      "blocked",
+      "blocked",
+      "blocked",
+    ]);
+    expect(formatSplit402LaunchChecklistBrief(checklist)).toContain(
+      "Collect Phase 7 hosted public-alpha proof [blocked]",
+    );
+  });
 });
