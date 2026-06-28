@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  attachPayoutTransactionItemMappings,
   createPayoutBatchPlan,
   createPayoutFinalizationLedgerTransaction,
   createMerchantObligationSummary,
@@ -9,6 +10,8 @@ import {
   createReferrerPayoutHistoryItems,
   createSignedPayoutTransactionRecords,
   filterPayoutEligibleAccruals,
+  releasePayoutBatchAllocationsForBatch,
+  summarizePayoutBatchTransactionItemFinality,
   summarizePayoutBatchFinality,
   type CommissionAccrual,
   type PayoutBatchRecord,
@@ -240,7 +243,8 @@ describe("signed payout transaction records", () => {
         signedTransactionBase64: "AQID",
         expectedSignature: "sig_0",
         status: "signed",
-        createdAt: NOW
+        createdAt: NOW,
+        items: []
       },
       {
         id: "ptx_22222222222222222222222222222222",
@@ -250,9 +254,64 @@ describe("signed payout transaction records", () => {
         signedTransactionBase64: "BAUG",
         expectedSignature: "sig_1",
         status: "signed",
-        createdAt: NOW
+        createdAt: NOW,
+        items: []
       }
     ]);
+  });
+
+  it("attaches and validates durable payout transaction item mappings", () => {
+    const batch = finalizedBatch({
+      status: "planned",
+      itemStatus: "allocated"
+    });
+    const [record] = attachPayoutTransactionItemMappings(
+      createSignedPayoutTransactionRecords({
+        payoutBatchId: batch.id,
+        now: NOW,
+        transactions: [
+          {
+            sequence: 0,
+            signedTransactionBase64: "AQID",
+            items: [transactionItemInput(batch.items[0]!)]
+          }
+        ]
+      }),
+      batch
+    );
+
+    if (record === undefined) {
+      throw new Error("expected payout transaction record");
+    }
+    expect(record?.items).toEqual([
+      {
+        payoutTransactionId: record.id,
+        payoutItemId: batch.items[0]!.id,
+        amountAtomic: batch.items[0]!.amountAtomic,
+        destinationWallet: batch.items[0]!.destinationWallet
+      }
+    ]);
+    expect(() =>
+      attachPayoutTransactionItemMappings(
+        createSignedPayoutTransactionRecords({
+          payoutBatchId: batch.id,
+          now: NOW,
+          transactions: [
+            {
+              sequence: 0,
+              signedTransactionBase64: "AQID",
+              items: [
+                {
+                  ...transactionItemInput(batch.items[0]!),
+                  amountAtomic: "1"
+                }
+              ]
+            }
+          ]
+        }),
+        batch
+      )
+    ).toThrow("payout transaction item amount mismatch");
   });
 
   it("rejects duplicate attempts, duplicate signatures, and invalid bytes", () => {
@@ -331,6 +390,166 @@ describe("payout batch finality rollup", () => {
       failureCode: "payout_transaction_failed",
       failureMessage: "insufficient funds"
     });
+  });
+
+  it("rolls up finality only for items mapped to the finalized transaction", () => {
+    const batch = finalizedBatch({ status: "submitted", itemStatus: "submitted" });
+    const transactions = attachPayoutTransactionItemMappings(
+      createSignedPayoutTransactionRecords({
+        payoutBatchId: batch.id,
+        now: NOW,
+        transactions: [
+          {
+            sequence: 0,
+            signedTransactionBase64: "AQID",
+            items: [transactionItemInput(batch.items[0]!)]
+          },
+          {
+            sequence: 1,
+            signedTransactionBase64: "BAUG",
+            items: [transactionItemInput(batch.items[1]!)]
+          }
+        ]
+      }),
+      batch
+    );
+
+    expect(
+      summarizePayoutBatchTransactionItemFinality({
+        batch,
+        transactions: [
+          { ...transactions[0]!, status: "finalized" },
+          { ...transactions[1]!, status: "submitted" }
+        ]
+      })
+    ).toEqual({
+      batchStatus: "submitted",
+      updatedItems: [
+        {
+          payoutItemId: batch.items[0]!.id,
+          status: "finalized"
+        }
+      ]
+    });
+  });
+
+  it("allows retry attempts to supersede failed transaction item groups", () => {
+    const batch = finalizedBatch({ status: "submitted", itemStatus: "submitted" });
+    const [failedAttempt, retryAttempt] = attachPayoutTransactionItemMappings(
+      createSignedPayoutTransactionRecords({
+        payoutBatchId: batch.id,
+        now: NOW,
+        transactions: [
+          {
+            sequence: 0,
+            attempt: 1,
+            signedTransactionBase64: "AQID",
+            items: [transactionItemInput(batch.items[0]!)]
+          },
+          {
+            sequence: 0,
+            attempt: 2,
+            signedTransactionBase64: "BAUG",
+            items: [transactionItemInput(batch.items[0]!)]
+          }
+        ]
+      }),
+      batch
+    );
+
+    expect(
+      summarizePayoutBatchTransactionItemFinality({
+        batch,
+        transactions: [
+          { ...failedAttempt!, status: "failed", error: { message: "dropped" } },
+          { ...retryAttempt!, status: "submitted" }
+        ]
+      })
+    ).toEqual({
+      batchStatus: "submitted",
+      updatedItems: []
+    });
+  });
+
+  it("finalizes the batch only after every mapped item group finalizes", () => {
+    const batch = finalizedBatch({ status: "submitted", itemStatus: "submitted" });
+    const transactions = attachPayoutTransactionItemMappings(
+      createSignedPayoutTransactionRecords({
+        payoutBatchId: batch.id,
+        now: NOW,
+        transactions: [
+          {
+            sequence: 0,
+            signedTransactionBase64: "AQID",
+            items: [transactionItemInput(batch.items[0]!)]
+          },
+          {
+            sequence: 1,
+            signedTransactionBase64: "BAUG",
+            items: [transactionItemInput(batch.items[1]!)]
+          }
+        ]
+      }),
+      batch
+    );
+
+    expect(
+      summarizePayoutBatchTransactionItemFinality({
+        batch,
+        transactions: transactions.map((transaction) => ({
+          ...transaction,
+          status: "finalized" as const
+        }))
+      })
+    ).toEqual({
+      batchStatus: "finalized",
+      updatedItems: [
+        { payoutItemId: batch.items[0]!.id, status: "finalized" },
+        { payoutItemId: batch.items[1]!.id, status: "finalized" }
+      ]
+    });
+  });
+});
+
+describe("payout allocation release", () => {
+  it("cancels planned batches and marks items released", () => {
+    const released = releasePayoutBatchAllocationsForBatch({
+      batch: finalizedBatch({ status: "planned", itemStatus: "allocated" }),
+      reason: "signer policy failed",
+      now: "2026-06-24T00:11:00Z"
+    });
+
+    expect(released).toEqual(
+      expect.objectContaining({
+        status: "cancelled",
+        failureCode: "allocations_released",
+        failureMessage: "signer policy failed",
+        updatedAt: "2026-06-24T00:11:00.000Z"
+      })
+    );
+    expect(released.items.map((item) => item.status)).toEqual([
+      "released",
+      "released"
+    ]);
+  });
+
+  it("does not release submitted or outcome-unknown batches", () => {
+    expect(() =>
+      releasePayoutBatchAllocationsForBatch({
+        batch: finalizedBatch({ status: "submitted", itemStatus: "submitted" }),
+        reason: "manual release"
+      })
+    ).toThrow("payout batch status submitted cannot release allocations");
+
+    expect(() =>
+      releasePayoutBatchAllocationsForBatch({
+        batch: finalizedBatch({
+          status: "outcome_unknown",
+          itemStatus: "submitted"
+        }),
+        reason: "manual release"
+      })
+    ).toThrow("payout batch status outcome_unknown cannot release allocations");
   });
 });
 
@@ -648,14 +867,21 @@ function accrual(overrides: Partial<CommissionAccrual> = {}): CommissionAccrual 
   };
 }
 
-function finalizedBatch(): PayoutBatchRecord {
+function finalizedBatch(
+  options: {
+    status?: PayoutBatchRecord["status"];
+    itemStatus?: PayoutBatchRecord["items"][number]["status"];
+  } = {}
+): PayoutBatchRecord {
+  const status = options.status ?? "finalized";
+  const itemStatus = options.itemStatus ?? "finalized";
   return {
     id: "pbt_ffffffffffffffffffffffffffffffff",
     merchantId: "mrc_1",
     payoutWalletId: "mpw_ffffffffffffffffffffffffffffffff",
     network: "solana:devnet",
     asset: "usdc_mint",
-    status: "finalized",
+    status,
     totalAmountAtomic: "100",
     itemCount: 2,
     accrualCount: 2,
@@ -667,7 +893,7 @@ function finalizedBatch(): PayoutBatchRecord {
         payoutBatchId: "pbt_ffffffffffffffffffffffffffffffff",
         destinationWallet: "payout_a",
         amountAtomic: "70",
-        status: "finalized",
+        status: itemStatus,
         createdAt: NOW,
         allocations: [
           {
@@ -682,7 +908,7 @@ function finalizedBatch(): PayoutBatchRecord {
         payoutBatchId: "pbt_ffffffffffffffffffffffffffffffff",
         destinationWallet: "payout_b",
         amountAtomic: "30",
-        status: "finalized",
+        status: itemStatus,
         createdAt: NOW,
         allocations: [
           {
@@ -696,17 +922,33 @@ function finalizedBatch(): PayoutBatchRecord {
   };
 }
 
+function transactionItemInput(item: PayoutBatchRecord["items"][number]) {
+  return {
+    payoutItemId: item.id,
+    amountAtomic: item.amountAtomic,
+    destinationWallet: item.destinationWallet,
+    ...(item.destinationTokenAccount === undefined
+      ? {}
+      : { destinationTokenAccount: item.destinationTokenAccount })
+  };
+}
+
 function payoutTransaction(
   overrides: Partial<PayoutTransactionRecord> = {}
 ): PayoutTransactionRecord {
-  return {
+  const transaction: PayoutTransactionRecord = {
     id: "ptx_1",
     payoutBatchId: "pbt_ffffffffffffffffffffffffffffffff",
     sequence: 0,
     attempt: 1,
     status: "submitted",
     createdAt: NOW,
-    ...overrides
+    items: []
+  };
+  return {
+    ...transaction,
+    ...overrides,
+    items: overrides.items ?? transaction.items
   };
 }
 

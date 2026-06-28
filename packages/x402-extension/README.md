@@ -28,6 +28,11 @@ The extension does not split the original x402 payment. It carries the signed
 offer, referral claim, request digest evidence, and receipt needed for later
 commission accrual and payout.
 
+Receipts use `protocolFeeBpsOfCommission` to split the merchant commission into
+protocol fee and referrer credit. Self-referral checks are based on the settled
+payer wallet and merchant-owner policy, not on whether the referrer identity
+wallet and payout wallet are the same.
+
 ## Resource-Server Flow
 
 ```mermaid

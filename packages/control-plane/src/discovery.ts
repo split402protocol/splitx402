@@ -55,6 +55,7 @@ export interface Split402BazaarResource {
       referrerWallet: string;
       payoutWallet: string;
       commissionBps: number;
+      protocolFeeBpsOfCommission: number;
       commissionBase: string;
       settlementMode: string;
       attributionRequired: boolean;
@@ -197,6 +198,7 @@ export function createSplit402BazaarResources(
           referrerWallet: route.referrerWallet,
           payoutWallet: route.payoutWallet,
           commissionBps: terms.commissionBps,
+          protocolFeeBpsOfCommission: terms.protocolFeeBpsOfCommission,
           commissionBase: terms.commissionBase,
           settlementMode: terms.settlementMode,
           attributionRequired: terms.attributionRequired,

@@ -98,7 +98,7 @@ describe("control-plane HTTP API", () => {
     expect(response.body.accrual).toEqual(
       expect.objectContaining({
         receiptId: receipt.receiptId,
-        amountAtomic: "2000"
+        amountAtomic: receipt.referrerCreditAtomic
       })
     );
     expect(store.listAccruals()).toHaveLength(1);
@@ -150,19 +150,19 @@ describe("control-plane HTTP API", () => {
       expect.objectContaining({
         merchantId: receipt.merchantId,
         eligibleAccrualCount: 1,
-        totalAmountAtomicByAsset: { [receipt.asset]: "2000" }
+        totalAmountAtomicByAsset: { [receipt.asset]: receipt.referrerCreditAtomic }
       })
     );
     expect(response.body.preview.batches).toEqual([
       expect.objectContaining({
         asset: receipt.asset,
-        totalAmountAtomic: "2000",
+        totalAmountAtomic: receipt.referrerCreditAtomic,
         fundingStatus: "deficit",
-        fundingDeficitAtomic: "1000",
+        fundingDeficitAtomic: "800",
         items: [
           expect.objectContaining({
             destinationWallet: receipt.payoutWallet,
-            amountAtomic: "2000",
+            amountAtomic: receipt.referrerCreditAtomic,
             accrualIds: [snapshot.accrual.id]
           })
         ]
@@ -184,8 +184,7 @@ describe("control-plane HTTP API", () => {
         id: receipt.merchantId,
         slug: "obligation-merchant",
         displayName: "Obligation Merchant",
-        ownerWallet: receipt.payerWallet,
-        status: "active"
+        ownerWallet: receipt.payerWallet
       })
       .expect(201);
     await request(app).post("/v1/receipts").send({ receipt }).expect(201);
@@ -218,9 +217,9 @@ describe("control-plane HTTP API", () => {
           expect.objectContaining({
             asset: receipt.asset,
             fundingStatus: "unknown",
-            availableAmountAtomic: "2000",
-            outstandingAmountAtomic: "2000",
-            totalAccruedAmountAtomic: "2000",
+            availableAmountAtomic: receipt.referrerCreditAtomic,
+            outstandingAmountAtomic: receipt.referrerCreditAtomic,
+            totalAccruedAmountAtomic: receipt.referrerCreditAtomic,
             availableAccrualCount: 1
           })
         ]
@@ -246,8 +245,7 @@ describe("control-plane HTTP API", () => {
         id: receipt.merchantId,
         slug: "funding-merchant",
         displayName: "Funding Merchant",
-        ownerWallet: receipt.payerWallet,
-        status: "active"
+        ownerWallet: receipt.payerWallet
       })
       .expect(201);
     await request(app)
@@ -298,7 +296,7 @@ describe("control-plane HTTP API", () => {
         fundingStatus: "covered",
         fundingAmountAtomic: "2500",
         fundingDeficitAtomic: "0",
-        outstandingAmountAtomic: "2000"
+        outstandingAmountAtomic: receipt.referrerCreditAtomic
       })
     );
   });
@@ -317,8 +315,7 @@ describe("control-plane HTTP API", () => {
         id: receipt.merchantId,
         slug: "batch-merchant",
         displayName: "Batch Merchant",
-        ownerWallet: receipt.payerWallet,
-        status: "active"
+        ownerWallet: receipt.payerWallet
       })
       .expect(201);
     await request(app)
@@ -364,7 +361,7 @@ describe("control-plane HTTP API", () => {
         network: receipt.network,
         asset: receipt.asset,
         status: "planned",
-        totalAmountAtomic: "2000",
+        totalAmountAtomic: receipt.referrerCreditAtomic,
         itemCount: 1,
         accrualCount: 1
       })
@@ -372,12 +369,12 @@ describe("control-plane HTTP API", () => {
     expect(response.body.batch.items).toEqual([
       expect.objectContaining({
         destinationWallet: receipt.payoutWallet,
-        amountAtomic: "2000",
+        amountAtomic: receipt.referrerCreditAtomic,
         status: "allocated",
         allocations: [
           expect.objectContaining({
             accrualId: snapshot.accrual.id,
-            amountAtomic: "2000"
+            amountAtomic: receipt.referrerCreditAtomic
           })
         ]
       })
@@ -394,6 +391,95 @@ describe("control-plane HTTP API", () => {
     ).toHaveLength(0);
   });
 
+  it("releases planned payout batch allocations", async () => {
+    const { app, store, receipt, merchantRegistry } = createTestApp({
+      withMerchantRegistry: true,
+      withPayouts: true
+    });
+    if (merchantRegistry === undefined) {
+      throw new Error("expected merchant registry");
+    }
+    await request(app)
+      .post("/v1/merchants")
+      .send({
+        id: receipt.merchantId,
+        slug: "release-merchant",
+        displayName: "Release Merchant",
+        ownerWallet: receipt.payerWallet
+      })
+      .expect(201);
+    await request(app)
+      .post(`/v1/merchants/${receipt.merchantId}/payout-wallets`)
+      .send({
+        id: "mpw_ffffffffffffffffffffffffffffffff",
+        network: receipt.network,
+        wallet: receipt.payToWallet,
+        asset: receipt.asset,
+        signerReference: "kms:split402-devnet-payout"
+      })
+      .expect(201);
+    await request(app).post("/v1/receipts").send({ receipt }).expect(201);
+    const snapshot = store.getByReceiptId(receipt.receiptId);
+    if (snapshot?.accrual === undefined) {
+      throw new Error("expected receipt accrual");
+    }
+    store.save({
+      ...snapshot,
+      receipt: {
+        ...snapshot.receipt,
+        verificationState: "signature_verified"
+      },
+      accrual: {
+        ...snapshot.accrual,
+        status: "available",
+        availableAt: "2026-06-24T00:04:00.000Z"
+      }
+    });
+    const availableAccrual = store.getByReceiptId(receipt.receiptId)?.accrual;
+    if (availableAccrual === undefined) {
+      throw new Error("expected available accrual");
+    }
+    const batch = store.createPayoutBatch({
+      merchantId: receipt.merchantId,
+      payoutWalletId: "mpw_ffffffffffffffffffffffffffffffff",
+      network: receipt.network,
+      asset: receipt.asset,
+      accruals: [availableAccrual],
+      now: "2026-06-24T00:05:00Z"
+    });
+
+    const response = await request(app)
+      .post(`/v1/payout-batches/${batch.id}/release-allocations`)
+      .send({
+        reason: "signer policy failed",
+        now: "2026-06-24T00:06:00Z"
+      })
+      .expect(200);
+
+    expect(response.body.batch).toEqual(
+      expect.objectContaining({
+        id: batch.id,
+        status: "cancelled",
+        failureCode: "allocations_released",
+        failureMessage: "signer policy failed",
+        updatedAt: "2026-06-24T00:06:00.000Z"
+      })
+    );
+    expect(response.body.batch.items[0]).toEqual(
+      expect.objectContaining({ status: "released" })
+    );
+    expect(store.getByReceiptId(receipt.receiptId)?.accrual?.status).toBe(
+      "available"
+    );
+    expect(
+      store.listPayoutEligibleAccruals({
+        merchantId: receipt.merchantId,
+        asset: receipt.asset,
+        now: "2026-06-24T00:06:00Z"
+      })
+    ).toHaveLength(1);
+  });
+
   it("lists payout batches that need reconciliation", async () => {
     const { app, store, receipt, merchantRegistry } = createTestApp({
       withMerchantRegistry: true,
@@ -408,8 +494,7 @@ describe("control-plane HTTP API", () => {
         id: receipt.merchantId,
         slug: "reconciliation-merchant",
         displayName: "Reconciliation Merchant",
-        ownerWallet: receipt.payerWallet,
-        status: "active"
+        ownerWallet: receipt.payerWallet
       })
       .expect(201);
     await request(app)
@@ -522,8 +607,7 @@ describe("control-plane HTTP API", () => {
         id: receipt.merchantId,
         slug: "reconciliation-action-merchant",
         displayName: "Reconciliation Action Merchant",
-        ownerWallet: receipt.payerWallet,
-        status: "active"
+        ownerWallet: receipt.payerWallet
       })
       .expect(201);
     await request(app).post("/v1/receipts").send({ receipt }).expect(201);
@@ -623,8 +707,7 @@ describe("control-plane HTTP API", () => {
         id: receipt.merchantId,
         slug: "referrer-view-merchant",
         displayName: "Referrer View Merchant",
-        ownerWallet: receipt.payerWallet,
-        status: "active"
+        ownerWallet: receipt.payerWallet
       })
       .expect(201);
     await request(app)
@@ -705,8 +788,8 @@ describe("control-plane HTTP API", () => {
             availableAmountAtomic: "0",
             heldAmountAtomic: "0",
             inFlightAmountAtomic: "0",
-            paidAmountAtomic: "2000",
-            totalEarnedAmountAtomic: "2000"
+            paidAmountAtomic: receipt.referrerCreditAtomic,
+            totalEarnedAmountAtomic: receipt.referrerCreditAtomic
           }
         ]
       })
@@ -717,7 +800,7 @@ describe("control-plane HTTP API", () => {
         receiptId: receipt.receiptId,
         referrerWallet: receipt.referrerWallet,
         payoutWallet: receipt.payoutWallet,
-        amountAtomic: "2000",
+        amountAtomic: receipt.referrerCreditAtomic,
         status: "paid",
         payoutBatchId: batch.id,
         payoutStatus: "finalized"
@@ -760,7 +843,7 @@ describe("control-plane HTTP API", () => {
     const bundle = createSampleProtocolArtifacts();
     const { app } = createTestApp({ withMerchantRegistry: true });
 
-    const merchantResponse = await request(app)
+    const selfApprovedMerchantResponse = await request(app)
       .post("/v1/merchants")
       .send({
         id: bundle.artifacts.receipt.merchantId,
@@ -769,14 +852,37 @@ describe("control-plane HTTP API", () => {
         ownerWallet: bundle.keys.payerWallet,
         status: "active"
       })
+      .expect(400);
+    const merchantResponse = await request(app)
+      .post("/v1/merchants")
+      .send({
+        id: bundle.artifacts.receipt.merchantId,
+        slug: "demo-merchant",
+        displayName: "Demo Merchant",
+        ownerWallet: bundle.keys.payerWallet
+      })
       .expect(201);
-    const originResponse = await request(app)
+    const selfApprovedOriginResponse = await request(app)
       .post(`/v1/merchants/${bundle.artifacts.receipt.merchantId}/origins`)
       .send({
         origin: bundle.artifacts.receipt.merchantOrigin,
         verificationMethod: "well_known",
-        status: "verified",
+        status: "verified"
+      })
+      .expect(400);
+    const selfVerifiedOriginResponse = await request(app)
+      .post(`/v1/merchants/${bundle.artifacts.receipt.merchantId}/origins`)
+      .send({
+        origin: bundle.artifacts.receipt.merchantOrigin,
+        verificationMethod: "well_known",
         verifiedAt: "2026-06-24T00:00:30Z"
+      })
+      .expect(400);
+    const originResponse = await request(app)
+      .post(`/v1/merchants/${bundle.artifacts.receipt.merchantId}/origins`)
+      .send({
+        origin: bundle.artifacts.receipt.merchantOrigin,
+        verificationMethod: "well_known"
       })
       .expect(201);
     const keyResponse = await request(app)
@@ -824,12 +930,25 @@ describe("control-plane HTTP API", () => {
       })
       .expect(200);
 
-    expect(merchantResponse.body.merchant.id).toBe(
-      bundle.artifacts.receipt.merchantId
+    expect(selfApprovedMerchantResponse.body.message).toBe(
+      "status is not accepted on this public endpoint"
+    );
+    expect(selfApprovedOriginResponse.body.message).toBe(
+      "status is not accepted on this public endpoint"
+    );
+    expect(selfVerifiedOriginResponse.body.message).toBe(
+      "verifiedAt is not accepted on this public endpoint"
+    );
+    expect(merchantResponse.body.merchant).toEqual(
+      expect.objectContaining({
+        id: bundle.artifacts.receipt.merchantId,
+        status: "pending"
+      })
     );
     expect(originResponse.body.origin.origin).toBe(
       bundle.artifacts.receipt.merchantOrigin
     );
+    expect(originResponse.body.origin.status).toBe("pending");
     expect(keyResponse.body.key.publicKey).toBe(bundle.keys.merchantPublicKey);
     expect(payoutWalletResponse.body.payoutWallet).toEqual(
       expect.objectContaining({
@@ -851,19 +970,19 @@ describe("control-plane HTTP API", () => {
           id: bundle.artifacts.receipt.merchantId,
           slug: "demo-merchant",
           displayName: "Demo Merchant",
-          status: "active"
+          status: "pending"
         }),
         signals: {
-          verifiedOrigins: 1,
+          verifiedOrigins: 0,
           activeOfferReceiptKeys: 1,
           activeWebhookKeys: 1,
           activePayoutWallets: 1
         },
         readiness: {
-          acceptsReceipts: true,
+          acceptsReceipts: false,
           payoutReady: true,
           webhookReady: true,
-          discoveryReady: true
+          discoveryReady: false
         }
       })
     );
@@ -924,8 +1043,7 @@ describe("control-plane HTTP API", () => {
         id: bundle.artifacts.receipt.merchantId,
         slug: "webhook-merchant",
         displayName: "Webhook Merchant",
-        ownerWallet: bundle.keys.payerWallet,
-        status: "active"
+        ownerWallet: bundle.keys.payerWallet
       })
       .expect(201);
 
@@ -1129,41 +1247,13 @@ describe("control-plane HTTP API", () => {
 
   it("activates a campaign with a merchant service-key signature", async () => {
     const bundle = createSampleProtocolArtifacts();
-    const { app } = createTestApp({
+    const { app, merchantRegistry } = createTestApp({
       withAuth: true,
       withCampaignRegistry: true,
       withMerchantRegistry: true
     });
     const ownerToken = await createAccessToken(app, OWNER_SEED, OWNER_WALLET);
-    await request(app)
-      .post("/v1/merchants")
-      .set("authorization", `Bearer ${ownerToken}`)
-      .send({
-        id: bundle.artifacts.receipt.merchantId,
-        slug: "demo-merchant",
-        displayName: "Demo Merchant",
-        status: "active"
-      })
-      .expect(201);
-    await request(app)
-      .post(`/v1/merchants/${bundle.artifacts.receipt.merchantId}/origins`)
-      .set("authorization", `Bearer ${ownerToken}`)
-      .send({
-        origin: bundle.artifacts.receipt.merchantOrigin,
-        verificationMethod: "well_known",
-        status: "verified",
-        verifiedAt: "2026-06-24T00:01:00Z"
-      })
-      .expect(201);
-    await request(app)
-      .post(`/v1/merchants/${bundle.artifacts.receipt.merchantId}/keys`)
-      .set("authorization", `Bearer ${ownerToken}`)
-      .send({
-        kid: bundle.artifacts.receipt.kid,
-        publicKey: bundle.keys.merchantPublicKey,
-        validFrom: "2026-06-24T00:00:00Z"
-      })
-      .expect(201);
+    seedMerchantFixture(merchantRegistry, { merchantStatus: "active", originStatus: "verified" });
     const campaignResponse = await request(app)
       .post("/v1/campaigns")
       .set("authorization", `Bearer ${ownerToken}`)
@@ -1206,14 +1296,82 @@ describe("control-plane HTTP API", () => {
     );
   });
 
+  it("rejects campaign activation while the merchant is pending", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const { app, merchantRegistry } = createTestApp({
+      withCampaignRegistry: true,
+      withMerchantRegistry: true
+    });
+    seedMerchantFixture(merchantRegistry, {
+      merchantStatus: "pending",
+      originStatus: "verified"
+    });
+    const campaignResponse = await request(app)
+      .post("/v1/campaigns")
+      .send({
+        id: bundle.artifacts.receipt.campaignId,
+        merchantId: bundle.artifacts.receipt.merchantId,
+        ...createCampaignBody()
+      })
+      .expect(201);
+    const signature = signCampaignTerms(
+      campaignResponse.body.campaign.current as CampaignVersionRecord
+    );
+
+    const response = await request(app)
+      .post(`/v1/campaigns/${bundle.artifacts.receipt.campaignId}/activate`)
+      .send({
+        kid: bundle.artifacts.receipt.kid,
+        signature
+      })
+      .expect(400);
+
+    expect(response.body.message).toBe("merchant must be active");
+  });
+
+  it("rejects campaign activation while the origin is pending", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const { app, merchantRegistry } = createTestApp({
+      withCampaignRegistry: true,
+      withMerchantRegistry: true
+    });
+    seedMerchantFixture(merchantRegistry, {
+      merchantStatus: "active",
+      originStatus: "pending"
+    });
+    const campaignResponse = await request(app)
+      .post("/v1/campaigns")
+      .send({
+        id: bundle.artifacts.receipt.campaignId,
+        merchantId: bundle.artifacts.receipt.merchantId,
+        ...createCampaignBody()
+      })
+      .expect(201);
+    const signature = signCampaignTerms(
+      campaignResponse.body.campaign.current as CampaignVersionRecord
+    );
+
+    const response = await request(app)
+      .post(`/v1/campaigns/${bundle.artifacts.receipt.campaignId}/activate`)
+      .send({
+        kid: bundle.artifacts.receipt.kid,
+        signature
+      })
+      .expect(400);
+
+    expect(response.body.message).toBe(
+      "campaign resourceOrigin must match a verified merchant origin"
+    );
+  });
+
   it("creates route drafts and activates signed route claims", async () => {
     const bundle = createSampleProtocolArtifacts();
-    const { app } = createTestApp({
+    const { app, merchantRegistry } = createTestApp({
       withCampaignRegistry: true,
       withMerchantRegistry: true,
       withRouteRegistry: true
     });
-    await createActiveCampaign(app);
+    await createActiveCampaign({ app, merchantRegistry });
 
     const draftResponse = await request(app)
       .post("/v1/routes/drafts")
@@ -1324,12 +1482,12 @@ describe("control-plane HTTP API", () => {
 
   it("rotates route payout wallets and exposes immutable route versions", async () => {
     const bundle = createSampleProtocolArtifacts();
-    const { app } = createTestApp({
+    const { app, merchantRegistry } = createTestApp({
       withCampaignRegistry: true,
       withMerchantRegistry: true,
       withRouteRegistry: true
     });
-    await createActiveCampaign(app);
+    await createActiveCampaign({ app, merchantRegistry });
 
     const draftResponse = await request(app)
       .post("/v1/routes/drafts")
@@ -1390,12 +1548,12 @@ describe("control-plane HTTP API", () => {
 
   it("searches routes with query filters and status selection", async () => {
     const bundle = createSampleProtocolArtifacts();
-    const { app } = createTestApp({
+    const { app, merchantRegistry } = createTestApp({
       withCampaignRegistry: true,
       withMerchantRegistry: true,
       withRouteRegistry: true
     });
-    await createActiveCampaign(app);
+    await createActiveCampaign({ app, merchantRegistry });
 
     const firstDraftResponse = await request(app)
       .post("/v1/routes/drafts")
@@ -1471,12 +1629,12 @@ describe("control-plane HTTP API", () => {
 
   it("lists referrer routes for dashboard and discovery views", async () => {
     const bundle = createSampleProtocolArtifacts();
-    const { app } = createTestApp({
+    const { app, merchantRegistry } = createTestApp({
       withCampaignRegistry: true,
       withMerchantRegistry: true,
       withRouteRegistry: true
     });
-    await createActiveCampaign(app);
+    await createActiveCampaign({ app, merchantRegistry });
     const referrerDraftResponse = await request(app)
       .post("/v1/routes/drafts")
       .send({
@@ -1541,7 +1699,7 @@ describe("control-plane HTTP API", () => {
 
   it("suspends active routes with merchant-owner authorization when required", async () => {
     const bundle = createSampleProtocolArtifacts();
-    const { app } = createTestApp({
+    const { app, merchantRegistry } = createTestApp({
       withAuth: true,
       withCampaignRegistry: true,
       withMerchantRegistry: true,
@@ -1553,7 +1711,7 @@ describe("control-plane HTTP API", () => {
       OTHER_OWNER_SEED,
       OTHER_OWNER_WALLET
     );
-    await createActiveCampaign(app, ownerToken);
+    await createActiveCampaign({ app, merchantRegistry, ownerToken });
     const draftResponse = await request(app)
       .post("/v1/routes/drafts")
       .send({
@@ -1751,39 +1909,52 @@ class FakePayoutFinalityMonitor implements PayoutFinalityMonitor {
   }
 }
 
-async function createActiveCampaign(app: Express, ownerToken?: string): Promise<void> {
+function seedMerchantFixture(
+  merchantRegistry: InMemoryMerchantRegistry | undefined,
+  input: {
+    merchantStatus: "pending" | "active";
+    originStatus: "pending" | "verified";
+  }
+): void {
+  if (merchantRegistry === undefined) {
+    throw new Error("merchant registry is required for merchant fixtures");
+  }
   const bundle = createSampleProtocolArtifacts();
-  const merchantRequest = request(app)
-    .post("/v1/merchants")
-    .set(ownerToken === undefined ? {} : { authorization: `Bearer ${ownerToken}` })
-    .send({
-      id: bundle.artifacts.receipt.merchantId,
-      slug: "demo-merchant",
-      displayName: "Demo Merchant",
-      ownerWallet: OWNER_WALLET,
-      status: "active"
-    })
-    .expect(201);
-  await merchantRequest;
-  await request(app)
-    .post(`/v1/merchants/${bundle.artifacts.receipt.merchantId}/origins`)
-    .set(ownerToken === undefined ? {} : { authorization: `Bearer ${ownerToken}` })
-    .send({
-      origin: bundle.artifacts.receipt.merchantOrigin,
-      verificationMethod: "well_known",
-      status: "verified",
-      verifiedAt: "2026-06-24T00:01:00Z"
-    })
-    .expect(201);
-  await request(app)
-    .post(`/v1/merchants/${bundle.artifacts.receipt.merchantId}/keys`)
-    .set(ownerToken === undefined ? {} : { authorization: `Bearer ${ownerToken}` })
-    .send({
-      kid: bundle.artifacts.receipt.kid,
-      publicKey: bundle.keys.merchantPublicKey,
-      validFrom: "2026-06-24T00:00:00Z"
-    })
-    .expect(201);
+  merchantRegistry.createMerchant({
+    id: bundle.artifacts.receipt.merchantId,
+    slug: "demo-merchant",
+    displayName: "Demo Merchant",
+    ownerWallet: OWNER_WALLET,
+    status: input.merchantStatus
+  });
+  merchantRegistry.addOrigin({
+    merchantId: bundle.artifacts.receipt.merchantId,
+    origin: bundle.artifacts.receipt.merchantOrigin,
+    verificationMethod: "well_known",
+    status: input.originStatus,
+    ...(input.originStatus === "verified"
+      ? { verifiedAt: "2026-06-24T00:01:00Z" }
+      : {})
+  });
+  merchantRegistry.addKey({
+    merchantId: bundle.artifacts.receipt.merchantId,
+    kid: bundle.artifacts.receipt.kid,
+    publicKey: bundle.keys.merchantPublicKey,
+    validFrom: "2026-06-24T00:00:00Z"
+  });
+}
+
+async function createActiveCampaign(input: {
+  app: Express;
+  merchantRegistry: InMemoryMerchantRegistry | undefined;
+  ownerToken?: string;
+}): Promise<void> {
+  const { app, merchantRegistry, ownerToken } = input;
+  const bundle = createSampleProtocolArtifacts();
+  seedMerchantFixture(merchantRegistry, {
+    merchantStatus: "active",
+    originStatus: "verified"
+  });
   const campaignResponse = await request(app)
     .post("/v1/campaigns")
     .set(ownerToken === undefined ? {} : { authorization: `Bearer ${ownerToken}` })

@@ -31,6 +31,7 @@ describe("CachedControlPlaneCampaignResolver", () => {
           campaignVersion: receipt.campaignVersion,
           campaignTermsHash: receipt.campaignTermsHash,
           commissionBps: receipt.commissionBps,
+          protocolFeeBpsOfCommission: receipt.protocolFeeBpsOfCommission,
           attributionRequired: false,
           allowSelfReferral: false
         },
@@ -158,7 +159,7 @@ function campaignResponse(status: "active" | "paused") {
           requiredAmountAtomic: receipt.requiredAmountAtomic,
           payToWallet: receipt.payToWallet,
           commissionBps: receipt.commissionBps,
-          protocolFeeBps: 0,
+          protocolFeeBpsOfCommission: receipt.protocolFeeBpsOfCommission,
           commissionBase: "required_amount",
           settlementMode: "accrual",
           attributionRequired: false,

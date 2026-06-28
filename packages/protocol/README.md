@@ -62,7 +62,12 @@ lets the rest of Split402 prove:
 - which merchant campaign applied;
 - which referral claim was attached;
 - how much commission should be recorded in atomic units;
+- how much of that commission is protocol fee versus referrer credit;
 - which payout wallet should later receive the merchant-funded commission.
+
+Commission is calculated from the required x402 amount. Protocol fee is
+calculated from the commission amount via `protocolFeeBpsOfCommission`, so
+`referrerCreditAtomic + protocolFeeAtomic = commissionAmountAtomic`.
 
 ## Commands
 

@@ -116,6 +116,41 @@ describe("ReceiptChainVerificationWorker", () => {
     );
     expect(outboxStore.event?.status).toBe("dead_letter");
   });
+
+  it("marks conclusively rejected chain verification before dead-lettering", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const snapshot = await createSnapshot();
+    const outboxStore = new FakeOutboxEventStore(
+      createReceiptAcceptedEvent(bundle.artifacts.receipt.receiptId)
+    );
+    const receiptStore = new FakeReceiptChainVerificationStore(snapshot);
+    const worker = new ReceiptChainVerificationWorker(
+      outboxStore,
+      receiptStore,
+      {
+        verify: () => ({
+          status: "rejected",
+          error: "settlement transfer did not match receipt"
+        })
+      },
+      { now: () => FIXED_NOW }
+    );
+
+    const result = await worker.processNext();
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        status: "dead_letter",
+        lastError: "settlement transfer did not match receipt"
+      })
+    );
+    expect(receiptStore.snapshot?.receipt.verificationState).toBe("chain_rejected");
+    expect(receiptStore.snapshot?.receipt.verificationReason).toBe(
+      "settlement transfer did not match receipt"
+    );
+    expect(receiptStore.snapshot?.accrual?.status).toBe("rejected");
+    expect(outboxStore.event?.status).toBe("dead_letter");
+  });
 });
 
 describe("runReceiptChainVerificationWorkerLoop", () => {
@@ -467,6 +502,33 @@ class FakeReceiptChainVerificationStore implements ReceiptChainVerificationStore
               ...this.snapshot.accrual,
               status: "available",
               availableAt: input.verifiedAt
+            }
+          })
+    };
+    return this.snapshot;
+  }
+
+  markReceiptChainRejected(input: {
+    receiptId: string;
+    rejectedAt: string;
+    reason: string;
+  }): ReceiptIngestionSnapshot | undefined {
+    if (this.snapshot?.receipt.id !== input.receiptId) {
+      return undefined;
+    }
+    this.snapshot = {
+      ...this.snapshot,
+      receipt: {
+        ...this.snapshot.receipt,
+        verificationState: "chain_rejected",
+        verificationReason: input.reason
+      },
+      ...(this.snapshot.accrual === undefined
+        ? {}
+        : {
+            accrual: {
+              ...this.snapshot.accrual,
+              status: "rejected"
             }
           })
     };

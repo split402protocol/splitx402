@@ -55,12 +55,28 @@ describe("receipt ingestion", () => {
         routeId: bundle.artifacts.receipt.routeId,
         referrerWallet: bundle.keys.referrerPublicKey,
         payoutWallet: bundle.keys.payoutWallet,
-        amountAtomic: "2000",
+        amountAtomic: bundle.artifacts.receipt.referrerCreditAtomic,
         status: "pending_chain_verification"
       })
     );
     expect(result.ledgerTransaction?.sourceId).toBe(result.accrual?.id);
     expect(result.ledgerTransaction?.entries).toHaveLength(3);
+    expect(result.ledgerTransaction?.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          accountType: "merchant_commission_liability",
+          amountAtomic: `-${bundle.artifacts.receipt.commissionAmountAtomic}`
+        }),
+        expect.objectContaining({
+          accountType: "referrer_payable",
+          amountAtomic: bundle.artifacts.receipt.referrerCreditAtomic
+        }),
+        expect.objectContaining({
+          accountType: "protocol_fee_payable",
+          amountAtomic: bundle.artifacts.receipt.protocolFeeAtomic
+        })
+      ])
+    );
     assertLedgerBalances(result.ledgerTransaction?.entries ?? []);
     expect(store.listAccruals()).toHaveLength(1);
   });
@@ -180,6 +196,7 @@ function createZeroCreditReceipt(receipt: Split402ReceiptV1): Split402ReceiptV1 
   zeroCreditReceipt.paymentId = "pay_00000000000000000000000000000007";
   zeroCreditReceipt.settlementTxSignature = base58Encode(hexToBytes("cc".repeat(64)));
   zeroCreditReceipt.commissionBps = 0;
+  zeroCreditReceipt.protocolFeeBpsOfCommission = 0;
   zeroCreditReceipt.commissionAmountAtomic = "0";
   zeroCreditReceipt.protocolFeeAtomic = "0";
   zeroCreditReceipt.referrerCreditAtomic = "0";

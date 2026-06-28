@@ -34,6 +34,35 @@ describe("campaign registry", () => {
     expect(campaign.current.termsHash).toMatch(/^sha256:[0-9a-f]{64}$/u);
     expect(campaign.current.signingBytesHex).toMatch(/^[0-9a-f]+$/u);
     expect(version?.terms).toEqual(campaign.current.terms);
+    expect(campaign.current.terms.protocolFeeBpsOfCommission).toBe(
+      bundle.artifacts.receipt.protocolFeeBpsOfCommission
+    );
+  });
+
+  it("normalizes deprecated protocolFeeBps and rejects conflicting fee fields", () => {
+    const bundle = createSampleProtocolArtifacts();
+    const registry = createRegistry();
+    const legacy = registry.createCampaign({
+      id: bundle.artifacts.receipt.campaignId,
+      merchantId: bundle.artifacts.receipt.merchantId,
+      ...createCampaignTerms({
+        protocolFeeBps: 1000
+      })
+    });
+
+    expect(legacy.current.terms.protocolFeeBpsOfCommission).toBe(1000);
+    expect(() =>
+      registry.createCampaign({
+        id: "cmp_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        merchantId: bundle.artifacts.receipt.merchantId,
+        ...createCampaignTerms({
+          protocolFeeBpsOfCommission: 1000,
+          protocolFeeBps: 999
+        })
+      })
+    ).toThrow(
+      "protocolFeeBps and protocolFeeBpsOfCommission must match when both are provided"
+    );
   });
 
   it("creates the next immutable version without changing the old version", () => {
@@ -187,6 +216,8 @@ function createCampaignTerms(
     requiredAmountAtomic: bundle.artifacts.receipt.requiredAmountAtomic,
     payToWallet: bundle.artifacts.receipt.payToWallet,
     commissionBps: bundle.artifacts.receipt.commissionBps,
+    protocolFeeBpsOfCommission:
+      bundle.artifacts.receipt.protocolFeeBpsOfCommission,
     payoutThresholdAtomic: "100000",
     startsAt: "2026-06-24T00:00:00Z",
     endsAt: null,
@@ -204,5 +235,5 @@ function signCampaignTerms(
 }
 
 function mutateSignature(signature: string): string {
-  return `${signature.slice(0, -1)}${signature.endsWith("A") ? "B" : "A"}`;
+  return `${signature.startsWith("A") ? "B" : "A"}${signature.slice(1)}`;
 }
