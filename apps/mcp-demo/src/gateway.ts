@@ -587,23 +587,28 @@ function routerToolCards() {
 }
 
 function createDemoRouterExecutor(bundle: McpDemoBundle): Split402RouterExecutor {
+  let receiptSequence = 0;
   return {
-    execute: async (input: Parameters<Split402RouterExecutor["execute"]>[0]) => ({
-      data: {
-        executionMode: "router-demo-mock",
-        wallet:
-          typeof input.body === "object" && input.body !== null
-            ? ((input.body as Record<string, unknown>).wallet ?? null)
-            : null,
-        referralClaimHash:
-          input.referralClaim === undefined
-            ? null
-            : hashProtocolObject(input.referralClaim),
-        riskScore: 17,
-        risk: "low"
-      },
-      receipt: createDemoReceipt(bundle, input.provider, input.body)
-    })
+    execute: async (input: Parameters<Split402RouterExecutor["execute"]>[0]) => {
+      const sequence = receiptSequence;
+      receiptSequence += 1;
+      return {
+        data: {
+          executionMode: "router-demo-mock",
+          wallet:
+            typeof input.body === "object" && input.body !== null
+              ? ((input.body as Record<string, unknown>).wallet ?? null)
+              : null,
+          referralClaimHash:
+            input.referralClaim === undefined
+              ? null
+              : hashProtocolObject(input.referralClaim),
+          riskScore: 17,
+          risk: "low"
+        },
+        receipt: createDemoReceipt(bundle, input.provider, input.body, sequence)
+      };
+    }
   };
 }
 
@@ -611,6 +616,7 @@ function createDemoReceipt(
   bundle: McpDemoBundle,
   provider: Split402CapabilityProvider,
   body: unknown,
+  sequence: number,
 ): Split402ReceiptV1 {
   const sample = createSampleProtocolArtifacts();
   const requiredAmount = parseAtomicAmount(provider.amountAtomic);
@@ -621,7 +627,11 @@ function createDemoReceipt(
   );
   const unsigned = {
     protocolVersion: "0.1",
-    receiptId: "rcp_00000000000000000000000000000005",
+    receiptId: createDeterministicDemoId("rcp", {
+      providerId: provider.providerId,
+      body,
+      sequence
+    }),
     merchantId: "mrc_00000000000000000000000000000001",
     merchantOrigin: provider.merchantOrigin,
     operationId: provider.operationId,
@@ -641,14 +651,18 @@ function createDemoReceipt(
     referralClaimHash: sample.artifacts.receipt.referralClaimHash!,
     referrerWallet: sample.artifacts.receipt.referrerWallet!,
     payoutWallet: sample.artifacts.receipt.payoutWallet!,
-    paymentId: "pay_00000000000000000000000000000004",
+    paymentId: createDeterministicDemoId("pay", {
+      providerId: provider.providerId,
+      body,
+      sequence
+    }),
     network: provider.network,
     asset: provider.asset,
     payerWallet: sample.artifacts.receipt.payerWallet,
     payToWallet: sample.artifacts.receipt.payToWallet,
     requiredAmountAtomic: provider.amountAtomic,
     settledAmountAtomic: provider.amountAtomic,
-    settlementTxSignature: "demo-mcp-gateway-mock-settlement",
+    settlementTxSignature: `demo-mcp-gateway-mock-settlement-${sequence}`,
     commissionBps: bundle.mcp.tools[0].split402.commissionBps,
     protocolFeeBpsOfCommission:
       bundle.mcp.tools[0].split402.protocolFeeBpsOfCommission,
@@ -657,7 +671,11 @@ function createDemoReceipt(
     protocolFeeAtomic: serializeAtomicAmount(commission.protocolFee),
     referrerCreditAtomic: serializeAtomicAmount(commission.referrerCredit),
     settlementMode: "accrual",
-    offerNonce: "ofn_00000000000000000000000000000006",
+    offerNonce: createDeterministicDemoId("ofn", {
+      providerId: provider.providerId,
+      body,
+      sequence
+    }),
     settledAt: "2026-06-26T00:01:45Z",
     issuedAt: "2026-06-26T00:01:46Z",
     recordingStatus: "accepted",
@@ -671,6 +689,13 @@ function createDemoReceipt(
     ...unsigned,
     signature: signature.signature
   };
+}
+
+function createDeterministicDemoId(
+  prefix: "ofn" | "pay" | "rcp",
+  value: unknown
+): string {
+  return `${prefix}_${hashProtocolObject(value).slice("sha256:".length, 39)}`;
 }
 
 function publicProviderView(provider: Split402CapabilityProvider) {
