@@ -84,6 +84,8 @@ fields. Next is hosted proof evidence from a real staging environment.
 The hosted staging proof remains `no-go` until a real hosted environment
 supplies all required evidence from the same source commit.
 Use `corepack pnpm product:evidence:init` to scaffold a local launch-evidence
-workspace, then `corepack pnpm product:status --brief` for a simple operator
-view of the Phase 7 hosted proof gate, Phase 6 production custody gate,
-launch-gate percentages, and next actions.
+workspace. The initializer refuses to overwrite existing scaffold files unless
+`--force` is passed intentionally. Then run
+`corepack pnpm product:status --brief` for a simple operator view of the Phase 7
+hosted proof gate, Phase 6 production custody gate, launch-gate percentages,
+and next actions.
