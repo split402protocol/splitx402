@@ -16,8 +16,8 @@ Status: implemented as the protocol-core baseline.
 
 - Vendored the canonical architecture spec into
   `docs/reference/split402_protocol_architecture_v0.1.md`.
-- Imported `packages/protocol` from `splitx402/ffff` as the compatibility baseline.
-- Imported `packages/test-vectors` from `splitx402/ffff`.
+- Added `packages/protocol` from the initial compatibility baseline.
+- Added `packages/test-vectors` from the initial compatibility baseline.
 - Converted the repo to a pnpm workspace.
 - Added root scripts for protocol vector generation and vector checking.
 - Updated CI to install and test through pnpm.
@@ -26,14 +26,13 @@ Status: implemented as the protocol-core baseline.
 ## Why This Comes First
 
 The x402 extension, merchant demo, agent SDK, control plane, and payout worker all
-depend on stable protocol artifacts. The first v2 step is therefore to preserve the
-known-good `ffff` artifact behavior before changing extension or demo behavior.
+depend on stable protocol artifacts. The first v2 step is therefore to preserve
+known-good artifact behavior before changing extension or demo behavior.
 
 ## Boundary
 
 This phase should not redesign Split402. The architecture spec defines the scope,
-`ffff` provides the first implementation shape, and this branch establishes the
-deterministic protocol floor for follow-up work.
+and this branch establishes the deterministic protocol floor for follow-up work.
 
 ## Acceptance Checks
 
