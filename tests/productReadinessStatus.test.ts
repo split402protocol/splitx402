@@ -29,10 +29,13 @@ describe("Split402 product readiness status", () => {
     expect(report.summary).toContain("public-alpha implementation foundation");
     expect(report.summary).toContain("Missing checked evidence");
     expect(report.nextActions).toContain(
-      "Run hosted Phase 7 staging proof collection and status validation.",
+      "Create a combined launch evidence workspace with corepack pnpm product:evidence:init.",
     );
     expect(report.nextActions).toContain(
-      "Generate and assemble the Phase 6 custody evidence bundle.",
+      "Run hosted Phase 7 staging proof collection and status validation.",
+    );
+    expect(report.nextActions).not.toContain(
+      "Create the evidence workspace with corepack pnpm phase7:staging:init.",
     );
   });
 
@@ -88,5 +91,6 @@ approval_notes: checked evidence is intentionally incomplete
     expect(brief).toContain("Phase 7 hosted public-alpha proof: not checked");
     expect(brief).toContain("Phase 6 production custody evidence: not checked");
     expect(brief).toContain("Mainnet ready: no");
+    expect(brief).toContain("corepack pnpm product:evidence:init");
   });
 });
