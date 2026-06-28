@@ -15,6 +15,7 @@ export interface McpDemoBundleInput {
   asset?: string;
   requiredAmountAtomic?: string;
   commissionBps?: number;
+  protocolFeeBpsOfCommission?: number;
   generatedAt?: string;
 }
 
@@ -63,6 +64,7 @@ export interface McpDemoBundle {
           campaignId: string;
           operationId: string;
           commissionBps: number;
+          protocolFeeBpsOfCommission: number;
           referralClaimSources: ["mcp-config", "tool-argument", "http-header"];
           receiptVerification: {
             package: "@split402/agent-sdk";
@@ -75,6 +77,9 @@ export interface McpDemoBundle {
   expectedEconomics: {
     paymentAmountAtomic: string;
     referrerCommissionBps: number;
+    protocolFeeBpsOfCommission: number;
+    commissionAmountAtomic: string;
+    protocolFeeAtomic: string;
     referrerCreditAtomic: string;
     merchantRetainsAtomic: string;
   };
@@ -98,9 +103,15 @@ export function createMcpDemoBundle(
   const commissionBps =
     input.commissionBps ??
     readCommissionBps(process.env.SPLIT402_COMMISSION_BPS ?? "2000");
+  const protocolFeeBpsOfCommission =
+    input.protocolFeeBpsOfCommission ??
+    readCommissionBps(process.env.SPLIT402_PROTOCOL_FEE_BPS_OF_COMMISSION ?? "1000");
   const paymentAmount = readAtomicAmount(requiredAmountAtomic);
-  const referrerCredit = (paymentAmount * BigInt(commissionBps)) / 10_000n;
-  const merchantRetains = paymentAmount - referrerCredit;
+  const commissionAmount = (paymentAmount * BigInt(commissionBps)) / 10_000n;
+  const protocolFee =
+    (commissionAmount * BigInt(protocolFeeBpsOfCommission)) / 10_000n;
+  const referrerCredit = commissionAmount - protocolFee;
+  const merchantRetains = paymentAmount - commissionAmount;
   const asset =
     input.asset ?? process.env.SPLIT402_ASSET ?? MCP_DEMO_DEFAULT_DEVNET_USDC;
   const servicePublicKey =
@@ -155,6 +166,7 @@ export function createMcpDemoBundle(
             campaignId: MCP_DEMO_CAMPAIGN_ID,
             operationId: MCP_DEMO_OPERATION_ID,
             commissionBps,
+            protocolFeeBpsOfCommission,
             referralClaimSources: ["mcp-config", "tool-argument", "http-header"],
             receiptVerification: {
               package: "@split402/agent-sdk",
@@ -167,6 +179,9 @@ export function createMcpDemoBundle(
     expectedEconomics: {
       paymentAmountAtomic: paymentAmount.toString(),
       referrerCommissionBps: commissionBps,
+      protocolFeeBpsOfCommission,
+      commissionAmountAtomic: commissionAmount.toString(),
+      protocolFeeAtomic: protocolFee.toString(),
       referrerCreditAtomic: referrerCredit.toString(),
       merchantRetainsAtomic: merchantRetains.toString()
     },
