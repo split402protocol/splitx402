@@ -42,6 +42,7 @@ try {
       "  SPLIT402_PHASE7_REFERRER_WALLET",
       "Optional environment:",
       "  SPLIT402_PHASE7_CONTROL_PLANE_TOKEN",
+      "  SPLIT402_PHASE7_EVIDENCE_DIR",
       "  SPLIT402_PHASE7_READ_OUTPUT_DIR",
       "  SPLIT402_PHASE7_WEBHOOK_STATUS",
     ].join("\n"),
