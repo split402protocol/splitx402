@@ -1723,6 +1723,9 @@ function validateMcpGatewayTranscript(
     return;
   }
   const receiptId = readNonEmptyString(executeContent.receiptId);
+  const executeReferrerCreditAtomic = readNonEmptyString(
+    executeContent.referrerCreditAtomic,
+  );
   for (const [field, value] of [
     ["providerId", executeContent.providerId],
     ["amountPaidAtomic", executeContent.amountPaidAtomic],
@@ -1777,8 +1780,23 @@ function validateMcpGatewayTranscript(
   }
   const receiptResponse = findResponse(lines, receiptRequest.message.id);
   const receiptContent = readStructuredContent(receiptResponse);
-  if (receiptContent?.receiptId !== receiptId || readRecord(receiptContent?.receipt) === undefined) {
+  const receiptRecord = readRecord(receiptContent?.receipt);
+  if (receiptContent?.receiptId !== receiptId || receiptRecord === undefined) {
     blockers.push("mcp_gateway_evidence getReceipt response does not match execute receiptId");
+    return;
+  }
+  if (receiptRecord.receiptId !== receiptId) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt receipt.receiptId does not match execute receiptId",
+    );
+  }
+  if (
+    executeReferrerCreditAtomic !== undefined &&
+    receiptRecord.referrerCreditAtomic !== executeReferrerCreditAtomic
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt referrerCreditAtomic does not match execute response",
+    );
   }
 }
 
