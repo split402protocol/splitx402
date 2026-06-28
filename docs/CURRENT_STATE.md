@@ -95,4 +95,5 @@ validation, hosted proof, custody evidence, and combined status commands; pass
 the Phase 6 and Phase 7 evidence files to show checked, blocked, or ready
 section statuses from real files. Then run `corepack pnpm product:status
 --brief` for a simple operator view of the Phase 7 hosted proof gate, Phase 6
-production custody gate, launch-gate percentages, and next actions.
+production custody gate, launch-gate percentages, evidence-env setup commands,
+and next actions.
