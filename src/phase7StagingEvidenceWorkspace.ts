@@ -144,7 +144,7 @@ function createReadmeText(directory: string): string {
     `corepack pnpm demo:mcp-bundle > ${directory}/mcp-bundle.json`,
     `corepack pnpm demo:paid-suite > ${directory}/paid-suite.log`,
     "corepack pnpm phase7:staging:derive-receipt-verification",
-    "corepack pnpm phase7:staging:manifest",
+    "corepack pnpm phase7:staging:manifest phase7-staging-proof.txt",
     `corepack pnpm phase7:staging:assemble > phase7-staging-proof.txt`,
     `corepack pnpm phase7:staging:status phase7-staging-proof.txt`,
     "```",

@@ -36,7 +36,7 @@ console.log(
         `corepack pnpm demo:mcp-bundle > ${workspace.directory}/mcp-bundle.json`,
         `corepack pnpm demo:paid-suite > ${workspace.directory}/paid-suite.log`,
         "corepack pnpm phase7:staging:derive-receipt-verification",
-        "corepack pnpm phase7:staging:manifest",
+        "corepack pnpm phase7:staging:manifest phase7-staging-proof.txt",
         "corepack pnpm phase7:staging:assemble > phase7-staging-proof.txt",
         "corepack pnpm phase7:staging:status phase7-staging-proof.txt",
         "Record the commands above plus lint, typecheck, test, build, vectors:check, and audit in commands.log.",
