@@ -1,10 +1,13 @@
+import { execFileSync } from "node:child_process";
+
 import { createPhase7StagingProofRecord } from "./phase7StagingProof.js";
 
 const values = {
   proof_id: process.env.SPLIT402_PHASE7_PROOF_ID,
   proof_date: process.env.SPLIT402_PHASE7_PROOF_DATE ?? isoDate(),
   reviewers: process.env.SPLIT402_PHASE7_PROOF_REVIEWERS,
-  source_commit: process.env.SPLIT402_PHASE7_SOURCE_COMMIT,
+  source_commit:
+    readOptionalEnv("SPLIT402_PHASE7_SOURCE_COMMIT") ?? readCurrentGitCommit(),
   staging_environment: process.env.SPLIT402_PHASE7_STAGING_ENVIRONMENT,
   control_plane_url: process.env.SPLIT402_PHASE7_CONTROL_PLANE_URL,
   dashboard_url: process.env.SPLIT402_PHASE7_DASHBOARD_URL,
@@ -38,4 +41,19 @@ console.log(createPhase7StagingProofRecord(values));
 
 function isoDate(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function readOptionalEnv(envName: string): string | undefined {
+  const value = process.env[envName];
+  if (value === undefined || value.trim().length === 0) {
+    return undefined;
+  }
+  return value.trim();
+}
+
+function readCurrentGitCommit(): string {
+  return execFileSync("git", ["rev-parse", "HEAD"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  }).trim();
 }
