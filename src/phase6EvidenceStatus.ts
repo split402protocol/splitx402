@@ -15,6 +15,11 @@ export const PHASE6_EVIDENCE_COMMANDS = [
     evidenceField: "review_id",
   },
   {
+    gate: "custody_assembly_env_template",
+    command: "corepack pnpm phase6:evidence:env-template",
+    evidenceField: "review_id",
+  },
+  {
     gate: "signer_image_provenance",
     command: "corepack pnpm phase6:image-provenance",
     evidenceField: "signer_image_dependency_audit_output",
@@ -111,6 +116,7 @@ function createNextActions(
   if (validation === undefined) {
     return [
       "Generate a bundle scaffold with corepack pnpm phase6:evidence:bundle.",
+      "Generate local assembly env guidance with corepack pnpm phase6:evidence:env-template.",
       "Run each listed evidence command against staging outputs.",
       "Attach generated records to docs/templates/phase6-custody-evidence.txt copy.",
       "Run corepack pnpm phase6:evidence:status <evidence-bundle.txt>.",

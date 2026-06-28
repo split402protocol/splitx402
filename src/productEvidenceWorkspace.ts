@@ -2,6 +2,7 @@ import {
   createPhase6CustodyEvidenceBundle,
   type Phase6CustodyEvidenceBundleValues,
 } from "./phase6CustodyBundle.js";
+import { createPhase6EvidenceAssemblyEnvTemplate } from "./phase6EvidenceAssemblyEnv.js";
 import {
   createPhase7StagingEvidenceWorkspace,
   type Phase7StagingEvidenceWorkspace,
@@ -18,10 +19,12 @@ export interface Split402ProductEvidenceWorkspace {
   directory: string;
   readmeFileName: "README.md";
   phase6EvidenceFileName: "phase6-custody-evidence.txt";
+  phase6EnvFileName: "phase6-evidence.env";
   phase7ProofFileName: "phase7-staging-proof.txt";
   phase7EnvFileName: "phase7-staging.env";
   phase7: Phase7StagingEvidenceWorkspace;
   phase6EvidenceText: string;
+  phase6EnvText: string;
   phase7ProofText: string;
   readmeText: string;
   nextCommands: string[];
@@ -40,6 +43,7 @@ export function createSplit402ProductEvidenceWorkspace(
   };
   const phase6EvidenceText = createPhase6CustodyEvidenceBundle(phase6Values);
   const phase6EvidenceFileName = "phase6-custody-evidence.txt" as const;
+  const phase6EnvFileName = "phase6-evidence.env" as const;
   const phase7ProofFileName = "phase7-staging-proof.txt" as const;
   const phase7EnvFileName = "phase7-staging.env" as const;
   const phase7ProofText = createPhase7ProofText({
@@ -51,6 +55,7 @@ export function createSplit402ProductEvidenceWorkspace(
   const nextCommands = createNextCommands({
     directory,
     phase6EvidenceFileName,
+    phase6EnvFileName,
     phase7ProofFileName,
     phase7EnvFileName,
   });
@@ -59,14 +64,17 @@ export function createSplit402ProductEvidenceWorkspace(
     directory,
     readmeFileName: "README.md",
     phase6EvidenceFileName,
+    phase6EnvFileName,
     phase7ProofFileName,
     phase7EnvFileName,
     phase7,
     phase6EvidenceText,
+    phase6EnvText: createPhase6EvidenceAssemblyEnvTemplate(),
     phase7ProofText,
     readmeText: createReadmeText({
       directory,
       phase6EvidenceFileName,
+      phase6EnvFileName,
       phase7ProofFileName,
       phase7EnvFileName,
       nextCommands,
@@ -111,11 +119,14 @@ function relativePhase7EvidenceDirectory(
 function createNextCommands(input: {
   directory: string;
   phase6EvidenceFileName: string;
+  phase6EnvFileName: string;
   phase7ProofFileName: string;
   phase7EnvFileName: string;
 }): string[] {
   return [
     `Fill ${input.directory}/${input.phase7EnvFileName} with hosted staging values.`,
+    `corepack pnpm phase6:evidence:env-template > ${input.directory}/${input.phase6EnvFileName}`,
+    `Fill ${input.directory}/${input.phase6EnvFileName} with Phase 6 custody record paths.`,
     `Fill ${input.directory}/${input.phase6EvidenceFileName} with generated Phase 6 custody records.`,
     `corepack pnpm product:launch-preflight --brief ${input.directory}`,
     "SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",
@@ -139,6 +150,7 @@ function createNextCommands(input: {
 function createReadmeText(input: {
   directory: string;
   phase6EvidenceFileName: string;
+  phase6EnvFileName: string;
   phase7ProofFileName: string;
   phase7EnvFileName: string;
   nextCommands: string[];
@@ -157,6 +169,7 @@ function createReadmeText(input: {
     "| Path | Purpose |",
     "| --- | --- |",
     `| \`${input.phase6EvidenceFileName}\` | Phase 6 custody evidence bundle scaffold. |`,
+    `| \`${input.phase6EnvFileName}\` | Local Phase 6 custody evidence assembly environment template. |`,
     `| \`${input.phase7ProofFileName}\` | Phase 7 staging proof record after assembly. |`,
     `| \`${input.phase7EnvFileName}\` | Local Phase 7 collector and attachment environment template. |`,
     "| `phase7-staging-evidence/` | Local Phase 7 artifacts parsed by the status checker. |",

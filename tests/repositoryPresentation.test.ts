@@ -152,6 +152,7 @@ describe("repository presentation", () => {
     expect(readme).toContain("corepack pnpm product:evidence:init --force");
     expect(readme).toContain("corepack pnpm product:launch-preflight --brief");
     expect(readme).toContain("corepack pnpm product:launch-checklist --brief");
+    expect(readme).toContain("corepack pnpm phase6:evidence:env-template");
     expect(readme).toContain(
       "corepack pnpm product:launch-checklist --brief <phase6-custody-evidence.txt> <phase7-staging-proof.txt>",
     );
@@ -165,6 +166,7 @@ describe("repository presentation", () => {
     expect(currentState).toContain("corepack pnpm product:evidence:init");
     expect(currentState).toContain("corepack pnpm product:launch-preflight");
     expect(currentState).toContain("corepack pnpm product:launch-checklist");
+    expect(currentState).toContain("local env templates");
     expect(currentState).toContain("checked, blocked, or ready");
     expect(currentState).toContain("refuses to overwrite existing scaffold");
     expect(currentState).toContain("corepack pnpm product:status");
