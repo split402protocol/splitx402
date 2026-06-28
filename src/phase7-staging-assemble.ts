@@ -1,3 +1,5 @@
+import { execFileSync } from "node:child_process";
+
 import {
   PHASE7_STAGING_ATTACHMENT_FIELDS,
   assemblePhase7StagingProof,
@@ -27,6 +29,7 @@ try {
       "Usage: corepack pnpm phase7:staging:assemble",
       "Direct field override environment:",
       "  SPLIT402_PHASE7_* fields from .env.example",
+      "  SPLIT402_PHASE7_SOURCE_COMMIT (optional; defaults to git rev-parse HEAD)",
       "Attachment path environment:",
       "  SPLIT402_PHASE7_ASSEMBLE_AGENT_DISCOVERY_EVIDENCE",
       "  SPLIT402_PHASE7_ASSEMBLE_PAID_REQUEST_EVIDENCE",
@@ -57,6 +60,7 @@ function readDirectValues(): Phase7StagingProofValues {
       values[field] = value;
     }
   }
+  values.source_commit ??= readCurrentGitCommit();
   return values;
 }
 
@@ -81,4 +85,11 @@ function readOptionalEnv(envName: string): string | undefined {
     return undefined;
   }
   return value.trim();
+}
+
+function readCurrentGitCommit(): string {
+  return execFileSync("git", ["rev-parse", "HEAD"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  }).trim();
 }
