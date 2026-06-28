@@ -159,7 +159,7 @@ function createPhase6Section(
         : "not_checked",
     externalEvidenceRequired: true,
     commands: [
-      "corepack pnpm phase6:evidence:env-template split402-launch-evidence > split402-launch-evidence/phase6-evidence.env",
+      "Review generated split402-launch-evidence/phase6-evidence.env before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template split402-launch-evidence > split402-launch-evidence/phase6-evidence.env",
       "Fill split402-launch-evidence/phase6-evidence.env with generated Phase 6 custody record paths.",
       "Fill split402-launch-evidence/phase6-custody-evidence.txt with generated Phase 6 custody records.",
       "corepack pnpm phase6:image-provenance",
