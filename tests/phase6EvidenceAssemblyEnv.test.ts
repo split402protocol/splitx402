@@ -22,4 +22,18 @@ describe("Phase 6 evidence assembly env template", () => {
     );
     expect(template).not.toMatch(/^\s*SPLIT402_PHASE6_/mu);
   });
+
+  it("uses the selected launch evidence directory in generated paths", () => {
+    const template = createPhase6EvidenceAssemblyEnvTemplate({
+      directory: "evidence/launch",
+    });
+
+    expect(template).toContain(
+      "# SPLIT402_PHASE6_ASSEMBLE_IMAGE_PROVENANCE_RECORD=evidence/launch/phase6-image-provenance.txt",
+    );
+    expect(template).toContain(
+      "# corepack pnpm phase6:evidence:assemble > evidence/launch/phase6-custody-evidence.txt",
+    );
+    expect(template).not.toContain("split402-launch-evidence/phase6-image-provenance.txt");
+  });
 });

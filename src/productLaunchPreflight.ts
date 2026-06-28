@@ -1,9 +1,6 @@
 import { join } from "node:path";
 
-import {
-  PHASE6_ATTACHMENT_ENV,
-  PHASE6_RECORD_EXTRACTION_ENV_ENTRIES,
-} from "./phase6EvidenceAssemblyEnv.js";
+import { createPhase6EvidenceAssemblyEnvMappings } from "./phase6EvidenceAssemblyEnv.js";
 import { createSplit402ProductEvidenceWorkspace } from "./productEvidenceWorkspace.js";
 
 export interface Split402LaunchPreflightInput {
@@ -80,8 +77,10 @@ export function createSplit402LaunchPreflightReport(
   const missingPhase6DirectKeys = REQUIRED_PHASE6_DIRECT_ENV_KEYS.filter(
     (key) => !hasConfiguredEnvValue(phase6Env, key),
   );
-  const missingPhase6Mappings = uniquePhase6EnvMappings().filter(
-    (mapping) => phase6Env.get(mapping.envName) !== mapping.examplePath,
+  const missingPhase6Mappings = createPhase6EvidenceAssemblyEnvMappings({
+    directory: workspace.directory,
+  }).filter(
+    (mapping) => phase6Env.get(mapping.envName) !== mapping.path,
   );
   const missingAttachmentMappings = workspace.phase7.artifacts
     .map((artifact) => ({
@@ -145,7 +144,7 @@ export function createSplit402LaunchPreflightReport(
         missingPhase6Mappings.length === 0
           ? ["Phase 6 custody record env paths point at the launch workspace."]
           : missingPhase6Mappings.map(
-              (mapping) => `Set ${mapping.envName}=${mapping.examplePath}`,
+              (mapping) => `Set ${mapping.envName}=${mapping.path}`,
             ),
     },
     {
@@ -272,17 +271,4 @@ function hasConfiguredEnvValue(env: ReadonlyMap<string, string>, key: string): b
 
 function phase7AttachmentEnvName(field: string): string {
   return `SPLIT402_PHASE7_ASSEMBLE_${field.toUpperCase()}`;
-}
-
-function uniquePhase6EnvMappings(): Array<{
-  envName: string;
-  examplePath: string;
-}> {
-  const mappings = [
-    ...PHASE6_RECORD_EXTRACTION_ENV_ENTRIES,
-    ...PHASE6_ATTACHMENT_ENV,
-  ];
-  return Array.from(
-    new Map(mappings.map((entry) => [entry.envName, entry])).values(),
-  );
 }

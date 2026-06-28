@@ -117,7 +117,7 @@ plus an unknown-outcome reconciliation queue and referrer payout views.
   custody evidence bundle in validator field order with safe defaults.
 - Added `corepack pnpm phase6:evidence:env-template` to generate a local,
   commented environment helper for Phase 6 custody record extraction and
-  attachment paths.
+  attachment paths, with optional custom launch workspace path support.
 - Added `corepack pnpm phase6:evidence:assemble` to assemble the canonical
   custody evidence bundle from generated evidence records, attachment paths, and
   explicit field overrides.
