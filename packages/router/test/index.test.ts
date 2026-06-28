@@ -113,7 +113,7 @@ describe("Split402Router", () => {
     ).toEqual(["provider-devnet-cheap"]);
   });
 
-  it("ignores malformed provider prices during budgeted search and ranking", () => {
+  it("ignores malformed provider prices during search and budgeted ranking", () => {
     const router = new Split402Router({
       providers: [
         provider({
@@ -143,6 +143,13 @@ describe("Split402Router", () => {
     expect(router.searchCapabilities(input).map((item) => item.providerId)).toEqual([
       "provider-valid"
     ]);
+    expect(
+      router
+        .searchCapabilities({
+          capability: "solana.wallet-risk"
+        })
+        .map((item) => item.providerId)
+    ).toEqual(["provider-valid"]);
   });
 
   it("executes a valid provider when another matching provider has a malformed price", async () => {
