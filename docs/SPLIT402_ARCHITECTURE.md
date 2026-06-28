@@ -30,13 +30,11 @@ Those are later milestones after the USDC referral-payment loop works end to end
 
 ## Historical Baseline
 
-`splitx402/ffff` is not a different product direction. It is the first
-implementation repo built from the Split402 architecture. This repository is now
-the canonical public Split402 implementation repository.
+This repository is now the canonical public Split402 implementation repository.
 
-Phase 2 started by preserving the `ffff` protocol package and deterministic test
-vectors. The current repository has since ported and evolved the x402 extension,
-demo merchant, demo agent, agent SDK, control plane, merchant SDK, ledger, outbox
+Phase 2 started by preserving deterministic protocol package behavior and test
+vectors. The current repository has since evolved the x402 extension, demo
+merchant, demo agent, agent SDK, control plane, merchant SDK, ledger, outbox
 workers, chain verification, and the first payout-engine boundaries, including
 payout lifecycle outbox/webhook events, local-dev signer wiring, remote signer
 client wiring, signer deployment artifacts, machine-checkable custody review
