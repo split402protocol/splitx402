@@ -1,4 +1,5 @@
 import {
+  PHASE7_LOCAL_ARTIFACT_EVIDENCE_FIELDS,
   createPhase7StagingProofRecord,
   type Phase7StagingProofField,
   type Phase7StagingProofValues,
@@ -35,6 +36,7 @@ export function assemblePhase7StagingProof(
     ...deriveAttachmentValues(input.attachments ?? {}),
     ...(input.values ?? {}),
   };
+  assertLocalOnlyEvidenceReferences(values);
 
   return createPhase7StagingProofRecord(values);
 }
@@ -44,9 +46,31 @@ function deriveAttachmentValues(
 ): Phase7StagingProofValues {
   const values: Phase7StagingProofValues = {};
   for (const [field, path] of Object.entries(attachments)) {
-    if (path.trim().length > 0) {
-      values[field as Phase7StagingAttachmentField] = `attached: ${path.trim()}`;
+    const trimmed = path.trim();
+    if (trimmed.length > 0) {
+      if (isHttpUrl(trimmed)) {
+        throw new Error(`${field} attachment path must be local, not a URL`);
+      }
+      values[field as Phase7StagingAttachmentField] = `attached: ${trimmed}`;
     }
   }
   return values;
+}
+
+function assertLocalOnlyEvidenceReferences(values: Phase7StagingProofValues): void {
+  for (const field of PHASE7_LOCAL_ARTIFACT_EVIDENCE_FIELDS) {
+    const reference = values[field];
+    if (reference !== undefined && isHttpUrl(reference)) {
+      throw new Error(`${field} must be an attached local artifact`);
+    }
+  }
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
 }

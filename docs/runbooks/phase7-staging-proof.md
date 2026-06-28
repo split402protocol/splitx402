@@ -126,9 +126,11 @@ flowchart LR
 Attach response captures or artifact paths for every field in
 `docs/templates/phase7-staging-proof.txt`, or set the
 `SPLIT402_PHASE7_ASSEMBLE_*` attachment variables and run
-`corepack pnpm phase7:staging:assemble`. Leave `approval_decision` as `no-go`
-until all attached evidence is from the same staging environment and source
-commit. Include `artifact_manifest_evidence` from
+`corepack pnpm phase7:staging:assemble`. Assemble rejects URL references for
+local-only proof artifacts; use local `attached:` artifacts for evidence that
+the status checker parses. Leave `approval_decision` as `no-go` until all
+attached evidence is from the same staging environment and source commit.
+Include `artifact_manifest_evidence` from
 `corepack pnpm phase7:staging:manifest`.
 
 The validator requires:
