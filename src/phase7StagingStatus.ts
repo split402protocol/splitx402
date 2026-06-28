@@ -1757,6 +1757,9 @@ function validateMcpGatewayTranscript(
           }),
       );
       searchProviderIds = new Set(searchProvidersById.keys());
+      if (searchProviderIds.size === 0) {
+        blockers.push("mcp_gateway_evidence search response has no provider ids");
+      }
     }
   }
 
@@ -1842,8 +1845,8 @@ function validateMcpGatewayTranscript(
     providerId === undefined ? undefined : searchProvidersById.get(providerId);
   if (
     providerId !== undefined &&
-    searchProviderIds.size > 0 &&
-    !searchProviderIds.has(providerId)
+    selectedProvider === undefined &&
+    searchProviderIds.size > 0
   ) {
     blockers.push(
       "mcp_gateway_evidence execute providerId was not returned by search",
