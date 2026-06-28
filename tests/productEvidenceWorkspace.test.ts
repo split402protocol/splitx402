@@ -31,6 +31,12 @@ describe("Split402 product evidence workspace", () => {
     expect(workspace.phase6EnvText).toContain(
       "SPLIT402_PHASE6_ASSEMBLE_IMAGE_PROVENANCE_RECORD",
     );
+    expect(workspace.phase6EnvText).toContain(
+      "evidence/launch/phase6-image-provenance.txt",
+    );
+    expect(workspace.phase6EnvText).not.toContain(
+      "split402-launch-evidence/phase6-image-provenance.txt",
+    );
     expect(workspace.phase7ProofText).toContain("proof_date: 2026-06-29");
     expect(workspace.phase7ProofText).toContain("source_commit: 096f190");
     expect(workspace.phase7ProofText).toContain("approval_decision: no-go");
@@ -69,7 +75,7 @@ describe("Split402 product evidence workspace", () => {
       "Review split402-launch-evidence/phase7-staging-proof.txt and fill direct hosted proof fields.",
     );
     expect(workspace.nextCommands).toContain(
-      "corepack pnpm phase6:evidence:env-template > split402-launch-evidence/phase6-evidence.env",
+      "corepack pnpm phase6:evidence:env-template split402-launch-evidence > split402-launch-evidence/phase6-evidence.env",
     );
     expect(workspace.nextCommands).toContain(
       "Fill split402-launch-evidence/phase6-evidence.env with Phase 6 custody record paths.",
