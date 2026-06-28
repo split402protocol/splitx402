@@ -41,6 +41,7 @@ describe("Phase 7 MCP gateway evidence collector", () => {
       ],
       executionCaptured: false,
       receiptLookupCaptured: false,
+      maxAmountAtomic: "50000",
       requestCount: 3,
       responseCount: 3,
     });
@@ -86,6 +87,9 @@ describe("Phase 7 MCP gateway evidence collector", () => {
       executionCaptured: true,
       receiptLookupCaptured: true,
       providerId: "split402-demo-merchant",
+      maxAmountAtomic: "50000",
+      providerAmountAtomic: "10000",
+      providerPayToWallet: bundle.mcp.tools[0].x402.payToWallet,
       amountPaidAtomic: "10000",
       receiptVerificationStatus: "verified",
       referrerCreditAtomic: "1800",
