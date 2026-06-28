@@ -39,6 +39,18 @@ describe("Phase 7 staging evidence workspace", () => {
       "# SPLIT402_DASHBOARD_VIEWER_TOKEN=<dashboard-viewer-token>",
     );
     expect(workspace.envText).toContain(
+      "# SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc",
+    );
+    expect(workspace.envText).toContain(
+      "# SPLIT402_FUNDING_BALANCE_SOLANA_RPC_URL=https://api.devnet.solana.com",
+    );
+    expect(workspace.envText).toContain(
+      "# SPLIT402_FUNDING_BALANCE_SOLANA_RPC_URLS=<comma-separated-rpc-urls>",
+    );
+    expect(workspace.envText).not.toContain(
+      "\nSPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc",
+    );
+    expect(workspace.envText).toContain(
       "# SPLIT402_MCP_CONTROL_PLANE_URL=http://localhost:4021",
     );
     expect(workspace.envText).toContain(
