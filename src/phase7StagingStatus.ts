@@ -24,19 +24,14 @@ export const PHASE7_STAGING_COMMANDS = [
     evidenceField: "proof_id",
   },
   {
-    gate: "control_plane_read_capture",
-    command: "corepack pnpm phase7:staging:collect-reads",
-    evidenceField: "dashboard_summary_evidence",
-  },
-  {
     gate: "hosted_staging_preflight",
     command: "corepack pnpm phase7:hosted:preflight",
     evidenceField: "hosted_preflight_evidence",
   },
   {
-    gate: "proof_assembly",
-    command: "corepack pnpm phase7:staging:assemble",
-    evidenceField: "commands_run",
+    gate: "control_plane_read_capture",
+    command: "corepack pnpm phase7:staging:collect-reads",
+    evidenceField: "dashboard_summary_evidence",
   },
   {
     gate: "artifact_manifest",
@@ -45,13 +40,14 @@ export const PHASE7_STAGING_COMMANDS = [
     evidenceField: "artifact_manifest_evidence",
   },
   {
-    gate: "dashboard_smoke",
-    command: "corepack pnpm dashboard",
-    evidenceField: "dashboard_url",
+    gate: "proof_assembly",
+    command: "corepack pnpm phase7:staging:assemble",
+    evidenceField: "commands_run",
   },
   {
     gate: "mcp_bundle",
-    command: "corepack pnpm demo:mcp-bundle",
+    command:
+      "corepack pnpm demo:mcp-bundle > phase7-staging-evidence/mcp-bundle.json",
     evidenceField: "mcp_bundle_evidence",
   },
   {
@@ -66,14 +62,9 @@ export const PHASE7_STAGING_COMMANDS = [
   },
   {
     gate: "agent_paid_suite",
-    command: "corepack pnpm demo:paid-suite",
-    evidenceField: "paid_request_evidence",
-  },
-  {
-    gate: "control_plane_reads",
     command:
-      "curl the Phase 7 control-plane read APIs from docs/PHASE_7.md and attach responses",
-    evidenceField: "dashboard_summary_evidence",
+      "corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log",
+    evidenceField: "paid_request_evidence",
   },
   {
     gate: "funding_balance",
