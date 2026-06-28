@@ -34,7 +34,7 @@ and fill every field. Then run:
 
 ```bash
 corepack pnpm phase6:evidence:bundle > phase6-custody-evidence.txt
-corepack pnpm phase6:evidence:env-template > split402-launch-evidence/phase6-evidence.env
+corepack pnpm phase6:evidence:env-template split402-launch-evidence > split402-launch-evidence/phase6-evidence.env
 corepack pnpm phase6:evidence:assemble > phase6-custody-evidence.txt
 corepack pnpm phase6:evidence:status <evidence-bundle.txt>
 corepack pnpm phase6:custody:check <evidence-bundle.txt>

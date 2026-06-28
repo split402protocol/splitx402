@@ -16,7 +16,8 @@ export const PHASE6_EVIDENCE_COMMANDS = [
   },
   {
     gate: "custody_assembly_env_template",
-    command: "corepack pnpm phase6:evidence:env-template",
+    command:
+      "corepack pnpm phase6:evidence:env-template split402-launch-evidence > split402-launch-evidence/phase6-evidence.env",
     evidenceField: "review_id",
   },
   {
@@ -116,7 +117,7 @@ function createNextActions(
   if (validation === undefined) {
     return [
       "Generate a bundle scaffold with corepack pnpm phase6:evidence:bundle.",
-      "Generate local assembly env guidance with corepack pnpm phase6:evidence:env-template.",
+      "Generate local assembly env guidance with corepack pnpm phase6:evidence:env-template split402-launch-evidence > split402-launch-evidence/phase6-evidence.env.",
       "Run each listed evidence command against staging outputs.",
       "Attach generated records to docs/templates/phase6-custody-evidence.txt copy.",
       "Run corepack pnpm phase6:evidence:status <evidence-bundle.txt>.",
