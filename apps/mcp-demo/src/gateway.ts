@@ -372,6 +372,9 @@ async function handleRouterExecuteTool(
   if (budgetFilter !== undefined && "message" in budgetFilter) {
     return createErrorResponse(id, -32602, budgetFilter.message);
   }
+  if (record.budget === undefined) {
+    return createErrorResponse(id, -32602, "budget argument is required");
+  }
   const provider =
     context.router.searchCapabilities({
       capability,
@@ -554,7 +557,7 @@ function routerToolCards() {
           },
           maxAttempts: { type: "number" }
         },
-        required: ["capability", "input"],
+        required: ["capability", "input", "budget"],
         additionalProperties: false
       }
     },
