@@ -154,6 +154,9 @@ describe("repository presentation", () => {
     expect(readme).toContain("corepack pnpm product:launch-checklist --brief");
     expect(readme).toContain("corepack pnpm phase6:evidence:env-template");
     expect(readme).toContain(
+      "Review that generated file before editing it.",
+    );
+    expect(readme).toContain(
       "corepack pnpm phase6:evidence:env-template evidence/launch",
     );
     expect(readme).toContain(

@@ -43,7 +43,7 @@ describe("Phase 6 evidence status", () => {
       "Generate a bundle scaffold with corepack pnpm phase6:evidence:bundle.",
     );
     expect(report.nextActions).toContain(
-      "Generate local assembly env guidance with corepack pnpm phase6:evidence:env-template split402-launch-evidence > split402-launch-evidence/phase6-evidence.env.",
+      "Review generated split402-launch-evidence/phase6-evidence.env before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template split402-launch-evidence > split402-launch-evidence/phase6-evidence.env.",
     );
   });
 
