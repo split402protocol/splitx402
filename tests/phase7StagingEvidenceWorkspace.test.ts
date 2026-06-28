@@ -36,7 +36,22 @@ describe("Phase 7 staging evidence workspace", () => {
       "# SPLIT402_PHASE7_REFERRER_WALLET=<seed-output-referrer-wallet>",
     );
     expect(workspace.envText).toContain(
+      "# SPLIT402_DASHBOARD_MERCHANT_ID=<seed-output-merchant-id>",
+    );
+    expect(workspace.envText).toContain(
+      "# SPLIT402_DASHBOARD_REFERRER_WALLET=<seed-output-referrer-wallet>",
+    );
+    expect(workspace.envText).toContain(
       "# SPLIT402_DASHBOARD_VIEWER_TOKEN=<dashboard-viewer-token>",
+    );
+    expect(workspace.envText).toContain(
+      "# SPLIT402_MERCHANT_ORIGIN=http://localhost:4023",
+    );
+    expect(workspace.envText).toContain(
+      "# SPLIT402_MERCHANT_PUBLIC_KEY=<seed-output-service-public-key>",
+    );
+    expect(workspace.envText).not.toContain(
+      "\nSPLIT402_MERCHANT_PUBLIC_KEY=<seed-output-service-public-key>",
     );
     expect(workspace.envText).toContain(
       "# SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc",
