@@ -6,6 +6,7 @@ import {
   createPhase7StagingEvidenceWorkspace,
   type Phase7StagingEvidenceWorkspace,
 } from "./phase7StagingEvidenceWorkspace.js";
+import { assemblePhase7StagingProof } from "./phase7StagingProofAssembly.js";
 
 export interface Split402ProductEvidenceWorkspaceInput {
   directory?: string;
@@ -21,6 +22,7 @@ export interface Split402ProductEvidenceWorkspace {
   phase7EnvFileName: "phase7-staging.env";
   phase7: Phase7StagingEvidenceWorkspace;
   phase6EvidenceText: string;
+  phase7ProofText: string;
   readmeText: string;
   nextCommands: string[];
 }
@@ -40,6 +42,12 @@ export function createSplit402ProductEvidenceWorkspace(
   const phase6EvidenceFileName = "phase6-custody-evidence.txt" as const;
   const phase7ProofFileName = "phase7-staging-proof.txt" as const;
   const phase7EnvFileName = "phase7-staging.env" as const;
+  const phase7ProofText = createPhase7ProofText({
+    directory,
+    phase7,
+    sourceCommit: input.sourceCommit,
+    reviewDate: input.reviewDate,
+  });
   const nextCommands = createNextCommands({
     directory,
     phase6EvidenceFileName,
@@ -55,6 +63,7 @@ export function createSplit402ProductEvidenceWorkspace(
     phase7EnvFileName,
     phase7,
     phase6EvidenceText,
+    phase7ProofText,
     readmeText: createReadmeText({
       directory,
       phase6EvidenceFileName,
@@ -64,6 +73,39 @@ export function createSplit402ProductEvidenceWorkspace(
     }),
     nextCommands,
   };
+}
+
+function createPhase7ProofText(input: {
+  directory: string;
+  phase7: Phase7StagingEvidenceWorkspace;
+  sourceCommit?: string;
+  reviewDate?: string;
+}): string {
+  return assemblePhase7StagingProof({
+    values: {
+      ...(input.reviewDate === undefined ? {} : { proof_date: input.reviewDate }),
+      ...(input.sourceCommit === undefined ? {} : { source_commit: input.sourceCommit }),
+      approval_decision: "no-go",
+      approval_notes:
+        "scaffold only; replace with real hosted evidence before approval",
+    },
+    attachments: Object.fromEntries(
+      input.phase7.artifacts.map((artifact) => [
+        artifact.field,
+        `${relativePhase7EvidenceDirectory(input.directory, input.phase7.directory)}/${artifact.fileName}`,
+      ]),
+    ),
+  });
+}
+
+function relativePhase7EvidenceDirectory(
+  workspaceDirectory: string,
+  phase7Directory: string,
+): string {
+  const prefix = `${workspaceDirectory}/`;
+  return phase7Directory.startsWith(prefix)
+    ? phase7Directory.slice(prefix.length)
+    : phase7Directory;
 }
 
 function createNextCommands(input: {
@@ -76,7 +118,7 @@ function createNextCommands(input: {
     `Fill ${input.directory}/${input.phase7EnvFileName} with hosted staging values.`,
     `Fill ${input.directory}/${input.phase6EvidenceFileName} with generated Phase 6 custody records.`,
     "SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",
-    `corepack pnpm phase7:staging-proof > ${input.directory}/${input.phase7ProofFileName}`,
+    `Review ${input.directory}/${input.phase7ProofFileName} and fill direct hosted proof fields.`,
     "corepack pnpm phase7:hosted:preflight",
     "corepack pnpm phase7:staging:collect-reads",
     "SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 corepack pnpm phase7:staging:collect-mcp-gateway",
