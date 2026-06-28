@@ -116,9 +116,10 @@ Example execution request:
 ```
 
 When `network` or `asset` are omitted from `budget`, the gateway defaults them
-from the selected provider and still enforces `maxAmountAtomic`. `referralClaim`
-is optional; when present, the gateway validates the Split402 claim schema before
-forwarding it into the router execution.
+from the best provider that already matches the supplied budget filters and
+still enforces `maxAmountAtomic`. `referralClaim` is optional; when present, the
+gateway validates the Split402 claim schema before forwarding it into the router
+execution.
 
 ### Control-Plane Discovery Mode
 
