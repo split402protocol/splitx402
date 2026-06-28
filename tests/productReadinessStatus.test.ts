@@ -1,0 +1,68 @@
+import { describe, expect, it } from "vitest";
+
+import { createSplit402ProductReadinessReport } from "../src/productReadinessStatus.js";
+
+describe("Split402 product readiness status", () => {
+  it("reports the product as no-go until Phase 6 and Phase 7 evidence are checked", () => {
+    const report = createSplit402ProductReadinessReport();
+
+    expect(report).toMatchObject({
+      schema: "split402.product_readiness_status.v1",
+      product: "Split402",
+      repository: "split402protocol/splitx402",
+      implementationState: "public-alpha foundation implemented",
+      launchDecision: "no-go",
+      readyForPublicAlphaDemo: false,
+      readyForProductionCustody: false,
+      readyForMainnet: false,
+    });
+    expect(report.summary).toContain("public-alpha implementation foundation");
+    expect(report.summary).toContain("Missing checked evidence");
+    expect(report.nextActions).toContain(
+      "Run hosted Phase 7 staging proof collection and status validation.",
+    );
+    expect(report.nextActions).toContain(
+      "Generate and assemble the Phase 6 custody evidence bundle.",
+    );
+  });
+
+  it("surfaces blockers from checked but incomplete evidence", () => {
+    const report = createSplit402ProductReadinessReport({
+      phase6EvidenceText: `review_id: pending
+approval_decision: no-go
+`,
+      phase7ProofText: `proof_id: pending
+approval_decision: no-go
+proof_date: 2026-06-29
+source_commit: 21113e7
+control_plane_url: https://control.example
+dashboard_url: https://dashboard.example
+demo_merchant_url: https://merchant.example
+hosted_preflight_evidence: attached: hosted-preflight.json
+agent_discovery_evidence: attached: agent-discovery.json
+paid_request_evidence: attached: paid-suite.log
+receipt_verification_evidence: attached: receipt-verification.json
+referrer_balance_evidence: attached: referrer-balance.json
+dashboard_summary_evidence: attached: dashboard-summary.json
+webhook_delivery_evidence: attached: webhook-delivery.json
+payout_obligation_evidence: attached: payout-obligation.json
+funding_balance_evidence: attached: funding-balance.json
+mcp_bundle_evidence: attached: mcp-bundle.json
+mcp_gateway_evidence: attached: mcp-gateway.jsonl
+artifact_manifest_evidence: attached: artifact-manifest.json
+commands_run: attached: commands.log
+approval_notes: checked evidence is intentionally incomplete
+`,
+    });
+
+    expect(report.launchDecision).toBe("no-go");
+    expect(report.phase6.evidenceBundleChecked).toBe(true);
+    expect(report.phase7.proofChecked).toBe(true);
+    expect(report.nextActions.join("\n")).toContain(
+      "Fix Phase 7 hosted proof blockers",
+    );
+    expect(report.nextActions.join("\n")).toContain(
+      "Fix Phase 6 custody evidence blockers",
+    );
+  });
+});

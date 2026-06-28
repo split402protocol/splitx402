@@ -141,6 +141,15 @@ describe("repository presentation", () => {
       "receipt summaries from a different run",
     );
   });
+
+  it("documents the combined product readiness status command", () => {
+    const readme = readFileSync("README.md", "utf8");
+    const currentState = readFileSync("docs/CURRENT_STATE.md", "utf8");
+
+    expect(readme).toContain("corepack pnpm product:status");
+    expect(readme).toContain("launch decision remains");
+    expect(currentState).toContain("corepack pnpm product:status");
+  });
 });
 
 function listPresentationFiles(): string[] {

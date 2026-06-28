@@ -122,6 +122,7 @@ corepack pnpm phase7:staging:derive-receipt-verification
 corepack pnpm phase7:staging:manifest phase7-staging-proof.txt > phase7-staging-evidence/artifact-manifest.json
 corepack pnpm phase7:staging:assemble > phase7-staging-proof.txt
 corepack pnpm phase7:staging:status phase7-staging-proof.txt
+corepack pnpm product:status <phase6-custody-evidence.txt> phase7-staging-proof.txt
 ```
 
 The proof must attach evidence for hosted preflight, route discovery, x402
@@ -160,6 +161,9 @@ command transcript must include the Phase 7 evidence commands and full
 validation suite.
 The funding-balance artifact is checked separately, requiring every asset to
 show a resolved `covered` or `deficit` state instead of unresolved funding.
+The top-level `product:status` command combines this Phase 7 result with the
+Phase 6 custody evidence status so operators can see the real product launch
+decision in one JSON report.
 
 ## Remaining Phase 7 Work
 
