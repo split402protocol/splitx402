@@ -64,8 +64,11 @@ failed runs.
 and `split402.getReceipt` requests through the MCP gateway. The transcript must
 include provider used, amount paid, receipt id, receipt verification status, and
 referrer credit, and the collector's JSON report echoes those fields as
-`providerId`, `amountPaidAtomic`, `receiptId`, `receiptVerificationStatus`, and
-`referrerCreditAtomic`, plus route id, commission bps, protocol-fee bps, and
+`providerId`, `providerNetwork`, `providerAsset`, `providerAmountAtomic`,
+`providerPayToWallet`, `amountPaidAtomic`, `receiptId`,
+`receiptVerificationStatus`, and `referrerCreditAtomic`, plus receipt-side
+`network`, `asset`, `requiredAmountAtomic`, `payToWallet`,
+`receiptReferrerCreditAtomic`, route id, commission bps, protocol-fee bps, and
 commission/protocol-fee amounts when receipt lookup succeeds. Demo mode is a
 local contract check only and remains no-go for hosted Phase 7 proof. Proof-ready
 MCP gateway evidence must run in `router-live-agent-sdk` mode: set
