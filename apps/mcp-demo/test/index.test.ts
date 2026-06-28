@@ -343,6 +343,28 @@ describe("MCP demo gateway", () => {
     ).rejects.toThrow("invalid base58");
   });
 
+  it("rejects missing hosted execution signer when required", async () => {
+    const bundle = createMcpDemoBundle({
+      merchantOrigin: "https://merchant.example",
+      generatedAt: "2026-06-26T00:00:00.000Z"
+    });
+
+    await expect(
+      createMcpGatewayContextFromEnv({
+        bundle,
+        env: {
+          SPLIT402_MCP_CONTROL_PLANE_URL: "https://control.example",
+          SPLIT402_MCP_CONTROL_PLANE_TOKEN: "control-token",
+          SPLIT402_MCP_CAPABILITY: "solana.wallet-risk"
+        },
+        fetch: mcpControlPlaneFetch([], bundle),
+        requireSigner: true
+      })
+    ).rejects.toThrow(
+      "SPLIT402_MCP_SVM_PRIVATE_KEY or SVM_PRIVATE_KEY is required for live MCP gateway execution"
+    );
+  });
+
   it("executes through the router gateway and stores receipts for lookup", async () => {
     const context = createMcpGatewayContext(
       createMcpDemoBundle({
