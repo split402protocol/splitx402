@@ -691,6 +691,10 @@ function createControlPlaneReadStatus(
   }
 
   const blockers: string[] = [];
+  const artifacts = new Map<
+    (typeof PHASE7_CONTROL_PLANE_READ_EVIDENCE_FIELDS)[number],
+    unknown
+  >();
   for (const [field, reference] of references) {
     if (reference === undefined) {
       continue;
@@ -709,8 +713,10 @@ function createControlPlaneReadStatus(
     if (artifact === undefined) {
       continue;
     }
+    artifacts.set(field, artifact);
     validateControlPlaneReadArtifact(field, artifact, blockers);
   }
+  validateControlPlaneReadContinuity(artifacts, blockers);
 
   return blockers.length === 0
     ? { status: "valid", blockers: [] }
@@ -739,6 +745,164 @@ function validateControlPlaneReadArtifact(
       validatePayoutObligationArtifact(artifact, blockers);
       return;
   }
+}
+
+function validateControlPlaneReadContinuity(
+  artifacts: ReadonlyMap<
+    (typeof PHASE7_CONTROL_PLANE_READ_EVIDENCE_FIELDS)[number],
+    unknown
+  >,
+  blockers: string[],
+): void {
+  const discoveryRoutes = readDiscoveryRoutes(
+    artifacts.get("agent_discovery_evidence"),
+  );
+  const activeDiscoveryRoutes = discoveryRoutes.filter(
+    (route) => route.status === "active",
+  );
+  const dashboardSummary = readRecord(
+    readRecord(artifacts.get("dashboard_summary_evidence"))?.summary,
+  );
+  const referrerBalanceSummary = readRecord(
+    readRecord(artifacts.get("referrer_balance_evidence"))?.summary,
+  );
+  const webhookEvents = readWebhookEvents(
+    artifacts.get("webhook_delivery_evidence"),
+  );
+  const payoutObligationSummary = readMerchantObligationSummary(
+    artifacts.get("payout_obligation_evidence"),
+  );
+
+  if (dashboardSummary !== undefined && activeDiscoveryRoutes.length > 0) {
+    const activeCampaignIds = readStringSet(
+      readRecord(dashboardSummary.campaigns)?.activeCampaignIds,
+    );
+    const activeRouteIds = readStringSet(
+      readRecord(dashboardSummary.routes)?.activeRouteIds,
+    );
+    for (const route of activeDiscoveryRoutes) {
+      if (
+        route.campaignId !== undefined &&
+        activeCampaignIds !== undefined &&
+        !activeCampaignIds.has(route.campaignId)
+      ) {
+        blockers.push(
+          "dashboard_summary_evidence activeCampaignIds does not include discovered active route campaignId",
+        );
+        break;
+      }
+    }
+    for (const route of activeDiscoveryRoutes) {
+      if (
+        route.routeId !== undefined &&
+        activeRouteIds !== undefined &&
+        !activeRouteIds.has(route.routeId)
+      ) {
+        blockers.push(
+          "dashboard_summary_evidence activeRouteIds does not include discovered active route id",
+        );
+        break;
+      }
+    }
+  }
+
+  const discoveredReferrerWallets = new Set(
+    activeDiscoveryRoutes
+      .map((route) => route.referrerWallet)
+      .filter((wallet): wallet is string => wallet !== undefined),
+  );
+  const referrerWallet = readNonEmptyString(
+    referrerBalanceSummary?.referrerWallet,
+  );
+  if (
+    referrerWallet !== undefined &&
+    discoveredReferrerWallets.size > 0 &&
+    !discoveredReferrerWallets.has(referrerWallet)
+  ) {
+    blockers.push(
+      "referrer_balance_evidence referrerWallet does not match any discovered active route referrerWallet",
+    );
+  }
+
+  const dashboardMerchantId = readNonEmptyString(
+    readRecord(dashboardSummary?.merchant)?.id,
+  );
+  if (dashboardMerchantId !== undefined) {
+    if (
+      payoutObligationSummary !== undefined &&
+      readNonEmptyString(payoutObligationSummary.merchantId) !== undefined &&
+      payoutObligationSummary.merchantId !== dashboardMerchantId
+    ) {
+      blockers.push(
+        "payout_obligation_evidence merchantId does not match dashboard_summary_evidence merchant.id",
+      );
+    }
+    const deliveredMerchantIds = webhookEvents
+      .filter((event) => event.status === "delivered")
+      .map((event) => event.merchantId)
+      .filter((merchantId): merchantId is string => merchantId !== undefined);
+    if (
+      deliveredMerchantIds.length > 0 &&
+      !deliveredMerchantIds.includes(dashboardMerchantId)
+    ) {
+      blockers.push(
+        "webhook_delivery_evidence delivered merchantId does not match dashboard_summary_evidence merchant.id",
+      );
+    }
+  }
+}
+
+function readDiscoveryRoutes(artifact: unknown): Array<{
+  routeId?: string;
+  status?: string;
+  campaignId?: string;
+  referrerWallet?: string;
+}> {
+  const record = readRecord(artifact);
+  const routes = Array.isArray(record?.routes) ? record.routes : [];
+  return routes.flatMap((route) => {
+    const routeRecord = readRecord(route);
+    if (routeRecord === undefined) {
+      return [];
+    }
+    const routeId =
+      readNonEmptyString(routeRecord.id) ??
+      readNonEmptyString(routeRecord.routeId);
+    const status = readNonEmptyString(routeRecord.status);
+    const campaignId = readNonEmptyString(routeRecord.campaignId);
+    const referrerWallet = readNonEmptyString(routeRecord.referrerWallet);
+    return [{ routeId, status, campaignId, referrerWallet }];
+  });
+}
+
+function readWebhookEvents(artifact: unknown): Array<{
+  status?: string;
+  merchantId?: string;
+}> {
+  const record = readRecord(artifact);
+  const events = Array.isArray(record?.events) ? record.events : [];
+  return events.flatMap((event) => {
+    const eventRecord = readRecord(event);
+    if (eventRecord === undefined) {
+      return [];
+    }
+    const payload = readRecord(eventRecord.payload);
+    return [
+      {
+        status: readNonEmptyString(eventRecord.status),
+        merchantId: readNonEmptyString(payload?.merchantId),
+      },
+    ];
+  });
+}
+
+function readStringSet(value: unknown): Set<string> | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  return new Set(
+    value.filter((item): item is string => typeof item === "string" && item.length > 0),
+  );
 }
 
 function createPaidRequestStatus(
@@ -2654,6 +2818,7 @@ interface Phase7HostedPreflightCheck {
 
 interface Phase7MerchantObligationSummaryArtifact {
   schema?: unknown;
+  merchantId?: unknown;
   assets?: unknown;
 }
 

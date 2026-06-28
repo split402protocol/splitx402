@@ -908,6 +908,123 @@ funding_balance_evidence: funding.json
     );
   });
 
+  it("blocks staged proof status when dashboard summary omits the discovered active route", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/dashboard-summary.json",
+      encode(
+        JSON.stringify(
+          createValidDashboardSummary({
+            routes: { activeRouteIds: ["rte_other"] },
+          }),
+        ),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.controlPlaneReadStatus.blockers).toContain(
+      "dashboard_summary_evidence activeRouteIds does not include discovered active route id",
+    );
+  });
+
+  it("blocks staged proof status when dashboard summary omits the discovered campaign", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/dashboard-summary.json",
+      encode(
+        JSON.stringify(
+          createValidDashboardSummary({
+            campaigns: { activeCampaignIds: ["cmp_other"] },
+          }),
+        ),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.controlPlaneReadStatus.blockers).toContain(
+      "dashboard_summary_evidence activeCampaignIds does not include discovered active route campaignId",
+    );
+  });
+
+  it("blocks staged proof status when referrer balance targets a different wallet", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/referrer-balances.json",
+      encode(JSON.stringify(createValidReferrerBalance("other-referrer-wallet"))),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.controlPlaneReadStatus.blockers).toContain(
+      "referrer_balance_evidence referrerWallet does not match any discovered active route referrerWallet",
+    );
+  });
+
+  it("blocks staged proof status when payout obligations target a different merchant", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/payout-obligations.json",
+      encode(JSON.stringify(createValidPayoutObligations("mrc_other"))),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.controlPlaneReadStatus.blockers).toContain(
+      "payout_obligation_evidence merchantId does not match dashboard_summary_evidence merchant.id",
+    );
+  });
+
+  it("blocks staged proof status when delivered webhook targets a different merchant", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/webhook-events.json",
+      encode(JSON.stringify(createValidWebhookEvents("mrc_other"))),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.controlPlaneReadStatus.blockers).toContain(
+      "webhook_delivery_evidence delivered merchantId does not match dashboard_summary_evidence merchant.id",
+    );
+  });
+
   it("blocks staged proof status when MCP bundle economics are not useful", () => {
     const proofText = createManifestProof();
     const artifacts = createManifestArtifacts(proofText);
@@ -1996,97 +2113,19 @@ function createManifestArtifacts(proofText: string): Map<string, Uint8Array> {
     ],
     [
       "evidence/agent-discovery.json",
-      encode(
-        JSON.stringify({
-          routes: [
-            {
-              id: "rte_00000000000000000000000000000003",
-              status: "active",
-              campaignId: "cmp_00000000000000000000000000000002",
-              referrerWallet: "referrer-wallet",
-              payoutWallet: "payout-wallet",
-            },
-          ],
-        }),
-      ),
+      encode(JSON.stringify(createValidAgentDiscovery())),
     ],
     [
       "evidence/referrer-balances.json",
-      encode(
-        JSON.stringify({
-          summary: {
-            referrerWallet: "referrer-wallet",
-            generatedAt: "2026-06-26T00:00:00.000Z",
-            assets: [
-              {
-                asset: "usdc-devnet",
-                pendingAmountAtomic: "0",
-                availableAmountAtomic: "1800",
-                heldAmountAtomic: "0",
-                inFlightAmountAtomic: "0",
-                paidAmountAtomic: "0",
-                totalEarnedAmountAtomic: "1800",
-              },
-            ],
-          },
-        }),
-      ),
+      encode(JSON.stringify(createValidReferrerBalance())),
     ],
     [
       "evidence/dashboard-summary.json",
-      encode(
-        JSON.stringify({
-          summary: {
-            schema: "split402.merchant_dashboard_summary.v1",
-            generatedAt: "2026-06-26T00:00:00.000Z",
-            merchant: {
-              id: "mrc_001",
-              slug: "merchant",
-              displayName: "Merchant",
-              status: "active",
-            },
-            reliability: {
-              acceptsReceipts: true,
-              payoutReady: true,
-              webhookReady: true,
-              discoveryReady: true,
-              signals: {
-                verifiedOrigins: 1,
-                activeOfferReceiptKeys: 1,
-                activeWebhookKeys: 1,
-                activePayoutWallets: 1,
-              },
-            },
-            campaigns: {
-              total: 1,
-              byStatus: { draft: 0, active: 1, paused: 0, closed: 0 },
-              activeCampaignIds: ["cmp_00000000000000000000000000000002"],
-              operationCount: 1,
-            },
-            routes: {
-              total: 1,
-              byStatus: { active: 1, suspended: 0, expired: 0, revoked: 0 },
-              activeRouteIds: ["rte_00000000000000000000000000000003"],
-            },
-          },
-        }),
-      ),
+      encode(JSON.stringify(createValidDashboardSummary())),
     ],
     [
       "evidence/webhook-events.json",
-      encode(
-        JSON.stringify({
-          events: [
-            {
-              id: "evt_001",
-              eventType: "webhook.receipt.accepted.v1",
-              status: "delivered",
-              attempts: 1,
-              payload: { merchantId: "mrc_001" },
-            },
-          ],
-        }),
-      ),
+      encode(JSON.stringify(createValidWebhookEvents())),
     ],
     [
       "evidence/payout-obligations.json",
@@ -2158,6 +2197,101 @@ function createPassingHostedPreflightChecks(): unknown[] {
   ];
 }
 
+function createValidAgentDiscovery(): unknown {
+  return {
+    routes: [
+      {
+        id: "rte_00000000000000000000000000000003",
+        status: "active",
+        campaignId: "cmp_00000000000000000000000000000002",
+        referrerWallet: "referrer-wallet",
+        payoutWallet: "payout-wallet",
+      },
+    ],
+  };
+}
+
+function createValidReferrerBalance(referrerWallet = "referrer-wallet"): unknown {
+  return {
+    summary: {
+      referrerWallet,
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      assets: [
+        {
+          asset: "usdc-devnet",
+          pendingAmountAtomic: "0",
+          availableAmountAtomic: "1800",
+          heldAmountAtomic: "0",
+          inFlightAmountAtomic: "0",
+          paidAmountAtomic: "0",
+          totalEarnedAmountAtomic: "1800",
+        },
+      ],
+    },
+  };
+}
+
+function createValidDashboardSummary(
+  overrides: {
+    merchant?: Partial<Record<string, unknown>>;
+    campaigns?: Partial<Record<string, unknown>>;
+    routes?: Partial<Record<string, unknown>>;
+  } = {},
+): unknown {
+  return {
+    summary: {
+      schema: "split402.merchant_dashboard_summary.v1",
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      merchant: {
+        id: "mrc_001",
+        slug: "merchant",
+        displayName: "Merchant",
+        status: "active",
+        ...(overrides.merchant ?? {}),
+      },
+      reliability: {
+        acceptsReceipts: true,
+        payoutReady: true,
+        webhookReady: true,
+        discoveryReady: true,
+        signals: {
+          verifiedOrigins: 1,
+          activeOfferReceiptKeys: 1,
+          activeWebhookKeys: 1,
+          activePayoutWallets: 1,
+        },
+      },
+      campaigns: {
+        total: 1,
+        byStatus: { draft: 0, active: 1, paused: 0, closed: 0 },
+        activeCampaignIds: ["cmp_00000000000000000000000000000002"],
+        operationCount: 1,
+        ...(overrides.campaigns ?? {}),
+      },
+      routes: {
+        total: 1,
+        byStatus: { active: 1, suspended: 0, expired: 0, revoked: 0 },
+        activeRouteIds: ["rte_00000000000000000000000000000003"],
+        ...(overrides.routes ?? {}),
+      },
+    },
+  };
+}
+
+function createValidWebhookEvents(merchantId = "mrc_001"): unknown {
+  return {
+    events: [
+      {
+        id: "evt_001",
+        eventType: "webhook.receipt.accepted.v1",
+        status: "delivered",
+        attempts: 1,
+        payload: { merchantId },
+      },
+    ],
+  };
+}
+
 function createValidMcpBundle(): unknown {
   return {
     schemaVersion: "split402.mcp-demo-bundle.v1",
@@ -2219,11 +2353,11 @@ function createValidMcpBundle(): unknown {
   };
 }
 
-function createValidPayoutObligations(): unknown {
+function createValidPayoutObligations(merchantId = "mrc_001"): unknown {
   return {
     summary: {
       schema: "split402.merchant_obligation_summary.v1",
-      merchantId: "mrc_001",
+      merchantId,
       generatedAt: "2026-06-26T00:00:00.000Z",
       assets: [
         {
