@@ -20,6 +20,15 @@ describe("Split402 product evidence workspace", () => {
     expect(workspace.phase6EvidenceText).toContain("review_date: 2026-06-29");
     expect(workspace.phase6EvidenceText).toContain("source_commit: 096f190");
     expect(workspace.phase6EvidenceText).toContain("approval_decision: no-go");
+    expect(workspace.phase7ProofText).toContain("proof_date: 2026-06-29");
+    expect(workspace.phase7ProofText).toContain("source_commit: 096f190");
+    expect(workspace.phase7ProofText).toContain("approval_decision: no-go");
+    expect(workspace.phase7ProofText).toContain(
+      "hosted_preflight_evidence: attached: phase7-staging-evidence/hosted-preflight.json",
+    );
+    expect(workspace.phase7ProofText).toContain(
+      "commands_run: attached: phase7-staging-evidence/commands.log",
+    );
     expect(workspace.phase7.envText).toContain(
       "SPLIT402_PHASE7_EVIDENCE_DIR=evidence/launch/phase7-staging-evidence",
     );
@@ -38,6 +47,9 @@ describe("Split402 product evidence workspace", () => {
     );
     expect(workspace.nextCommands).toContain(
       "corepack pnpm phase7:staging:collect-reads",
+    );
+    expect(workspace.nextCommands).toContain(
+      "Review split402-launch-evidence/phase7-staging-proof.txt and fill direct hosted proof fields.",
     );
     expect(workspace.nextCommands).toContain(
       "corepack pnpm phase6:evidence:status split402-launch-evidence/phase6-custody-evidence.txt",

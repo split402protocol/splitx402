@@ -23,6 +23,10 @@ writeFileSync(
   workspace.phase6EvidenceText,
 );
 writeFileSync(
+  join(workspace.directory, workspace.phase7ProofFileName),
+  workspace.phase7ProofText,
+);
+writeFileSync(
   join(workspace.directory, workspace.phase7EnvFileName),
   workspace.phase7.envText,
 );
