@@ -77,8 +77,9 @@ deployment examples, control-plane route discovery for the router, and
 control-plane discovery mode for the MCP gateway are now implemented in the
 repository. The Phase 7 proof validator also checks budgeted MCP discovery,
 router execution continuity, receipt lookup consistency, route attribution, and
-route-discovery continuity, plus commission/protocol-fee arithmetic from the
-receipt bps fields. Next is hosted proof evidence from a real staging
-environment.
+route-discovery continuity, read-artifact continuity across active
+route/campaign/referrer/merchant identities, paid-suite to receipt-verification
+continuity, plus commission/protocol-fee arithmetic from the receipt bps
+fields. Next is hosted proof evidence from a real staging environment.
 The hosted staging proof remains `no-go` until a real hosted environment
 supplies all required evidence from the same source commit.

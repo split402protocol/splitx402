@@ -123,6 +123,24 @@ describe("repository presentation", () => {
       "PendingChainVerification --> DeadLetter: verifier exhausted",
     );
   });
+
+  it("keeps public proof docs aligned with Phase 7 continuity gates", () => {
+    const readme = readFileSync("README.md", "utf8");
+    const phase7 = readFileSync("docs/PHASE_7.md", "utf8");
+    const stagingProof = readFileSync(
+      "docs/runbooks/phase7-staging-proof.md",
+      "utf8",
+    );
+
+    expect(readme).toContain("proof gate cross-checks those artifacts");
+    expect(phase7).toContain("same active route, campaign");
+    expect(phase7).toContain("referrer wallet, and merchant id");
+    expect(stagingProof).toContain("proof artifacts are local-only");
+    expect(stagingProof).toContain("close the status gate");
+    expect(stagingProof).toContain(
+      "receipt summaries from a different run",
+    );
+  });
 });
 
 function listPresentationFiles(): string[] {
