@@ -49,6 +49,12 @@ describe("Phase 7 staging evidence workspace", () => {
       "SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",
     );
     expect(workspace.readmeText).toContain(
+      "corepack pnpm phase7:hosted:preflight",
+    );
+    expect(workspace.readmeText).not.toContain(
+      "phase7:hosted:preflight > phase7-staging-evidence/hosted-preflight.json",
+    );
+    expect(workspace.readmeText).toContain(
       "corepack pnpm phase7:staging:collect-mcp-gateway",
     );
     expect(workspace.readmeText).toContain(
@@ -56,6 +62,9 @@ describe("Phase 7 staging evidence workspace", () => {
     );
     expect(workspace.readmeText).toContain("receiptVerificationStatus");
     expect(workspace.readmeText).toContain("protocolFeeBpsOfCommission");
+    expect(workspace.readmeText).toContain(
+      "`phase7:hosted:preflight` writes `hosted-preflight.json`",
+    );
     expect(workspace.readmeText).toContain(
       "corepack pnpm phase7:staging:derive-receipt-verification",
     );
