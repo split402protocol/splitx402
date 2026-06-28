@@ -16,14 +16,13 @@ corepack pnpm phase7:staging:init
 SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed
 corepack pnpm phase7:staging-proof > phase7-staging-proof.txt
 corepack pnpm phase7:hosted:preflight
+# Confirm hosted control plane has SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc.
 corepack pnpm phase7:staging:collect-reads
 corepack pnpm phase7:staging:collect-mcp-gateway
 corepack pnpm demo:mcp-gateway:smoke
 corepack pnpm demo:mcp-bundle > phase7-staging-evidence/mcp-bundle.json
 corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log
 corepack pnpm phase7:staging:derive-receipt-verification
-# Capture payout obligations with SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc
-# and attach covered/deficit funding evidence to funding_balance_evidence.
 corepack pnpm phase7:staging:manifest phase7-staging-proof.txt > phase7-staging-evidence/artifact-manifest.json
 corepack pnpm phase7:staging:assemble > phase7-staging-proof.txt
 corepack pnpm phase7:staging:status phase7-staging-proof.txt

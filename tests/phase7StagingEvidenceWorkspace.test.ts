@@ -90,6 +90,9 @@ describe("Phase 7 staging evidence workspace", () => {
     expect(workspace.readmeText).toContain(
       "corepack pnpm phase7:hosted:preflight",
     );
+    expect(workspace.readmeText).toContain(
+      "# Confirm hosted control plane has SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc.",
+    );
     expect(workspace.readmeText).not.toContain(
       "phase7:hosted:preflight > phase7-staging-evidence/hosted-preflight.json",
     );
@@ -103,6 +106,12 @@ describe("Phase 7 staging evidence workspace", () => {
     expect(workspace.readmeText).toContain("protocolFeeBpsOfCommission");
     expect(workspace.readmeText).toContain(
       "`phase7:hosted:preflight` writes `hosted-preflight.json`",
+    );
+    expect(workspace.readmeText).toContain(
+      "Funding-balance evidence requires the hosted control plane to run with",
+    );
+    expect(workspace.readmeText).toContain(
+      "`SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc`",
     );
     expect(workspace.readmeText).toContain(
       "`phase7:staging-proof` and `phase7:staging:assemble` fill `source_commit`",
