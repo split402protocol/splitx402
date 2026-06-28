@@ -130,6 +130,9 @@ approval_decision: no-go
       "corepack pnpm phase7:staging:init",
     );
     expect(report.commands.map((item) => item.command)).toContain(
+      "corepack pnpm phase7:staging:seed",
+    );
+    expect(report.commands.map((item) => item.command)).toContain(
       "corepack pnpm phase7:staging-proof",
     );
     expect(report.commands.map((item) => item.command)).toContain(
@@ -158,6 +161,9 @@ approval_decision: no-go
     );
     expect(report.nextActions).toContain(
       "Create the evidence workspace with corepack pnpm phase7:staging:init.",
+    );
+    expect(report.nextActions).toContain(
+      "Seed the hosted staging demo state with SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed.",
     );
     expect(report.nextActions).toContain(
       "Generate a proof scaffold with corepack pnpm phase7:staging-proof.",
@@ -479,6 +485,9 @@ funding_balance_evidence: funding.json
     expect(report.readyForPublicAlphaDemo).toBe(false);
     expect(report.commandEvidenceStatus.blockers).toContain(
       "commands_run missing required command: corepack pnpm lint",
+    );
+    expect(report.commandEvidenceStatus.blockers).toContain(
+      "commands_run missing required command: corepack pnpm phase7:staging:seed",
     );
     expect(report.commandEvidenceStatus.blockers).toContain(
       "commands_run missing required command: corepack pnpm audit --audit-level high",
@@ -1675,6 +1684,7 @@ function createValidPaidSuiteLog(): string {
 function createValidCommandsLog(): string {
   return [
     "$ corepack pnpm phase7:staging:init",
+    "$ SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",
     "$ corepack pnpm phase7:staging-proof > phase7-staging-proof.txt",
     "$ corepack pnpm phase7:hosted:preflight",
     "$ corepack pnpm phase7:staging:collect-reads",

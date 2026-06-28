@@ -28,6 +28,7 @@ console.log(
         "Fill direct SPLIT402_PHASE7_* proof fields.",
         `Use ${workspace.envFileName} for SPLIT402_PHASE7_ASSEMBLE_* attachment paths.`,
         "Capture real staging outputs into the listed artifact files.",
+        "SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",
         "corepack pnpm phase7:staging-proof > phase7-staging-proof.txt",
         `corepack pnpm phase7:hosted:preflight > ${workspace.directory}/hosted-preflight.json`,
         "corepack pnpm phase7:staging:collect-reads",

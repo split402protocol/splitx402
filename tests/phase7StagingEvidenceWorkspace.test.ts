@@ -46,6 +46,9 @@ describe("Phase 7 staging evidence workspace", () => {
       "router-backed discovery, execution, and receipt lookup",
     );
     expect(workspace.readmeText).toContain(
+      "SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",
+    );
+    expect(workspace.readmeText).toContain(
       "corepack pnpm phase7:staging:collect-mcp-gateway",
     );
     expect(workspace.readmeText).toContain(
