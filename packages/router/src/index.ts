@@ -957,13 +957,18 @@ function parseBazaarResource(
   const campaignId = readOptionalString(split402?.campaignId);
   const referrerWallet = readOptionalString(split402?.referrerWallet);
   const payoutWallet = readOptionalString(split402?.payoutWallet);
+  const network = readOptionalString(accept?.network);
+  const amount = readOptionalString(accept?.amount);
+  const asset = readOptionalString(accept?.asset);
+  const payTo = readOptionalString(accept?.payTo);
   if (
     resourceUrl === undefined ||
     accept?.scheme !== "exact" ||
-    readOptionalString(accept.network) === undefined ||
-    readOptionalString(accept.amount) === undefined ||
-    readOptionalString(accept.asset) === undefined ||
-    readOptionalString(accept.payTo) === undefined ||
+    network === undefined ||
+    amount === undefined ||
+    readOptionalAtomicAmount(amount) === undefined ||
+    asset === undefined ||
+    payTo === undefined ||
     method === undefined ||
     operationId === undefined ||
     routeId === undefined ||
@@ -979,10 +984,10 @@ function parseBazaarResource(
     accepts: [
       {
         scheme: "exact",
-        network: accept.network as string,
-        amount: accept.amount as string,
-        asset: accept.asset as string,
-        payTo: accept.payTo as string
+        network,
+        amount,
+        asset,
+        payTo
       }
     ],
     metadata: {
@@ -1030,7 +1035,11 @@ function readRecord(value: unknown): Record<string, unknown> | undefined {
 }
 
 function readOptionalString(value: unknown): string | undefined {
-  return typeof value === "string" && value.length > 0 ? value : undefined;
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? undefined : trimmed;
 }
 
 function parseUrl(value: string): URL | undefined {

@@ -629,6 +629,44 @@ describe("Split402ControlPlaneDiscoveryClient", () => {
 
     await expect(discovery.discoverProviders()).resolves.toEqual([]);
   });
+
+  it("skips discovered providers with blank or malformed payment fields", async () => {
+    const blankPayToDiscovery = new Split402ControlPlaneDiscoveryClient({
+      controlPlaneUrl: "https://control.example",
+      fetch: controlPlaneFetch([], {
+        resourceOverrides: {
+          accepts: [
+            {
+              scheme: "exact",
+              network: receipt.network,
+              amount: receipt.requiredAmountAtomic,
+              asset: receipt.asset,
+              payTo: "   "
+            }
+          ]
+        }
+      })
+    });
+    await expect(blankPayToDiscovery.discoverProviders()).resolves.toEqual([]);
+
+    const malformedAmountDiscovery = new Split402ControlPlaneDiscoveryClient({
+      controlPlaneUrl: "https://control.example",
+      fetch: controlPlaneFetch([], {
+        resourceOverrides: {
+          accepts: [
+            {
+              scheme: "exact",
+              network: receipt.network,
+              amount: "10.5",
+              asset: receipt.asset,
+              payTo: receipt.payToWallet
+            }
+          ]
+        }
+      })
+    });
+    await expect(malformedAmountDiscovery.discoverProviders()).resolves.toEqual([]);
+  });
 });
 
 function provider(
@@ -668,7 +706,10 @@ function executorReturning(
 
 function controlPlaneFetch(
   calls: Array<{ url: string; authorization?: string }>,
-  options: { omitMerchantKey?: boolean } = {}
+  options: {
+    omitMerchantKey?: boolean;
+    resourceOverrides?: Record<string, unknown>;
+  } = {}
 ): Split402DiscoveryFetch {
   return async (url, init) => {
     calls.push({
@@ -689,32 +730,36 @@ function controlPlaneFetch(
       });
     }
     if (parsed.pathname === "/v1/routes/rte_1/bazaar-resources") {
+      const resource = {
+        schema: "split402.bazaar_resource.v1",
+        resource: `${receipt.merchantOrigin}/v1/risk`,
+        type: "http",
+        x402Version: 2,
+        accepts: [
+          {
+            scheme: "exact",
+            network: receipt.network,
+            amount: receipt.requiredAmountAtomic,
+            asset: receipt.asset,
+            payTo: receipt.payToWallet
+          }
+        ],
+        metadata: {
+          method: "POST",
+          operationId: "risk.score",
+          split402: {
+            routeId: "rte_1",
+            campaignId: receipt.campaignId,
+            referrerWallet: receipt.referrerWallet,
+            payoutWallet: receipt.payoutWallet
+          }
+        }
+      };
       return jsonResponse({
         resources: [
           {
-            schema: "split402.bazaar_resource.v1",
-            resource: `${receipt.merchantOrigin}/v1/risk`,
-            type: "http",
-            x402Version: 2,
-            accepts: [
-              {
-                scheme: "exact",
-                network: receipt.network,
-                amount: receipt.requiredAmountAtomic,
-                asset: receipt.asset,
-                payTo: receipt.payToWallet
-              }
-            ],
-            metadata: {
-              method: "POST",
-              operationId: "risk.score",
-              split402: {
-                routeId: "rte_1",
-                campaignId: receipt.campaignId,
-                referrerWallet: receipt.referrerWallet,
-                payoutWallet: receipt.payoutWallet
-              }
-            }
+            ...resource,
+            ...(options.resourceOverrides ?? {})
           }
         ]
       });
