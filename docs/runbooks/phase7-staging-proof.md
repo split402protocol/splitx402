@@ -71,8 +71,10 @@ plus receipt-side `network`, `asset`, `requiredAmountAtomic`, `payToWallet`,
 `receiptReferrerCreditAtomic`, route id, commission bps, protocol-fee bps, and
 commission/protocol-fee amounts when receipt lookup succeeds. The collector
 rejects the report if the receipt amount, selected-provider payment details,
-commission, protocol fee, or referrer credit arithmetic does not match. Demo mode is a
-local contract check only and remains no-go for hosted Phase 7 proof. Proof-ready
+commission, protocol fee, or referrer credit arithmetic does not match. It also
+rejects execute evidence with missing required fields, unsupported execution
+mode, unverified receipt status, or zero referrer credit. Demo mode is a local
+contract check only and remains no-go for hosted Phase 7 proof. Proof-ready
 MCP gateway evidence must run in `router-live-agent-sdk` mode: set
 `SPLIT402_MCP_CONTROL_PLANE_URL` for hosted route discovery, set
 `SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1`, and provide a funded buyer key in
