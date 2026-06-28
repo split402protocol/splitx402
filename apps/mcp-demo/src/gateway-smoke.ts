@@ -21,6 +21,8 @@ export interface McpGatewaySmokeReport {
   receiptId: string;
   receiptVerificationStatus: string;
   referrerCreditAtomic: string;
+  receiptRequiredAmountAtomic: string;
+  receiptReferrerCreditAtomic: string;
 }
 
 export async function runMcpGatewaySmoke(): Promise<McpGatewaySmokeReport> {
@@ -139,6 +141,22 @@ export async function runMcpGatewaySmoke(): Promise<McpGatewaySmokeReport> {
       }
     }
   });
+  const receiptRequiredAmountAtomic = readString(
+    receipt,
+    ["result", "structuredContent", "receipt", "requiredAmountAtomic"],
+    "receipt required amount"
+  );
+  if (receiptRequiredAmountAtomic !== amountPaidAtomic) {
+    throw new Error("receipt required amount must match execute amount paid");
+  }
+  const receiptReferrerCreditAtomic = readString(
+    receipt,
+    ["result", "structuredContent", "receipt", "referrerCreditAtomic"],
+    "receipt referrer credit"
+  );
+  if (receiptReferrerCreditAtomic !== referrerCreditAtomic) {
+    throw new Error("receipt referrer credit must match execute referrer credit");
+  }
   const receiptNetwork = readString(
     receipt,
     ["result", "structuredContent", "receipt", "network"],
@@ -178,7 +196,9 @@ export async function runMcpGatewaySmoke(): Promise<McpGatewaySmokeReport> {
     amountPaidAtomic,
     receiptId,
     receiptVerificationStatus,
-    referrerCreditAtomic
+    referrerCreditAtomic,
+    receiptRequiredAmountAtomic,
+    receiptReferrerCreditAtomic
   };
 }
 
