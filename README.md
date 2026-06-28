@@ -331,6 +331,7 @@ Check the combined product readiness gates:
 ```bash
 corepack pnpm product:evidence:init
 corepack pnpm product:evidence:init --force
+corepack pnpm product:launch-preflight --brief
 corepack pnpm product:launch-checklist --brief
 corepack pnpm product:launch-checklist --brief <phase6-custody-evidence.txt> <phase7-staging-proof.txt>
 corepack pnpm product:status
@@ -341,13 +342,15 @@ corepack pnpm product:status <phase6-custody-evidence.txt> <phase7-staging-proof
 `product:evidence:init` creates a local evidence workspace for the remaining
 Phase 7 hosted proof and Phase 6 custody bundle. It refuses to overwrite
 existing scaffold files; rerun with `--force` only when intentionally replacing
-local scaffold content. `product:launch-checklist --brief` prints the exact
-remaining local validation, hosted proof, custody evidence, and combined status
-commands; pass the Phase 6 and Phase 7 evidence paths to show checked, blocked,
-or ready section statuses from real files. `product:status` reports the current
-Split402 phase, whether the public-alpha hosted proof and production custody
-evidence are checked, launch-gate percentages, and why the launch decision
-remains `no-go` until both machine-checkable gates are satisfied.
+local scaffold content. `product:launch-preflight --brief` checks whether the
+local launch workspace and required Phase 7 hosted proof environment values are
+ready before collection starts. `product:launch-checklist --brief` prints the
+exact remaining local validation, hosted proof, custody evidence, and combined
+status commands; pass the Phase 6 and Phase 7 evidence paths to show checked,
+blocked, or ready section statuses from real files. `product:status` reports the
+current Split402 phase, whether the public-alpha hosted proof and production
+custody evidence are checked, launch-gate percentages, and why the launch
+decision remains `no-go` until both machine-checkable gates are satisfied.
 
 Generate the Phase 6 image provenance review record after building immutable
 signer and control-plane images:
