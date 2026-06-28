@@ -113,13 +113,47 @@ describe("Split402 launch preflight", () => {
         ]),
       );
   });
+
+  it("uses custom launch workspace paths for Phase 6 env checks", () => {
+    const workspace = createSplit402ProductEvidenceWorkspace({
+      directory: "evidence/launch",
+    });
+    const files = createWorkspaceFileMap(
+      [
+        workspace.phase7.envText,
+        "SPLIT402_PHASE7_CONTROL_PLANE_URL=https://control.staging.example",
+        "SPLIT402_PHASE7_DASHBOARD_URL=https://dashboard.staging.example",
+        "SPLIT402_PHASE7_DEMO_MERCHANT_URL=https://merchant.staging.example",
+        "SPLIT402_PHASE7_CONTROL_PLANE_TOKEN=merchant-session-token",
+        "SPLIT402_PHASE7_MERCHANT_ID=mrc_123",
+        "SPLIT402_PHASE7_REFERRER_WALLET=referrer-wallet",
+        "SPLIT402_MCP_CONTROL_PLANE_URL=https://control.staging.example",
+        "SPLIT402_MCP_CONTROL_PLANE_TOKEN=merchant-session-token",
+        "SPLIT402_MCP_CAPABILITY=solana.wallet-risk",
+        "SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1",
+        "SPLIT402_MCP_SVM_PRIVATE_KEY=funded-devnet-buyer-key",
+      ].join("\n"),
+      createFilledPhase6EnvText(workspace.phase6EnvText),
+      workspace,
+    );
+
+    const report = createSplit402LaunchPreflightReport({
+      directory: "evidence/launch",
+      exists: (path) => files.has(path),
+      readText: (path) => files.get(path) ?? "",
+    });
+
+    expect(report.readyToCollectEvidence).toBe(true);
+    expect(report.checks.find((check) => check.id === "phase6_evidence_env_mappings"))
+      .toMatchObject({ ok: true });
+  });
 });
 
 function createWorkspaceFileMap(
   phase7EnvText: string,
   phase6EnvText?: string,
+  workspace = createSplit402ProductEvidenceWorkspace(),
 ): Map<string, string> {
-  const workspace = createSplit402ProductEvidenceWorkspace();
   return new Map([
     [join(workspace.directory, workspace.readmeFileName), workspace.readmeText],
     [

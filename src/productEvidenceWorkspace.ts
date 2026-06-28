@@ -69,7 +69,7 @@ export function createSplit402ProductEvidenceWorkspace(
     phase7EnvFileName,
     phase7,
     phase6EvidenceText,
-    phase6EnvText: createPhase6EvidenceAssemblyEnvTemplate(),
+    phase6EnvText: createPhase6EvidenceAssemblyEnvTemplate({ directory }),
     phase7ProofText,
     readmeText: createReadmeText({
       directory,
@@ -125,7 +125,7 @@ function createNextCommands(input: {
 }): string[] {
   return [
     `Fill ${input.directory}/${input.phase7EnvFileName} with hosted staging values.`,
-    `corepack pnpm phase6:evidence:env-template > ${input.directory}/${input.phase6EnvFileName}`,
+    `corepack pnpm phase6:evidence:env-template ${input.directory} > ${input.directory}/${input.phase6EnvFileName}`,
     `Fill ${input.directory}/${input.phase6EnvFileName} with Phase 6 custody record paths.`,
     `Fill ${input.directory}/${input.phase6EvidenceFileName} with generated Phase 6 custody records.`,
     `corepack pnpm product:launch-preflight --brief ${input.directory}`,
