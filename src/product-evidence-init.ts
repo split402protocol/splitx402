@@ -1,39 +1,40 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 
+import {
+  createProductEvidenceInitWrites,
+  findExistingProductEvidenceInitWrites,
+  parseProductEvidenceInitArgs,
+} from "./productEvidenceInitPlan.js";
 import { createSplit402ProductEvidenceWorkspace } from "./productEvidenceWorkspace.js";
 
-const directory = process.argv[2] ?? "split402-launch-evidence";
+const args = parseArgs();
 const workspace = createSplit402ProductEvidenceWorkspace({
-  directory,
+  directory: args.directory,
   sourceCommit: readCurrentGitCommit(),
   reviewDate: isoDate(),
 });
+const writes = createProductEvidenceInitWrites(workspace);
+const existingFiles = args.force
+  ? []
+  : findExistingProductEvidenceInitWrites(writes, existsSync);
 
-mkdirSync(workspace.directory, { recursive: true });
-mkdirSync(workspace.phase7.directory, { recursive: true });
+if (existingFiles.length > 0) {
+  console.error(
+    [
+      "Refusing to overwrite existing Split402 launch evidence scaffold files.",
+      "Review or move these files first, or rerun with `corepack pnpm product:evidence:init --force` to replace them intentionally:",
+      ...existingFiles.map((path) => `- ${path}`),
+    ].join("\n"),
+  );
+  process.exit(1);
+}
 
-writeFileSync(
-  join(workspace.directory, workspace.readmeFileName),
-  workspace.readmeText,
-);
-writeFileSync(
-  join(workspace.directory, workspace.phase6EvidenceFileName),
-  workspace.phase6EvidenceText,
-);
-writeFileSync(
-  join(workspace.directory, workspace.phase7ProofFileName),
-  workspace.phase7ProofText,
-);
-writeFileSync(
-  join(workspace.directory, workspace.phase7EnvFileName),
-  workspace.phase7.envText,
-);
-writeFileSync(
-  join(workspace.phase7.directory, workspace.phase7.readmeFileName),
-  workspace.phase7.readmeText,
-);
+for (const write of writes) {
+  mkdirSync(dirname(write.path), { recursive: true });
+  writeFileSync(write.path, write.contents);
+}
 
 console.log(
   JSON.stringify(
@@ -54,6 +55,15 @@ console.log(
     2,
   ),
 );
+
+function parseArgs() {
+  try {
+    return parseProductEvidenceInitArgs(process.argv.slice(2));
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+}
 
 function readCurrentGitCommit(): string {
   return execFileSync("git", ["rev-parse", "HEAD"], {
