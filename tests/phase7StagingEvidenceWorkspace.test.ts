@@ -75,7 +75,7 @@ describe("Phase 7 staging evidence workspace", () => {
       "corepack pnpm phase7:staging:derive-receipt-verification",
     );
     expect(workspace.readmeText).toContain(
-      "corepack pnpm phase7:staging:manifest phase7-staging-proof.txt",
+      "corepack pnpm phase7:staging:manifest phase7-staging-proof.txt > phase7-staging-evidence/artifact-manifest.json",
     );
     expect(workspace.readmeText).toContain("lint, typecheck, test, build");
     expect(workspace.readmeText).toContain(
