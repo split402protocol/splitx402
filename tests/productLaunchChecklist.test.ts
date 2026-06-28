@@ -35,6 +35,9 @@ describe("Split402 launch checklist", () => {
       "Check combined launch readiness",
     ]);
     expect(checklist.sections[2]?.externalEvidenceRequired).toBe(true);
+    expect(checklist.sections[0]?.commands).toContain(
+      "corepack pnpm product:launch-preflight --brief split402-launch-evidence",
+    );
     expect(checklist.sections[2]?.commands).toContain(
       "SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 corepack pnpm phase7:staging:collect-mcp-gateway",
     );

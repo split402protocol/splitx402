@@ -32,6 +32,9 @@ describe("Split402 product readiness status", () => {
       "Create a combined launch evidence workspace with corepack pnpm product:evidence:init.",
     );
     expect(report.nextActions).toContain(
+      "Run corepack pnpm product:launch-preflight --brief split402-launch-evidence before collecting hosted proof.",
+    );
+    expect(report.nextActions).toContain(
       "Run hosted Phase 7 staging proof collection and status validation.",
     );
     expect(report.nextActions).not.toContain(
@@ -92,5 +95,6 @@ approval_notes: checked evidence is intentionally incomplete
     expect(brief).toContain("Phase 6 production custody evidence: not checked");
     expect(brief).toContain("Mainnet ready: no");
     expect(brief).toContain("corepack pnpm product:evidence:init");
+    expect(brief).toContain("corepack pnpm product:launch-preflight");
   });
 });
