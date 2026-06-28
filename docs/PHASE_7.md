@@ -131,10 +131,13 @@ It also validates the control-plane read artifacts so route discovery, referrer
 earnings, dashboard summary, webhook delivery, and payout obligations must be
 present and non-empty. The paid-suite log and receipt-verification JSON are
 checked for a successful paid request, a verified commission-bearing receipt,
-and the invalid-claim zero-commission path. The command transcript must include
-the Phase 7 evidence commands and full validation suite. The funding-balance
-artifact is checked separately, requiring every asset to show a resolved
-`covered` or `deficit` state instead of unresolved funding.
+and the invalid-claim zero-commission path. The MCP gateway transcript must
+prove budget-filtered capability discovery, verified execution, matching receipt
+lookup, route attribution, and commission/protocol-fee amounts derived from the
+receipt `commissionBps` and `protocolFeeBpsOfCommission` fields. The command
+transcript must include the Phase 7 evidence commands and full validation suite.
+The funding-balance artifact is checked separately, requiring every asset to
+show a resolved `covered` or `deficit` state instead of unresolved funding.
 
 ## Remaining Phase 7 Work
 
