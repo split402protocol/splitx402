@@ -136,7 +136,8 @@ dashboard is locked without the viewer token while accepting the viewer-token
 path. It also compares the proof `source_commit` with the checkout running
 `phase7:staging:status`, so proof evidence from an older commit stays no-go
 after new code is merged, and it keeps the proof no-go when the checkout has
-uncommitted changes.
+uncommitted source changes. Generated proof artifacts remain local and do not
+block the status check.
 Attach `phase7-staging-evidence/mcp-gateway.jsonl` as `mcp_gateway_evidence`.
 The collector runs the gateway with JSON-RPC `initialize`, `tools/list`, and
 budget-filtered `split402.searchCapabilities` requests using
