@@ -113,6 +113,76 @@ describe("Split402Router", () => {
     ).toEqual(["provider-devnet-cheap"]);
   });
 
+  it("ignores malformed provider prices during budgeted search and ranking", () => {
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-invalid-price",
+          amountAtomic: "10.5"
+        }),
+        provider({
+          providerId: "provider-valid",
+          amountAtomic: "10000"
+        })
+      ]
+    });
+
+    const input = {
+      capability: "solana.wallet-risk",
+      input: {},
+      budget: {
+        network: receipt.network,
+        asset: receipt.asset,
+        maxAmountAtomic: "50000"
+      }
+    };
+
+    expect(router.rankProviders(input).map((item) => item.providerId)).toEqual([
+      "provider-valid"
+    ]);
+    expect(router.searchCapabilities(input).map((item) => item.providerId)).toEqual([
+      "provider-valid"
+    ]);
+  });
+
+  it("executes a valid provider when another matching provider has a malformed price", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>().mockResolvedValue({
+      data: { risk: "low" },
+      receipt
+    });
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-invalid-price",
+          amountAtomic: "10.5"
+        }),
+        provider({
+          providerId: "provider-valid",
+          amountAtomic: receipt.requiredAmountAtomic
+        })
+      ],
+      executor: { execute }
+    });
+
+    const result = await router.execute({
+      capability: "solana.wallet-risk",
+      input: { wallet: "wallet_1" },
+      budget: {
+        network: receipt.network,
+        asset: receipt.asset,
+        maxAmountAtomic: receipt.requiredAmountAtomic
+      }
+    });
+
+    expect(result.providerId).toBe("provider-valid");
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: expect.objectContaining({ providerId: "provider-valid" })
+      })
+    );
+  });
+
   it("rejects when every provider exceeds budget", async () => {
     const router = new Split402Router({
       providers: [provider({ providerId: "provider-expensive", amountAtomic: "50001" })],

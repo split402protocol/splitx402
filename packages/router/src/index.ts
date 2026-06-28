@@ -235,15 +235,20 @@ export class Split402Router {
           search.budget?.asset === undefined ||
           provider.asset === search.budget.asset
       )
-      .filter(
-        (provider) =>
-          search.budget?.maxAmountAtomic === undefined ||
-          readAtomicAmount(provider.amountAtomic, "provider.amountAtomic") <=
+      .filter((provider) => {
+        if (search.budget?.maxAmountAtomic === undefined) {
+          return true;
+        }
+        const providerAmount = readProviderAtomicAmount(provider);
+        return (
+          providerAmount !== undefined &&
+          providerAmount <=
             readAtomicAmount(
               search.budget.maxAmountAtomic,
               "budget.maxAmountAtomic"
             )
-      )
+        );
+      })
       .sort(compareProviders);
   }
 
@@ -257,7 +262,10 @@ export class Split402Router {
       .filter((provider) => provider.capability === input.capability)
       .filter((provider) => provider.network === input.budget.network)
       .filter((provider) => provider.asset === input.budget.asset)
-      .filter((provider) => readAtomicAmount(provider.amountAtomic, "provider.amountAtomic") <= maxAmount)
+      .filter((provider) => {
+        const providerAmount = readProviderAtomicAmount(provider);
+        return providerAmount !== undefined && providerAmount <= maxAmount;
+      })
       .sort(compareProviders);
   }
 
@@ -799,8 +807,17 @@ function normalizeBps(value: number): number {
 }
 
 function compareAtomicAmount(left: string, right: string): number {
-  const leftAmount = readAtomicAmount(left, "amountAtomic");
-  const rightAmount = readAtomicAmount(right, "amountAtomic");
+  const leftAmount = readOptionalAtomicAmount(left);
+  const rightAmount = readOptionalAtomicAmount(right);
+  if (leftAmount === undefined && rightAmount === undefined) {
+    return left.localeCompare(right);
+  }
+  if (leftAmount === undefined) {
+    return 1;
+  }
+  if (rightAmount === undefined) {
+    return -1;
+  }
   if (leftAmount === rightAmount) {
     return 0;
   }
@@ -844,6 +861,16 @@ function readAtomicAmount(value: string, label: string): bigint {
     );
   }
   return BigInt(value);
+}
+
+function readProviderAtomicAmount(
+  provider: Split402CapabilityProvider
+): bigint | undefined {
+  return readOptionalAtomicAmount(provider.amountAtomic);
+}
+
+function readOptionalAtomicAmount(value: string): bigint | undefined {
+  return /^(0|[1-9][0-9]*)$/u.test(value) ? BigInt(value) : undefined;
 }
 
 function isRetryableProviderError(error: unknown): boolean {
