@@ -66,8 +66,8 @@ include provider used, amount paid, receipt id, receipt verification status, and
 referrer credit, and the collector's JSON report echoes those fields as
 `providerId`, `providerNetwork`, `providerAsset`, `providerAmountAtomic`,
 `providerPayToWallet`, `amountPaidAtomic`, `receiptId`,
-`receiptVerificationStatus`, and `referrerCreditAtomic`, plus receipt-side
-`network`, `asset`, `requiredAmountAtomic`, `payToWallet`,
+`receiptVerificationStatus`, `executeExecutionMode`, and `referrerCreditAtomic`,
+plus receipt-side `network`, `asset`, `requiredAmountAtomic`, `payToWallet`,
 `receiptReferrerCreditAtomic`, route id, commission bps, protocol-fee bps, and
 commission/protocol-fee amounts when receipt lookup succeeds. The collector
 rejects the report if the receipt amount, selected-provider payment details,

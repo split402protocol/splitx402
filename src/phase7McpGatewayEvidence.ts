@@ -32,6 +32,7 @@ export interface Phase7McpGatewayEvidenceReport {
   amountPaidAtomic?: string;
   receiptId?: string;
   receiptVerificationStatus?: string;
+  executeExecutionMode?: string;
   referrerCreditAtomic?: string;
   routeId?: string;
   network?: string;
@@ -216,6 +217,16 @@ export async function collectPhase7McpGatewayEvidence(
         );
       }
     }
+    if (executionSummary.receiptVerificationStatus !== "verified") {
+      blockers.push(
+        "mcp_gateway_evidence execute response receiptVerificationStatus is not verified",
+      );
+    }
+    if (executionSummary.executionMode !== context.executionMode) {
+      blockers.push(
+        "mcp_gateway_evidence execute response executionMode does not match collector execution mode",
+      );
+    }
     if (providerSummary === undefined) {
       blockers.push(
         "mcp_gateway_evidence search response missing executed provider details",
@@ -289,6 +300,7 @@ export async function collectPhase7McpGatewayEvidence(
           amountPaidAtomic: executionSummary.amountPaidAtomic,
           receiptId: executionSummary.receiptId,
           receiptVerificationStatus: executionSummary.receiptVerificationStatus,
+          executeExecutionMode: executionSummary.executionMode,
           referrerCreditAtomic: executionSummary.referrerCreditAtomic,
         }),
     ...(receiptSummary === undefined
@@ -336,6 +348,7 @@ interface McpGatewayExecutionSummary {
   amountPaidAtomic: string;
   receiptId: string;
   receiptVerificationStatus: string;
+  executionMode: Phase7McpGatewayEvidenceReport["executionMode"];
   referrerCreditAtomic: string;
 }
 
@@ -370,6 +383,7 @@ function readExecutionSummary(
   const receiptVerificationStatus = readNonEmptyString(
     structuredContent?.receiptVerificationStatus,
   );
+  const executionMode = readExecutionMode(structuredContent?.executionMode);
   const referrerCreditAtomic = readNonEmptyString(
     structuredContent?.referrerCreditAtomic,
   );
@@ -378,6 +392,7 @@ function readExecutionSummary(
     amountPaidAtomic === undefined ||
     receiptId === undefined ||
     receiptVerificationStatus === undefined ||
+    executionMode === undefined ||
     referrerCreditAtomic === undefined
   ) {
     return undefined;
@@ -387,6 +402,7 @@ function readExecutionSummary(
     amountPaidAtomic,
     receiptId,
     receiptVerificationStatus,
+    executionMode,
     referrerCreditAtomic,
   };
 }
@@ -552,6 +568,14 @@ function readBasisPoints(value: unknown): number | undefined {
     typeof value === "number" &&
     value >= 0 &&
     value <= 10_000
+    ? value
+    : undefined;
+}
+
+function readExecutionMode(
+  value: unknown,
+): Phase7McpGatewayEvidenceReport["executionMode"] | undefined {
+  return value === "router-demo-mock" || value === "router-live-agent-sdk"
     ? value
     : undefined;
 }
