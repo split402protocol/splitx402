@@ -1811,6 +1811,35 @@ function validateMcpGatewayTranscript(
   if (readNonEmptyString(receiptRecord.routeId) === undefined) {
     blockers.push("mcp_gateway_evidence getReceipt receipt.routeId is missing");
   }
+  const receiptCommissionAmount = readPositiveAtomicString(
+    receiptRecord.commissionAmountAtomic,
+  );
+  if (receiptCommissionAmount === undefined) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt commissionAmountAtomic must be positive",
+    );
+  }
+  const receiptProtocolFee = readNonNegativeAtomicString(
+    receiptRecord.protocolFeeAtomic,
+  );
+  if (receiptProtocolFee === undefined) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt protocolFeeAtomic must be a non-negative atomic amount",
+    );
+  }
+  const receiptReferrerCredit = readNonNegativeAtomicString(
+    receiptRecord.referrerCreditAtomic,
+  );
+  if (
+    receiptCommissionAmount !== undefined &&
+    receiptProtocolFee !== undefined &&
+    receiptReferrerCredit !== undefined &&
+    receiptCommissionAmount - receiptProtocolFee !== receiptReferrerCredit
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt referrerCreditAtomic does not equal commission minus protocol fee",
+    );
+  }
 }
 
 function createArtifactStatuses(

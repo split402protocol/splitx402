@@ -1035,6 +1035,57 @@ funding_balance_evidence: funding.json
     );
   });
 
+  it("blocks staged proof status when MCP receipt lookup omits commission amount", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          includeLookupCommissionAmount: false,
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence getReceipt commissionAmountAtomic must be positive",
+    );
+  });
+
+  it("blocks staged proof status when MCP receipt split arithmetic is wrong", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          lookupCommissionAmountAtomic: "2100",
+          lookupProtocolFeeAtomic: "200",
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence getReceipt referrerCreditAtomic does not equal commission minus protocol fee",
+    );
+  });
+
   it("blocks staged proof status when funding balance evidence is unresolved", () => {
     const proofText = createManifestProof();
     const artifacts = createManifestArtifacts(proofText);
@@ -1560,6 +1611,9 @@ function createValidMcpGatewayTranscript(
     lookupReferrerCreditAtomic?: string;
     lookupRequiredAmountAtomic?: string;
     includeLookupRouteId?: boolean;
+    includeLookupCommissionAmount?: boolean;
+    lookupCommissionAmountAtomic?: string;
+    lookupProtocolFeeAtomic?: string;
     tools?: string[];
   } = {},
 ): string {
@@ -1589,6 +1643,12 @@ function createValidMcpGatewayTranscript(
   const lookupRequiredAmountAtomic =
     options.lookupRequiredAmountAtomic ?? amountPaidAtomic;
   const includeLookupRouteId = options.includeLookupRouteId ?? true;
+  const includeLookupCommissionAmount =
+    options.includeLookupCommissionAmount ?? true;
+  const lookupProtocolFeeAtomic = options.lookupProtocolFeeAtomic ?? "200";
+  const lookupCommissionAmountAtomic =
+    options.lookupCommissionAmountAtomic ??
+    (BigInt(lookupReferrerCreditAtomic) + BigInt(lookupProtocolFeeAtomic)).toString();
   const lines = [
     {
       direction: "request",
@@ -1708,6 +1768,10 @@ function createValidMcpGatewayTranscript(
                           ...(includeLookupRouteId
                             ? { routeId: "rte_00000000000000000000000000000003" }
                             : {}),
+                          ...(includeLookupCommissionAmount
+                            ? { commissionAmountAtomic: lookupCommissionAmountAtomic }
+                            : {}),
+                          protocolFeeAtomic: lookupProtocolFeeAtomic,
                         },
                       },
                     },
