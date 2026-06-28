@@ -22,6 +22,21 @@ describe("Phase 7 git status filtering", () => {
     expect(changes).toEqual([]);
   });
 
+  it("allows absolute proof and artifact paths inside the repository", () => {
+    const changes = listPhase7SourceWorktreeChanges({
+      porcelainStatus: [
+        "?? phase7-staging-proof.txt",
+        "?? evidence/phase7/mcp-gateway.jsonl",
+        "",
+      ].join("\n"),
+      proofPath: "C:/repo/splitx402/phase7-staging-proof.txt",
+      allowedArtifactPaths: ["C:/repo/splitx402/evidence/phase7/mcp-gateway.jsonl"],
+      repositoryRoot: "C:/repo/splitx402",
+    });
+
+    expect(changes).toEqual([]);
+  });
+
   it("blocks source changes outside the proof artifact paths", () => {
     expect(
       listPhase7SourceWorktreeChanges({

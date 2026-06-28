@@ -59,6 +59,7 @@ function readCurrentWorktreeDirty(
     porcelainStatus,
     proofPath: proofFilePath,
     allowedArtifactPaths: readAttachedArtifactPaths(checkedProofText),
+    repositoryRoot: process.cwd(),
   });
 }
 
