@@ -54,6 +54,7 @@ describe("Phase 7 MCP gateway evidence collector", () => {
     expect(transcript).toContain('"direction":"request"');
     expect(transcript).toContain('"method":"tools/list"');
     expect(transcript).toContain('"split402.searchCapabilities"');
+    expect(transcript).toContain('"budget":{"maxAmountAtomic":"50000"}');
     expect(transcript).toContain('"providerId":"rte_discovered:wallet-risk-score"');
     expect(transcript).not.toContain('"id":"execute"');
   });
@@ -92,6 +93,7 @@ describe("Phase 7 MCP gateway evidence collector", () => {
     const transcript = writes.get("evidence/mcp-gateway.jsonl");
     expect(transcript).toContain('"split402.execute"');
     expect(transcript).toContain('"split402.getReceipt"');
+    expect(transcript).toContain('"budget":{"maxAmountAtomic":"50000"}');
     expect(transcript).toContain('"providerId":"split402-demo-merchant"');
     expect(transcript).toContain('"amountPaidAtomic":"10000"');
     expect(transcript).toContain('"receiptId":"rcp_00000000000000000000000000000005"');
