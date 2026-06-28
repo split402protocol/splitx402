@@ -1163,6 +1163,7 @@ funding_balance_evidence: funding.json
         createValidMcpGatewayTranscript({
           includeSearchProviderNetwork: false,
           includeSearchProviderAsset: false,
+          includeSearchProviderPayToWallet: false,
           includeSearchProviderAmount: false,
         }),
       ),
@@ -1183,6 +1184,9 @@ funding_balance_evidence: funding.json
       "mcp_gateway_evidence selected provider asset is missing",
     );
     expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence selected provider payToWallet is missing",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
       "mcp_gateway_evidence selected provider amountAtomic must be a positive atomic amount",
     );
   });
@@ -1196,6 +1200,7 @@ funding_balance_evidence: funding.json
         createValidMcpGatewayTranscript({
           lookupNetwork: "solana:wrong-network",
           lookupAsset: "wrong-asset",
+          lookupPayToWallet: "wrong-pay-to-wallet",
           searchProviderAmountAtomic: "9000",
         }),
       ),
@@ -1214,6 +1219,9 @@ funding_balance_evidence: funding.json
     );
     expect(report.mcpGatewayStatus.blockers).toContain(
       "mcp_gateway_evidence getReceipt asset does not match selected provider",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence getReceipt payToWallet does not match selected provider",
     );
     expect(report.mcpGatewayStatus.blockers).toContain(
       "mcp_gateway_evidence execute amountPaidAtomic does not match selected provider amountAtomic",
@@ -2054,9 +2062,11 @@ function createValidMcpGatewayTranscript(
     executeExecutionMode?: string;
     includeSearchProviderNetwork?: boolean;
     includeSearchProviderAsset?: boolean;
+    includeSearchProviderPayToWallet?: boolean;
     includeSearchProviderAmount?: boolean;
     searchProviderNetwork?: string;
     searchProviderAsset?: string;
+    searchProviderPayToWallet?: string;
     searchProviderAmountAtomic?: string;
     amountPaidAtomic?: string;
     executeReferrerCreditAtomic?: string;
@@ -2065,6 +2075,7 @@ function createValidMcpGatewayTranscript(
     lookupRequiredAmountAtomic?: string;
     lookupNetwork?: string;
     lookupAsset?: string;
+    lookupPayToWallet?: string;
     includeLookupRouteId?: boolean;
     includeLookupCommissionAmount?: boolean;
     lookupCommissionAmountAtomic?: string;
@@ -2094,10 +2105,14 @@ function createValidMcpGatewayTranscript(
   const includeSearchProviderNetwork =
     options.includeSearchProviderNetwork ?? true;
   const includeSearchProviderAsset = options.includeSearchProviderAsset ?? true;
+  const includeSearchProviderPayToWallet =
+    options.includeSearchProviderPayToWallet ?? true;
   const includeSearchProviderAmount = options.includeSearchProviderAmount ?? true;
   const searchProviderNetwork =
     options.searchProviderNetwork ?? "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
   const searchProviderAsset = options.searchProviderAsset ?? "usdc-devnet";
+  const searchProviderPayToWallet =
+    options.searchProviderPayToWallet ?? "pay-to-wallet";
   const searchProviderAmountAtomic =
     options.searchProviderAmountAtomic ?? amountPaidAtomic;
   const executeReferrerCreditAtomic =
@@ -2115,6 +2130,8 @@ function createValidMcpGatewayTranscript(
     options.lookupRequiredAmountAtomic ?? amountPaidAtomic;
   const lookupNetwork = options.lookupNetwork ?? searchProviderNetwork;
   const lookupAsset = options.lookupAsset ?? searchProviderAsset;
+  const lookupPayToWallet =
+    options.lookupPayToWallet ?? searchProviderPayToWallet;
   const includeLookupRouteId = options.includeLookupRouteId ?? true;
   const includeLookupCommissionAmount =
     options.includeLookupCommissionAmount ?? true;
@@ -2184,6 +2201,9 @@ function createValidMcpGatewayTranscript(
                   ? { network: searchProviderNetwork }
                   : {}),
                 ...(includeSearchProviderAsset ? { asset: searchProviderAsset } : {}),
+                ...(includeSearchProviderPayToWallet
+                  ? { payToWallet: searchProviderPayToWallet }
+                  : {}),
                 ...(includeSearchProviderAmount
                   ? { amountAtomic: searchProviderAmountAtomic }
                   : {}),
@@ -2256,6 +2276,7 @@ function createValidMcpGatewayTranscript(
                           receiptId: lookupReceiptId,
                           network: lookupNetwork,
                           asset: lookupAsset,
+                          payToWallet: lookupPayToWallet,
                           referrerCreditAtomic: lookupReferrerCreditAtomic,
                           requiredAmountAtomic: lookupRequiredAmountAtomic,
                           ...(includeLookupRouteId
