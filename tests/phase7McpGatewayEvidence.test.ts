@@ -98,7 +98,9 @@ describe("Phase 7 MCP gateway evidence collector", () => {
       routeId: "rte_00000000000000000000000000000003",
       network: bundle.mcp.tools[0].x402.network,
       asset: bundle.mcp.tools[0].x402.asset,
+      requiredAmountAtomic: "10000",
       payToWallet: bundle.mcp.tools[0].x402.payToWallet,
+      receiptReferrerCreditAtomic: "1800",
       commissionBps: 2000,
       protocolFeeBpsOfCommission: 1000,
       commissionAmountAtomic: "2000",
@@ -119,6 +121,7 @@ describe("Phase 7 MCP gateway evidence collector", () => {
     expect(transcript).toContain('"routeId":"rte_00000000000000000000000000000003"');
     expect(transcript).toContain(`"network":"${report.network}"`);
     expect(transcript).toContain(`"asset":"${report.asset}"`);
+    expect(transcript).toContain('"requiredAmountAtomic":"10000"');
     expect(transcript).toContain(`"payToWallet":"${report.payToWallet}"`);
     expect(transcript).toContain('"commissionBps":2000');
     expect(transcript).toContain('"protocolFeeBpsOfCommission":1000');

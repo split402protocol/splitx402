@@ -144,11 +144,13 @@ describe("Phase 7 staging evidence workspace", () => {
     );
     expect(workspace.readmeText).toContain("providerAsset");
     expect(workspace.readmeText).toContain("providerPayToWallet");
+    expect(workspace.readmeText).toContain("requiredAmountAtomic");
+    expect(workspace.readmeText).toContain("receiptReferrerCreditAtomic");
     expect(workspace.readmeText).toContain(
       "selected provider network, asset, and",
     );
     expect(workspace.readmeText).toContain(
-      "matching receipt network, asset, and payToWallet",
+      "matching receipt network, asset, payToWallet, required",
     );
     expect(workspace.readmeText).toContain(
       "`phase7:hosted:preflight` writes `hosted-preflight.json`",

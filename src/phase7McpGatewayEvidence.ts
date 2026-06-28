@@ -36,7 +36,9 @@ export interface Phase7McpGatewayEvidenceReport {
   routeId?: string;
   network?: string;
   asset?: string;
+  requiredAmountAtomic?: string;
   payToWallet?: string;
+  receiptReferrerCreditAtomic?: string;
   commissionBps?: number;
   protocolFeeBpsOfCommission?: number;
   commissionAmountAtomic?: string;
@@ -212,6 +214,16 @@ export async function collectPhase7McpGatewayEvidence(
         );
       }
       if (receiptSummary !== undefined) {
+        if (receiptSummary.requiredAmountAtomic !== executionSummary.amountPaidAtomic) {
+          blockers.push(
+            "mcp_gateway_evidence getReceipt requiredAmountAtomic does not match execute amountPaidAtomic",
+          );
+        }
+        if (receiptSummary.referrerCreditAtomic !== executionSummary.referrerCreditAtomic) {
+          blockers.push(
+            "mcp_gateway_evidence getReceipt referrerCreditAtomic does not match execute response",
+          );
+        }
         if (receiptSummary.network !== providerSummary.network) {
           blockers.push(
             "mcp_gateway_evidence getReceipt network does not match selected provider",
@@ -282,7 +294,9 @@ export async function collectPhase7McpGatewayEvidence(
           routeId: receiptSummary.routeId,
           network: receiptSummary.network,
           asset: receiptSummary.asset,
+          requiredAmountAtomic: receiptSummary.requiredAmountAtomic,
           payToWallet: receiptSummary.payToWallet,
+          receiptReferrerCreditAtomic: receiptSummary.referrerCreditAtomic,
           commissionBps: receiptSummary.commissionBps,
           protocolFeeBpsOfCommission:
             receiptSummary.protocolFeeBpsOfCommission,
@@ -326,7 +340,9 @@ interface McpGatewayReceiptSummary {
   routeId: string;
   network: string;
   asset: string;
+  requiredAmountAtomic: string;
   payToWallet: string;
+  referrerCreditAtomic: string;
   commissionBps: number;
   protocolFeeBpsOfCommission: number;
   commissionAmountAtomic: string;
@@ -381,7 +397,9 @@ function readReceiptSummary(
   const routeId = readNonEmptyString(receipt?.routeId);
   const network = readNonEmptyString(receipt?.network);
   const asset = readNonEmptyString(receipt?.asset);
+  const requiredAmountAtomic = readNonEmptyString(receipt?.requiredAmountAtomic);
   const payToWallet = readNonEmptyString(receipt?.payToWallet);
+  const referrerCreditAtomic = readNonEmptyString(receipt?.referrerCreditAtomic);
   const commissionBps = readBasisPoints(receipt?.commissionBps);
   const protocolFeeBpsOfCommission = readBasisPoints(
     receipt?.protocolFeeBpsOfCommission,
@@ -394,7 +412,9 @@ function readReceiptSummary(
     routeId === undefined ||
     network === undefined ||
     asset === undefined ||
+    requiredAmountAtomic === undefined ||
     payToWallet === undefined ||
+    referrerCreditAtomic === undefined ||
     commissionBps === undefined ||
     protocolFeeBpsOfCommission === undefined ||
     commissionAmountAtomic === undefined ||
@@ -406,7 +426,9 @@ function readReceiptSummary(
     routeId,
     network,
     asset,
+    requiredAmountAtomic,
     payToWallet,
+    referrerCreditAtomic,
     commissionBps,
     protocolFeeBpsOfCommission,
     commissionAmountAtomic,
