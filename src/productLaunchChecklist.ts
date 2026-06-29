@@ -86,11 +86,13 @@ function createWorkspaceSection(
     commands: [
       "corepack pnpm product:evidence:init",
       "corepack pnpm product:evidence:init --missing",
+      "corepack pnpm product:evidence:init --refresh-source",
       "corepack pnpm product:evidence:init --force",
       "corepack pnpm product:launch-preflight --brief split402-launch-evidence",
     ],
     notes: [
       "Use --missing to create absent scaffold files without overwriting existing evidence.",
+      "Use --refresh-source to update only stale scaffold source_commit values before evidence collection.",
       "Use --force only when intentionally replacing scaffold files.",
       "Do not commit secrets, private URLs, private keys, or private transaction bytes.",
     ],
