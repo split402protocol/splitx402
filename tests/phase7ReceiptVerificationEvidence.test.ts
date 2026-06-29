@@ -44,6 +44,27 @@ describe("Phase 7 receipt verification evidence", () => {
     );
   });
 
+  it("derives receipt evidence from PowerShell UTF-16LE redirected logs", () => {
+    const writes = new Map<string, string>();
+    const utf16Log = Buffer.concat([
+      Buffer.from([0xff, 0xfe]),
+      Buffer.from(createPaidSuiteLog(), "utf16le"),
+    ]);
+
+    const evidence = derivePhase7ReceiptVerificationEvidence({
+      paidSuiteLogPath: "evidence/paid-suite.log",
+      outputPath: "evidence/receipt-verification.json",
+      now: "2026-06-26T00:00:00.000Z",
+      readArtifact: () => utf16Log,
+      writeArtifact: (path, text) => writes.set(path, text),
+    });
+
+    expect(evidence.receiptId).toBe("rcp_valid");
+    expect(writes.get("evidence/receipt-verification.json")).toContain(
+      '"split402ReceiptVerified": true',
+    );
+  });
+
   it("rejects paid-suite logs without a commission-bearing valid receipt", () => {
     expect(() =>
       derivePhase7ReceiptVerificationEvidence({

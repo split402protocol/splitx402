@@ -818,6 +818,42 @@ funding_balance_evidence: funding.json
     );
   });
 
+  it("accepts PowerShell UTF-16LE redirected text artifacts", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/commands.log",
+      encodeUtf16Le(createValidCommandsLog()),
+    );
+    artifacts.set(
+      "evidence/paid-suite.log",
+      encodeUtf16Le(createValidPaidSuiteLog()),
+    );
+    const manifest = createPhase7StagingArtifactManifest(proofText, {
+      artifactBaseDir: "evidence",
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+    artifacts.set(
+      "evidence/artifact-manifest.json",
+      encode(JSON.stringify(manifest, null, 2)),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.commandEvidenceStatus).toEqual({
+      status: "valid",
+      blockers: [],
+    });
+    expect(report.paidRequestStatus.status).toBe("valid");
+    expect(report.manifestStatus).toEqual({ status: "valid", blockers: [] });
+  });
+
   it("blocks staged proof status when artifact manifest evidence is remote", () => {
     const proofText = createPhase7StagingProofRecord({
       proof_id: "phase7-staging-2026-06-26",
@@ -2860,4 +2896,11 @@ function createValidMcpGatewayTranscript(
 
 function encode(value: string): Uint8Array {
   return new TextEncoder().encode(value);
+}
+
+function encodeUtf16Le(value: string): Uint8Array {
+  return Buffer.concat([
+    Buffer.from([0xff, 0xfe]),
+    Buffer.from(value, "utf16le"),
+  ]);
 }

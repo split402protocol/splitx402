@@ -7,6 +7,7 @@ import {
   validatePhase7StagingProof,
 } from "./phase7StagingProof.js";
 import { PHASE7_REQUIRED_COMMAND_EVIDENCE } from "./phase7CommandEvidence.js";
+import { decodeArtifactText } from "./artifactEncoding.js";
 
 export const PHASE7_STAGING_COMMANDS = [
   {
@@ -469,7 +470,7 @@ function createManifestStatus(
   try {
     const manifestBytes = options.readArtifact(manifestPath);
     manifest = JSON.parse(
-      new TextDecoder().decode(manifestBytes),
+      decodeArtifactText(manifestBytes),
     ) as Phase7ArtifactManifest;
   } catch (error) {
     blockers.push(
@@ -586,7 +587,7 @@ function createHostedPreflightStatus(
   try {
     const artifactBytes = options.readArtifact(resolvedPath);
     preflight = JSON.parse(
-      new TextDecoder().decode(artifactBytes),
+      decodeArtifactText(artifactBytes),
     ) as Phase7HostedPreflightArtifact;
   } catch (error) {
     blockers.push(
@@ -1453,7 +1454,7 @@ function createFundingBalanceStatus(
   let artifact: unknown;
   try {
     const artifactBytes = options.readArtifact(resolvedPath);
-    artifact = JSON.parse(new TextDecoder().decode(artifactBytes));
+    artifact = JSON.parse(decodeArtifactText(artifactBytes));
   } catch (error) {
     blockers.push(
       `funding_balance_evidence artifact could not be read: ${formatError(error)}`,
@@ -1581,7 +1582,7 @@ function createMcpBundleStatus(
   let bundle: unknown;
   try {
     const artifactBytes = options.readArtifact(resolvedPath);
-    bundle = JSON.parse(new TextDecoder().decode(artifactBytes));
+    bundle = JSON.parse(decodeArtifactText(artifactBytes));
   } catch (error) {
     blockers.push(
       `mcp_bundle_evidence artifact could not be read: ${formatError(error)}`,
@@ -1798,7 +1799,7 @@ function createMcpGatewayStatus(
   let lines: McpGatewayTranscriptLine[] = [];
   try {
     const artifactBytes = options.readArtifact(resolvedPath);
-    const text = new TextDecoder().decode(artifactBytes);
+    const text = decodeArtifactText(artifactBytes);
     lines = parseMcpGatewayTranscript(text, blockers);
   } catch (error) {
     blockers.push(
@@ -2626,7 +2627,7 @@ function readJsonArtifact(
       blockers.push(`${field} artifact could not be read`);
       return undefined;
     }
-    return JSON.parse(new TextDecoder().decode(artifactBytes));
+    return JSON.parse(decodeArtifactText(artifactBytes));
   } catch (error) {
     blockers.push(`${field} artifact could not be read: ${formatError(error)}`);
     return undefined;
@@ -2646,7 +2647,7 @@ function readTextArtifact(
       blockers.push(`${field} artifact could not be read`);
       return undefined;
     }
-    return new TextDecoder().decode(artifactBytes);
+    return decodeArtifactText(artifactBytes);
   } catch (error) {
     blockers.push(`${field} artifact could not be read: ${formatError(error)}`);
     return undefined;

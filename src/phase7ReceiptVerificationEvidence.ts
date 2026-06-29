@@ -1,3 +1,5 @@
+import { decodeArtifactText } from "./artifactEncoding.js";
+
 export interface Phase7ReceiptVerificationEvidenceInput {
   paidSuiteLogPath: string;
   outputPath: string;
@@ -133,7 +135,7 @@ function readReceiptSummary(
 }
 
 function readArtifactText(value: Uint8Array | string): string {
-  return typeof value === "string" ? value : new TextDecoder().decode(value);
+  return decodeArtifactText(value);
 }
 
 function readNonEmptyString(value: unknown, label: string): string {
