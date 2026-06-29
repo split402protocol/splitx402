@@ -27,6 +27,9 @@ export interface Split402LaunchChecklistSection {
   notes: string[];
 }
 
+const LAUNCH_PREFLIGHT_COMMAND =
+  "corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence";
+
 export function createSplit402LaunchChecklist(
   report: Split402ProductReadinessReport,
 ): Split402LaunchChecklist {
@@ -92,7 +95,7 @@ function createWorkspaceSection(
       "corepack pnpm product:evidence:init --missing",
       "corepack pnpm product:evidence:init --refresh-source",
       "corepack pnpm product:evidence:init --force",
-      "corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence",
+      LAUNCH_PREFLIGHT_COMMAND,
       "corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json",
     ],
     notes: [
@@ -161,6 +164,7 @@ function createPhase7Section(
         : "not_checked",
     externalEvidenceRequired: true,
     commands: [
+      LAUNCH_PREFLIGHT_COMMAND,
       "Fill split402-launch-evidence/phase7-staging.env with hosted staging values.",
       "SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",
       "corepack pnpm phase7:hosted:preflight --evidence-env-file split402-launch-evidence/phase7-staging.env",
@@ -194,6 +198,7 @@ function createPhase6Section(
         : "not_checked",
     externalEvidenceRequired: true,
     commands: [
+      LAUNCH_PREFLIGHT_COMMAND,
       "Review generated split402-launch-evidence/phase6-evidence.env before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template split402-launch-evidence split402-launch-evidence/phase6-evidence.env",
       "Generate Phase 6 custody records at the paths listed in split402-launch-evidence/phase6-evidence.env.",
       "Fill split402-launch-evidence/phase6-custody-evidence.txt with generated Phase 6 custody records.",
