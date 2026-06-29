@@ -224,6 +224,27 @@ describe("Split402 launch preflight", () => {
           }),
         ]),
       );
+    const redactedSummary = report.checks.find(
+      (check) => check.id === "phase7_redacted_env_summary",
+    );
+    expect(redactedSummary).toMatchObject({
+      ok: true,
+      severity: "advisory",
+      details: expect.arrayContaining([
+        "Env file: split402-launch-evidence/phase7-staging.env",
+        "SPLIT402_PHASE7_CONTROL_PLANE_URL: configured (https://control.staging.example)",
+        "SPLIT402_PHASE7_CONTROL_PLANE_TOKEN: configured (redacted)",
+        "SPLIT402_MCP_CONTROL_PLANE_TOKEN: configured (redacted)",
+        "SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE: enabled",
+        "SPLIT402_MCP_SVM_PRIVATE_KEY/SVM_PRIVATE_KEY: configured via SPLIT402_MCP_SVM_PRIVATE_KEY (redacted)",
+      ]),
+    });
+    expect(redactedSummary?.details.join("\n")).not.toContain(
+      "merchant-session-token",
+    );
+    expect(redactedSummary?.details.join("\n")).not.toContain(
+      "funded-devnet-buyer-key",
+    );
   });
 
   it("rejects copied Phase 7 env template placeholders", () => {
@@ -463,6 +484,20 @@ describe("Split402 launch preflight", () => {
     });
     expect(report.nextActions).toContain(
       "Set SPLIT402_PHASE7_CONTROL_PLANE_URL to an http(s) URL in split402-launch-evidence/phase7-staging.env.",
+    );
+    const redactedSummary = report.checks.find(
+      (check) => check.id === "phase7_redacted_env_summary",
+    );
+    expect(redactedSummary?.details).toEqual(
+      expect.arrayContaining([
+        "SPLIT402_PHASE7_CONTROL_PLANE_URL: configured (invalid URL redacted)",
+        "SPLIT402_PHASE7_WEBHOOK_RECEIVER_URL: configured (invalid URL redacted)",
+        "SPLIT402_PHASE7_CONTROL_PLANE_TOKEN: configured (redacted)",
+      ]),
+    );
+    expect(redactedSummary?.details.join("\n")).not.toContain("not-a-url");
+    expect(redactedSummary?.details.join("\n")).not.toContain(
+      "merchant-session-token",
     );
   });
 

@@ -342,6 +342,16 @@ export function createSplit402LaunchPreflightReport(
           : mcpHostedMismatchDetails,
     },
     {
+      id: "phase7_redacted_env_summary",
+      label: "Phase 7 hosted env redacted summary",
+      ok: true,
+      severity: "advisory",
+      details: createPhase7RedactedEnvSummary({
+        env: phase7Env,
+        envPath: phase7EnvPath,
+      }),
+    },
+    {
       id: "mainnet_not_ready",
       label: "Mainnet approval remains outside local preflight",
       ok: true,
@@ -519,6 +529,72 @@ function createMcpHostedMismatchDetails(input: {
     );
   }
   return details;
+}
+
+function createPhase7RedactedEnvSummary(input: {
+  env: ReadonlyMap<string, string>;
+  envPath: string;
+}): string[] {
+  return [
+    `Env file: ${toDisplayPath(input.envPath)}`,
+    ...REQUIRED_PHASE7_HOSTED_ENV_KEYS.map((key) =>
+      describePhase7EnvValue(input.env, key),
+    ),
+    ...REQUIRED_MCP_LIVE_ENV_KEYS.map((key) =>
+      describePhase7EnvValue(input.env, key),
+    ),
+    `${MCP_LIVE_EXECUTION_ENV_KEY}: ${
+      hasTruthyEnvValue(input.env, MCP_LIVE_EXECUTION_ENV_KEY)
+        ? "enabled"
+        : "missing or disabled"
+    }`,
+    `SPLIT402_MCP_SVM_PRIVATE_KEY/SVM_PRIVATE_KEY: ${describeBuyerKeyStatus(
+      input.env,
+    )}`,
+  ];
+}
+
+function describePhase7EnvValue(
+  env: ReadonlyMap<string, string>,
+  key: string,
+): string {
+  if (!hasConfiguredEnvValue(env, key)) {
+    return `${key}: missing`;
+  }
+  if (isSecretEnvKey(key)) {
+    return `${key}: configured (redacted)`;
+  }
+  if (key.endsWith("_URL")) {
+    return `${key}: ${redactUrlForSummary(env.get(key))}`;
+  }
+  return `${key}: configured`;
+}
+
+function describeBuyerKeyStatus(env: ReadonlyMap<string, string>): string {
+  if (hasConfiguredEnvValue(env, "SPLIT402_MCP_SVM_PRIVATE_KEY")) {
+    return "configured via SPLIT402_MCP_SVM_PRIVATE_KEY (redacted)";
+  }
+  if (hasConfiguredEnvValue(env, "SVM_PRIVATE_KEY")) {
+    return "configured via SVM_PRIVATE_KEY (redacted)";
+  }
+  return "missing";
+}
+
+function isSecretEnvKey(key: string): boolean {
+  return key.includes("TOKEN") || key.includes("PRIVATE_KEY");
+}
+
+function redactUrlForSummary(value: string | undefined): string {
+  if (value === undefined) {
+    return "missing";
+  }
+  try {
+    const url = new URL(value);
+    const port = url.port.length === 0 ? "" : `:${url.port}`;
+    return `configured (${url.protocol}//${url.hostname}${port})`;
+  } catch {
+    return "configured (invalid URL redacted)";
+  }
 }
 
 function createHttpUrlEnvDetails(input: {
