@@ -156,6 +156,9 @@ describe("repository presentation", () => {
     expect(readme).toContain("corepack pnpm product:launch-preflight --brief");
     expect(readme).toContain("corepack pnpm product:launch-checklist --help");
     expect(readme).toContain("corepack pnpm product:launch-checklist --brief");
+    expect(readme).toContain(
+      "corepack pnpm product:launch-checklist --brief --workspace split402-launch-evidence",
+    );
     expect(readme).toContain("corepack pnpm phase6:evidence:env-template");
     expect(readme).toContain(
       "Review that generated file before editing it.",
@@ -169,6 +172,9 @@ describe("repository presentation", () => {
     expect(readme).toContain("corepack pnpm product:status");
     expect(readme).toContain("corepack pnpm product:status --help");
     expect(readme).toContain("corepack pnpm product:status --brief");
+    expect(readme).toContain(
+      "corepack pnpm product:status --brief --workspace split402-launch-evidence",
+    );
     expect(readme).toContain("creates a local evidence workspace");
     expect(readme).toContain("refuses to overwrite");
     expect(readme).toContain("existing scaffold files");

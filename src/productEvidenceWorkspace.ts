@@ -146,7 +146,7 @@ function createNextCommands(input: {
     `corepack pnpm phase7:staging:assemble > ${input.directory}/${input.phase7ProofFileName}`,
     `corepack pnpm phase7:staging:status ${input.directory}/${input.phase7ProofFileName}`,
     `corepack pnpm phase6:evidence:status ${input.directory}/${input.phase6EvidenceFileName}`,
-    `corepack pnpm product:status --brief ${input.directory}/${input.phase6EvidenceFileName} ${input.directory}/${input.phase7ProofFileName}`,
+    `corepack pnpm product:status --brief --workspace ${input.directory}`,
   ];
 }
 

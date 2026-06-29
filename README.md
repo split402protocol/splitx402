@@ -337,10 +337,12 @@ corepack pnpm product:launch-preflight --help
 corepack pnpm product:launch-preflight --brief
 corepack pnpm product:launch-checklist --help
 corepack pnpm product:launch-checklist --brief
+corepack pnpm product:launch-checklist --brief --workspace split402-launch-evidence
 corepack pnpm product:launch-checklist --brief <phase6-custody-evidence.txt> <phase7-staging-proof.txt>
 corepack pnpm product:status --help
 corepack pnpm product:status
 corepack pnpm product:status --brief
+corepack pnpm product:status --brief --workspace split402-launch-evidence
 corepack pnpm product:status <phase6-custody-evidence.txt> <phase7-staging-proof.txt>
 ```
 
@@ -354,8 +356,9 @@ Phase 6 custody evidence env paths, and required Phase 7 hosted proof
 environment values are ready before collection starts.
 `product:launch-checklist --brief` prints the exact remaining local
 validation, hosted proof, custody evidence, and combined status commands; pass
-the Phase 6 and Phase 7 evidence paths to show checked, blocked, or ready
-section statuses from real files. `product:status` reports the current Split402
+`--workspace split402-launch-evidence` or the Phase 6 and Phase 7 evidence paths
+to show checked, blocked, or ready section statuses from real files.
+`product:status` reports the current Split402
 phase, whether the public-alpha hosted proof and production custody evidence are
 checked, launch-gate percentages, exact evidence-env setup commands, and why the
 launch decision remains `no-go` until both machine-checkable gates are
