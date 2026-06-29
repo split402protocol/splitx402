@@ -135,6 +135,17 @@ describe("Split402 launch preflight", () => {
     ).toMatchObject({ ok: true });
     expect(report.checks.find((check) => check.id === "phase6_evidence_env_values"))
       .toMatchObject({ ok: false });
+    expect(report.checks.find((check) => check.id === "phase6_redacted_env_summary"))
+      .toMatchObject({
+        ok: true,
+        severity: "advisory",
+        details: expect.arrayContaining([
+          "Env file: split402-launch-evidence/phase6-evidence.env",
+          "SPLIT402_PHASE6_EVIDENCE_REVIEW_ID: missing",
+          "SPLIT402_PHASE6_EVIDENCE_FUNDING_WALLET: missing",
+          "SPLIT402_PHASE6_EVIDENCE_APPROVAL_DECISION: unset",
+        ]),
+      });
     expect(
       report.checks.find(
         (check) => check.id === "phase6_evidence_env_mappings",
@@ -222,6 +233,22 @@ describe("Split402 launch preflight", () => {
           }),
         ]),
       );
+    const phase6RedactedSummary = report.checks.find(
+      (check) => check.id === "phase6_redacted_env_summary",
+    );
+    expect(phase6RedactedSummary).toMatchObject({
+      ok: true,
+      severity: "advisory",
+      details: expect.arrayContaining([
+        "Env file: split402-launch-evidence/phase6-evidence.env",
+        "SPLIT402_PHASE6_EVIDENCE_REVIEW_ID: configured",
+        "SPLIT402_PHASE6_EVIDENCE_FUNDING_WALLET: configured",
+        "SPLIT402_PHASE6_EVIDENCE_APPROVAL_DECISION: configured",
+      ]),
+    });
+    expect(phase6RedactedSummary?.details.join("\n")).not.toContain(
+      "merchant-funding-wallet",
+    );
     const redactedSummary = report.checks.find(
       (check) => check.id === "phase7_redacted_env_summary",
     );
