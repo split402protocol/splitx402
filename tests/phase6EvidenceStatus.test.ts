@@ -54,10 +54,52 @@ approval_decision: no-go
 
     expect(report.readyForCustody).toBe(false);
     expect(report.evidenceBundleChecked).toBe(true);
+    expect(report.sourceCommitStatus.status).toBe("not_applicable");
     expect(report.validation?.missingFields).toContain("review_date");
     expect(report.validation?.placeholderFields).toContain("review_id");
     expect(report.nextActions.join("\n")).toContain(
       "approval_decision must be approved before Phase 6 custody can go live",
+    );
+  });
+
+  it("validates Phase 6 evidence source_commit against the current checkout", () => {
+    const report = createPhase6EvidenceStatusReport(
+      `review_id: pending
+source_commit: abc1234
+approval_decision: no-go
+`,
+      {
+        currentSourceCommit: "abc1234000000000000000000000000000000000",
+      },
+    );
+
+    expect(report.sourceCommitStatus).toEqual({
+      status: "valid",
+      evidenceSourceCommit: "abc1234",
+      currentSourceCommit: "abc1234000000000000000000000000000000000",
+      blockers: [],
+    });
+  });
+
+  it("blocks Phase 6 evidence from a stale checkout", () => {
+    const report = createPhase6EvidenceStatusReport(
+      `review_id: pending
+source_commit: abc1234
+approval_decision: no-go
+`,
+      {
+        currentSourceCommit: "def5678000000000000000000000000000000000",
+      },
+    );
+
+    expect(report.sourceCommitStatus).toEqual({
+      status: "invalid",
+      evidenceSourceCommit: "abc1234",
+      currentSourceCommit: "def5678000000000000000000000000000000000",
+      blockers: ["source_commit does not match current checkout"],
+    });
+    expect(report.nextActions).toContain(
+      "source_commit does not match current checkout",
     );
   });
 });

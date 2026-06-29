@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
 import { createPhase6EvidenceStatusReport } from "./phase6EvidenceStatus.js";
@@ -10,9 +11,18 @@ const evidenceText =
     ? undefined
     : readFileSync(evidencePath, "utf8");
 
-const report = createPhase6EvidenceStatusReport(evidenceText);
+const report = createPhase6EvidenceStatusReport(evidenceText, {
+  currentSourceCommit: readCurrentGitCommit(),
+});
 console.log(JSON.stringify(report, null, 2));
 
 if (report.evidenceBundleChecked && !report.readyForCustody) {
   process.exitCode = 1;
+}
+
+function readCurrentGitCommit(): string {
+  return execFileSync("git", ["rev-parse", "HEAD"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  }).trim();
 }

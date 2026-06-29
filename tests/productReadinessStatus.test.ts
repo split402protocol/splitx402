@@ -173,6 +173,26 @@ approval_notes: checked evidence is intentionally incomplete
     expect(brief.indexOf("Fill missing fields: review_date")).toBeGreaterThan(-1);
   });
 
+  it("surfaces stale Phase 6 custody source_commit before custody review", () => {
+    const report = createSplit402ProductReadinessReport({
+      phase6EvidenceText: `review_id: phase6-custody-2026-06-30
+source_commit: abc1234
+approval_decision: no-go
+`,
+      phase6Options: {
+        currentSourceCommit: "def5678000000000000000000000000000000000",
+      },
+    });
+
+    expect(report.phase6.sourceCommitStatus).toMatchObject({
+      status: "invalid",
+      blockers: ["source_commit does not match current checkout"],
+    });
+    expect(report.nextActions).toContain(
+      "Run corepack pnpm product:evidence:init --refresh-source before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist.",
+    );
+  });
+
   it("formats a simple operator-facing summary", () => {
     const report = createSplit402ProductReadinessReport();
     const brief = formatSplit402ProductReadinessBrief(report);

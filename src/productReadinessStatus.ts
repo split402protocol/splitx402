@@ -1,4 +1,5 @@
 import {
+  type Phase6EvidenceStatusOptions,
   type Phase6EvidenceStatusReport,
   createPhase6EvidenceStatusReport,
 } from "./phase6EvidenceStatus.js";
@@ -15,6 +16,7 @@ import {
 export interface Split402ProductReadinessInput {
   localProofText?: string;
   phase6EvidenceText?: string;
+  phase6Options?: Phase6EvidenceStatusOptions;
   phase7ProofText?: string;
   phase7Options?: Phase7StagingStatusOptions;
 }
@@ -71,7 +73,10 @@ export function createSplit402ProductReadinessReport(
   input: Split402ProductReadinessInput = {},
 ): Split402ProductReadinessReport {
   const localProof = createLocalProofStatus(input.localProofText);
-  const phase6 = createPhase6EvidenceStatusReport(input.phase6EvidenceText);
+  const phase6 = createPhase6EvidenceStatusReport(
+    input.phase6EvidenceText,
+    input.phase6Options,
+  );
   const phase7 = createPhase7StagingStatusReport(
     input.phase7ProofText,
     input.phase7Options,
@@ -197,10 +202,8 @@ function createProductNextActions(
     }
   }
   if (
-    phase7.sourceCommitStatus.status === "invalid" &&
-    phase7.sourceCommitStatus.blockers.includes(
-      "source_commit does not match current checkout",
-    )
+    hasStaleSourceCommit(phase7.sourceCommitStatus) ||
+    hasStaleSourceCommit(phase6.sourceCommitStatus)
   ) {
     leadActions.push(
       "Run corepack pnpm product:evidence:init --refresh-source before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist.",
@@ -317,6 +320,10 @@ function createLocalProofStatus(
       : {}),
     blockers,
   };
+}
+
+function hasStaleSourceCommit(input: { blockers: readonly string[] }): boolean {
+  return input.blockers.includes("source_commit does not match current checkout");
 }
 
 function interleaveActions(left: readonly string[], right: readonly string[]): string[] {
