@@ -48,6 +48,31 @@ describe("Split402 public surface check", () => {
     });
   });
 
+  it("fails when package metadata uses an old product description", () => {
+    const files = createPublicSurfaceFiles({
+      "package.json": JSON.stringify({
+        name: "split402",
+        description: "Referral and commission protocol infrastructure.",
+        license: "Apache-2.0",
+        private: true,
+      }),
+    });
+    const report = createSplit402PublicSurfaceCheckReport({
+      exists: (path) => files.has(path),
+      readText: (path) => files.get(path) ?? "",
+    });
+
+    expect(report.ok).toBe(false);
+    expect(
+      report.checks.find((check) => check.id === "package_license_metadata"),
+    ).toMatchObject({
+      ok: false,
+      details: [
+        'Set package.json description to "Agent payment routing and verifiable referral accounting for x402 APIs.".',
+      ],
+    });
+  });
+
   it("fails when the public/private boundary disappears", () => {
     const files = createPublicSurfaceFiles();
     files.delete("docs/PUBLIC_PRIVATE_BOUNDARY.md");
@@ -108,6 +133,8 @@ function createPublicSurfaceFiles(
     Object.entries({
       "package.json": JSON.stringify({
         name: "split402",
+        description:
+          "Agent payment routing and verifiable referral accounting for x402 APIs.",
         license: "Apache-2.0",
         private: true,
       }),
