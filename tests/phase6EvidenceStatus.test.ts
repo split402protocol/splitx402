@@ -58,8 +58,11 @@ approval_decision: no-go
     expect(report.sourceCommitStatus.status).toBe("not_applicable");
     expect(report.validation?.missingFields).toContain("review_date");
     expect(report.validation?.placeholderFields).toContain("review_id");
-    expect(report.nextActions.join("\n")).toContain(
+    expect(report.validation?.invalidFields).toContain(
       "approval_decision must be approved before Phase 6 custody can go live",
+    );
+    expect(report.nextActions.join("\n")).toContain(
+      "Keep approval_decision=no-go until all Phase 6 custody evidence fields and reviews are complete",
     );
     expect(report.nextActions.join("\n")).not.toContain(
       "Replace placeholder fields: approval_decision",

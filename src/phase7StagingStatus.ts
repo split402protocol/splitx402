@@ -2835,9 +2835,17 @@ function createNextActions(
       `Replace placeholder fields: ${placeholderFieldsToReplace.join(", ")}`,
     );
   }
-  actions.push(...validation.invalidFields);
+  actions.push(...createOperatorInvalidFieldActions(validation.invalidFields));
   actions.push(...createOperatorBlockerActions(artifactBlockers));
   return actions;
+}
+
+function createOperatorInvalidFieldActions(invalidFields: readonly string[]): string[] {
+  return invalidFields.map((field) =>
+    field === "approval_decision must be approved before Phase 7 staging proof can close"
+      ? "Keep approval_decision=no-go until every Phase 7 hosted proof gate passes; set it to approved only during final human public-alpha review."
+      : field,
+  );
 }
 
 function createOperatorBlockerActions(blockers: readonly string[]): string[] {

@@ -336,6 +336,12 @@ funding_balance_evidence: funding.json
     expect(report.nextActions.join("\n")).not.toContain(
       "Replace placeholder fields: approval_decision",
     );
+    expect(report.validation?.invalidFields).toContain(
+      "approval_decision must be approved before Phase 7 staging proof can close",
+    );
+    expect(report.nextActions.join("\n")).toContain(
+      "Keep approval_decision=no-go until every Phase 7 hosted proof gate passes",
+    );
     const brief = formatPhase7StagingStatusBrief(report);
     expect(brief).toContain("Phase 7 hosted staging proof: checked, blocked");
     expect(brief).toContain("Ready gates:");
