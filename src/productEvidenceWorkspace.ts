@@ -199,8 +199,9 @@ function createReadmeText(input: {
     "The product remains `no-go` until the Phase 7 hosted proof and Phase 6",
     "custody evidence both pass.",
     "Before collecting hosted proof, `product:launch-preflight` also checks",
-    "that MCP live execution targets the same hosted control-plane URL and token",
-    "as the Phase 7 proof environment.",
+    "that hosted proof URLs are valid http(s) URLs and that MCP live execution",
+    "targets the same hosted control-plane URL and token as the Phase 7 proof",
+    "environment.",
     "",
   ].join("\n");
 }
