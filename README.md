@@ -343,6 +343,7 @@ corepack pnpm product:evidence:init --refresh-source
 corepack pnpm product:evidence:init --force
 corepack pnpm product:local-proof --help
 corepack pnpm product:local-proof --brief
+corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json
 corepack pnpm product:launch-preflight --help
 corepack pnpm product:launch-preflight --brief
 corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence
@@ -377,8 +378,10 @@ validation, hosted proof, custody evidence, and combined status commands; pass
 to show checked, blocked, or ready section statuses from real files.
 `product:local-proof --brief` proves the local public-alpha protocol vectors,
 router alpha tests, and runnable MCP gateway smoke path before hosted evidence
-collection. This is an adoption-layer smoke proof only; it does not approve
-hosted Phase 7, production custody, mainnet, or commercial operations.
+collection. Pass `--output split402-launch-evidence/local-public-alpha-proof.json`
+to save that proof beside the launch evidence workspace. This is an
+adoption-layer smoke proof only; it does not approve hosted Phase 7, production
+custody, mainnet, or commercial operations.
 `product:status` reports the current Split402
 phase, whether the public-alpha hosted proof and production custody evidence are
 checked, launch-gate percentages, exact evidence-env setup commands, and why the
@@ -546,7 +549,7 @@ Prepare and check the Phase 7 staging proof:
 
 ```bash
 corepack pnpm phase7:staging:init
-corepack pnpm product:local-proof --brief
+corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json
 SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed
 corepack pnpm phase7:staging-proof --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-proof.txt
 corepack pnpm phase7:hosted:preflight --evidence-env-file split402-launch-evidence/phase7-staging.env

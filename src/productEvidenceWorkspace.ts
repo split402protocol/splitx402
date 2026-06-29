@@ -18,6 +18,7 @@ export interface Split402ProductEvidenceWorkspaceInput {
 export interface Split402ProductEvidenceWorkspace {
   directory: string;
   readmeFileName: "README.md";
+  localProofFileName: "local-public-alpha-proof.json";
   phase6EvidenceFileName: "phase6-custody-evidence.txt";
   phase6EnvFileName: "phase6-evidence.env";
   phase7ProofFileName: "phase7-staging-proof.txt";
@@ -43,6 +44,7 @@ export function createSplit402ProductEvidenceWorkspace(
     ...(input.sourceCommit === undefined ? {} : { source_commit: input.sourceCommit }),
   };
   const phase6EvidenceText = createPhase6CustodyEvidenceBundle(phase6Values);
+  const localProofFileName = "local-public-alpha-proof.json" as const;
   const phase6EvidenceFileName = "phase6-custody-evidence.txt" as const;
   const phase6EnvFileName = "phase6-evidence.env" as const;
   const phase7ProofFileName = "phase7-staging-proof.txt" as const;
@@ -55,6 +57,7 @@ export function createSplit402ProductEvidenceWorkspace(
   });
   const nextCommands = createNextCommands({
     directory,
+    localProofFileName,
     phase6EvidenceFileName,
     phase6EnvFileName,
     phase7ProofFileName,
@@ -64,6 +67,7 @@ export function createSplit402ProductEvidenceWorkspace(
   return {
     directory,
     readmeFileName: "README.md",
+    localProofFileName,
     phase6EvidenceFileName,
     phase6EnvFileName,
     phase7ProofFileName,
@@ -77,6 +81,7 @@ export function createSplit402ProductEvidenceWorkspace(
     phase7ProofText,
     readmeText: createReadmeText({
       directory,
+      localProofFileName,
       phase6EvidenceFileName,
       phase6EnvFileName,
       phase7ProofFileName,
@@ -122,6 +127,7 @@ function relativePhase7EvidenceDirectory(
 
 function createNextCommands(input: {
   directory: string;
+  localProofFileName: string;
   phase6EvidenceFileName: string;
   phase6EnvFileName: string;
   phase7ProofFileName: string;
@@ -132,6 +138,7 @@ function createNextCommands(input: {
   const phase7EnvOption = `--evidence-env-file ${phase7EnvFile}`;
   return [
     `Fill ${phase7EnvFile} with hosted staging values.`,
+    `corepack pnpm product:local-proof --brief --output ${input.directory}/${input.localProofFileName}`,
     `Review generated ${phase6EnvFile} before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template ${input.directory} ${phase6EnvFile}`,
     `Generate Phase 6 custody records at the paths listed in ${phase6EnvFile}.`,
     `Fill ${input.directory}/${input.phase6EvidenceFileName} with generated Phase 6 custody records.`,
@@ -157,6 +164,7 @@ function createNextCommands(input: {
 
 function createReadmeText(input: {
   directory: string;
+  localProofFileName: string;
   phase6EvidenceFileName: string;
   phase6EnvFileName: string;
   phase7ProofFileName: string;
@@ -176,6 +184,7 @@ function createReadmeText(input: {
     "",
     "| Path | Purpose |",
     "| --- | --- |",
+    `| \`${input.localProofFileName}\` | Saved local public-alpha protocol/router/MCP proof artifact. |`,
     `| \`${input.phase6EvidenceFileName}\` | Phase 6 custody evidence bundle scaffold. |`,
     `| \`${input.phase6EnvFileName}\` | Local Phase 6 custody evidence assembly environment template. |`,
     `| \`${input.phase7ProofFileName}\` | Phase 7 staging proof record after assembly. |`,

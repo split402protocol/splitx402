@@ -9,6 +9,7 @@ export interface Split402LaunchChecklist {
   workspace: {
     directory: "split402-launch-evidence";
     phase6EvidenceFile: "split402-launch-evidence/phase6-custody-evidence.txt";
+    localProofFile: "split402-launch-evidence/local-public-alpha-proof.json";
     phase6EnvFile: "split402-launch-evidence/phase6-evidence.env";
     phase7ProofFile: "split402-launch-evidence/phase7-staging-proof.txt";
     phase7EnvFile: "split402-launch-evidence/phase7-staging.env";
@@ -45,6 +46,7 @@ export function createSplit402LaunchChecklist(
     readyForMainnet: false,
     workspace: {
       directory: "split402-launch-evidence",
+      localProofFile: "split402-launch-evidence/local-public-alpha-proof.json",
       phase6EvidenceFile: "split402-launch-evidence/phase6-custody-evidence.txt",
       phase6EnvFile: "split402-launch-evidence/phase6-evidence.env",
       phase7ProofFile: "split402-launch-evidence/phase7-staging-proof.txt",
@@ -91,6 +93,7 @@ function createWorkspaceSection(
       "corepack pnpm product:evidence:init --refresh-source",
       "corepack pnpm product:evidence:init --force",
       "corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence",
+      "corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json",
     ],
     notes: [
       "Use --missing to create absent scaffold files without overwriting existing evidence.",
@@ -129,6 +132,7 @@ function createLocalValidationSection(
     status,
     externalEvidenceRequired: false,
     commands: [
+      "corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json",
       "corepack pnpm lint",
       "corepack pnpm typecheck",
       "corepack pnpm test",

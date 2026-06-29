@@ -17,6 +17,7 @@ export interface Split402LocalProofReport {
   schema: "split402.local_public_alpha_proof.v1";
   status: "passed" | "failed";
   launchApproval: "not_approved";
+  generatedAt: string;
   checks: Split402LocalProofCheckResult[];
   notes: string[];
 }
@@ -29,7 +30,7 @@ export interface Split402LocalProofOptions {
 }
 
 export const LOCAL_PROOF_USAGE =
-  "Usage: corepack pnpm product:local-proof [--brief|--json]";
+  "Usage: corepack pnpm product:local-proof [--brief|--json] [--output file]";
 
 export const LOCAL_PUBLIC_ALPHA_PROOF_CHECKS: readonly Split402LocalProofCheck[] =
   [
@@ -58,6 +59,8 @@ export const LOCAL_PUBLIC_ALPHA_PROOF_CHECKS: readonly Split402LocalProofCheck[]
 export function createSplit402LocalProofReport(
   options: Split402LocalProofOptions = {},
 ): Split402LocalProofReport {
+  const now = options.now ?? Date.now;
+  const generatedAt = new Date(now()).toISOString();
   const runCommand = options.runCommand ?? createDefaultCommandRunner(options);
   const checks = LOCAL_PUBLIC_ALPHA_PROOF_CHECKS.map((check) =>
     runCommand(check),
@@ -70,6 +73,7 @@ export function createSplit402LocalProofReport(
     schema: "split402.local_public_alpha_proof.v1",
     status,
     launchApproval: "not_approved",
+    generatedAt,
     checks,
     notes: [
       "This proves the local public-alpha protocol, router, and MCP gateway path only.",
@@ -77,6 +81,12 @@ export function createSplit402LocalProofReport(
       "Run product:status with real Phase 6 and Phase 7 evidence before any launch claim.",
     ],
   };
+}
+
+export function serializeSplit402LocalProofReport(
+  report: Split402LocalProofReport,
+): string {
+  return `${JSON.stringify(report, null, 2)}\n`;
 }
 
 export function formatSplit402LocalProofBrief(

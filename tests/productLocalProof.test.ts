@@ -4,6 +4,7 @@ import {
   createSplit402LocalProofReport,
   formatSplit402LocalProofBrief,
   LOCAL_PUBLIC_ALPHA_PROOF_CHECKS,
+  serializeSplit402LocalProofReport,
   type Split402LocalProofCheck,
 } from "../src/productLocalProof.js";
 
@@ -11,6 +12,7 @@ describe("local public-alpha product proof", () => {
   it("runs the adoption-critical local checks", () => {
     const commands: string[] = [];
     const report = createSplit402LocalProofReport({
+      now: () => Date.parse("2026-06-29T20:00:00.000Z"),
       runCommand: (check) => {
         commands.push(check.command.join(" "));
         return pass(check);
@@ -19,12 +21,32 @@ describe("local public-alpha product proof", () => {
 
     expect(report.status).toBe("passed");
     expect(report.launchApproval).toBe("not_approved");
+    expect(report.generatedAt).toBe("2026-06-29T20:00:00.000Z");
     expect(commands).toEqual([
       "corepack pnpm repo:guard",
       "corepack pnpm vectors:check",
       "corepack pnpm --filter @split402/router test",
       "corepack pnpm demo:mcp-gateway:smoke",
     ]);
+  });
+
+  it("serializes a stable JSON artifact", () => {
+    const report = createSplit402LocalProofReport({
+      now: () => Date.parse("2026-06-29T20:00:00.000Z"),
+      runCommand: pass,
+    });
+
+    const parsed = JSON.parse(serializeSplit402LocalProofReport(report)) as {
+      schema: string;
+      generatedAt: string;
+      launchApproval: string;
+    };
+
+    expect(parsed).toMatchObject({
+      schema: "split402.local_public_alpha_proof.v1",
+      generatedAt: "2026-06-29T20:00:00.000Z",
+      launchApproval: "not_approved",
+    });
   });
 
   it("fails closed when any local proof check fails", () => {
