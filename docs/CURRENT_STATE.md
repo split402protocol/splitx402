@@ -103,7 +103,8 @@ to prove and save the local public-alpha protocol vectors, router alpha tests,
 public/private license surface, and runnable MCP gateway smoke path before
 hosted collection. This command does not approve hosted staging, production
 custody, mainnet, or commercial operations. The saved proof records the source
-commit and is stale if the checkout changes or the source worktree has
+commit, `product:local-proof` fails unless the source worktree is clean, and
+saved proof is stale if the checkout changes or the source worktree has
 uncommitted edits. Run
 `corepack pnpm product:public-surface-check --brief` when you only need to
 verify the launch-facing Apache-2.0/public-private boundary. Run
