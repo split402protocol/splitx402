@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  PHASE7_COMMAND_EVIDENCE_ALTERNATIVES,
   PHASE7_REQUIRED_COMMAND_EVIDENCE,
   createPhase7CommandEvidenceTemplate,
 } from "../src/phase7CommandEvidence.js";
@@ -14,6 +15,12 @@ describe("Phase 7 command evidence template", () => {
     for (const command of PHASE7_REQUIRED_COMMAND_EVIDENCE) {
       expect(template).toContain(`# $ ${command}`);
       expect(template).not.toContain(`\n$ ${command}`);
+    }
+    for (const alternative of PHASE7_COMMAND_EVIDENCE_ALTERNATIVES) {
+      expect(template).toContain(`# $ ${alternative.required}`);
+      for (const command of alternative.alternatives) {
+        expect(template).toContain(`# $ ${command}`);
+      }
     }
   });
 });

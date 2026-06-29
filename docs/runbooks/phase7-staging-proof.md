@@ -39,6 +39,9 @@ corepack pnpm product:status --brief --workspace split402-launch-evidence
 `split402-launch-evidence/phase7-staging-evidence/` artifact directory README.
 It does not create real evidence artifact files; those must be captured from
 the hosted staging run.
+The `commands.log` transcript may use `corepack pnpm product:evidence:init` as
+the workspace-initialization command; the status checker treats it as equivalent
+to `corepack pnpm phase7:staging:init` for the combined launch workspace.
 The collection and assembly commands auto-load the default evidence env files
 when present; use `--evidence-env-file <path>` when the evidence workspace is
 not at the default path.

@@ -133,6 +133,10 @@ payment, Split402 receipt verification, referrer earnings, dashboard summary,
 webhook delivery, payout obligations, Solana RPC funding-balance coverage, MCP
 bundle output, MCP gateway transcript evidence, and artifact manifest hashes
 from the same staging environment.
+For the combined launch workspace, the command transcript may use
+`corepack pnpm product:evidence:init` as the workspace-initialization command;
+the status checker treats it as equivalent to
+`corepack pnpm phase7:staging:init`.
 The MCP gateway collection report must identify the provider used, paid amount,
 receipt id, verification status, referrer credit, provider route id, receipt
 route id, provider merchant origin, receipt merchant origin, provider operation
