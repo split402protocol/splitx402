@@ -164,10 +164,10 @@ approval_notes: checked evidence is intentionally incomplete
     );
     const brief = formatSplit402ProductReadinessBrief(report);
     expect(brief).toContain(
-      "Fix Phase 7 hosted proof blockers reported by corepack pnpm phase7:staging:status.",
+      "Fix Phase 7 hosted proof blockers reported by corepack pnpm phase7:staging:status --brief.",
     );
     expect(brief).toContain(
-      "Fix Phase 6 custody evidence blockers reported by corepack pnpm phase6:evidence:status.",
+      "Fix Phase 6 custody evidence blockers reported by corepack pnpm phase6:evidence:status --brief.",
     );
     expect(brief.indexOf("Fill missing fields: reviewers")).toBeGreaterThan(-1);
     expect(brief.indexOf("Fill missing fields: review_date")).toBeGreaterThan(-1);

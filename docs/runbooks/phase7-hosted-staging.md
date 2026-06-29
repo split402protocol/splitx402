@@ -122,7 +122,7 @@ corepack pnpm demo:paid-suite split402-launch-evidence/phase7-staging-evidence/p
 corepack pnpm phase7:staging:derive-receipt-verification --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-evidence/paid-suite.log split402-launch-evidence/phase7-staging-evidence/receipt-verification.json
 corepack pnpm phase7:staging:manifest split402-launch-evidence/phase7-staging-proof.txt split402-launch-evidence/phase7-staging-evidence/artifact-manifest.json
 corepack pnpm phase7:staging:assemble --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-proof.txt
-corepack pnpm phase7:staging:status split402-launch-evidence/phase7-staging-proof.txt
+corepack pnpm phase7:staging:status --brief split402-launch-evidence/phase7-staging-proof.txt
 corepack pnpm product:status --brief --workspace split402-launch-evidence
 ```
 
