@@ -336,6 +336,21 @@ funding_balance_evidence: funding.json
     expect(report.nextActions.join("\n")).not.toContain(
       "Replace placeholder fields: approval_decision",
     );
+    expect(report.nextActions.join("\n")).toContain(
+      "Fill hosted proof identity fields in split402-launch-evidence/phase7-staging.env",
+    );
+    expect(report.nextActions.join("\n")).toContain(
+      "Fill hosted endpoint URL fields in split402-launch-evidence/phase7-staging.env",
+    );
+    expect(report.nextActions.join("\n")).toContain(
+      "Capture hosted_preflight_evidence with corepack pnpm phase7:hosted:preflight",
+    );
+    expect(report.nextActions.join("\n")).toContain(
+      "Capture mcp_gateway_evidence with SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 corepack pnpm phase7:staging:collect-mcp-gateway",
+    );
+    expect(report.nextActions.join("\n")).toContain(
+      "Reassemble with corepack pnpm phase7:staging:assemble",
+    );
     expect(report.validation?.invalidFields).toContain(
       "approval_decision must be approved before Phase 7 staging proof can close",
     );
