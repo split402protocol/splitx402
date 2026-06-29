@@ -5,6 +5,7 @@ import type { Split402ProductEvidenceWorkspace } from "./productEvidenceWorkspac
 export interface ProductEvidenceInitArgs {
   directory: string;
   force: boolean;
+  help: boolean;
   missing: boolean;
 }
 
@@ -13,30 +14,49 @@ export interface ProductEvidenceInitWrite {
   contents: string;
 }
 
+export const PRODUCT_EVIDENCE_INIT_USAGE =
+  "Usage: corepack pnpm product:evidence:init [--force|--missing] [directory]";
+
 export function parseProductEvidenceInitArgs(
   args: readonly string[],
 ): ProductEvidenceInitArgs {
+  const help = args.includes("--help") || args.includes("-h");
   const force = args.includes("--force");
   const missing = args.includes("--missing");
-  const directoryArgs = args.filter(
-    (arg) => arg !== "--force" && arg !== "--missing",
+  const unknownOptions = args.filter(
+    (arg) =>
+      arg.startsWith("-") &&
+      arg !== "--help" &&
+      arg !== "-h" &&
+      arg !== "--force" &&
+      arg !== "--missing",
   );
-
-  if (force && missing) {
+  if (unknownOptions.length > 0) {
     throw new Error(
-      "Usage: corepack pnpm product:evidence:init [--force|--missing] [directory]",
+      `${PRODUCT_EVIDENCE_INIT_USAGE}\nUnknown option: ${unknownOptions[0]}`,
     );
   }
 
+  const directoryArgs = args.filter(
+    (arg) =>
+      arg !== "--help" &&
+      arg !== "-h" &&
+      arg !== "--force" &&
+      arg !== "--missing",
+  );
+
+  if (force && missing) {
+    throw new Error(PRODUCT_EVIDENCE_INIT_USAGE);
+  }
+
   if (directoryArgs.length > 1) {
-    throw new Error(
-      "Usage: corepack pnpm product:evidence:init [--force|--missing] [directory]",
-    );
+    throw new Error(PRODUCT_EVIDENCE_INIT_USAGE);
   }
 
   return {
     directory: directoryArgs[0] ?? "split402-launch-evidence",
     force,
+    help,
     missing,
   };
 }
