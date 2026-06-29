@@ -149,6 +149,7 @@ describe("repository presentation", () => {
     const currentState = readFileSync("docs/CURRENT_STATE.md", "utf8");
 
     expect(readme).toContain("corepack pnpm product:evidence:init");
+    expect(readme).toContain("corepack pnpm product:evidence:init --missing");
     expect(readme).toContain("corepack pnpm product:evidence:init --force");
     expect(readme).toContain("corepack pnpm product:launch-preflight --brief");
     expect(readme).toContain("corepack pnpm product:launch-checklist --brief");
