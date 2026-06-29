@@ -105,7 +105,7 @@ evidence:
 ```bash
 corepack pnpm product:evidence:init --missing
 corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence
-corepack pnpm product:local-proof --brief
+corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json
 SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed
 corepack pnpm phase7:staging-proof --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-proof.txt
 corepack pnpm phase7:hosted:preflight --evidence-env-file split402-launch-evidence/phase7-staging.env
