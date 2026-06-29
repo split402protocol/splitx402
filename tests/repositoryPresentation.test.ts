@@ -182,6 +182,7 @@ describe("repository presentation", () => {
     expect(readme).toContain("launch-gate percentages");
     expect(currentState).toContain("corepack pnpm product:evidence:init");
     expect(currentState).toContain("corepack pnpm product:launch-preflight");
+    expect(currentState).toContain("scaffold `source_commit` values");
     expect(currentState).toContain("corepack pnpm product:launch-checklist");
     expect(currentState).toContain("local env templates");
     expect(currentState).toContain("checked, blocked, or ready");

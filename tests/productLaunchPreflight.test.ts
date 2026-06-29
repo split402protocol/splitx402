@@ -116,7 +116,9 @@ describe("Split402 launch preflight", () => {
   });
 
   it("passes when scaffold and required Phase 6 and hosted Phase 7 env values are filled", () => {
-    const workspace = createSplit402ProductEvidenceWorkspace();
+    const workspace = createSplit402ProductEvidenceWorkspace({
+      sourceCommit: "abc1234",
+    });
     const files = createWorkspaceFileMap(
       [
         workspace.phase7.envText,
@@ -133,9 +135,11 @@ describe("Split402 launch preflight", () => {
         "SPLIT402_MCP_SVM_PRIVATE_KEY=funded-devnet-buyer-key",
       ].join("\n"),
       createFilledPhase6EnvText(workspace.phase6EnvText),
+      workspace,
     );
 
     const report = createSplit402LaunchPreflightReport({
+      currentSourceCommit: "abc1234",
       exists: (path) => files.has(path),
       readText: (path) => files.get(path) ?? "",
     });
@@ -162,8 +166,58 @@ describe("Split402 launch preflight", () => {
             id: "phase7_mcp_live_execution_env",
             ok: true,
           }),
+          expect.objectContaining({
+            id: "launch_workspace_source_commit",
+            ok: true,
+          }),
         ]),
       );
+  });
+
+  it("rejects stale launch evidence source commits before collection", () => {
+    const workspace = createSplit402ProductEvidenceWorkspace({
+      sourceCommit: "abc1234",
+    });
+    const files = createWorkspaceFileMap(
+      [
+        workspace.phase7.envText,
+        "SPLIT402_PHASE7_CONTROL_PLANE_URL=https://control.staging.example",
+        "SPLIT402_PHASE7_DASHBOARD_URL=https://dashboard.staging.example",
+        "SPLIT402_PHASE7_DEMO_MERCHANT_URL=https://merchant.staging.example",
+        "SPLIT402_PHASE7_CONTROL_PLANE_TOKEN=merchant-session-token",
+        "SPLIT402_PHASE7_MERCHANT_ID=mrc_123",
+        "SPLIT402_PHASE7_REFERRER_WALLET=referrer-wallet",
+        "SPLIT402_MCP_CONTROL_PLANE_URL=https://control.staging.example",
+        "SPLIT402_MCP_CONTROL_PLANE_TOKEN=merchant-session-token",
+        "SPLIT402_MCP_CAPABILITY=solana.wallet-risk",
+        "SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1",
+        "SPLIT402_MCP_SVM_PRIVATE_KEY=funded-devnet-buyer-key",
+      ].join("\n"),
+      createFilledPhase6EnvText(workspace.phase6EnvText),
+      workspace,
+    );
+
+    const report = createSplit402LaunchPreflightReport({
+      currentSourceCommit: "def5678",
+      exists: (path) => files.has(path),
+      readText: (path) => files.get(path) ?? "",
+    });
+
+    expect(report.readyToCollectEvidence).toBe(false);
+    expect(
+      report.checks.find(
+        (check) => check.id === "launch_workspace_source_commit",
+      ),
+    ).toMatchObject({
+      ok: false,
+      details: expect.arrayContaining([
+        "Regenerate split402-launch-evidence\\phase6-custody-evidence.txt from checkout def5678 before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist; found source_commit abc1234.",
+        "Regenerate split402-launch-evidence\\phase7-staging-proof.txt from checkout def5678 before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist; found source_commit abc1234.",
+      ]),
+    });
+    expect(report.nextActions).toContain(
+      "Regenerate split402-launch-evidence\\phase6-custody-evidence.txt from checkout def5678 before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist; found source_commit abc1234.",
+    );
   });
 
   it("rejects MCP proof preflight when live execution is explicitly disabled", () => {
