@@ -169,8 +169,12 @@ approval_notes: checked evidence is intentionally incomplete
     expect(brief).toContain(
       "Fix Phase 6 custody evidence blockers reported by corepack pnpm phase6:evidence:status --brief.",
     );
-    expect(brief.indexOf("Fill missing fields: reviewers")).toBeGreaterThan(-1);
-    expect(brief.indexOf("Fill missing fields: review_date")).toBeGreaterThan(-1);
+    expect(brief).toContain(
+      "Fill direct Phase 6 custody review fields in split402-launch-evidence/phase6-evidence.env",
+    );
+    expect(report.phase6.nextActions.join("\n")).toContain(
+      "Generate image provenance with corepack pnpm phase6:image-provenance",
+    );
   });
 
   it("surfaces stale Phase 6 custody source_commit before custody review", () => {

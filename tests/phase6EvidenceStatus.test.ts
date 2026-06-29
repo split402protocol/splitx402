@@ -62,8 +62,24 @@ approval_decision: no-go
       "approval_decision must be approved before Phase 6 custody can go live",
     );
     expect(report.nextActions.join("\n")).toContain(
+      "Fill direct Phase 6 custody review fields in split402-launch-evidence/phase6-evidence.env",
+    );
+    expect(report.nextActions.join("\n")).toContain(
+      "Generate image provenance with corepack pnpm phase6:image-provenance",
+    );
+    expect(report.nextActions.join("\n")).toContain(
+      "Generate signer policy evidence with corepack pnpm phase6:signer-policy",
+    );
+    expect(report.nextActions.join("\n")).toContain(
+      "Generate custody drill evidence",
+    );
+    expect(report.nextActions.join("\n")).toContain(
       "Keep approval_decision=no-go until all Phase 6 custody evidence fields and reviews are complete",
     );
+    expect(report.nextActions.join("\n")).toContain(
+      "Reassemble with corepack pnpm phase6:evidence:assemble",
+    );
+    expect(report.nextActions.join("\n")).not.toContain("Fill missing fields:");
     expect(report.nextActions.join("\n")).not.toContain(
       "Replace placeholder fields: approval_decision",
     );
