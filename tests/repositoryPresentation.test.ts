@@ -277,17 +277,23 @@ describe("repository presentation", () => {
     expect(readme).toContain("existing scaffold files");
     expect(readme).toContain("remains `no-go`");
     expect(readme).toContain("launch-gate percentages");
+    expect(readme).toContain("redacted summaries");
+    expect(readme).toContain("without printing tokens, private keys");
+    expect(readme).toContain("custody values");
+    expect(readme).toContain("hides extra actions");
     expect(readme).toContain("adoption-layer smoke proof");
     expect(currentState).toContain("corepack pnpm product:evidence:init");
     expect(currentState).toContain("corepack pnpm product:local-proof");
     expect(currentState).toContain("corepack pnpm product:launch-preflight");
     expect(currentState).toContain("scaffold `source_commit` values");
+    expect(currentState).toContain("redacted Phase 6 custody and Phase 7 hosted env summaries");
     expect(currentState).toContain("corepack pnpm product:launch-checklist");
     expect(currentState).toContain("local env templates");
     expect(currentState).toContain("`--refresh-source`");
     expect(currentState).toContain("checked, blocked, or ready");
     expect(currentState).toContain("refuses to overwrite existing scaffold");
     expect(currentState).toContain("corepack pnpm product:status");
+    expect(currentState).toContain("full blocker lists");
   });
 });
 
