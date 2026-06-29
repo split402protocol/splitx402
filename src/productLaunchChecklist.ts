@@ -173,7 +173,7 @@ function createPhase7Section(
       "corepack pnpm phase7:staging:derive-receipt-verification --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-evidence/paid-suite.log split402-launch-evidence/phase7-staging-evidence/receipt-verification.json",
       "corepack pnpm phase7:staging:manifest split402-launch-evidence/phase7-staging-proof.txt split402-launch-evidence/phase7-staging-evidence/artifact-manifest.json",
       "corepack pnpm phase7:staging:assemble --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-proof.txt",
-      "corepack pnpm phase7:staging:status split402-launch-evidence/phase7-staging-proof.txt",
+      "corepack pnpm phase7:staging:status --brief split402-launch-evidence/phase7-staging-proof.txt",
     ],
     notes: [
       "The proof must come from the same hosted environment and source commit.",
@@ -211,7 +211,7 @@ function createPhase6Section(
       "corepack pnpm payout:finality:failover-drill",
       "corepack pnpm phase6:rpc-failover",
       "corepack pnpm phase6:evidence:assemble --evidence-env-file split402-launch-evidence/phase6-evidence.env split402-launch-evidence/phase6-custody-evidence.txt",
-      "corepack pnpm phase6:evidence:status split402-launch-evidence/phase6-custody-evidence.txt",
+      "corepack pnpm phase6:evidence:status --brief split402-launch-evidence/phase6-custody-evidence.txt",
     ],
     notes: [
       "Production custody approval requires real deployed signer, policy, drill, and custody records.",

@@ -225,7 +225,7 @@ function createProductNextActions(
   if (!phase7.readyForPublicAlphaDemo) {
     leadActions.push(
       phase7.proofChecked
-        ? "Fix Phase 7 hosted proof blockers reported by corepack pnpm phase7:staging:status."
+        ? "Fix Phase 7 hosted proof blockers reported by corepack pnpm phase7:staging:status --brief."
         : "Run corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence before collecting hosted proof.",
     );
     phase7DetailActions.push(...phase7.nextActions.slice(0, 5));
@@ -234,7 +234,7 @@ function createProductNextActions(
   if (!phase6.readyForCustody) {
     leadActions.push(
       phase6.evidenceBundleChecked
-        ? "Fix Phase 6 custody evidence blockers reported by corepack pnpm phase6:evidence:status."
+        ? "Fix Phase 6 custody evidence blockers reported by corepack pnpm phase6:evidence:status --brief."
         : "Generate and assemble the Phase 6 custody evidence bundle.",
     );
     phase6DetailActions.push(...phase6.nextActions.slice(0, 5));

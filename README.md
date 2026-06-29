@@ -471,7 +471,7 @@ corepack pnpm phase6:evidence:bundle
 # Review split402-launch-evidence/phase6-evidence.env first; regenerate only if missing:
 corepack pnpm phase6:evidence:env-template split402-launch-evidence split402-launch-evidence/phase6-evidence.env
 corepack pnpm phase6:evidence:assemble --evidence-env-file split402-launch-evidence/phase6-evidence.env split402-launch-evidence/phase6-custody-evidence.txt
-corepack pnpm phase6:evidence:status split402-launch-evidence/phase6-custody-evidence.txt
+corepack pnpm phase6:evidence:status --brief split402-launch-evidence/phase6-custody-evidence.txt
 corepack pnpm phase6:custody:check split402-launch-evidence/phase6-custody-evidence.txt
 ```
 
@@ -573,7 +573,7 @@ corepack pnpm demo:paid-suite split402-launch-evidence/phase7-staging-evidence/p
 corepack pnpm phase7:staging:derive-receipt-verification --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-evidence/paid-suite.log split402-launch-evidence/phase7-staging-evidence/receipt-verification.json
 corepack pnpm phase7:staging:manifest split402-launch-evidence/phase7-staging-proof.txt split402-launch-evidence/phase7-staging-evidence/artifact-manifest.json
 corepack pnpm phase7:staging:assemble --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-proof.txt
-corepack pnpm phase7:staging:status split402-launch-evidence/phase7-staging-proof.txt
+corepack pnpm phase7:staging:status --brief split402-launch-evidence/phase7-staging-proof.txt
 ```
 
 The Phase 7 collection and assembly commands auto-load

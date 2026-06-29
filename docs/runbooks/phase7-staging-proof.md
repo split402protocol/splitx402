@@ -29,7 +29,7 @@ corepack pnpm demo:paid-suite split402-launch-evidence/phase7-staging-evidence/p
 corepack pnpm phase7:staging:derive-receipt-verification --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-evidence/paid-suite.log split402-launch-evidence/phase7-staging-evidence/receipt-verification.json
 corepack pnpm phase7:staging:manifest split402-launch-evidence/phase7-staging-proof.txt split402-launch-evidence/phase7-staging-evidence/artifact-manifest.json
 corepack pnpm phase7:staging:assemble --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-proof.txt
-corepack pnpm phase7:staging:status split402-launch-evidence/phase7-staging-proof.txt
+corepack pnpm phase7:staging:status --brief split402-launch-evidence/phase7-staging-proof.txt
 corepack pnpm product:status --brief --workspace split402-launch-evidence
 ```
 
@@ -193,7 +193,7 @@ The validator requires:
 - every evidence field as either `attached: <artifact-path>` or an `http(s)`
   artifact URL.
 - local `attached:` artifact paths must exist when
-  `corepack pnpm phase7:staging:status <phase7-staging-proof.txt>` checks a
+  `corepack pnpm phase7:staging:status --brief <phase7-staging-proof.txt>` checks a
   proof file.
 - `hosted_preflight_evidence` must be a local attached
   `hosted-preflight.json` artifact whose checks passed against the proof's

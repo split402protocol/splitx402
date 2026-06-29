@@ -93,7 +93,7 @@ describe("Split402 product evidence workspace", () => {
       "Generate Phase 6 custody records at the paths listed in split402-launch-evidence/phase6-evidence.env.",
     );
     expect(workspace.nextCommands).toContain(
-      "corepack pnpm phase6:evidence:status split402-launch-evidence/phase6-custody-evidence.txt",
+      "corepack pnpm phase6:evidence:status --brief split402-launch-evidence/phase6-custody-evidence.txt",
     );
     expect(workspace.nextCommands).toContain(
       "corepack pnpm phase6:evidence:assemble --evidence-env-file split402-launch-evidence/phase6-evidence.env split402-launch-evidence/phase6-custody-evidence.txt",

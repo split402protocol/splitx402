@@ -62,7 +62,7 @@ function main(): void {
           `corepack pnpm phase7:staging:derive-receipt-verification --evidence-env-file ${envFilePath} ${workspace.directory}/paid-suite.log ${workspace.directory}/receipt-verification.json`,
           `corepack pnpm phase7:staging:manifest phase7-staging-proof.txt ${workspace.directory}/artifact-manifest.json`,
           `corepack pnpm phase7:staging:assemble --evidence-env-file ${envFilePath} phase7-staging-proof.txt`,
-          "corepack pnpm phase7:staging:status phase7-staging-proof.txt",
+          "corepack pnpm phase7:staging:status --brief phase7-staging-proof.txt",
           "Record the commands above plus lint, typecheck, test, build, vectors:check, and audit in commands.log.",
         ],
       },

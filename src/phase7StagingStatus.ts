@@ -2809,7 +2809,7 @@ function createNextActions(
       "Derive receipt-verification evidence with corepack pnpm phase7:staging:derive-receipt-verification phase7-staging-evidence/paid-suite.log phase7-staging-evidence/receipt-verification.json.",
       "Generate artifact hashes with corepack pnpm phase7:staging:manifest <phase7-staging-proof.txt> phase7-staging-evidence/artifact-manifest.json.",
       "Attach response URLs, logs, or artifact paths with corepack pnpm phase7:staging:assemble.",
-      "Run corepack pnpm phase7:staging:status <phase7-staging-proof.txt>.",
+      "Run corepack pnpm phase7:staging:status --brief <phase7-staging-proof.txt>.",
     ];
   }
 

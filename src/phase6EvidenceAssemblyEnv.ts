@@ -132,7 +132,7 @@ export function createPhase6EvidenceAssemblyEnvTemplate(
     "",
     "# Assemble and check:",
     `# corepack pnpm phase6:evidence:assemble --evidence-env-file ${directory}/phase6-evidence.env ${directory}/phase6-custody-evidence.txt`,
-    `# corepack pnpm phase6:evidence:status ${directory}/phase6-custody-evidence.txt`,
+    `# corepack pnpm phase6:evidence:status --brief ${directory}/phase6-custody-evidence.txt`,
     "",
   ].join("\n");
 }
