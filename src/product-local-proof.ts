@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
@@ -15,7 +16,9 @@ if (help) {
   process.exit(0);
 }
 
-const report = createSplit402LocalProofReport();
+const report = createSplit402LocalProofReport({
+  sourceCommit: readCurrentGitCommit(),
+});
 if (outputPath !== undefined) {
   mkdirSync(dirname(outputPath), { recursive: true });
   writeFileSync(outputPath, serializeSplit402LocalProofReport(report), {
@@ -92,4 +95,11 @@ function readCliArgs(): {
     console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
+}
+
+function readCurrentGitCommit(): string {
+  return execFileSync("git", ["rev-parse", "HEAD"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  }).trim();
 }

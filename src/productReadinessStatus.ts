@@ -14,6 +14,8 @@ import {
 } from "./productLocalProof.js";
 
 export interface Split402ProductReadinessInput {
+  currentSourceCommit?: string;
+  currentWorktreeDirty?: boolean;
   localProofText?: string;
   phase6EvidenceText?: string;
   phase6Options?: Phase6EvidenceStatusOptions;
@@ -26,6 +28,7 @@ export interface Split402LocalProofStatus {
   ready: boolean;
   status: "not_checked" | "passed" | "failed";
   generatedAt?: string;
+  sourceCommit?: string;
   blockers: string[];
 }
 
@@ -72,7 +75,11 @@ export interface Split402ProductReadinessProgress {
 export function createSplit402ProductReadinessReport(
   input: Split402ProductReadinessInput = {},
 ): Split402ProductReadinessReport {
-  const localProof = createLocalProofStatus(input.localProofText);
+  const localProof = createLocalProofStatus({
+    currentSourceCommit: input.currentSourceCommit,
+    currentWorktreeDirty: input.currentWorktreeDirty,
+    localProofText: input.localProofText,
+  });
   const phase6 = createPhase6EvidenceStatusReport(
     input.phase6EvidenceText,
     input.phase6Options,
@@ -262,9 +269,12 @@ function createProductNextActions(
   ];
 }
 
-function createLocalProofStatus(
-  localProofText: string | undefined,
-): Split402LocalProofStatus {
+function createLocalProofStatus(input: {
+  currentSourceCommit?: string;
+  currentWorktreeDirty?: boolean;
+  localProofText?: string;
+}): Split402LocalProofStatus {
+  const localProofText = input.localProofText;
   if (localProofText === undefined || localProofText.trim().length === 0) {
     return {
       checked: false,
@@ -301,6 +311,25 @@ function createLocalProofStatus(
   if (report.launchApproval !== "not_approved") {
     blockers.push("local proof must not claim launch approval");
   }
+  const sourceCommit =
+    typeof report.sourceCommit === "string" ? report.sourceCommit.trim() : "";
+  const currentSourceCommit = input.currentSourceCommit?.trim();
+  if (sourceCommit.length === 0) {
+    blockers.push("local proof sourceCommit is missing; rerun product:local-proof");
+  } else if (
+    currentSourceCommit !== undefined &&
+    currentSourceCommit.length > 0 &&
+    !gitShasMatch(sourceCommit, currentSourceCommit)
+  ) {
+    blockers.push(
+      `local proof sourceCommit does not match current checkout; rerun product:local-proof for ${currentSourceCommit}`,
+    );
+  }
+  if (input.currentWorktreeDirty === true) {
+    blockers.push(
+      "local proof is stale because the source worktree has uncommitted changes; commit or revert them, then rerun product:local-proof",
+    );
+  }
   if (!Array.isArray(report.checks) || report.checks.length === 0) {
     blockers.push("local proof checks are missing");
   } else {
@@ -332,12 +361,28 @@ function createLocalProofStatus(
     ...(typeof report.generatedAt === "string"
       ? { generatedAt: report.generatedAt }
       : {}),
+    ...(sourceCommit.length > 0 ? { sourceCommit } : {}),
     blockers,
   };
 }
 
 function hasStaleSourceCommit(input: { blockers: readonly string[] }): boolean {
   return input.blockers.includes("source_commit does not match current checkout");
+}
+
+function gitShasMatch(left: string, right: string): boolean {
+  const normalizedLeft = left.trim().toLowerCase();
+  const normalizedRight = right.trim().toLowerCase();
+  if (
+    !/^[0-9a-f]{7,40}$/u.test(normalizedLeft) ||
+    !/^[0-9a-f]{7,40}$/u.test(normalizedRight)
+  ) {
+    return false;
+  }
+  return (
+    normalizedLeft.startsWith(normalizedRight) ||
+    normalizedRight.startsWith(normalizedLeft)
+  );
 }
 
 function interleaveActions(left: readonly string[], right: readonly string[]): string[] {
