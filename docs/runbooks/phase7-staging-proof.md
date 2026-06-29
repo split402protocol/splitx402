@@ -23,10 +23,10 @@ corepack pnpm phase7:staging:collect-reads --evidence-env-file phase7-staging-ev
 corepack pnpm phase7:staging:collect-mcp-gateway --evidence-env-file phase7-staging-evidence/phase7-staging.env
 corepack pnpm demo:mcp-gateway:smoke
 corepack pnpm phase7:staging:commands-template > phase7-staging-evidence/commands.log
-corepack pnpm demo:mcp-bundle > phase7-staging-evidence/mcp-bundle.json
+corepack pnpm demo:mcp-bundle phase7-staging-evidence/mcp-bundle.json
 corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log
 corepack pnpm phase7:staging:derive-receipt-verification --evidence-env-file phase7-staging-evidence/phase7-staging.env
-corepack pnpm phase7:staging:manifest phase7-staging-proof.txt > phase7-staging-evidence/artifact-manifest.json
+corepack pnpm phase7:staging:manifest phase7-staging-proof.txt phase7-staging-evidence/artifact-manifest.json
 corepack pnpm phase7:staging:assemble --evidence-env-file phase7-staging-evidence/phase7-staging.env > phase7-staging-proof.txt
 corepack pnpm phase7:staging:status phase7-staging-proof.txt
 ```
@@ -170,7 +170,7 @@ local-only proof artifacts; use local `attached:` artifacts for evidence that
 the status checker parses. Leave `approval_decision` as `no-go` until all
 attached evidence is from the same staging environment and source commit.
 Include `artifact_manifest_evidence` from
-`corepack pnpm phase7:staging:manifest phase7-staging-proof.txt`.
+`corepack pnpm phase7:staging:manifest phase7-staging-proof.txt phase7-staging-evidence/artifact-manifest.json`.
 
 The validator requires:
 

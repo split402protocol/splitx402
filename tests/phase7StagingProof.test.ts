@@ -33,7 +33,7 @@ describe("Phase 7 staging proof", () => {
     expect(commands).toContain("corepack pnpm phase7:hosted:preflight");
     expect(commands).toContain("corepack pnpm phase7:staging:collect-reads");
     expect(commands).toContain(
-      "corepack pnpm demo:mcp-bundle > phase7-staging-evidence/mcp-bundle.json",
+      "corepack pnpm demo:mcp-bundle phase7-staging-evidence/mcp-bundle.json",
     );
     expect(commands).toContain(
       "corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log",
@@ -47,10 +47,10 @@ describe("Phase 7 staging proof", () => {
       "run the payout-obligations read with SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc and attach covered/deficit evidence",
       "corepack pnpm phase7:staging:collect-mcp-gateway",
       "corepack pnpm demo:mcp-gateway:smoke",
-      "corepack pnpm demo:mcp-bundle > phase7-staging-evidence/mcp-bundle.json",
+      "corepack pnpm demo:mcp-bundle phase7-staging-evidence/mcp-bundle.json",
       "corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log",
       "corepack pnpm phase7:staging:derive-receipt-verification",
-      "corepack pnpm phase7:staging:manifest <phase7-staging-proof.txt> > phase7-staging-evidence/artifact-manifest.json",
+      "corepack pnpm phase7:staging:manifest <phase7-staging-proof.txt> phase7-staging-evidence/artifact-manifest.json",
       "corepack pnpm phase7:staging:assemble",
     ];
     const commandPositions = expectedCaptureOrder.map((command) =>
@@ -222,7 +222,7 @@ approval_decision: no-go
       "corepack pnpm phase7:staging:assemble",
     );
     expect(report.commands.map((item) => item.command)).toContain(
-      "corepack pnpm phase7:staging:manifest <phase7-staging-proof.txt> > phase7-staging-evidence/artifact-manifest.json",
+      "corepack pnpm phase7:staging:manifest <phase7-staging-proof.txt> phase7-staging-evidence/artifact-manifest.json",
     );
     expect(report.commands.map((item) => item.evidenceField)).toContain(
       "funding_balance_evidence",
@@ -252,7 +252,7 @@ approval_decision: no-go
       "Capture funding-balance evidence by running corepack pnpm phase7:staging:collect-reads with SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc.",
     );
     expect(report.nextActions).toContain(
-      "Capture MCP bundle evidence with corepack pnpm demo:mcp-bundle > phase7-staging-evidence/mcp-bundle.json.",
+      "Capture MCP bundle evidence with corepack pnpm demo:mcp-bundle phase7-staging-evidence/mcp-bundle.json.",
     );
     expect(report.nextActions).toContain(
       "Capture paid-suite evidence with corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log.",
@@ -2532,10 +2532,10 @@ function createValidCommandsLog(): string {
     "$ corepack pnpm phase7:staging:collect-reads",
     "$ corepack pnpm phase7:staging:collect-mcp-gateway",
     "$ corepack pnpm demo:mcp-gateway:smoke",
-    "$ corepack pnpm demo:mcp-bundle > phase7-staging-evidence/mcp-bundle.json",
+    "$ corepack pnpm demo:mcp-bundle phase7-staging-evidence/mcp-bundle.json",
     "$ corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log",
     "$ corepack pnpm phase7:staging:derive-receipt-verification",
-    "$ corepack pnpm phase7:staging:manifest phase7-staging-proof.txt > phase7-staging-evidence/artifact-manifest.json",
+    "$ corepack pnpm phase7:staging:manifest phase7-staging-proof.txt phase7-staging-evidence/artifact-manifest.json",
     "$ corepack pnpm phase7:staging:assemble > phase7-staging-proof.txt",
     "$ corepack pnpm phase7:staging:status phase7-staging-proof.txt",
     "$ corepack pnpm lint",

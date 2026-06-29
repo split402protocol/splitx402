@@ -1,3 +1,7 @@
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+
 import { describe, expect, it } from "vitest";
 import { createSampleProtocolArtifacts, hashProtocolObject } from "@split402/protocol";
 import {
@@ -17,6 +21,7 @@ import {
 } from "../src/gateway.js";
 import { runMcpGatewaySmoke } from "../src/gateway-smoke.js";
 import { createMcpDemoBundle } from "../src/index.js";
+import { writeMcpDemoBundleOutput } from "../src/bundle.js";
 
 describe("createMcpDemoBundle", () => {
   it("describes the Split402 paid MCP tool and economics", () => {
@@ -70,6 +75,45 @@ describe("createMcpDemoBundle", () => {
     expect(bundle.expectedEconomics.protocolFeeAtomic).toBe("2500");
     expect(bundle.expectedEconomics.referrerCreditAtomic).toBe("22500");
     expect(bundle.expectedEconomics.merchantRetainsAtomic).toBe("225000");
+  });
+
+  it("writes the MCP bundle artifact as UTF-8 JSON", () => {
+    const directory = mkdtempSync(join(tmpdir(), "split402-mcp-bundle-"));
+    const outputPath = join(directory, "mcp-bundle.json");
+    try {
+      writeMcpDemoBundleOutput(outputPath);
+
+      const bytes = readFileSync(outputPath);
+      expect([...bytes.subarray(0, 2)]).not.toEqual([0xff, 0xfe]);
+      const parsed = JSON.parse(readFileSync(outputPath, "utf8")) as {
+        schemaVersion: string;
+      };
+      expect(parsed.schemaVersion).toBe("split402.mcp-demo-bundle.v1");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("resolves relative bundle output paths from pnpm INIT_CWD", () => {
+    const directory = mkdtempSync(join(tmpdir(), "split402-mcp-bundle-root-"));
+    const previousInitCwd = process.env.INIT_CWD;
+    process.env.INIT_CWD = directory;
+    try {
+      writeMcpDemoBundleOutput("evidence/mcp-bundle.json");
+
+      const outputPath = join(directory, "evidence", "mcp-bundle.json");
+      const parsed = JSON.parse(readFileSync(outputPath, "utf8")) as {
+        schemaVersion: string;
+      };
+      expect(parsed.schemaVersion).toBe("split402.mcp-demo-bundle.v1");
+    } finally {
+      if (previousInitCwd === undefined) {
+        delete process.env.INIT_CWD;
+      } else {
+        process.env.INIT_CWD = previousInitCwd;
+      }
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 });
 
