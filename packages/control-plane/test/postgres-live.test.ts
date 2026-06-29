@@ -226,7 +226,9 @@ describeLive("live PostgreSQL control-plane persistence", () => {
     expect(claimedOutboxEvent.attempts).toBe(1);
     expect(verifiedSnapshot?.receipt.verificationState).toBe("signature_verified");
     expect(verifiedSnapshot?.accrual?.status).toBe("available");
-    expect(verifiedSnapshot?.accrual?.availableAt).toBe("2026-06-24T00:04:00Z");
+    expect(new Date(verifiedSnapshot?.accrual?.availableAt ?? "").toISOString()).toBe(
+      "2026-06-24T00:04:00.000Z"
+    );
     if (verifiedSnapshot?.accrual === undefined) {
       throw new Error("expected verified accrual");
     }
