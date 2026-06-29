@@ -143,6 +143,9 @@ artifact_manifest_evidence: attached: artifact-manifest.json
 commands_run: attached: commands.log
 approval_notes: checked evidence is intentionally incomplete
 `,
+      phase7Options: {
+        currentSourceCommit: "fd88024000000000000000000000000000000000",
+      },
     });
 
     expect(report.launchDecision).toBe("no-go");
@@ -155,6 +158,9 @@ approval_notes: checked evidence is intentionally incomplete
     );
     expect(report.nextActions.join("\n")).toContain(
       "Fix Phase 6 custody evidence blockers",
+    );
+    expect(report.nextActions).toContain(
+      "Run corepack pnpm product:evidence:init --refresh-source before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist.",
     );
     const brief = formatSplit402ProductReadinessBrief(report);
     expect(brief).toContain(
