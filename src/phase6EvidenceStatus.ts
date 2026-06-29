@@ -128,6 +128,37 @@ export function createPhase6EvidenceStatusReport(
   };
 }
 
+export function formatPhase6EvidenceStatusBrief(
+  report: Phase6EvidenceStatusReport,
+): string {
+  const status = report.readyForCustody
+    ? "ready"
+    : report.evidenceBundleChecked
+      ? "checked, blocked"
+      : "not checked";
+  const sourceCommit =
+    report.sourceCommitStatus.status === "valid"
+      ? "valid"
+      : report.sourceCommitStatus.status;
+  const validation = report.validation;
+  const missingCount = validation?.missingFields.length ?? 0;
+  const invalidCount = validation?.invalidFields.length ?? 0;
+  const nextActions = report.nextActions
+    .slice(0, 8)
+    .map((action) => `- ${action}`);
+
+  return [
+    `Phase 6 custody evidence: ${status}`,
+    `Source commit: ${sourceCommit}`,
+    `Missing fields: ${missingCount}`,
+    `Invalid fields: ${invalidCount}`,
+    "Launch posture: production custody remains no-go until evidence is approved.",
+    "",
+    "Next actions:",
+    ...(nextActions.length > 0 ? nextActions : ["- No next actions."]),
+  ].join("\n");
+}
+
 function createNextActions(
   validation: Phase6CustodyReviewValidation | undefined,
   sourceCommitBlockers: readonly string[] = [],
@@ -152,9 +183,12 @@ function createNextActions(
   if (validation.missingFields.length > 0) {
     actions.push(`Fill missing fields: ${validation.missingFields.join(", ")}`);
   }
-  if (validation.placeholderFields.length > 0) {
+  const placeholderFieldsToReplace = validation.placeholderFields.filter(
+    (field) => field !== "approval_decision",
+  );
+  if (placeholderFieldsToReplace.length > 0) {
     actions.push(
-      `Replace placeholder fields: ${validation.placeholderFields.join(", ")}`,
+      `Replace placeholder fields: ${placeholderFieldsToReplace.join(", ")}`,
     );
   }
   actions.push(...validation.invalidFields);

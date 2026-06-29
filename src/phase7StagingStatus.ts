@@ -262,6 +262,42 @@ export function createPhase7StagingStatusReport(
   };
 }
 
+export function formatPhase7StagingStatusBrief(
+  report: Phase7StagingStatusReport,
+): string {
+  const status = report.readyForPublicAlphaDemo
+    ? "ready"
+    : report.proofChecked
+      ? "checked, blocked"
+      : "not checked";
+  const readyGates = report.gateStatuses.filter(
+    (gate) => gate.status === "ready",
+  ).length;
+  const totalGates = report.gateStatuses.length;
+  const sourceCommit =
+    report.sourceCommitStatus.status === "valid"
+      ? "valid"
+      : report.sourceCommitStatus.status;
+  const validation = report.validation;
+  const missingCount = validation?.missingFields.length ?? 0;
+  const invalidCount = validation?.invalidFields.length ?? 0;
+  const nextActions = report.nextActions
+    .slice(0, 10)
+    .map((action) => `- ${action}`);
+
+  return [
+    `Phase 7 hosted staging proof: ${status}`,
+    `Source commit: ${sourceCommit}`,
+    `Ready gates: ${readyGates}/${totalGates}`,
+    `Missing fields: ${missingCount}`,
+    `Invalid fields: ${invalidCount}`,
+    "Launch posture: public-alpha approval remains no-go until hosted proof gates pass.",
+    "",
+    "Next actions:",
+    ...(nextActions.length > 0 ? nextActions : ["- No next actions."]),
+  ].join("\n");
+}
+
 function createGateStatuses(
   validation: Phase7StagingProofValidation | undefined,
   artifactStatuses: readonly Phase7StagingArtifactStatus[],
@@ -2778,26 +2814,49 @@ function createNextActions(
   }
 
   if (validation.approved) {
-    if (artifactBlockers.length === 0) {
+    const operatorArtifactActions = createOperatorBlockerActions(artifactBlockers);
+    if (operatorArtifactActions.length === 0) {
       return [
         "Phase 7 staging proof passes machine checks; proceed to launch review.",
       ];
     }
-    return [...artifactBlockers];
+    return operatorArtifactActions;
   }
 
   const actions: string[] = [];
   if (validation.missingFields.length > 0) {
     actions.push(`Fill missing fields: ${validation.missingFields.join(", ")}`);
   }
-  if (validation.placeholderFields.length > 0) {
+  const placeholderFieldsToReplace = validation.placeholderFields.filter(
+    (field) => field !== "approval_decision",
+  );
+  if (placeholderFieldsToReplace.length > 0) {
     actions.push(
-      `Replace placeholder fields: ${validation.placeholderFields.join(", ")}`,
+      `Replace placeholder fields: ${placeholderFieldsToReplace.join(", ")}`,
     );
   }
   actions.push(...validation.invalidFields);
-  actions.push(...artifactBlockers);
+  actions.push(...createOperatorBlockerActions(artifactBlockers));
   return actions;
+}
+
+function createOperatorBlockerActions(blockers: readonly string[]): string[] {
+  const uniqueBlockers = [...new Set(blockers)];
+  const missingArtifactFields = new Set(
+    uniqueBlockers.flatMap((blocker) => {
+      const match = /^([a-z][a-z0-9_]*) artifact is missing:/u.exec(blocker);
+      return match?.[1] === undefined ? [] : [match[1]];
+    }),
+  );
+
+  return uniqueBlockers.filter((blocker) => {
+    const readErrorMatch =
+      /^([a-z][a-z0-9_]*) artifact could not be read(?::.*)?$/u.exec(blocker);
+    return !(
+      readErrorMatch?.[1] !== undefined &&
+      missingArtifactFields.has(readErrorMatch[1])
+    );
+  });
 }
 
 function resolveArtifactPath(

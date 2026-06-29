@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   PHASE6_EVIDENCE_COMMANDS,
   createPhase6EvidenceStatusReport,
+  formatPhase6EvidenceStatusBrief,
 } from "../src/phase6EvidenceStatus.js";
 
 describe("Phase 6 evidence status", () => {
@@ -60,6 +61,13 @@ approval_decision: no-go
     expect(report.nextActions.join("\n")).toContain(
       "approval_decision must be approved before Phase 6 custody can go live",
     );
+    expect(report.nextActions.join("\n")).not.toContain(
+      "Replace placeholder fields: approval_decision",
+    );
+    const brief = formatPhase6EvidenceStatusBrief(report);
+    expect(brief).toContain("Phase 6 custody evidence: checked, blocked");
+    expect(brief).toContain("Launch posture: production custody remains no-go");
+    expect(brief).toContain("Missing fields:");
   });
 
   it("validates Phase 6 evidence source_commit against the current checkout", () => {
