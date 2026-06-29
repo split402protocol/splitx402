@@ -494,6 +494,7 @@ function createRouterExecuteResponse(
     status: "executed",
     executionMode,
     providerId: result.providerId,
+    provider: publicProviderView(result.provider),
     capability: result.capability,
     amountPaidAtomic: result.receipt.requiredAmountAtomic,
     receiptId: result.receipt.receiptId,

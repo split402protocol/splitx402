@@ -19,6 +19,10 @@ const result = await split402.execute({
 });
 ```
 
+The result includes the selected provider record, the normalized output, the
+verified receipt, and an attempt log so agents can audit which provider was
+used without correlating a separate search response.
+
 This package supports a static in-memory provider registry and a public-alpha
 control-plane discovery client that projects active Split402 routes and
 Bazaar-compatible route metadata into router providers. It is not a production
@@ -70,6 +74,7 @@ prices are discarded before provider records are returned.
 - discovers active control-plane routes into provider records;
 - ranks by success rate, then price, then latency, then provider id;
 - executes through `Split402AgentClient` by default;
+- returns the selected provider with each successful execution result;
 - accepts an injected executor for tests or controlled gateways;
 - skips providers whose discovered route/referrer/payout metadata conflicts
   with the supplied `referralClaim`;

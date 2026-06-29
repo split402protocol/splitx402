@@ -182,6 +182,13 @@ describe("Split402Router", () => {
     });
 
     expect(result.providerId).toBe("provider-valid");
+    expect(result.provider).toEqual(
+      expect.objectContaining({
+        providerId: "provider-valid",
+        payToWallet: receipt.payToWallet,
+        amountAtomic: receipt.requiredAmountAtomic
+      })
+    );
     expect(execute).toHaveBeenCalledTimes(1);
     expect(execute).toHaveBeenCalledWith(
       expect.objectContaining({

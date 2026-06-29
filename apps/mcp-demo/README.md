@@ -61,7 +61,10 @@ gateway never silently spends against a provider default. Capability search
 results include each provider's advertised `payToWallet`, merchant origin,
 operation id, campaign id, route attribution, referrer wallet, and payout wallet
 when available, and router execution rejects merchant offers or receipts that do
-not match that destination.
+not match that destination. Successful execution responses also include the
+selected provider summary so agents can audit the exact merchant origin,
+operation, campaign, route, asset, pay-to wallet, and amount used for the paid
+call.
 
 Example `tools/call` request:
 

@@ -47,6 +47,7 @@ export interface Split402RouterExecuteInput {
 
 export interface Split402RouterExecuteResult<T = unknown> {
   providerId: string;
+  provider: Split402CapabilityProvider;
   capability: string;
   data: T;
   receipt: Split402ReceiptV1;
@@ -340,6 +341,7 @@ export class Split402Router {
         });
         return {
           providerId: provider.providerId,
+          provider,
           capability: provider.capability,
           data: result.data as T,
           receipt,
