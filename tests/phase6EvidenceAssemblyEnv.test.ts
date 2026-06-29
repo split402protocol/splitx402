@@ -40,7 +40,7 @@ describe("Phase 6 evidence assembly env template", () => {
     expect(template.match(/SPLIT402_PHASE6_ASSEMBLE_SIGNER_POLICY_RECORD/gu))
       .toHaveLength(1);
     expect(template).toContain(
-      "# corepack pnpm phase6:evidence:assemble --evidence-env-file split402-launch-evidence/phase6-evidence.env > split402-launch-evidence/phase6-custody-evidence.txt",
+      "# corepack pnpm phase6:evidence:assemble --evidence-env-file split402-launch-evidence/phase6-evidence.env split402-launch-evidence/phase6-custody-evidence.txt",
     );
     expect(template).not.toMatch(/^\s*SPLIT402_PHASE6_/mu);
   });
@@ -54,7 +54,7 @@ describe("Phase 6 evidence assembly env template", () => {
       "# SPLIT402_PHASE6_ASSEMBLE_IMAGE_PROVENANCE_RECORD=evidence/launch/phase6-image-provenance.txt",
     );
     expect(template).toContain(
-      "# corepack pnpm phase6:evidence:assemble --evidence-env-file evidence/launch/phase6-evidence.env > evidence/launch/phase6-custody-evidence.txt",
+      "# corepack pnpm phase6:evidence:assemble --evidence-env-file evidence/launch/phase6-evidence.env evidence/launch/phase6-custody-evidence.txt",
     );
     expect(template).not.toContain("split402-launch-evidence/phase6-image-provenance.txt");
   });
