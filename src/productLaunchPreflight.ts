@@ -114,6 +114,16 @@ const REQUIRED_MCP_LIVE_ENV_KEYS = [
   "SPLIT402_MCP_CAPABILITY",
 ] as const;
 
+const REQUIRED_PHASE7_HOSTED_URL_ENV_KEYS = [
+  "SPLIT402_PHASE7_CONTROL_PLANE_URL",
+  "SPLIT402_PHASE7_DASHBOARD_URL",
+  "SPLIT402_PHASE7_DEMO_MERCHANT_URL",
+] as const;
+
+const REQUIRED_MCP_LIVE_URL_ENV_KEYS = [
+  "SPLIT402_MCP_CONTROL_PLANE_URL",
+] as const;
+
 const MCP_LIVE_EXECUTION_ENV_KEY = "SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE";
 
 const REQUIRED_PHASE6_DIRECT_ENV_KEYS = [
@@ -185,9 +195,19 @@ export function createSplit402LaunchPreflightReport(
   const missingHostedKeys = REQUIRED_PHASE7_HOSTED_ENV_KEYS.filter(
     (key) => !hasConfiguredEnvValue(phase7Env, key),
   );
+  const invalidHostedUrlDetails = createHttpUrlEnvDetails({
+    env: phase7Env,
+    envPath: phase7EnvPath,
+    keys: REQUIRED_PHASE7_HOSTED_URL_ENV_KEYS,
+  });
   const missingMcpKeys = REQUIRED_MCP_LIVE_ENV_KEYS.filter(
     (key) => !hasConfiguredEnvValue(phase7Env, key),
   );
+  const invalidMcpUrlDetails = createHttpUrlEnvDetails({
+    env: phase7Env,
+    envPath: phase7EnvPath,
+    keys: REQUIRED_MCP_LIVE_URL_ENV_KEYS,
+  });
   const liveExecutionEnabled = hasTruthyEnvValue(
     phase7Env,
     MCP_LIVE_EXECUTION_ENV_KEY,
@@ -209,6 +229,7 @@ export function createSplit402LaunchPreflightReport(
           `Fill SPLIT402_MCP_SVM_PRIVATE_KEY or SVM_PRIVATE_KEY in ${toDisplayPath(phase7EnvPath)}.`,
         ]
       : []),
+    ...invalidMcpUrlDetails,
   ];
   const mcpHostedMismatchDetails = createMcpHostedMismatchDetails({
     env: phase7Env,
@@ -279,14 +300,17 @@ export function createSplit402LaunchPreflightReport(
     {
       id: "phase7_hosted_env_values",
       label: "Phase 7 hosted proof env values are filled",
-      ok: missingHostedKeys.length === 0,
+      ok: missingHostedKeys.length === 0 && invalidHostedUrlDetails.length === 0,
       severity: "required",
       details:
-        missingHostedKeys.length === 0
+        missingHostedKeys.length === 0 && invalidHostedUrlDetails.length === 0
           ? ["Required hosted proof values are configured."]
-          : missingHostedKeys.map(
-              (key) => `Fill ${key} in ${toDisplayPath(phase7EnvPath)}.`,
-            ),
+          : [
+              ...missingHostedKeys.map(
+                (key) => `Fill ${key} in ${toDisplayPath(phase7EnvPath)}.`,
+              ),
+              ...invalidHostedUrlDetails,
+            ],
     },
     {
       id: "phase7_mcp_live_execution_env",
@@ -294,7 +318,8 @@ export function createSplit402LaunchPreflightReport(
       ok:
         missingMcpKeys.length === 0 &&
         liveExecutionEnabled &&
-        !missingBuyerKey,
+        !missingBuyerKey &&
+        invalidMcpUrlDetails.length === 0,
       severity: "required",
       details:
         missingMcpDetails.length === 0
@@ -489,6 +514,33 @@ function createMcpHostedMismatchDetails(input: {
     );
   }
   return details;
+}
+
+function createHttpUrlEnvDetails(input: {
+  env: ReadonlyMap<string, string>;
+  envPath: string;
+  keys: readonly string[];
+}): string[] {
+  return input.keys.flatMap((key) => {
+    if (!hasConfiguredEnvValue(input.env, key)) {
+      return [];
+    }
+    return isHttpUrl(input.env.get(key))
+      ? []
+      : [`Set ${key} to an http(s) URL in ${toDisplayPath(input.envPath)}.`];
+  });
+}
+
+function isHttpUrl(value: string | undefined): boolean {
+  if (value === undefined) {
+    return false;
+  }
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 function normalizeUrlForComparison(value: string | undefined): string | undefined {
