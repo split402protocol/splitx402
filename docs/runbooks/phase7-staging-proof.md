@@ -78,7 +78,12 @@ referrer credit, and the collector's JSON report echoes those fields as
 `providerId`, `providerNetwork`, `providerAsset`, `providerAmountAtomic`,
 `providerMerchantOrigin`, `providerOperationId`, `providerCampaignId`,
 `providerPayToWallet`, `providerRouteId`, `providerReferrerWallet`,
-`providerPayoutWallet`, `amountPaidAtomic`, `receiptId`,
+`providerPayoutWallet`, matching `executeProviderNetwork`,
+`executeProviderAsset`, `executeProviderMerchantOrigin`,
+`executeProviderOperationId`, `executeProviderCampaignId`,
+`executeProviderAmountAtomic`, `executeProviderPayToWallet`,
+`executeProviderRouteId`, `executeProviderReferrerWallet`, and
+`executeProviderPayoutWallet`, plus `amountPaidAtomic`, `receiptId`,
 `receiptVerificationStatus`, `executeExecutionMode`, and `referrerCreditAtomic`,
 plus receipt-side `network`, `asset`, `merchantOrigin`, `operationId`,
 `campaignId`, `requiredAmountAtomic`, `payToWallet`,
@@ -88,8 +93,9 @@ when receipt lookup succeeds. The collector rejects the report if the receipt
 amount, selected-provider payment details, selected-provider merchant origin,
 operation id, campaign id, route id, referrer wallet, payout wallet, commission,
 protocol fee, or referrer credit arithmetic does not match. It also rejects
-execute evidence with missing required fields, unsupported execution mode,
-unverified receipt status, or zero referrer credit. Demo mode is a local
+execute evidence with missing required fields, missing or inconsistent
+execute-provider summary fields, unsupported execution mode, unverified receipt
+status, or zero referrer credit. Demo mode is a local
 contract check only and remains no-go for hosted Phase 7 proof. Proof-ready
 MCP gateway evidence must run in `router-live-agent-sdk` mode: set
 `SPLIT402_MCP_CONTROL_PLANE_URL` for hosted route discovery, set

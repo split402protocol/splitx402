@@ -2190,6 +2190,83 @@ function validateMcpGatewayTranscript(
     );
   }
   const providerId = readNonEmptyString(executeContent.providerId);
+  const executeProvider = readRecord(executeContent.provider);
+  const executeProviderId = readNonEmptyString(executeProvider?.providerId);
+  const executeProviderNetwork = readNonEmptyString(executeProvider?.network);
+  const executeProviderAsset = readNonEmptyString(executeProvider?.asset);
+  const executeProviderMerchantOrigin = readNonEmptyString(
+    executeProvider?.merchantOrigin,
+  );
+  const executeProviderOperationId = readNonEmptyString(
+    executeProvider?.operationId,
+  );
+  const executeProviderCampaignId = readNonEmptyString(
+    executeProvider?.campaignId,
+  );
+  const executeProviderPayToWallet = readNonEmptyString(
+    executeProvider?.payToWallet,
+  );
+  const executeProviderRouteId = readNonEmptyString(executeProvider?.routeId);
+  const executeProviderReferrerWallet = readNonEmptyString(
+    executeProvider?.referrerWallet,
+  );
+  const executeProviderPayoutWallet = readNonEmptyString(
+    executeProvider?.payoutWallet,
+  );
+  const executeProviderAmount = readPositiveAtomicString(
+    executeProvider?.amountAtomic,
+  );
+  if (executeProvider === undefined) {
+    blockers.push(
+      "mcp_gateway_evidence execute response missing selected provider summary",
+    );
+  } else {
+    if (executeProviderId === undefined) {
+      blockers.push("mcp_gateway_evidence execute provider providerId is missing");
+    } else if (providerId !== undefined && executeProviderId !== providerId) {
+      blockers.push(
+        "mcp_gateway_evidence execute provider providerId does not match execute providerId",
+      );
+    }
+    if (executeProviderNetwork === undefined) {
+      blockers.push("mcp_gateway_evidence execute provider network is missing");
+    }
+    if (executeProviderAsset === undefined) {
+      blockers.push("mcp_gateway_evidence execute provider asset is missing");
+    }
+    if (executeProviderMerchantOrigin === undefined) {
+      blockers.push(
+        "mcp_gateway_evidence execute provider merchantOrigin is missing",
+      );
+    }
+    if (executeProviderOperationId === undefined) {
+      blockers.push("mcp_gateway_evidence execute provider operationId is missing");
+    }
+    if (executeProviderCampaignId === undefined) {
+      blockers.push("mcp_gateway_evidence execute provider campaignId is missing");
+    }
+    if (executeProviderPayToWallet === undefined) {
+      blockers.push("mcp_gateway_evidence execute provider payToWallet is missing");
+    }
+    if (executeProviderAmount === undefined) {
+      blockers.push(
+        "mcp_gateway_evidence execute provider amountAtomic must be a positive atomic amount",
+      );
+    }
+    if (executeProviderRouteId === undefined) {
+      blockers.push("mcp_gateway_evidence execute provider routeId is missing");
+    }
+    if (executeProviderReferrerWallet === undefined) {
+      blockers.push(
+        "mcp_gateway_evidence execute provider referrerWallet is missing",
+      );
+    }
+    if (executeProviderPayoutWallet === undefined) {
+      blockers.push(
+        "mcp_gateway_evidence execute provider payoutWallet is missing",
+      );
+    }
+  }
   const selectedProvider =
     providerId === undefined ? undefined : searchProvidersById.get(providerId);
   if (
@@ -2271,6 +2348,39 @@ function validateMcpGatewayTranscript(
       );
     }
   }
+  if (executeProvider !== undefined && selectedProvider !== undefined) {
+    for (const [field, executeValue, selectedValue] of [
+      ["providerId", executeProviderId, providerId],
+      ["network", executeProviderNetwork, selectedProviderNetwork],
+      ["asset", executeProviderAsset, selectedProviderAsset],
+      ["merchantOrigin", executeProviderMerchantOrigin, selectedProviderMerchantOrigin],
+      ["operationId", executeProviderOperationId, selectedProviderOperationId],
+      ["campaignId", executeProviderCampaignId, selectedProviderCampaignId],
+      ["payToWallet", executeProviderPayToWallet, selectedProviderPayToWallet],
+      ["routeId", executeProviderRouteId, selectedProviderRouteId],
+      ["referrerWallet", executeProviderReferrerWallet, selectedProviderReferrerWallet],
+      ["payoutWallet", executeProviderPayoutWallet, selectedProviderPayoutWallet],
+    ] as const) {
+      if (
+        executeValue !== undefined &&
+        selectedValue !== undefined &&
+        executeValue !== selectedValue
+      ) {
+        blockers.push(
+          `mcp_gateway_evidence execute provider ${field} does not match selected provider`,
+        );
+      }
+    }
+    if (
+      executeProviderAmount !== undefined &&
+      selectedProviderAmount !== undefined &&
+      executeProviderAmount !== selectedProviderAmount
+    ) {
+      blockers.push(
+        "mcp_gateway_evidence execute provider amountAtomic does not match selected provider",
+      );
+    }
+  }
   const amountPaidAtomic = readNonNegativeAtomicString(
     executeContent.amountPaidAtomic,
   );
@@ -2324,11 +2434,28 @@ function validateMcpGatewayTranscript(
     );
   }
   if (
+    executeProviderAmount !== undefined &&
+    amountPaidAtomic !== undefined &&
+    executeProviderAmount !== amountPaidAtomic
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence execute amountPaidAtomic does not match execute provider amountAtomic",
+    );
+  }
+  if (
     selectedProviderNetwork !== undefined &&
     receiptRecord.network !== selectedProviderNetwork
   ) {
     blockers.push(
       "mcp_gateway_evidence getReceipt network does not match selected provider",
+    );
+  }
+  if (
+    executeProviderNetwork !== undefined &&
+    receiptRecord.network !== executeProviderNetwork
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt network does not match execute provider",
     );
   }
   if (
@@ -2340,11 +2467,27 @@ function validateMcpGatewayTranscript(
     );
   }
   if (
+    executeProviderAsset !== undefined &&
+    receiptRecord.asset !== executeProviderAsset
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt asset does not match execute provider",
+    );
+  }
+  if (
     selectedProviderPayToWallet !== undefined &&
     receiptRecord.payToWallet !== selectedProviderPayToWallet
   ) {
     blockers.push(
       "mcp_gateway_evidence getReceipt payToWallet does not match selected provider",
+    );
+  }
+  if (
+    executeProviderPayToWallet !== undefined &&
+    receiptRecord.payToWallet !== executeProviderPayToWallet
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt payToWallet does not match execute provider",
     );
   }
   if (
@@ -2356,6 +2499,14 @@ function validateMcpGatewayTranscript(
     );
   }
   if (
+    executeProviderMerchantOrigin !== undefined &&
+    receiptRecord.merchantOrigin !== executeProviderMerchantOrigin
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt merchantOrigin does not match execute provider",
+    );
+  }
+  if (
     selectedProviderOperationId !== undefined &&
     receiptRecord.operationId !== selectedProviderOperationId
   ) {
@@ -2364,11 +2515,27 @@ function validateMcpGatewayTranscript(
     );
   }
   if (
+    executeProviderOperationId !== undefined &&
+    receiptRecord.operationId !== executeProviderOperationId
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt operationId does not match execute provider",
+    );
+  }
+  if (
     selectedProviderCampaignId !== undefined &&
     receiptRecord.campaignId !== selectedProviderCampaignId
   ) {
     blockers.push(
       "mcp_gateway_evidence getReceipt campaignId does not match selected provider",
+    );
+  }
+  if (
+    executeProviderCampaignId !== undefined &&
+    receiptRecord.campaignId !== executeProviderCampaignId
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt campaignId does not match execute provider",
     );
   }
   if (
@@ -2391,6 +2558,15 @@ function validateMcpGatewayTranscript(
       "mcp_gateway_evidence getReceipt routeId does not match selected provider",
     );
   }
+  if (
+    receiptRouteId !== undefined &&
+    executeProviderRouteId !== undefined &&
+    receiptRouteId !== executeProviderRouteId
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt routeId does not match execute provider",
+    );
+  }
   const receiptReferrerWallet = readNonEmptyString(receiptRecord.referrerWallet);
   if (receiptReferrerWallet === undefined) {
     blockers.push(
@@ -2404,6 +2580,15 @@ function validateMcpGatewayTranscript(
       "mcp_gateway_evidence getReceipt referrerWallet does not match selected provider",
     );
   }
+  if (
+    receiptReferrerWallet !== undefined &&
+    executeProviderReferrerWallet !== undefined &&
+    receiptReferrerWallet !== executeProviderReferrerWallet
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt referrerWallet does not match execute provider",
+    );
+  }
   const receiptPayoutWallet = readNonEmptyString(receiptRecord.payoutWallet);
   if (receiptPayoutWallet === undefined) {
     blockers.push("mcp_gateway_evidence getReceipt receipt.payoutWallet is missing");
@@ -2413,6 +2598,15 @@ function validateMcpGatewayTranscript(
   ) {
     blockers.push(
       "mcp_gateway_evidence getReceipt payoutWallet does not match selected provider",
+    );
+  }
+  if (
+    receiptPayoutWallet !== undefined &&
+    executeProviderPayoutWallet !== undefined &&
+    receiptPayoutWallet !== executeProviderPayoutWallet
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence getReceipt payoutWallet does not match execute provider",
     );
   }
   const receiptCommissionAmount = readPositiveAtomicString(

@@ -1481,6 +1481,143 @@ funding_balance_evidence: funding.json
     );
   });
 
+  it("blocks staged proof status when MCP execute response omits provider summary", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          includeExecuteProvider: false,
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute response missing selected provider summary",
+    );
+  });
+
+  it("blocks staged proof status when MCP execute provider omits payment details", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          includeExecuteProviderId: false,
+          includeExecuteProviderNetwork: false,
+          includeExecuteProviderAsset: false,
+          includeExecuteProviderMerchantOrigin: false,
+          includeExecuteProviderOperationId: false,
+          includeExecuteProviderCampaignId: false,
+          includeExecuteProviderPayToWallet: false,
+          includeExecuteProviderAmount: false,
+          includeExecuteProviderRouteId: false,
+          includeExecuteProviderReferrerWallet: false,
+          includeExecuteProviderPayoutWallet: false,
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute provider providerId is missing",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute provider network is missing",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute provider asset is missing",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute provider merchantOrigin is missing",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute provider operationId is missing",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute provider campaignId is missing",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute provider payToWallet is missing",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute provider amountAtomic must be a positive atomic amount",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute provider routeId is missing",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute provider referrerWallet is missing",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute provider payoutWallet is missing",
+    );
+  });
+
+  it("blocks staged proof status when MCP execute provider differs from selected provider", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          executeProviderNetwork: "solana:wrong-network",
+          executeProviderAsset: "wrong-asset",
+          executeProviderPayToWallet: "wrong-pay-to-wallet",
+          executeProviderAmountAtomic: "9000",
+          executeProviderRouteId: "rte_ffffffffffffffffffffffffffffffff",
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute provider network does not match selected provider",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute provider asset does not match selected provider",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute provider payToWallet does not match selected provider",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute provider amountAtomic does not match selected provider",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute provider routeId does not match selected provider",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence getReceipt network does not match execute provider",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute amountPaidAtomic does not match execute provider amountAtomic",
+    );
+  });
+
   it("blocks staged proof status when MCP receipt does not match selected provider", () => {
     const proofText = createManifestProof();
     const artifacts = createManifestArtifacts(proofText);
@@ -2582,6 +2719,29 @@ function createValidMcpGatewayTranscript(
     searchProviderRouteId?: string;
     searchProviderReferrerWallet?: string;
     searchProviderPayoutWallet?: string;
+    includeExecuteProvider?: boolean;
+    includeExecuteProviderId?: boolean;
+    executeProviderIdValue?: string;
+    includeExecuteProviderNetwork?: boolean;
+    includeExecuteProviderAsset?: boolean;
+    includeExecuteProviderMerchantOrigin?: boolean;
+    includeExecuteProviderOperationId?: boolean;
+    includeExecuteProviderCampaignId?: boolean;
+    includeExecuteProviderPayToWallet?: boolean;
+    includeExecuteProviderAmount?: boolean;
+    includeExecuteProviderRouteId?: boolean;
+    includeExecuteProviderReferrerWallet?: boolean;
+    includeExecuteProviderPayoutWallet?: boolean;
+    executeProviderNetwork?: string;
+    executeProviderAsset?: string;
+    executeProviderMerchantOrigin?: string;
+    executeProviderOperationId?: string;
+    executeProviderCampaignId?: string;
+    executeProviderPayToWallet?: string;
+    executeProviderAmountAtomic?: string;
+    executeProviderRouteId?: string;
+    executeProviderReferrerWallet?: string;
+    executeProviderPayoutWallet?: string;
     amountPaidAtomic?: string;
     executeReferrerCreditAtomic?: string;
     lookupReceiptId?: string;
@@ -2661,6 +2821,47 @@ function createValidMcpGatewayTranscript(
     options.searchProviderReferrerWallet ?? "referrer-wallet";
   const searchProviderPayoutWallet =
     options.searchProviderPayoutWallet ?? "payout-wallet";
+  const includeExecuteProvider = options.includeExecuteProvider ?? true;
+  const includeExecuteProviderId = options.includeExecuteProviderId ?? true;
+  const includeExecuteProviderNetwork =
+    options.includeExecuteProviderNetwork ?? true;
+  const includeExecuteProviderAsset = options.includeExecuteProviderAsset ?? true;
+  const includeExecuteProviderMerchantOrigin =
+    options.includeExecuteProviderMerchantOrigin ?? true;
+  const includeExecuteProviderOperationId =
+    options.includeExecuteProviderOperationId ?? true;
+  const includeExecuteProviderCampaignId =
+    options.includeExecuteProviderCampaignId ?? true;
+  const includeExecuteProviderPayToWallet =
+    options.includeExecuteProviderPayToWallet ?? true;
+  const includeExecuteProviderAmount = options.includeExecuteProviderAmount ?? true;
+  const includeExecuteProviderRouteId =
+    options.includeExecuteProviderRouteId ?? true;
+  const includeExecuteProviderReferrerWallet =
+    options.includeExecuteProviderReferrerWallet ?? true;
+  const includeExecuteProviderPayoutWallet =
+    options.includeExecuteProviderPayoutWallet ?? true;
+  const executeProviderIdValue =
+    options.executeProviderIdValue ?? executeProviderId;
+  const executeProviderNetwork =
+    options.executeProviderNetwork ?? searchProviderNetwork;
+  const executeProviderAsset = options.executeProviderAsset ?? searchProviderAsset;
+  const executeProviderMerchantOrigin =
+    options.executeProviderMerchantOrigin ?? searchProviderMerchantOrigin;
+  const executeProviderOperationId =
+    options.executeProviderOperationId ?? searchProviderOperationId;
+  const executeProviderCampaignId =
+    options.executeProviderCampaignId ?? searchProviderCampaignId;
+  const executeProviderPayToWallet =
+    options.executeProviderPayToWallet ?? searchProviderPayToWallet;
+  const executeProviderAmountAtomic =
+    options.executeProviderAmountAtomic ?? searchProviderAmountAtomic;
+  const executeProviderRouteId =
+    options.executeProviderRouteId ?? searchProviderRouteId;
+  const executeProviderReferrerWallet =
+    options.executeProviderReferrerWallet ?? searchProviderReferrerWallet;
+  const executeProviderPayoutWallet =
+    options.executeProviderPayoutWallet ?? searchProviderPayoutWallet;
   const executeReferrerCreditAtomic =
     options.executeReferrerCreditAtomic ?? "1800";
   const tools = options.tools ?? [
@@ -2823,6 +3024,45 @@ function createValidMcpGatewayTranscript(
                   receiptId,
                   receiptVerificationStatus: "verified",
                   referrerCreditAtomic: executeReferrerCreditAtomic,
+                  ...(includeExecuteProvider
+                    ? {
+                        provider: {
+                          ...(includeExecuteProviderId
+                            ? { providerId: executeProviderIdValue }
+                            : {}),
+                          ...(includeExecuteProviderNetwork
+                            ? { network: executeProviderNetwork }
+                            : {}),
+                          ...(includeExecuteProviderAsset
+                            ? { asset: executeProviderAsset }
+                            : {}),
+                          ...(includeExecuteProviderMerchantOrigin
+                            ? { merchantOrigin: executeProviderMerchantOrigin }
+                            : {}),
+                          ...(includeExecuteProviderOperationId
+                            ? { operationId: executeProviderOperationId }
+                            : {}),
+                          ...(includeExecuteProviderCampaignId
+                            ? { campaignId: executeProviderCampaignId }
+                            : {}),
+                          ...(includeExecuteProviderPayToWallet
+                            ? { payToWallet: executeProviderPayToWallet }
+                            : {}),
+                          ...(includeExecuteProviderAmount
+                            ? { amountAtomic: executeProviderAmountAtomic }
+                            : {}),
+                          ...(includeExecuteProviderRouteId
+                            ? { routeId: executeProviderRouteId }
+                            : {}),
+                          ...(includeExecuteProviderReferrerWallet
+                            ? { referrerWallet: executeProviderReferrerWallet }
+                            : {}),
+                          ...(includeExecuteProviderPayoutWallet
+                            ? { payoutWallet: executeProviderPayoutWallet }
+                            : {}),
+                        },
+                      }
+                    : {}),
                 },
               },
             },
