@@ -416,6 +416,34 @@ funding_balance_evidence: funding.json
         "funding_balance_evidence artifact is missing: evidence/missing-funding-balance.json",
       ],
     });
+    expect(report.nextActions).toContain(
+      "Capture funding_balance_evidence with SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc corepack pnpm phase7:staging:collect-reads --evidence-env-file split402-launch-evidence/phase7-staging.env.",
+    );
+    expect(report.nextActions.join("\n")).not.toContain(
+      "funding_balance_evidence artifact is missing:",
+    );
+  });
+
+  it("groups missing control-plane read artifacts into one capture action", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) =>
+        !path.endsWith("agent-discovery.json") &&
+        !path.endsWith("dashboard-summary.json") &&
+        artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.nextActions).toContain(
+      "Capture read evidence (agent_discovery_evidence, dashboard_summary_evidence) with corepack pnpm phase7:staging:collect-reads --evidence-env-file split402-launch-evidence/phase7-staging.env.",
+    );
+    expect(report.nextActions.join("\n")).not.toContain(
+      "agent_discovery_evidence artifact is missing:",
+    );
   });
 
   it("blocks approved proof records when hosted preflight checks failed", () => {

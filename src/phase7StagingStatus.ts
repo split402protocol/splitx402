@@ -2867,21 +2867,96 @@ function createOperatorInvalidFieldActions(invalidFields: readonly string[]): st
 
 function createOperatorBlockerActions(blockers: readonly string[]): string[] {
   const uniqueBlockers = [...new Set(blockers)];
-  const missingArtifactFields = new Set(
-    uniqueBlockers.flatMap((blocker) => {
-      const match = /^([a-z][a-z0-9_]*) artifact is missing:/u.exec(blocker);
-      return match?.[1] === undefined ? [] : [match[1]];
-    }),
+  const missingArtifactFields = [
+    ...new Set(
+      uniqueBlockers.flatMap((blocker) => {
+        const match = /^([a-z][a-z0-9_]*) artifact is missing:/u.exec(blocker);
+        return match?.[1] === undefined ? [] : [match[1]];
+      }),
+    ),
+  ];
+  const readCollectorFields = missingArtifactFields.filter((field) =>
+    isReadCollectorArtifactField(field),
   );
-
-  return uniqueBlockers.filter((blocker) => {
+  const nonReadCollectorFields = missingArtifactFields.filter(
+    (field) => !isReadCollectorArtifactField(field),
+  );
+  const missingArtifactActions = [
+    ...(readCollectorFields.length === 0
+      ? []
+      : [
+          `Capture read evidence (${readCollectorFields.join(
+            ", ",
+          )}) with corepack pnpm phase7:staging:collect-reads --evidence-env-file split402-launch-evidence/phase7-staging.env.`,
+        ]),
+    ...nonReadCollectorFields.flatMap((field) => createMissingArtifactAction(field)),
+  ];
+  const otherBlockers = uniqueBlockers.filter((blocker) => {
+    const missingMatch = /^([a-z][a-z0-9_]*) artifact is missing:/u.exec(blocker);
+    if (
+      missingMatch?.[1] !== undefined &&
+      missingArtifactFields.includes(missingMatch[1])
+    ) {
+      return false;
+    }
     const readErrorMatch =
       /^([a-z][a-z0-9_]*) artifact could not be read(?::.*)?$/u.exec(blocker);
     return !(
       readErrorMatch?.[1] !== undefined &&
-      missingArtifactFields.has(readErrorMatch[1])
+      missingArtifactFields.includes(readErrorMatch[1])
     );
   });
+
+  return [...missingArtifactActions, ...otherBlockers];
+}
+
+function isReadCollectorArtifactField(field: string): boolean {
+  return (
+    field === "agent_discovery_evidence" ||
+    field === "referrer_balance_evidence" ||
+    field === "dashboard_summary_evidence" ||
+    field === "webhook_delivery_evidence" ||
+    field === "payout_obligation_evidence"
+  );
+}
+
+function createMissingArtifactAction(field: string): string[] {
+  switch (field) {
+    case "hosted_preflight_evidence":
+      return [
+        "Capture hosted_preflight_evidence with corepack pnpm phase7:hosted:preflight --evidence-env-file split402-launch-evidence/phase7-staging.env.",
+      ];
+    case "funding_balance_evidence":
+      return [
+        "Capture funding_balance_evidence with SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc corepack pnpm phase7:staging:collect-reads --evidence-env-file split402-launch-evidence/phase7-staging.env.",
+      ];
+    case "mcp_gateway_evidence":
+      return [
+        "Capture mcp_gateway_evidence with SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 corepack pnpm phase7:staging:collect-mcp-gateway --evidence-env-file split402-launch-evidence/phase7-staging.env.",
+      ];
+    case "mcp_bundle_evidence":
+      return [
+        "Capture mcp_bundle_evidence with corepack pnpm demo:mcp-bundle split402-launch-evidence/phase7-staging-evidence/mcp-bundle.json.",
+      ];
+    case "paid_request_evidence":
+      return [
+        "Capture paid_request_evidence with corepack pnpm demo:paid-suite split402-launch-evidence/phase7-staging-evidence/paid-suite.log.",
+      ];
+    case "receipt_verification_evidence":
+      return [
+        "Derive receipt_verification_evidence with corepack pnpm phase7:staging:derive-receipt-verification --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-evidence/paid-suite.log split402-launch-evidence/phase7-staging-evidence/receipt-verification.json.",
+      ];
+    case "artifact_manifest_evidence":
+      return [
+        "Generate artifact_manifest_evidence with corepack pnpm phase7:staging:manifest split402-launch-evidence/phase7-staging-proof.txt split402-launch-evidence/phase7-staging-evidence/artifact-manifest.json.",
+      ];
+    case "commands_run":
+      return [
+        "Capture commands_run with corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log, then replace the template comments with the real command transcript.",
+      ];
+    default:
+      return [`Capture ${field} and attach the local artifact before approval.`];
+  }
 }
 
 function resolveArtifactPath(
