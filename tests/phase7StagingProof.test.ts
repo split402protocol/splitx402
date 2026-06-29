@@ -336,6 +336,9 @@ funding_balance_evidence: funding.json
     expect(report.nextActions.join("\n")).not.toContain(
       "Replace placeholder fields: approval_decision",
     );
+    expect(report.nextActions[0]).toBe(
+      "Run corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence for grouped env/setup blockers before collecting or recollecting evidence.",
+    );
     expect(report.nextActions.join("\n")).toContain(
       "Fill hosted proof identity fields in split402-launch-evidence/phase7-staging.env",
     );
@@ -362,6 +365,9 @@ funding_balance_evidence: funding.json
     expect(brief).toContain("Ready gates:");
     expect(brief).toContain(
       "Launch posture: public-alpha approval remains no-go until hosted proof gates pass.",
+    );
+    expect(brief).toContain(
+      "Reassemble with corepack pnpm phase7:staging:assemble",
     );
     expect(report.gateStatuses).toContainEqual({
       gate: "mcp_gateway",
@@ -431,6 +437,9 @@ funding_balance_evidence: funding.json
         "funding_balance_evidence artifact is missing: evidence/missing-funding-balance.json",
       ],
     });
+    expect(report.nextActions[0]).toBe(
+      "Run corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence for grouped env/setup blockers before collecting or recollecting evidence.",
+    );
     expect(report.nextActions).toContain(
       "Capture funding_balance_evidence with SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc corepack pnpm phase7:staging:collect-reads --evidence-env-file split402-launch-evidence/phase7-staging.env.",
     );
