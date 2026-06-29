@@ -333,9 +333,12 @@ corepack pnpm product:evidence:init --help
 corepack pnpm product:evidence:init
 corepack pnpm product:evidence:init --missing
 corepack pnpm product:evidence:init --force
+corepack pnpm product:launch-preflight --help
 corepack pnpm product:launch-preflight --brief
+corepack pnpm product:launch-checklist --help
 corepack pnpm product:launch-checklist --brief
 corepack pnpm product:launch-checklist --brief <phase6-custody-evidence.txt> <phase7-staging-proof.txt>
+corepack pnpm product:status --help
 corepack pnpm product:status
 corepack pnpm product:status --brief
 corepack pnpm product:status <phase6-custody-evidence.txt> <phase7-staging-proof.txt>
