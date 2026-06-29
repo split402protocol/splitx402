@@ -15,6 +15,7 @@ export const PHASE7_REQUIRED_COMMAND_EVIDENCE = [
   "corepack pnpm phase7:staging:assemble",
   "corepack pnpm phase7:staging:status",
   "corepack pnpm lint",
+  "corepack pnpm product:public-surface-check --brief",
   "corepack pnpm typecheck",
   "corepack pnpm test",
   "corepack pnpm build",

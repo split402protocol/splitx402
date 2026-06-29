@@ -593,9 +593,12 @@ The status check validates required proof fields, local attachment presence, and
 the local attached artifact manifest hashes. It also parses hosted preflight,
 read API evidence, paid-suite receipt verification, MCP bundle/gateway evidence,
 command evidence, and funding-balance coverage before the proof can close. The
-proof gate cross-checks those artifacts so discovered routes, dashboard summary,
-referrer balance, payout obligation, webhook delivery, paid-suite receipts, and
-MCP execution all describe the same hosted flow.
+command evidence must include `corepack pnpm product:public-surface-check --brief`
+so hosted proof cannot pass after license, About-description, or
+public/private-boundary drift. The proof gate cross-checks those artifacts so
+discovered routes, dashboard summary, referrer balance, payout obligation,
+webhook delivery, paid-suite receipts, and MCP execution all describe the same
+hosted flow.
 
 Run the demo merchant and agent flows:
 

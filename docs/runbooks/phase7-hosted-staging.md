@@ -126,7 +126,8 @@ corepack pnpm phase7:staging:status --brief split402-launch-evidence/phase7-stag
 corepack pnpm product:status --brief --workspace split402-launch-evidence
 ```
 
-The `commands_run` transcript must include the real output for
+The `commands_run` transcript must include the full validation suite, including
+`corepack pnpm product:public-surface-check --brief`, and the real output for
 `git status --short --branch`; it must show only the branch/status header and no
 changed-file rows.
 

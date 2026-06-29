@@ -2890,6 +2890,7 @@ function createValidCommandsLog(): string {
     "$ corepack pnpm phase7:staging:assemble phase7-staging-proof.txt",
     "$ corepack pnpm phase7:staging:status phase7-staging-proof.txt",
     "$ corepack pnpm lint",
+    "$ corepack pnpm product:public-surface-check --brief",
     "$ corepack pnpm typecheck",
     "$ corepack pnpm test",
     "$ corepack pnpm build",

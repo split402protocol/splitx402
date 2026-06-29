@@ -228,7 +228,8 @@ The validator requires:
   source commit/status commands, the Phase 7 staging collection/status commands,
   and the validation commands:
   `git rev-parse HEAD`, `git status --short --branch`,
-  `corepack pnpm lint`, `corepack pnpm typecheck`, `corepack pnpm test`,
+  `corepack pnpm lint`, `corepack pnpm product:public-surface-check --brief`,
+  `corepack pnpm typecheck`, `corepack pnpm test`,
   `corepack pnpm build`, `corepack pnpm vectors:check`, and
   `corepack pnpm audit --audit-level high`. The pasted
   `git status --short --branch` output must show only the branch/status header
