@@ -165,7 +165,7 @@ function createPhase7Section(
     externalEvidenceRequired: true,
     commands: [
       LAUNCH_PREFLIGHT_COMMAND,
-      "Fill split402-launch-evidence/phase7-staging.env with hosted staging values.",
+      "Fill split402-launch-evidence/phase7-staging.env with hosted staging values reported by launch preflight.",
       "SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",
       "corepack pnpm phase7:hosted:preflight --evidence-env-file split402-launch-evidence/phase7-staging.env",
       "corepack pnpm phase7:staging:collect-reads --evidence-env-file split402-launch-evidence/phase7-staging.env",
