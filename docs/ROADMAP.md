@@ -11,15 +11,18 @@ the first Phase 6 payout-engine boundaries. The protocol core, test vectors, x40
 extension, demo merchant, demo agent, agent SDK, merchant SDK primitives,
 control-plane ingestion, PostgreSQL adapters, outbox workers, Solana chain
 verification, receipt economic-policy verification, public pending-only
-merchant/origin registration, payout preview/allocation, payout transaction persistence,
-broadcast/finality boundaries, local-dev signer, remote signer client, signer
-appliance scaffold, signer deployment artifacts, rollup, payout lifecycle
-outbox/webhook events, unknown-outcome reconciliation queue, referrer payout
-views, payout reconciliation decision tooling, and idempotent payout ledger
-closure are present. Chain verification rejection now creates terminal rejected
-accrual state, finalized payout ledger closure marks allocated accruals paid,
-and safe release can cancel pre-submission/problem payout batches back to
-available accruals. The first `@split402/router` alpha package is present with
+merchant/origin registration, payout preview/allocation, payout transaction
+persistence, payout transaction-to-item mapping, signer byte verification,
+broadcast/finality boundaries, finalized payout transfer-content verification,
+local-dev signer, remote signer client, signer appliance scaffold, signer
+deployment artifacts, rollup, payout lifecycle outbox/webhook events,
+unknown-outcome reconciliation queue, referrer payout views, payout
+reconciliation decision tooling, and idempotent payout ledger closure are
+present. Chain verification rejection now creates terminal rejected accrual
+state, finalized payout ledger closure marks allocated accruals paid only after
+transfer-content verification, and safe release can cancel
+pre-submission/problem payout batches back to available accruals. The first
+`@split402/router` alpha package is present with
 static providers, control-plane route discovery, budget enforcement, ranking,
 fallback, and receipt verification, and the MCP demo gateway now exposes router-backed
 `split402.searchCapabilities`, `split402.execute`, and `split402.getReceipt`
@@ -31,7 +34,9 @@ receipt-verification continuity, positive referrer credit, and Split402 fee
 arithmetic derived from receipt bps fields.
 Launch evidence scaffolds now include env-file loading for the Phase 6 and
 Phase 7 collection/assembly commands so custom evidence directories can be run
-without copying every variable into the shell session.
+without copying every variable into the shell session. Use
+`corepack pnpm product:status --brief --workspace split402-launch-evidence` for
+the combined Phase 6 custody and Phase 7 hosted-proof launch status.
 
 The MVP still uses normal x402 settlement to the merchant and records a
 commission liability for later merchant-funded payout. Protocol fee is a
@@ -270,6 +275,7 @@ Current slice:
 - Solana RPC payout transaction simulation with per-transaction
   succeeded/failed/retry outcomes;
 - Solana payout signer interface and policy gate before isolated signing;
+- fail-closed payout transaction byte verification before signer delegation;
 - disposable local-dev signer wiring for Devnet payout tests;
 - remote signer client wiring with optional HMAC request authentication;
 - isolated payout signer appliance scaffold with HMAC verification and Solana
@@ -320,12 +326,14 @@ Current slice:
   passed and observed status from the secondary RPC;
 - signed-byte payout transaction persistence and Solana broadcast submission
   boundary;
+- payout transaction-to-item mapping for per-item finality;
 - Solana payout transaction finality monitor with retry and outcome-unknown
   classification;
+- finalized payout transfer-content verification before ledger closure;
 - payout batch and item status rollup from transaction finality;
 - safe payout allocation release for draft, planned, signing, failed, and
   cancelled batches;
-- idempotent payout-batch ledger closure for finalized payouts;
+- idempotent payout-batch ledger closure for finalized, transfer-verified payouts;
 - payout submitted, confirmed, finalized, failed, and outcome-unknown internal
   and webhook outbox events;
 - unknown-outcome payout reconciliation queue for merchant/operator review;

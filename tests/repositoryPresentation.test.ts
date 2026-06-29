@@ -124,6 +124,20 @@ describe("repository presentation", () => {
     );
   });
 
+  it("keeps Phase 6 payout safety docs aligned with implemented hardening", () => {
+    const phase6 = readFileSync("docs/PHASE_6.md", "utf8");
+    const roadmap = readFileSync("docs/ROADMAP.md", "utf8");
+
+    for (const text of [phase6, roadmap]) {
+      expect(text).toContain("payout transaction-to-item");
+      expect(text).toContain("transfer-content verification");
+      expect(text).toContain("signer byte verification");
+      expect(text).toContain(
+        "corepack pnpm product:status --brief --workspace split402-launch-evidence",
+      );
+    }
+  });
+
   it("keeps public proof docs aligned with Phase 7 continuity gates", () => {
     const readme = readFileSync("README.md", "utf8");
     const phase7 = readFileSync("docs/PHASE_7.md", "utf8");
