@@ -167,11 +167,9 @@ function createProductNextActions(
   if (!phase7.proofChecked && !phase6.evidenceBundleChecked) {
     return [
       "Create a combined launch evidence workspace with corepack pnpm product:evidence:init.",
-      "Fill split402-launch-evidence/phase7-staging.env with hosted staging values.",
-      "Review generated split402-launch-evidence/phase6-evidence.env before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template split402-launch-evidence > split402-launch-evidence/phase6-evidence.env.",
-      "Fill split402-launch-evidence/phase6-evidence.env with generated Phase 6 custody record paths.",
-      "Fill split402-launch-evidence/phase6-custody-evidence.txt with generated Phase 6 custody records.",
-      "Run corepack pnpm product:launch-preflight --brief split402-launch-evidence before collecting hosted proof.",
+      "Run corepack pnpm product:launch-preflight --brief split402-launch-evidence and follow its next action.",
+      "Fill the generated Phase 7 and Phase 6 env files with hosted staging and custody evidence values.",
+      "Collect Phase 7 hosted proof and Phase 6 custody evidence from the same deployed environment and source commit.",
       "Run hosted Phase 7 staging proof collection and status validation.",
       "Run corepack pnpm product:status --brief split402-launch-evidence/phase6-custody-evidence.txt split402-launch-evidence/phase7-staging-proof.txt.",
     ];

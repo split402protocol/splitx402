@@ -32,13 +32,13 @@ describe("Split402 product readiness status", () => {
       "Create a combined launch evidence workspace with corepack pnpm product:evidence:init.",
     );
     expect(report.nextActions).toContain(
-      "Run corepack pnpm product:launch-preflight --brief split402-launch-evidence before collecting hosted proof.",
+      "Run corepack pnpm product:launch-preflight --brief split402-launch-evidence and follow its next action.",
     );
     expect(report.nextActions).toContain(
-      "Review generated split402-launch-evidence/phase6-evidence.env before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template split402-launch-evidence > split402-launch-evidence/phase6-evidence.env.",
+      "Fill the generated Phase 7 and Phase 6 env files with hosted staging and custody evidence values.",
     );
     expect(report.nextActions).toContain(
-      "Fill split402-launch-evidence/phase6-evidence.env with generated Phase 6 custody record paths.",
+      "Collect Phase 7 hosted proof and Phase 6 custody evidence from the same deployed environment and source commit.",
     );
     expect(report.nextActions).toContain(
       "Run hosted Phase 7 staging proof collection and status validation.",
@@ -101,7 +101,7 @@ approval_notes: checked evidence is intentionally incomplete
     expect(brief).toContain("Phase 6 production custody evidence: not checked");
     expect(brief).toContain("Mainnet ready: no");
     expect(brief).toContain("corepack pnpm product:evidence:init");
-    expect(brief).toContain("phase6:evidence:env-template");
+    expect(brief).toContain("generated Phase 7 and Phase 6 env files");
     expect(brief).toContain("corepack pnpm product:launch-preflight");
   });
 });
