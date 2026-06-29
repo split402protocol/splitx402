@@ -230,7 +230,9 @@ The validator requires:
   `git rev-parse HEAD`, `git status --short --branch`,
   `corepack pnpm lint`, `corepack pnpm typecheck`, `corepack pnpm test`,
   `corepack pnpm build`, `corepack pnpm vectors:check`, and
-  `corepack pnpm audit --audit-level high`.
+  `corepack pnpm audit --audit-level high`. The pasted
+  `git status --short --branch` output must show only the branch/status header
+  and no changed-file rows.
 - `funding_balance_evidence` must be a local attached
   `funding-balance.json` artifact containing a merchant obligation summary.
   Each asset must report `covered` with `fundingDeficitAtomic: "0"` or

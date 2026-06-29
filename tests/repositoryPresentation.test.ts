@@ -193,6 +193,8 @@ describe("repository presentation", () => {
     expect(stagingProof).toContain(
       "receipt summaries from a different run",
     );
+    expect(phase7).toContain("no changed-file rows");
+    expect(stagingProof).toContain("no changed-file rows");
   });
 
   it("keeps Phase 7 proof docs on the launch evidence workspace flow", () => {

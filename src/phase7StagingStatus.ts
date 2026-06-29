@@ -2092,6 +2092,53 @@ function validateCommandEvidence(text: string, blockers: string[]): void {
       blockers.push(`commands_run missing required command: ${command}`);
     }
   }
+  validateGitStatusCommandOutput(text, blockers);
+}
+
+interface CommandEvidenceBlock {
+  command: string;
+  outputLines: string[];
+}
+
+function validateGitStatusCommandOutput(text: string, blockers: string[]): void {
+  const gitStatusBlock = extractCommandEvidenceBlocks(text).find((block) =>
+    block.command.includes("git status --short --branch"),
+  );
+  if (gitStatusBlock === undefined) {
+    return;
+  }
+
+  const outputLines = gitStatusBlock.outputLines
+    .map((line) => line.trimEnd())
+    .filter((line) => line.trim().length > 0);
+  if (outputLines.length === 0) {
+    blockers.push("commands_run git status output is missing");
+    return;
+  }
+  const changedFileLines = outputLines.filter((line) => !line.startsWith("## "));
+  if (changedFileLines.length > 0) {
+    blockers.push(
+      "commands_run git status output must show a clean source worktree",
+    );
+  }
+}
+
+function extractCommandEvidenceBlocks(text: string): CommandEvidenceBlock[] {
+  const blocks: CommandEvidenceBlock[] = [];
+  let currentBlock: CommandEvidenceBlock | undefined;
+  for (const rawLine of text.split(/\r?\n/u)) {
+    const trimmed = rawLine.trim();
+    const command = normalizeCommandText(stripCommandPrompt(trimmed));
+    if (command.length > 0 && isCommandEvidenceLine(command)) {
+      currentBlock = { command, outputLines: [] };
+      blocks.push(currentBlock);
+      continue;
+    }
+    if (currentBlock !== undefined && trimmed.length > 0) {
+      currentBlock.outputLines.push(rawLine);
+    }
+  }
+  return blocks;
 }
 
 function isRequiredCommandPresent(
@@ -3040,7 +3087,8 @@ function isCommandEvidenceBlocker(blocker: string): boolean {
     blocker === "commands_run artifact is empty" ||
     blocker ===
       "commands_run artifact must include shell command lines, not only prose" ||
-    blocker.startsWith("commands_run missing required command:")
+    blocker.startsWith("commands_run missing required command:") ||
+    blocker.startsWith("commands_run git status output")
   );
 }
 
