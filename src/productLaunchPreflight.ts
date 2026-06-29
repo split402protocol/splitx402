@@ -373,6 +373,16 @@ export function createSplit402LaunchPreflightReport(
           : prematureApprovalDetails,
     },
     {
+      id: "phase6_redacted_env_summary",
+      label: "Phase 6 custody env redacted summary",
+      ok: true,
+      severity: "advisory",
+      details: createPhase6RedactedEnvSummary({
+        env: phase6Env,
+        envPath: phase6EnvPath,
+      }),
+    },
+    {
       id: "phase7_redacted_env_summary",
       label: "Phase 7 hosted env redacted summary",
       ok: true,
@@ -661,6 +671,36 @@ function createPhase7RedactedEnvSummary(input: {
       input.env,
     )}`,
   ];
+}
+
+function createPhase6RedactedEnvSummary(input: {
+  env: ReadonlyMap<string, string>;
+  envPath: string;
+}): string[] {
+  return [
+    `Env file: ${toDisplayPath(input.envPath)}`,
+    ...REQUIRED_PHASE6_DIRECT_ENV_KEYS.map((key) =>
+      describePhase6EnvValue(input.env, key),
+    ),
+    `SPLIT402_PHASE6_EVIDENCE_APPROVAL_DECISION: ${describeOptionalDecision(
+      input.env,
+      "SPLIT402_PHASE6_EVIDENCE_APPROVAL_DECISION",
+    )}`,
+  ];
+}
+
+function describePhase6EnvValue(
+  env: ReadonlyMap<string, string>,
+  key: string,
+): string {
+  return hasConfiguredEnvValue(env, key) ? `${key}: configured` : `${key}: missing`;
+}
+
+function describeOptionalDecision(
+  env: ReadonlyMap<string, string>,
+  key: string,
+): string {
+  return hasConfiguredEnvValue(env, key) ? "configured" : "unset";
 }
 
 function describePhase7EnvValue(
