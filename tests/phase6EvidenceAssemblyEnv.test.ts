@@ -47,6 +47,18 @@ describe("Phase 6 evidence assembly env template", () => {
     expect(template).toContain(
       "# SPLIT402_PHASE6_ASSEMBLE_NETWORK_POLICY_RECORD=split402-launch-evidence/phase6-network-policy-review.txt",
     );
+    expect(template).toContain(
+      "# SPLIT402_PHASE6_EVIDENCE_REVIEWERS=Split402 security, operations, protocol",
+    );
+    expect(template).toContain(
+      "# SPLIT402_PHASE6_EVIDENCE_FUNDING_WALLET=<merchant-funding-wallet>",
+    );
+    expect(template).toContain(
+      "# SPLIT402_PHASE6_EVIDENCE_NETWORK=solana:devnet",
+    );
+    expect(template).toContain(
+      "# records below; direct values override derived values when set.",
+    );
     expect(template.match(/SPLIT402_PHASE6_ASSEMBLE_SIGNER_POLICY_RECORD/gu))
       .toHaveLength(1);
     expect(template).toContain(
@@ -86,6 +98,9 @@ describe("Phase 6 evidence assembly env template", () => {
     );
     expect(template).toContain(
       "# SPLIT402_PHASE6_EVIDENCE_REVIEW_ID=phase6-custody-YYYY-MM-DD",
+    );
+    expect(template).toContain(
+      "# SPLIT402_PHASE6_EVIDENCE_NETWORK=solana:devnet",
     );
   });
 });
