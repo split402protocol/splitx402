@@ -152,7 +152,9 @@ describe("repository presentation", () => {
     expect(readme).toContain("corepack pnpm product:evidence:init --help");
     expect(readme).toContain("corepack pnpm product:evidence:init --missing");
     expect(readme).toContain("corepack pnpm product:evidence:init --force");
+    expect(readme).toContain("corepack pnpm product:launch-preflight --help");
     expect(readme).toContain("corepack pnpm product:launch-preflight --brief");
+    expect(readme).toContain("corepack pnpm product:launch-checklist --help");
     expect(readme).toContain("corepack pnpm product:launch-checklist --brief");
     expect(readme).toContain("corepack pnpm phase6:evidence:env-template");
     expect(readme).toContain(
@@ -165,6 +167,7 @@ describe("repository presentation", () => {
       "corepack pnpm product:launch-checklist --brief <phase6-custody-evidence.txt> <phase7-staging-proof.txt>",
     );
     expect(readme).toContain("corepack pnpm product:status");
+    expect(readme).toContain("corepack pnpm product:status --help");
     expect(readme).toContain("corepack pnpm product:status --brief");
     expect(readme).toContain("creates a local evidence workspace");
     expect(readme).toContain("refuses to overwrite");
