@@ -54,7 +54,7 @@ export const PHASE7_STAGING_COMMANDS = [
   {
     gate: "mcp_bundle",
     command:
-      "corepack pnpm demo:mcp-bundle > phase7-staging-evidence/mcp-bundle.json",
+      "corepack pnpm demo:mcp-bundle phase7-staging-evidence/mcp-bundle.json",
     evidenceField: "mcp_bundle_evidence",
   },
   {
@@ -71,7 +71,7 @@ export const PHASE7_STAGING_COMMANDS = [
   {
     gate: "artifact_manifest",
     command:
-      "corepack pnpm phase7:staging:manifest <phase7-staging-proof.txt> > phase7-staging-evidence/artifact-manifest.json",
+      "corepack pnpm phase7:staging:manifest <phase7-staging-proof.txt> phase7-staging-evidence/artifact-manifest.json",
     evidenceField: "artifact_manifest_evidence",
   },
   {
@@ -2573,10 +2573,10 @@ function createNextActions(
       "Capture funding-balance evidence by running corepack pnpm phase7:staging:collect-reads with SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc.",
       "Capture MCP gateway transcript evidence with corepack pnpm phase7:staging:collect-mcp-gateway.",
       "Run the MCP gateway smoke check with corepack pnpm demo:mcp-gateway:smoke.",
-      "Capture MCP bundle evidence with corepack pnpm demo:mcp-bundle > phase7-staging-evidence/mcp-bundle.json.",
+      "Capture MCP bundle evidence with corepack pnpm demo:mcp-bundle phase7-staging-evidence/mcp-bundle.json.",
       "Capture paid-suite evidence with corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log.",
       "Derive receipt-verification evidence with corepack pnpm phase7:staging:derive-receipt-verification.",
-      "Generate artifact hashes with corepack pnpm phase7:staging:manifest <phase7-staging-proof.txt> > phase7-staging-evidence/artifact-manifest.json.",
+      "Generate artifact hashes with corepack pnpm phase7:staging:manifest <phase7-staging-proof.txt> phase7-staging-evidence/artifact-manifest.json.",
       "Attach response URLs, logs, or artifact paths with corepack pnpm phase7:staging:assemble.",
       "Run corepack pnpm phase7:staging:status <phase7-staging-proof.txt>.",
     ];

@@ -216,7 +216,7 @@ describe("Phase 7 staging evidence workspace", () => {
       "The staging seed prints `proofEnv`; copy those values",
     );
     expect(workspace.readmeText).toContain(
-      "corepack pnpm phase7:staging:manifest phase7-staging-proof.txt > phase7-staging-evidence/artifact-manifest.json",
+      "corepack pnpm phase7:staging:manifest phase7-staging-proof.txt phase7-staging-evidence/artifact-manifest.json",
     );
     expect(workspace.readmeText).toContain("lint, typecheck, test, build");
     expect(workspace.readmeText).toContain(

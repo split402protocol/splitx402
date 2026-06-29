@@ -45,7 +45,7 @@ export function createSplit402LaunchChecklist(
     },
     sections: [
       createWorkspaceSection(report),
-      createLocalValidationSection(),
+      createLocalValidationSection(report),
       createPhase7Section(report),
       createPhase6Section(report),
       createFinalStatusSection(report),
@@ -99,10 +99,20 @@ function createWorkspaceSection(
   };
 }
 
-function createLocalValidationSection(): Split402LaunchChecklistSection {
+function createLocalValidationSection(
+  report: Split402ProductReadinessReport,
+): Split402LaunchChecklistSection {
+  const commandEvidenceStatus = report.phase7.commandEvidenceStatus.status;
+  const status =
+    commandEvidenceStatus === "valid"
+      ? "ready"
+      : commandEvidenceStatus === "invalid"
+        ? "blocked"
+        : "not_checked";
+
   return {
     title: "Run local repository validation",
-    status: "not_checked",
+    status,
     externalEvidenceRequired: false,
     commands: [
       "corepack pnpm lint",
@@ -113,6 +123,7 @@ function createLocalValidationSection(): Split402LaunchChecklistSection {
       "corepack pnpm audit --audit-level high",
     ],
     notes: [
+      "This section is marked ready only when Phase 7 commands_run evidence includes the required validation commands.",
       "If SPLIT402_TEST_DATABASE_URL is configured, also run corepack pnpm test:postgres.",
     ],
   };
@@ -137,10 +148,10 @@ function createPhase7Section(
       "SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 corepack pnpm phase7:staging:collect-mcp-gateway --evidence-env-file split402-launch-evidence/phase7-staging.env",
       "corepack pnpm demo:mcp-gateway:smoke",
       "corepack pnpm phase7:staging:commands-template > split402-launch-evidence/phase7-staging-evidence/commands.log",
-      "corepack pnpm demo:mcp-bundle > split402-launch-evidence/phase7-staging-evidence/mcp-bundle.json",
+      "corepack pnpm demo:mcp-bundle split402-launch-evidence/phase7-staging-evidence/mcp-bundle.json",
       "corepack pnpm demo:paid-suite > split402-launch-evidence/phase7-staging-evidence/paid-suite.log",
       "corepack pnpm phase7:staging:derive-receipt-verification --evidence-env-file split402-launch-evidence/phase7-staging.env",
-      "corepack pnpm phase7:staging:manifest split402-launch-evidence/phase7-staging-proof.txt > split402-launch-evidence/phase7-staging-evidence/artifact-manifest.json",
+      "corepack pnpm phase7:staging:manifest split402-launch-evidence/phase7-staging-proof.txt split402-launch-evidence/phase7-staging-evidence/artifact-manifest.json",
       "corepack pnpm phase7:staging:assemble --evidence-env-file split402-launch-evidence/phase7-staging.env > split402-launch-evidence/phase7-staging-proof.txt",
       "corepack pnpm phase7:staging:status split402-launch-evidence/phase7-staging-proof.txt",
     ],

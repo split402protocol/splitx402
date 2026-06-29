@@ -129,4 +129,92 @@ approval_notes: checked evidence is intentionally incomplete
       "Collect Phase 7 hosted public-alpha proof [blocked]",
     );
   });
+
+  it("marks local validation ready when command evidence is valid", () => {
+    const artifacts = new Map<string, Uint8Array>([
+      ["evidence/commands.log", encode(createValidCommandsLog())],
+    ]);
+    const checklist = createSplit402LaunchChecklist(
+      createSplit402ProductReadinessReport({
+        phase7ProofText: "commands_run: attached: commands.log\n",
+        phase7Options: {
+          artifactBaseDir: "evidence",
+          readArtifact: (path) => readArtifact(artifacts, path),
+          resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+        },
+      }),
+    );
+
+    expect(checklist.sections[1]).toMatchObject({
+      title: "Run local repository validation",
+      status: "ready",
+      externalEvidenceRequired: false,
+    });
+  });
+
+  it("marks local validation blocked when command evidence is invalid", () => {
+    const artifacts = new Map<string, Uint8Array>([
+      ["evidence/commands.log", encode("$ corepack pnpm lint\n")],
+    ]);
+    const checklist = createSplit402LaunchChecklist(
+      createSplit402ProductReadinessReport({
+        phase7ProofText: "commands_run: attached: commands.log\n",
+        phase7Options: {
+          artifactBaseDir: "evidence",
+          readArtifact: (path) => readArtifact(artifacts, path),
+          resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+        },
+      }),
+    );
+
+    expect(checklist.sections[1]).toMatchObject({
+      title: "Run local repository validation",
+      status: "blocked",
+      externalEvidenceRequired: false,
+    });
+  });
 });
+
+function createValidCommandsLog(): string {
+  return [
+    "$ git rev-parse HEAD",
+    "fd88024000000000000000000000000000000000",
+    "$ git status --short --branch",
+    "## main...origin/main",
+    "$ corepack pnpm phase7:staging:init",
+    "$ SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",
+    "$ corepack pnpm phase7:staging-proof > phase7-staging-proof.txt",
+    "$ corepack pnpm phase7:hosted:preflight",
+    "$ corepack pnpm phase7:staging:collect-reads",
+    "$ corepack pnpm phase7:staging:collect-mcp-gateway",
+    "$ corepack pnpm demo:mcp-gateway:smoke",
+    "$ corepack pnpm demo:mcp-bundle phase7-staging-evidence/mcp-bundle.json",
+    "$ corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log",
+    "$ corepack pnpm phase7:staging:derive-receipt-verification",
+    "$ corepack pnpm phase7:staging:manifest phase7-staging-proof.txt phase7-staging-evidence/artifact-manifest.json",
+    "$ corepack pnpm phase7:staging:assemble > phase7-staging-proof.txt",
+    "$ corepack pnpm phase7:staging:status phase7-staging-proof.txt",
+    "$ corepack pnpm lint",
+    "$ corepack pnpm typecheck",
+    "$ corepack pnpm test",
+    "$ corepack pnpm build",
+    "$ corepack pnpm vectors:check",
+    "$ corepack pnpm audit --audit-level high",
+    "",
+  ].join("\n");
+}
+
+function readArtifact(
+  artifacts: ReadonlyMap<string, Uint8Array>,
+  path: string,
+): Uint8Array {
+  const artifact = artifacts.get(path);
+  if (artifact === undefined) {
+    throw new Error(`missing artifact ${path}`);
+  }
+  return artifact;
+}
+
+function encode(value: string): Uint8Array {
+  return new TextEncoder().encode(value);
+}
