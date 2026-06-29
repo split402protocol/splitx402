@@ -68,6 +68,7 @@ export const PHASE6_ATTACHMENT_ENV = [
 ] as const;
 
 export interface Phase6EvidenceAssemblyEnvTemplateInput {
+  activateRecordPathMappings?: boolean;
   directory?: string;
 }
 
@@ -96,6 +97,7 @@ export function createPhase6EvidenceAssemblyEnvTemplate(
   input: Phase6EvidenceAssemblyEnvTemplateInput = {},
 ): string {
   const directory = input.directory ?? "split402-launch-evidence";
+  const mappingPrefix = input.activateRecordPathMappings === true ? "" : "# ";
   const mappingsByEnvName = new Map(
     createPhase6EvidenceAssemblyEnvMappings({ directory }).map((entry) => [
       entry.envName,
@@ -115,19 +117,30 @@ export function createPhase6EvidenceAssemblyEnvTemplate(
     "# SPLIT402_PHASE6_EVIDENCE_APPROVAL_DECISION=no-go",
     "",
     "# Generated record files used for field extraction:",
-    ...PHASE6_RECORD_EXTRACTION_ENV_ENTRIES.map(
-      (entry) => `# ${entry.envName}=${mappingsByEnvName.get(entry.envName)}`,
+    ...PHASE6_RECORD_EXTRACTION_ENV_ENTRIES.map((entry) =>
+      formatEnvMappingLine(entry.envName, mappingsByEnvName, mappingPrefix),
     ),
     "",
     "# Attachment paths copied into the custody evidence bundle:",
     ...PHASE6_ATTACHMENT_ENV.filter(
       (entry) =>
         !PHASE6_RECORD_EXTRACTION_ENV.some((envName) => envName === entry.envName),
-    ).map((entry) => `# ${entry.envName}=${mappingsByEnvName.get(entry.envName)}`),
+    ).map(
+      (entry) =>
+        formatEnvMappingLine(entry.envName, mappingsByEnvName, mappingPrefix),
+    ),
     "",
     "# Assemble and check:",
     `# corepack pnpm phase6:evidence:assemble > ${directory}/phase6-custody-evidence.txt`,
     `# corepack pnpm phase6:evidence:status ${directory}/phase6-custody-evidence.txt`,
     "",
   ].join("\n");
+}
+
+function formatEnvMappingLine(
+  envName: string,
+  mappingsByEnvName: ReadonlyMap<string, string>,
+  prefix: string,
+): string {
+  return `${prefix}${envName}=${mappingsByEnvName.get(envName)}`;
 }
