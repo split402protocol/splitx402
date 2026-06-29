@@ -29,6 +29,14 @@ export interface Split402LaunchChecklistSection {
 export function createSplit402LaunchChecklist(
   report: Split402ProductReadinessReport,
 ): Split402LaunchChecklist {
+  const sections = [
+    createWorkspaceSection(report),
+    createLocalValidationSection(report),
+    createPhase7Section(report),
+    createPhase6Section(report),
+    createFinalStatusSection(report),
+  ];
+
   return {
     schema: "split402.launch_checklist.v1",
     product: "Split402",
@@ -43,14 +51,8 @@ export function createSplit402LaunchChecklist(
       phase7EnvFile: "split402-launch-evidence/phase7-staging.env",
       phase7EvidenceDirectory: "split402-launch-evidence/phase7-staging-evidence",
     },
-    sections: [
-      createWorkspaceSection(report),
-      createLocalValidationSection(report),
-      createPhase7Section(report),
-      createPhase6Section(report),
-      createFinalStatusSection(report),
-    ],
-    nextCommand: report.nextActions[0] ?? "corepack pnpm product:status --brief",
+    sections,
+    nextCommand: createChecklistNextCommand(sections, report),
   };
 }
 
@@ -97,6 +99,18 @@ function createWorkspaceSection(
       "Do not commit secrets, private URLs, private keys, or private transaction bytes.",
     ],
   };
+}
+
+function createChecklistNextCommand(
+  sections: readonly Split402LaunchChecklistSection[],
+  report: Split402ProductReadinessReport,
+): string {
+  const nextSection = sections.find((section) => section.status !== "ready");
+  const nextCommand = nextSection?.commands[0];
+  if (nextCommand !== undefined) {
+    return nextCommand;
+  }
+  return report.nextActions[0] ?? "corepack pnpm product:status --brief";
 }
 
 function createLocalValidationSection(

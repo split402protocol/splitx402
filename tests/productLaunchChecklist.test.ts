@@ -58,7 +58,7 @@ describe("Split402 launch checklist", () => {
       "corepack pnpm product:status --brief --workspace split402-launch-evidence",
     );
     expect(checklist.nextCommand).toBe(
-      "Create a combined launch evidence workspace with corepack pnpm product:evidence:init.",
+      "corepack pnpm product:evidence:init",
     );
   });
 
@@ -125,6 +125,7 @@ approval_notes: checked evidence is intentionally incomplete
       "blocked",
       "blocked",
     ]);
+    expect(checklist.nextCommand).toBe("corepack pnpm lint");
     expect(formatSplit402LaunchChecklistBrief(checklist)).toContain(
       "Collect Phase 7 hosted public-alpha proof [blocked]",
     );
