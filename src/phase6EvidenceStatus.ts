@@ -191,6 +191,9 @@ const PHASE6_MISSING_FIELD_ACTION_FIELDS = new Set<Phase6CustodyRequiredField>(
   PHASE6_MISSING_FIELD_ACTIONS.flatMap((action) => [...action.fields]),
 );
 
+const LAUNCH_PREFLIGHT_ACTION =
+  "Run corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence for grouped env/setup blockers before collecting or recollecting evidence.";
+
 export function createPhase6EvidenceStatusReport(
   evidenceText?: string,
   options: Phase6EvidenceStatusOptions = {},
@@ -229,9 +232,7 @@ export function formatPhase6EvidenceStatusBrief(
   const validation = report.validation;
   const missingCount = validation?.missingFields.length ?? 0;
   const invalidCount = validation?.invalidFields.length ?? 0;
-  const nextActions = report.nextActions
-    .slice(0, 8)
-    .map((action) => `- ${action}`);
+  const nextActions = report.nextActions.map((action) => `- ${action}`);
 
   return [
     `Phase 6 custody evidence: ${status}`,
@@ -262,10 +263,10 @@ function createNextActions(
   if (validation.approved) {
     return sourceCommitBlockers.length === 0
       ? ["Evidence bundle passes machine checks; proceed to human go/no-go review."]
-      : [...sourceCommitBlockers];
+      : [LAUNCH_PREFLIGHT_ACTION, ...sourceCommitBlockers];
   }
 
-  const actions: string[] = [];
+  const actions: string[] = [LAUNCH_PREFLIGHT_ACTION];
   actions.push(...createMissingFieldActions(validation));
   const placeholderFieldsToReplace = validation.placeholderFields.filter(
     (field) => field !== "approval_decision",

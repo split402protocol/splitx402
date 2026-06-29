@@ -218,6 +218,9 @@ const PHASE7_MISSING_FIELD_ACTION_FIELDS = new Set<string>(
   PHASE7_MISSING_FIELD_ACTIONS.flatMap((action) => [...action.fields]),
 );
 
+const LAUNCH_PREFLIGHT_ACTION =
+  "Run corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence for grouped env/setup blockers before collecting or recollecting evidence.";
+
 export interface Phase7StagingArtifactStatus {
   evidenceField: (typeof PHASE7_EVIDENCE_FIELDS)[number];
   reference?: string;
@@ -368,9 +371,7 @@ export function formatPhase7StagingStatusBrief(
   const validation = report.validation;
   const missingCount = validation?.missingFields.length ?? 0;
   const invalidCount = validation?.invalidFields.length ?? 0;
-  const nextActions = report.nextActions
-    .slice(0, 10)
-    .map((action) => `- ${action}`);
+  const nextActions = report.nextActions.map((action) => `- ${action}`);
 
   return [
     `Phase 7 hosted staging proof: ${status}`,
@@ -2922,10 +2923,10 @@ function createNextActions(
         "Phase 7 staging proof passes machine checks; proceed to launch review.",
       ];
     }
-    return operatorArtifactActions;
+    return [LAUNCH_PREFLIGHT_ACTION, ...operatorArtifactActions];
   }
 
-  const actions: string[] = [];
+  const actions: string[] = [LAUNCH_PREFLIGHT_ACTION];
   actions.push(...createMissingFieldActions(validation));
   const placeholderFieldsToReplace = validation.placeholderFields.filter(
     (field) =>

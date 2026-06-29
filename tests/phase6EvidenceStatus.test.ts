@@ -61,6 +61,9 @@ approval_decision: no-go
     expect(report.validation?.invalidFields).toContain(
       "approval_decision must be approved before Phase 6 custody can go live",
     );
+    expect(report.nextActions[0]).toBe(
+      "Run corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence for grouped env/setup blockers before collecting or recollecting evidence.",
+    );
     expect(report.nextActions.join("\n")).toContain(
       "Fill direct Phase 6 custody review fields in split402-launch-evidence/phase6-evidence.env",
     );
@@ -87,6 +90,9 @@ approval_decision: no-go
     expect(brief).toContain("Phase 6 custody evidence: checked, blocked");
     expect(brief).toContain("Launch posture: production custody remains no-go");
     expect(brief).toContain("Missing fields:");
+    expect(brief).toContain(
+      "Keep approval_decision=no-go until all Phase 6 custody evidence fields and reviews are complete",
+    );
   });
 
   it("validates Phase 6 evidence source_commit against the current checkout", () => {
@@ -125,6 +131,9 @@ approval_decision: no-go
       currentSourceCommit: "def5678000000000000000000000000000000000",
       blockers: ["source_commit does not match current checkout"],
     });
+    expect(report.nextActions).toContain(
+      "Run corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence for grouped env/setup blockers before collecting or recollecting evidence.",
+    );
     expect(report.nextActions).toContain(
       "source_commit does not match current checkout",
     );
