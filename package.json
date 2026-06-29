@@ -1,7 +1,7 @@
 {
   "name": "split402",
   "version": "0.1.0",
-  "description": "Referral and commission protocol infrastructure for x402-paid APIs and agent tools.",
+  "description": "Agent payment routing and verifiable referral accounting for x402 APIs.",
   "license": "Apache-2.0",
   "private": true,
   "type": "module",

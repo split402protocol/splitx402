@@ -123,10 +123,14 @@ function createPackageLicenseCheck(
 
   try {
     const parsed = JSON.parse(packageJson) as {
+      description?: unknown;
       license?: unknown;
       private?: unknown;
     };
     const blockers = [
+      ...(parsed.description === EXPECTED_GITHUB_DESCRIPTION
+        ? []
+        : [`Set package.json description to "${EXPECTED_GITHUB_DESCRIPTION}".`]),
       ...(parsed.license === "Apache-2.0"
         ? []
         : ["Set package.json license to Apache-2.0."]),
@@ -140,7 +144,9 @@ function createPackageLicenseCheck(
       ok: blockers.length === 0,
       details:
         blockers.length === 0
-          ? ["package.json declares Apache-2.0 and keeps the workspace private."]
+          ? [
+              "package.json declares the canonical public description, Apache-2.0, and keeps the workspace private.",
+            ]
           : blockers,
     };
   } catch {
