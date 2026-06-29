@@ -42,7 +42,13 @@ describe("Split402 product readiness CLI parsing", () => {
         status: "passed",
         launchApproval: "not_approved",
         generatedAt: "2026-06-29T20:00:00.000Z",
-        checks: [{ id: "repo_hygiene", status: "passed" }],
+        checks: [
+          { id: "repo_hygiene", status: "passed" },
+          { id: "public_surface", status: "passed" },
+          { id: "protocol_vectors", status: "passed" },
+          { id: "router_alpha", status: "passed" },
+          { id: "mcp_gateway_smoke", status: "passed" },
+        ],
         notes: [],
       }),
     );
