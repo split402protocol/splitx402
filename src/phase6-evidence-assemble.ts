@@ -15,10 +15,15 @@ import {
   PHASE6_ATTACHMENT_ENV,
   PHASE6_RECORD_EXTRACTION_ENV,
 } from "./phase6EvidenceAssemblyEnv.js";
+import { loadEvidenceEnvFiles } from "./evidenceEnvFile.js";
 
 const env = process.env;
 
 try {
+  loadEvidenceEnvFiles({
+    argv: process.argv.slice(2),
+    defaultEnvFiles: ["split402-launch-evidence/phase6-evidence.env"],
+  });
   const values = readDirectValues();
   const input: Phase6EvidenceAssemblyInput = {
     values,
@@ -39,6 +44,9 @@ try {
   console.error(
     [
       "Usage: corepack pnpm phase6:evidence:assemble",
+      "Env file options:",
+      "  --evidence-env-file <path> (optional; defaults to split402-launch-evidence/phase6-evidence.env when present)",
+      "  SPLIT402_ENV_FILE=<path> (optional; uses platform path separator for multiple files)",
       "Direct field override environment:",
       "  SPLIT402_PHASE6_EVIDENCE_<FIELD_NAME>",
       "Record extraction environment:",

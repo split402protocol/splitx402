@@ -1,11 +1,19 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { loadEvidenceEnvFiles } from "./evidenceEnvFile.js";
 import { collectPhase7ReadArtifacts } from "./phase7StagingReadCollector.js";
 
 const env = process.env;
 
 try {
+  loadEvidenceEnvFiles({
+    argv: process.argv.slice(2),
+    defaultEnvFiles: [
+      "split402-launch-evidence/phase7-staging.env",
+      "phase7-staging-evidence/phase7-staging.env",
+    ],
+  });
   const outputDir =
     readOptionalEnv("SPLIT402_PHASE7_READ_OUTPUT_DIR") ??
     readOptionalEnv("SPLIT402_PHASE7_EVIDENCE_DIR") ??
@@ -36,6 +44,9 @@ try {
   console.error(
     [
       "Usage: corepack pnpm phase7:staging:collect-reads",
+      "Env file options:",
+      "  --evidence-env-file <path> (optional; defaults to split402-launch-evidence/phase7-staging.env when present)",
+      "  SPLIT402_ENV_FILE=<path> (optional; uses platform path separator for multiple files)",
       "Required environment:",
       "  SPLIT402_PHASE7_CONTROL_PLANE_URL",
       "  SPLIT402_PHASE7_MERCHANT_ID",

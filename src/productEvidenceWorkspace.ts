@@ -36,6 +36,7 @@ export function createSplit402ProductEvidenceWorkspace(
   const directory = input.directory ?? "split402-launch-evidence";
   const phase7 = createPhase7StagingEvidenceWorkspace({
     directory: `${directory}/phase7-staging-evidence`,
+    envFilePath: `${directory}/phase7-staging.env`,
   });
   const phase6Values: Phase6CustodyEvidenceBundleValues = {
     ...(input.reviewDate === undefined ? {} : { review_date: input.reviewDate }),
@@ -126,25 +127,29 @@ function createNextCommands(input: {
   phase7ProofFileName: string;
   phase7EnvFileName: string;
 }): string[] {
+  const phase6EnvFile = `${input.directory}/${input.phase6EnvFileName}`;
+  const phase7EnvFile = `${input.directory}/${input.phase7EnvFileName}`;
+  const phase7EnvOption = `--evidence-env-file ${phase7EnvFile}`;
   return [
-    `Fill ${input.directory}/${input.phase7EnvFileName} with hosted staging values.`,
-    `Review generated ${input.directory}/${input.phase6EnvFileName} before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template ${input.directory} > ${input.directory}/${input.phase6EnvFileName}`,
-    `Generate Phase 6 custody records at the paths listed in ${input.directory}/${input.phase6EnvFileName}.`,
+    `Fill ${phase7EnvFile} with hosted staging values.`,
+    `Review generated ${phase6EnvFile} before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template ${input.directory} > ${phase6EnvFile}`,
+    `Generate Phase 6 custody records at the paths listed in ${phase6EnvFile}.`,
     `Fill ${input.directory}/${input.phase6EvidenceFileName} with generated Phase 6 custody records.`,
     `corepack pnpm product:launch-preflight --brief ${input.directory}`,
     "SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",
     `Review ${input.directory}/${input.phase7ProofFileName} and fill direct hosted proof fields.`,
-    "corepack pnpm phase7:hosted:preflight",
-    "corepack pnpm phase7:staging:collect-reads",
-    "SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 corepack pnpm phase7:staging:collect-mcp-gateway",
+    `corepack pnpm phase7:hosted:preflight ${phase7EnvOption}`,
+    `corepack pnpm phase7:staging:collect-reads ${phase7EnvOption}`,
+    `SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 corepack pnpm phase7:staging:collect-mcp-gateway ${phase7EnvOption}`,
     "corepack pnpm demo:mcp-gateway:smoke",
     `corepack pnpm phase7:staging:commands-template > ${input.directory}/phase7-staging-evidence/commands.log`,
     `corepack pnpm demo:mcp-bundle > ${input.directory}/phase7-staging-evidence/mcp-bundle.json`,
     `corepack pnpm demo:paid-suite > ${input.directory}/phase7-staging-evidence/paid-suite.log`,
-    "corepack pnpm phase7:staging:derive-receipt-verification",
+    `corepack pnpm phase7:staging:derive-receipt-verification ${phase7EnvOption}`,
     `corepack pnpm phase7:staging:manifest ${input.directory}/${input.phase7ProofFileName} > ${input.directory}/phase7-staging-evidence/artifact-manifest.json`,
-    `corepack pnpm phase7:staging:assemble > ${input.directory}/${input.phase7ProofFileName}`,
+    `corepack pnpm phase7:staging:assemble ${phase7EnvOption} > ${input.directory}/${input.phase7ProofFileName}`,
     `corepack pnpm phase7:staging:status ${input.directory}/${input.phase7ProofFileName}`,
+    `corepack pnpm phase6:evidence:assemble --evidence-env-file ${phase6EnvFile} > ${input.directory}/${input.phase6EvidenceFileName}`,
     `corepack pnpm phase6:evidence:status ${input.directory}/${input.phase6EvidenceFileName}`,
     `corepack pnpm product:status --brief --workspace ${input.directory}`,
   ];
