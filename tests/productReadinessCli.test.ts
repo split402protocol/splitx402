@@ -105,6 +105,9 @@ describe("Split402 product readiness CLI parsing", () => {
     expect(input.report.phase6.evidenceBundleChecked).toBe(true);
     expect(input.report.phase7.proofChecked).toBe(true);
     expect(input.report.launchDecision).toBe("no-go");
+    expect(input.report.nextActions).toContain(
+      "Run corepack pnpm product:evidence:init --refresh-source before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist.",
+    );
   });
 
   it("treats a missing local proof artifact as not checked", () => {

@@ -196,6 +196,16 @@ function createProductNextActions(
       leadActions.push(...localProof.blockers);
     }
   }
+  if (
+    phase7.sourceCommitStatus.status === "invalid" &&
+    phase7.sourceCommitStatus.blockers.includes(
+      "source_commit does not match current checkout",
+    )
+  ) {
+    leadActions.push(
+      "Run corepack pnpm product:evidence:init --refresh-source before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist.",
+    );
+  }
 
   if (!phase7.proofChecked && !phase6.evidenceBundleChecked) {
     return [
