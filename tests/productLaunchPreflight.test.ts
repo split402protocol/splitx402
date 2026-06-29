@@ -104,11 +104,11 @@ describe("Split402 launch preflight", () => {
       report.checks.find(
         (check) => check.id === "phase6_evidence_env_mappings",
       ),
-    ).toMatchObject({ ok: false });
+    ).toMatchObject({ ok: true });
     expect(report.nextActions).toContain(
       "Fill SPLIT402_PHASE6_EVIDENCE_REVIEW_ID in split402-launch-evidence\\phase6-evidence.env.",
     );
-    expect(report.nextActions).toContain(
+    expect(report.nextActions).not.toContain(
       "Set SPLIT402_PHASE6_ASSEMBLE_IMAGE_PROVENANCE_RECORD=split402-launch-evidence/phase6-image-provenance.txt",
     );
     expect(report.checks.find((check) => check.id === "phase7_hosted_env_values"))

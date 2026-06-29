@@ -34,6 +34,12 @@ describe("Split402 product evidence workspace", () => {
     expect(workspace.phase6EnvText).toContain(
       "evidence/launch/phase6-image-provenance.txt",
     );
+    expect(workspace.phase6EnvText).toContain(
+      "SPLIT402_PHASE6_ASSEMBLE_IMAGE_PROVENANCE_RECORD=evidence/launch/phase6-image-provenance.txt",
+    );
+    expect(workspace.phase6EnvText).not.toContain(
+      "# SPLIT402_PHASE6_ASSEMBLE_IMAGE_PROVENANCE_RECORD=evidence/launch/phase6-image-provenance.txt",
+    );
     expect(workspace.phase6EnvText).not.toContain(
       "split402-launch-evidence/phase6-image-provenance.txt",
     );
@@ -78,7 +84,7 @@ describe("Split402 product evidence workspace", () => {
       "Review generated split402-launch-evidence/phase6-evidence.env before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template split402-launch-evidence > split402-launch-evidence/phase6-evidence.env",
     );
     expect(workspace.nextCommands).toContain(
-      "Fill split402-launch-evidence/phase6-evidence.env with Phase 6 custody record paths.",
+      "Generate Phase 6 custody records at the paths listed in split402-launch-evidence/phase6-evidence.env.",
     );
     expect(workspace.nextCommands).toContain(
       "corepack pnpm phase6:evidence:status split402-launch-evidence/phase6-custody-evidence.txt",
