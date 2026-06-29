@@ -36,6 +36,17 @@ describe("Split402 product readiness CLI parsing", () => {
   it("reads default evidence files from a launch workspace", () => {
     const directory = mkdtempSync(join(tmpdir(), "split402-readiness-"));
     writeFileSync(
+      join(directory, "local-public-alpha-proof.json"),
+      JSON.stringify({
+        schema: "split402.local_public_alpha_proof.v1",
+        status: "passed",
+        launchApproval: "not_approved",
+        generatedAt: "2026-06-29T20:00:00.000Z",
+        checks: [{ id: "repo_hygiene", status: "passed" }],
+        notes: [],
+      }),
+    );
+    writeFileSync(
       join(directory, "phase6-custody-evidence.txt"),
       "review_id: pending\napproval_decision: no-go\n",
     );
@@ -78,12 +89,30 @@ describe("Split402 product readiness CLI parsing", () => {
     expect(input.phase6EvidencePath).toBe(
       join(directory, "phase6-custody-evidence.txt"),
     );
+    expect(input.localProofPath).toBe(
+      join(directory, "local-public-alpha-proof.json"),
+    );
+    expect(input.report.localProof.ready).toBe(true);
     expect(input.phase7ProofPath).toBe(
       join(directory, "phase7-staging-proof.txt"),
     );
     expect(input.report.phase6.evidenceBundleChecked).toBe(true);
     expect(input.report.phase7.proofChecked).toBe(true);
     expect(input.report.launchDecision).toBe("no-go");
+  });
+
+  it("treats a missing local proof artifact as not checked", () => {
+    const directory = mkdtempSync(join(tmpdir(), "split402-readiness-"));
+
+    const input = readSplit402ProductReadinessCliInput([
+      "--workspace",
+      directory,
+    ]);
+
+    expect(input.localProofPath).toBe(
+      join(directory, "local-public-alpha-proof.json"),
+    );
+    expect(input.report.localProof.checked).toBe(false);
   });
 
   it("rejects workspace mode mixed with explicit evidence paths", () => {

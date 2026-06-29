@@ -15,6 +15,7 @@ import {
 export interface Split402ProductReadinessCliInput {
   brief: boolean;
   help: boolean;
+  localProofPath?: string;
   phase6EvidencePath?: string;
   phase7ProofPath?: string;
   report: Split402ProductReadinessReport;
@@ -59,6 +60,12 @@ export function readSplit402ProductReadinessCliInput(
       : positionalArgs[1] ??
         workspaceEvidencePaths?.phase7ProofPath ??
         process.env.SPLIT402_PHASE7_STAGING_PROOF;
+  const localProofPath =
+    help
+      ? undefined
+      : workspaceEvidencePaths?.localProofPath ??
+        process.env.SPLIT402_LOCAL_PUBLIC_ALPHA_PROOF;
+  const localProofText = readOptionalText(localProofPath);
   const phase6EvidenceText = readOptionalText(phase6EvidencePath);
   const phase7ProofText = readOptionalText(phase7ProofPath);
   const phase7ArtifactBaseDir =
@@ -69,10 +76,12 @@ export function readSplit402ProductReadinessCliInput(
   return {
     brief,
     help,
+    localProofPath,
     phase6EvidencePath,
     phase7ProofPath,
     workspaceDirectory,
     report: createSplit402ProductReadinessReport({
+      localProofText,
       phase6EvidenceText,
       phase7ProofText,
       phase7Options: {
@@ -151,10 +160,12 @@ function parseReadinessCliArgs(
 }
 
 function createWorkspaceEvidencePaths(directory: string): {
+  localProofPath: string;
   phase6EvidencePath: string;
   phase7ProofPath: string;
 } {
   return {
+    localProofPath: join(directory, "local-public-alpha-proof.json"),
     phase6EvidencePath: join(directory, "phase6-custody-evidence.txt"),
     phase7ProofPath: join(directory, "phase7-staging-proof.txt"),
   };
@@ -162,6 +173,9 @@ function createWorkspaceEvidencePaths(directory: string): {
 
 function readOptionalText(path: string | undefined): string | undefined {
   if (path === undefined || path.trim().length === 0) {
+    return undefined;
+  }
+  if (!existsSync(path)) {
     return undefined;
   }
   return readFileSync(path, "utf8");

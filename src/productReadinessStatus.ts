@@ -7,11 +7,21 @@ import {
   type Phase7StagingStatusReport,
   createPhase7StagingStatusReport,
 } from "./phase7StagingStatus.js";
+import type { Split402LocalProofReport } from "./productLocalProof.js";
 
 export interface Split402ProductReadinessInput {
+  localProofText?: string;
   phase6EvidenceText?: string;
   phase7ProofText?: string;
   phase7Options?: Phase7StagingStatusOptions;
+}
+
+export interface Split402LocalProofStatus {
+  checked: boolean;
+  ready: boolean;
+  status: "not_checked" | "passed" | "failed";
+  generatedAt?: string;
+  blockers: string[];
 }
 
 export interface Split402ProductReadinessReport {
@@ -25,6 +35,7 @@ export interface Split402ProductReadinessReport {
   readyForPublicAlphaDemo: boolean;
   readyForProductionCustody: boolean;
   readyForMainnet: boolean;
+  localProof: Split402LocalProofStatus;
   phase6: Phase6EvidenceStatusReport;
   phase7: Phase7StagingStatusReport;
   nextActions: string[];
@@ -56,6 +67,7 @@ export interface Split402ProductReadinessProgress {
 export function createSplit402ProductReadinessReport(
   input: Split402ProductReadinessInput = {},
 ): Split402ProductReadinessReport {
+  const localProof = createLocalProofStatus(input.localProofText);
   const phase6 = createPhase6EvidenceStatusReport(input.phase6EvidenceText);
   const phase7 = createPhase7StagingStatusReport(
     input.phase7ProofText,
@@ -67,7 +79,7 @@ export function createSplit402ProductReadinessReport(
   const launchDecision =
     readyForPublicAlphaDemo && readyForProductionCustody ? "go" : "no-go";
   const readiness = createReadinessProgress(phase6, phase7);
-  const nextActions = createProductNextActions(phase6, phase7);
+  const nextActions = createProductNextActions(phase6, phase7, localProof);
 
   return {
     schema: "split402.product_readiness_status.v1",
@@ -80,6 +92,7 @@ export function createSplit402ProductReadinessReport(
     readyForPublicAlphaDemo,
     readyForProductionCustody,
     readyForMainnet,
+    localProof,
     phase6,
     phase7,
     nextActions,
@@ -95,6 +108,11 @@ export function createSplit402ProductReadinessReport(
 export function formatSplit402ProductReadinessBrief(
   report: Split402ProductReadinessReport,
 ): string {
+  const localProofLine = report.localProof.ready
+    ? "- Local public-alpha proof: ready"
+    : report.localProof.checked
+      ? "- Local public-alpha proof: checked, blocked"
+      : "- Local public-alpha proof: not checked";
   const gateLines = report.readiness.gates.map((gate) => {
     const status = gate.ready
       ? "ready"
@@ -112,6 +130,7 @@ export function formatSplit402ProductReadinessBrief(
     `Launch gates ready: ${report.readiness.readyLaunchGates}/${report.readiness.totalLaunchGates} (${report.readiness.readyLaunchGatePercent}%)`,
     `Launch gates checked: ${report.readiness.checkedLaunchGates}/${report.readiness.totalLaunchGates} (${report.readiness.checkedLaunchGatePercent}%)`,
     `Mainnet ready: ${report.readyForMainnet ? "yes" : "no"}`,
+    localProofLine,
     report.summary,
     "",
     "Gate status:",
@@ -161,6 +180,7 @@ function createReadinessProgress(
 function createProductNextActions(
   phase6: Phase6EvidenceStatusReport,
   phase7: Phase7StagingStatusReport,
+  localProof?: Split402LocalProofStatus,
 ): string[] {
   const leadActions: string[] = [];
   const phase7DetailActions: string[] = [];
@@ -170,6 +190,11 @@ function createProductNextActions(
     return [
       "Create a combined launch evidence workspace with corepack pnpm product:evidence:init.",
       "Run corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence and follow its next action.",
+      ...(localProof?.ready === true
+        ? []
+        : [
+            "Run corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json.",
+          ]),
       "Fill the generated Phase 7 and Phase 6 env files with hosted staging and custody evidence values.",
       "Collect Phase 7 hosted proof and Phase 6 custody evidence from the same deployed environment and source commit.",
       "Run hosted Phase 7 staging proof collection and status validation.",
@@ -201,6 +226,69 @@ function createProductNextActions(
       ...interleaveActions(phase7DetailActions, phase6DetailActions),
     ]),
   ];
+}
+
+function createLocalProofStatus(
+  localProofText: string | undefined,
+): Split402LocalProofStatus {
+  if (localProofText === undefined || localProofText.trim().length === 0) {
+    return {
+      checked: false,
+      ready: false,
+      status: "not_checked",
+      blockers: ["Run product:local-proof and save local-public-alpha-proof.json."],
+    };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(localProofText);
+  } catch (error) {
+    return {
+      checked: true,
+      ready: false,
+      status: "failed",
+      blockers: [
+        `local-public-alpha-proof.json is not valid JSON: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      ],
+    };
+  }
+
+  const report = parsed as Partial<Split402LocalProofReport>;
+  const blockers: string[] = [];
+  if (report.schema !== "split402.local_public_alpha_proof.v1") {
+    blockers.push("local proof schema is not split402.local_public_alpha_proof.v1");
+  }
+  if (report.status !== "passed") {
+    blockers.push("local proof status is not passed");
+  }
+  if (report.launchApproval !== "not_approved") {
+    blockers.push("local proof must not claim launch approval");
+  }
+  if (!Array.isArray(report.checks) || report.checks.length === 0) {
+    blockers.push("local proof checks are missing");
+  } else {
+    const failedChecks = report.checks.filter((check) => check.status !== "passed");
+    if (failedChecks.length > 0) {
+      blockers.push(
+        `local proof failed checks: ${failedChecks
+          .map((check) => check.id)
+          .join(", ")}`,
+      );
+    }
+  }
+
+  return {
+    checked: true,
+    ready: blockers.length === 0,
+    status: blockers.length === 0 ? "passed" : "failed",
+    ...(typeof report.generatedAt === "string"
+      ? { generatedAt: report.generatedAt }
+      : {}),
+    blockers,
+  };
 }
 
 function interleaveActions(left: readonly string[], right: readonly string[]): string[] {
