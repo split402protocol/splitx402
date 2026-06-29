@@ -69,7 +69,10 @@ export function createSplit402ProductEvidenceWorkspace(
     phase7EnvFileName,
     phase7,
     phase6EvidenceText,
-    phase6EnvText: createPhase6EvidenceAssemblyEnvTemplate({ directory }),
+    phase6EnvText: createPhase6EvidenceAssemblyEnvTemplate({
+      activateRecordPathMappings: true,
+      directory,
+    }),
     phase7ProofText,
     readmeText: createReadmeText({
       directory,
@@ -126,7 +129,7 @@ function createNextCommands(input: {
   return [
     `Fill ${input.directory}/${input.phase7EnvFileName} with hosted staging values.`,
     `Review generated ${input.directory}/${input.phase6EnvFileName} before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template ${input.directory} > ${input.directory}/${input.phase6EnvFileName}`,
-    `Fill ${input.directory}/${input.phase6EnvFileName} with Phase 6 custody record paths.`,
+    `Generate Phase 6 custody records at the paths listed in ${input.directory}/${input.phase6EnvFileName}.`,
     `Fill ${input.directory}/${input.phase6EvidenceFileName} with generated Phase 6 custody records.`,
     `corepack pnpm product:launch-preflight --brief ${input.directory}`,
     "SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",

@@ -58,4 +58,24 @@ describe("Phase 6 evidence assembly env template", () => {
     );
     expect(template).not.toContain("split402-launch-evidence/phase6-image-provenance.txt");
   });
+
+  it("can activate non-secret record path mappings for product evidence workspaces", () => {
+    const template = createPhase6EvidenceAssemblyEnvTemplate({
+      activateRecordPathMappings: true,
+      directory: "evidence/launch",
+    });
+
+    expect(template).toContain(
+      "SPLIT402_PHASE6_ASSEMBLE_IMAGE_PROVENANCE_RECORD=evidence/launch/phase6-image-provenance.txt",
+    );
+    expect(template).toContain(
+      "SPLIT402_PHASE6_ASSEMBLE_NETWORK_POLICY_RECORD=evidence/launch/phase6-network-policy-review.txt",
+    );
+    expect(template).not.toContain(
+      "# SPLIT402_PHASE6_ASSEMBLE_IMAGE_PROVENANCE_RECORD=evidence/launch/phase6-image-provenance.txt",
+    );
+    expect(template).toContain(
+      "# SPLIT402_PHASE6_EVIDENCE_REVIEW_ID=phase6-custody-YYYY-MM-DD",
+    );
+  });
 });
