@@ -22,7 +22,20 @@ export const PHASE7_REQUIRED_COMMAND_EVIDENCE = [
   "corepack pnpm audit --audit-level high",
 ] as const;
 
+export const PHASE7_COMMAND_EVIDENCE_ALTERNATIVES = [
+  {
+    required: "corepack pnpm phase7:staging:init",
+    alternatives: ["corepack pnpm product:evidence:init"],
+  },
+] as const;
+
 export function createPhase7CommandEvidenceTemplate(): string {
+  const alternativesByRequired: ReadonlyMap<string, readonly string[]> = new Map(
+    PHASE7_COMMAND_EVIDENCE_ALTERNATIVES.map((entry) => [
+      entry.required,
+      entry.alternatives,
+    ]),
+  );
   return [
     "# Split402 Phase 7 command evidence transcript",
     "#",
@@ -33,10 +46,17 @@ export function createPhase7CommandEvidenceTemplate(): string {
     "#",
     "# Required commands:",
     "",
-    ...PHASE7_REQUIRED_COMMAND_EVIDENCE.flatMap((command) => [
-      `# $ ${command}`,
-      "# paste real output here",
-      "",
-    ]),
+    ...PHASE7_REQUIRED_COMMAND_EVIDENCE.flatMap((command) => {
+      const alternatives = alternativesByRequired.get(command) ?? [];
+      return [
+        `# $ ${command}`,
+        ...alternatives.flatMap((alternative) => [
+          "# or, for the combined launch evidence workspace:",
+          `# $ ${alternative}`,
+        ]),
+        "# paste real output here",
+        "",
+      ];
+    }),
   ].join("\n");
 }

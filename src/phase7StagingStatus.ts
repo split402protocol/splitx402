@@ -6,7 +6,10 @@ import {
   parsePhase7ProofRecord,
   validatePhase7StagingProof,
 } from "./phase7StagingProof.js";
-import { PHASE7_REQUIRED_COMMAND_EVIDENCE } from "./phase7CommandEvidence.js";
+import {
+  PHASE7_COMMAND_EVIDENCE_ALTERNATIVES,
+  PHASE7_REQUIRED_COMMAND_EVIDENCE,
+} from "./phase7CommandEvidence.js";
 import { decodeArtifactText } from "./artifactEncoding.js";
 
 export const PHASE7_STAGING_COMMANDS = [
@@ -2000,11 +2003,25 @@ function validateCommandEvidence(text: string, blockers: string[]): void {
     );
   }
   for (const command of PHASE7_REQUIRED_COMMAND_EVIDENCE) {
-    const normalizedCommand = normalizeCommandText(command);
-    if (!commandLines.some((line) => line.includes(normalizedCommand))) {
+    if (!isRequiredCommandPresent(commandLines, command)) {
       blockers.push(`commands_run missing required command: ${command}`);
     }
   }
+}
+
+function isRequiredCommandPresent(
+  commandLines: readonly string[],
+  requiredCommand: string,
+): boolean {
+  const acceptedCommands = [
+    requiredCommand,
+    ...PHASE7_COMMAND_EVIDENCE_ALTERNATIVES.flatMap((entry) =>
+      entry.required === requiredCommand ? entry.alternatives : [],
+    ),
+  ].map((command) => normalizeCommandText(command));
+  return acceptedCommands.some((command) =>
+    commandLines.some((line) => line.includes(command)),
+  );
 }
 
 function extractCommandEvidenceLines(text: string): string[] {

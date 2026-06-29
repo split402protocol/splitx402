@@ -872,6 +872,31 @@ funding_balance_evidence: funding.json
     );
   });
 
+  it("accepts combined launch evidence workspace init as Phase 7 workspace evidence", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/commands.log",
+      encode(
+        createValidCommandsLog().replace(
+          "$ corepack pnpm phase7:staging:init",
+          "$ corepack pnpm product:evidence:init",
+        ),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.commandEvidenceStatus.blockers).not.toContain(
+      "commands_run missing required command: corepack pnpm phase7:staging:init",
+    );
+  });
+
   it("accepts PowerShell UTF-16LE redirected text artifacts", () => {
     const proofText = createManifestProof();
     const artifacts = createManifestArtifacts(proofText);
