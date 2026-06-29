@@ -257,7 +257,7 @@ function createLaunchWorkspaceMissingDetails(input: {
   const recoveryAction =
     input.existingRequiredFiles.length === 0
       ? "Run corepack pnpm product:evidence:init."
-      : "Review or move the existing partial launch evidence workspace, then run corepack pnpm product:evidence:init --force only if intentionally replacing scaffold files.";
+      : "Review the existing partial launch evidence workspace, then run corepack pnpm product:evidence:init --missing to create only absent scaffold files or --force only if intentionally replacing scaffold files.";
 
   return [
     recoveryAction,
