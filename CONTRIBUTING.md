@@ -13,6 +13,11 @@ invariants.
 - Add tests before expanding payment or payout behavior.
 - Keep mainnet deployment out of scope until replay, mutation, idempotency, and
   reconciliation checks are passing.
+- Keep production operations, custody evidence, private endpoints, provider
+  credentials, and commercial router strategy outside the public repository
+  unless a sanitized artifact is intentionally approved for release.
+- Contributions to this public repository are submitted under Apache-2.0 unless
+  an explicit written agreement says otherwise.
 
 ## Local Development
 
