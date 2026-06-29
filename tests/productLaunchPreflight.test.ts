@@ -166,6 +166,44 @@ describe("Split402 launch preflight", () => {
       );
   });
 
+  it("rejects MCP proof preflight when live execution is explicitly disabled", () => {
+    const workspace = createSplit402ProductEvidenceWorkspace();
+    const files = createWorkspaceFileMap(
+      [
+        workspace.phase7.envText,
+        "SPLIT402_PHASE7_CONTROL_PLANE_URL=https://control.staging.example",
+        "SPLIT402_PHASE7_DASHBOARD_URL=https://dashboard.staging.example",
+        "SPLIT402_PHASE7_DEMO_MERCHANT_URL=https://merchant.staging.example",
+        "SPLIT402_PHASE7_CONTROL_PLANE_TOKEN=merchant-session-token",
+        "SPLIT402_PHASE7_MERCHANT_ID=mrc_123",
+        "SPLIT402_PHASE7_REFERRER_WALLET=referrer-wallet",
+        "SPLIT402_MCP_CONTROL_PLANE_URL=https://control.staging.example",
+        "SPLIT402_MCP_CONTROL_PLANE_TOKEN=merchant-session-token",
+        "SPLIT402_MCP_CAPABILITY=solana.wallet-risk",
+        "SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=0",
+        "SPLIT402_MCP_SVM_PRIVATE_KEY=funded-devnet-buyer-key",
+      ].join("\n"),
+      createFilledPhase6EnvText(workspace.phase6EnvText),
+    );
+
+    const report = createSplit402LaunchPreflightReport({
+      exists: (path) => files.has(path),
+      readText: (path) => files.get(path) ?? "",
+    });
+
+    expect(report.readyToCollectEvidence).toBe(false);
+    expect(
+      report.checks.find(
+        (check) => check.id === "phase7_mcp_live_execution_env",
+      ),
+    ).toMatchObject({
+      ok: false,
+      details: expect.arrayContaining([
+        "Set SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 in split402-launch-evidence\\phase7-staging.env for live router execution.",
+      ]),
+    });
+  });
+
   it("uses custom launch workspace paths for Phase 6 env checks", () => {
     const workspace = createSplit402ProductEvidenceWorkspace({
       directory: "evidence/launch",
