@@ -40,6 +40,11 @@ export const LOCAL_PUBLIC_ALPHA_PROOF_CHECKS: readonly Split402LocalProofCheck[]
       command: ["corepack", "pnpm", "repo:guard"],
     },
     {
+      id: "public_surface",
+      label: "Public/private license surface check",
+      command: ["corepack", "pnpm", "product:public-surface-check", "--brief"],
+    },
+    {
       id: "protocol_vectors",
       label: "Protocol test vectors",
       command: ["corepack", "pnpm", "vectors:check"],

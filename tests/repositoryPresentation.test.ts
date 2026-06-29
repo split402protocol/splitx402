@@ -239,6 +239,7 @@ describe("repository presentation", () => {
     expect(readme).toContain("corepack pnpm product:evidence:init --force");
     expect(readme).toContain("corepack pnpm product:local-proof --help");
     expect(readme).toContain("corepack pnpm product:local-proof --brief");
+    expect(readme).toContain("corepack pnpm product:public-surface-check --brief");
     expect(readme).toContain(
       "corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json",
     );
