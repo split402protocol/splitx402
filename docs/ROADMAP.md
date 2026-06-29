@@ -35,6 +35,8 @@ arithmetic derived from receipt bps fields.
 Launch evidence scaffolds now include env-file loading for the Phase 6 and
 Phase 7 collection/assembly commands so custom evidence directories can be run
 without copying every variable into the shell session. Use
+`corepack pnpm product:local-proof --brief` before hosted collection to verify
+the local protocol vectors, router alpha tests, and MCP gateway smoke path. Use
 `corepack pnpm product:status --brief --workspace split402-launch-evidence` for
 the combined Phase 6 custody and Phase 7 hosted-proof launch status.
 

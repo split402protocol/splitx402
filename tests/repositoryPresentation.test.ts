@@ -237,6 +237,8 @@ describe("repository presentation", () => {
     expect(readme).toContain("corepack pnpm product:evidence:init --missing");
     expect(readme).toContain("corepack pnpm product:evidence:init --refresh-source");
     expect(readme).toContain("corepack pnpm product:evidence:init --force");
+    expect(readme).toContain("corepack pnpm product:local-proof --help");
+    expect(readme).toContain("corepack pnpm product:local-proof --brief");
     expect(readme).toContain("corepack pnpm product:launch-preflight --help");
     expect(readme).toContain("corepack pnpm product:launch-preflight --brief");
     expect(readme).toContain("corepack pnpm product:launch-checklist --help");
@@ -271,7 +273,9 @@ describe("repository presentation", () => {
     expect(readme).toContain("existing scaffold files");
     expect(readme).toContain("remains `no-go`");
     expect(readme).toContain("launch-gate percentages");
+    expect(readme).toContain("adoption-layer smoke proof");
     expect(currentState).toContain("corepack pnpm product:evidence:init");
+    expect(currentState).toContain("corepack pnpm product:local-proof");
     expect(currentState).toContain("corepack pnpm product:launch-preflight");
     expect(currentState).toContain("scaffold `source_commit` values");
     expect(currentState).toContain("corepack pnpm product:launch-checklist");

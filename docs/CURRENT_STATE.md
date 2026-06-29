@@ -98,6 +98,10 @@ initializer refuses to overwrite existing scaffold files; use `--missing` to
 create only absent scaffold files in a partial workspace, use `--refresh-source`
 to update only stale scaffold `source_commit` values before evidence collection,
 and pass `--force` only when intentionally replacing scaffold files. Run
+`corepack pnpm product:local-proof --brief` to prove the local public-alpha
+protocol vectors, router alpha tests, and runnable MCP gateway smoke path before
+hosted collection. This command does not approve hosted staging, production
+custody, mainnet, or commercial operations. Run
 evidence collection and assembly commands with the generated `--evidence-env-file`
 option, or use the default launch workspace paths that are auto-loaded when
 present. Run
