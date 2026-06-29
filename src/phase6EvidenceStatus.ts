@@ -1,4 +1,5 @@
 import {
+  type Phase6CustodyRequiredField,
   type Phase6CustodyReviewValidation,
   validatePhase6CustodyEvidence,
 } from "./phase6CustodyReview.js";
@@ -105,6 +106,91 @@ export interface Phase6SourceCommitStatus {
   blockers: string[];
 }
 
+interface Phase6MissingFieldAction {
+  fields: readonly Phase6CustodyRequiredField[];
+  createAction: (fields: readonly Phase6CustodyRequiredField[]) => string;
+}
+
+const PHASE6_MISSING_FIELD_ACTIONS: readonly Phase6MissingFieldAction[] = [
+  {
+    fields: [
+      "review_id",
+      "review_date",
+      "reviewers",
+      "staging_environment",
+      "funding_wallet",
+      "network",
+      "approval_notes",
+    ],
+    createAction: (fields) =>
+      `Fill direct Phase 6 custody review fields in split402-launch-evidence/phase6-evidence.env: ${fields.join(", ")}.`,
+  },
+  {
+    fields: ["source_commit"],
+    createAction: () =>
+      "Refresh source_commit with corepack pnpm product:evidence:init --refresh-source before collecting final evidence, or recollect evidence from the current checkout.",
+  },
+  {
+    fields: [
+      "signer_image_digest",
+      "signer_image_build_command",
+      "signer_image_dependency_audit_output",
+      "control_plane_image_digest",
+    ],
+    createAction: (fields) =>
+      `Generate image provenance with corepack pnpm phase6:image-provenance, then assemble these fields: ${fields.join(", ")}.`,
+  },
+  {
+    fields: ["network_policy_record"],
+    createAction: () =>
+      "Generate private signer network evidence with corepack pnpm phase6:network-policy, then attach network_policy_record.",
+  },
+  {
+    fields: [
+      "signer_policy_record",
+      "signer_policy_network",
+      "signer_policy_funding_wallet",
+      "signer_policy_source_token_account",
+      "signer_policy_mint",
+      "signer_policy_allowed_token_program_ids",
+      "signer_policy_max_transaction_amount_atomic",
+    ],
+    createAction: (fields) =>
+      `Generate signer policy evidence with corepack pnpm phase6:signer-policy, then assemble these fields: ${fields.join(", ")}.`,
+  },
+  {
+    fields: ["smoke_check_output"],
+    createAction: () =>
+      "Run corepack pnpm signer:payout:smoke && corepack pnpm phase6:signer-smoke, then attach smoke_check_output.",
+  },
+  {
+    fields: ["key_custody_record"],
+    createAction: () =>
+      "Generate key custody evidence with corepack pnpm phase6:key-custody, then attach key_custody_record.",
+  },
+  {
+    fields: [
+      "unknown_outcome_reconciliation_record",
+      "rotation_drill_record",
+      "emergency_revocation_drill_record",
+      "incident_drill_record",
+      "rollback_drill_record",
+      "rpc_failover_record",
+    ],
+    createAction: (fields) =>
+      `Generate custody drill evidence for ${fields.join(", ")} using corepack pnpm phase6:reconciliation-drill, phase6:rotation-drill, phase6:emergency-revocation, phase6:incident-drill, phase6:rollback-drill, and corepack pnpm payout:finality:failover-drill && corepack pnpm phase6:rpc-failover as applicable.`,
+  },
+  {
+    fields: ["approval_decision"],
+    createAction: () =>
+      "Set approval_decision=no-go until all Phase 6 custody evidence fields and reviews are complete; use approved only during final human custody approval.",
+  },
+];
+
+const PHASE6_MISSING_FIELD_ACTION_FIELDS = new Set<Phase6CustodyRequiredField>(
+  PHASE6_MISSING_FIELD_ACTIONS.flatMap((action) => [...action.fields]),
+);
+
 export function createPhase6EvidenceStatusReport(
   evidenceText?: string,
   options: Phase6EvidenceStatusOptions = {},
@@ -180,9 +266,7 @@ function createNextActions(
   }
 
   const actions: string[] = [];
-  if (validation.missingFields.length > 0) {
-    actions.push(`Fill missing fields: ${validation.missingFields.join(", ")}`);
-  }
+  actions.push(...createMissingFieldActions(validation));
   const placeholderFieldsToReplace = validation.placeholderFields.filter(
     (field) => field !== "approval_decision",
   );
@@ -193,6 +277,37 @@ function createNextActions(
   }
   actions.push(...createOperatorInvalidFieldActions(validation.invalidFields));
   actions.push(...sourceCommitBlockers);
+  if (actions.length > 0) {
+    actions.push(
+      "Reassemble with corepack pnpm phase6:evidence:assemble --evidence-env-file split402-launch-evidence/phase6-evidence.env split402-launch-evidence/phase6-custody-evidence.txt, then rerun corepack pnpm phase6:evidence:status --brief split402-launch-evidence/phase6-custody-evidence.txt.",
+    );
+  }
+  return actions;
+}
+
+function createMissingFieldActions(
+  validation: Phase6CustodyReviewValidation,
+): string[] {
+  const fieldsNeedingEvidence = new Set<Phase6CustodyRequiredField>([
+    ...validation.missingFields,
+    ...validation.placeholderFields.filter((field) => field !== "approval_decision"),
+  ]);
+  if (validation.missingFields.includes("approval_decision")) {
+    fieldsNeedingEvidence.add("approval_decision");
+  }
+
+  const actions = PHASE6_MISSING_FIELD_ACTIONS.flatMap((action) => {
+    const matchedFields = action.fields.filter((field) =>
+      fieldsNeedingEvidence.has(field),
+    );
+    return matchedFields.length === 0 ? [] : [action.createAction(matchedFields)];
+  });
+  const unhandledFields = [...fieldsNeedingEvidence].filter(
+    (field) => !PHASE6_MISSING_FIELD_ACTION_FIELDS.has(field),
+  );
+  if (unhandledFields.length > 0) {
+    actions.push(`Fill missing fields: ${unhandledFields.join(", ")}`);
+  }
   return actions;
 }
 
