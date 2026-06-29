@@ -53,6 +53,9 @@ describe("Split402 launch checklist", () => {
     expect(checklist.sections[2]?.commands[0]).toBe(
       "corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence",
     );
+    expect(checklist.sections[2]?.commands[1]).toBe(
+      "Fill split402-launch-evidence/phase7-staging.env with hosted staging values reported by launch preflight.",
+    );
     expect(checklist.sections[2]?.commands).toContain(
       "corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log",
     );
