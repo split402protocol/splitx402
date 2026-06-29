@@ -47,11 +47,26 @@ Public docs may describe the shape of these systems, but the operational
 implementation and evidence from real environments should stay private unless a
 specific artifact is intentionally sanitized for public trust-building.
 
+## Pre-Launch Classification Matrix
+
+Before real launch, classify every new repository, package, workflow, document,
+and generated artifact into one of these buckets:
+
+| Bucket | Keep public? | Examples | Rule |
+| --- | --- | --- | --- |
+| Open protocol foundation | Yes | protocol schemas, signed-object specs, test vectors, verifier helpers, SDK interfaces, reproducible local demos | Public by default because integrators need to inspect and verify it. |
+| Public-alpha proof surface | Yes, sanitized | README, roadmap, current-state docs, proof templates, local proof outputs without secrets | Public only when it explains status honestly and contains no private URLs, tokens, partner details, or live transaction bytes. |
+| Hosted product operations | No | production router provider registry, scoring, commercial policy, hosted MCP credentials, operator dashboards | Keep private because this is the business operating system, not the open protocol. |
+| Custody and payout operations | No | signer secrets, funding-wallet policy, real incident evidence, private-network details, mainnet transaction bytes | Keep private unless a specific artifact is redacted and intentionally published for trust-building. |
+| Partner, compliance, and risk | No | partner terms, merchant risk rules, disputes, onboarding review notes, compliance evidence | Keep private because disclosure can harm partners, users, and the business. |
+
 ## License Policy
 
 This repository is licensed under Apache-2.0. Apache-2.0 keeps the public
 protocol implementation open while adding clearer patent and contribution terms
-than the previous MIT license.
+than the previous MIT license. Apache-2.0 is the launch-facing license for this
+public repository; do not reintroduce MIT in README, package metadata, or other
+launch-facing license claims.
 
 Private Split402 services, hosted operations, production deployments, commercial
 registries, and custody tooling are not automatically licensed by this public

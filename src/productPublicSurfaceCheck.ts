@@ -213,6 +213,10 @@ function createBoundaryPolicyCheck(
     exists,
     readText,
   );
+  const hasLaunchFacingLicensePolicy =
+    boundary !== undefined &&
+    boundary.includes("Apache-2.0") &&
+    boundary.includes("launch-facing license");
   const blockers = [
     ...(boundary?.includes("## Public Repository") === true
       ? []
@@ -223,9 +227,15 @@ function createBoundaryPolicyCheck(
     ...(boundary?.includes("## License Policy") === true
       ? []
       : ["docs/PUBLIC_PRIVATE_BOUNDARY.md must define the license policy."]),
+    ...(boundary?.includes("## Pre-Launch Classification Matrix") === true
+      ? []
+      : ["docs/PUBLIC_PRIVATE_BOUNDARY.md must include the pre-launch classification matrix."]),
     ...(boundary?.includes("Apache-2.0") === true
       ? []
       : ["docs/PUBLIC_PRIVATE_BOUNDARY.md must state Apache-2.0 for the public repository."]),
+    ...(hasLaunchFacingLicensePolicy
+      ? []
+      : ["docs/PUBLIC_PRIVATE_BOUNDARY.md must state that Apache-2.0 is the launch-facing license."]),
   ];
   return {
     id: "public_private_boundary_policy",
@@ -278,6 +288,9 @@ function createGitHubProfileContractCheck(
     ...(profile.includes("Apache-2.0")
       ? []
       : [`${GITHUB_PROFILE_FILE} must state the public license as Apache-2.0.`]),
+    ...(profile.includes("## Launch Boundary")
+      ? []
+      : [`${GITHUB_PROFILE_FILE} must include the launch boundary section.`]),
     ...(profile.includes("Contributors are generated from commit author metadata")
       ? []
       : [
@@ -317,6 +330,9 @@ function createDecisionRecordCheck(
     ...(decision?.includes("private Split402 infrastructure") === true
       ? []
       : ["Decision 0009 must reserve sensitive operations for private infrastructure."]),
+    ...(decision?.includes("Apache-2.0 is the launch-facing license") === true
+      ? []
+      : ["Decision 0009 must state that Apache-2.0 is the launch-facing license."]),
   ];
   return {
     id: "license_decision_record",

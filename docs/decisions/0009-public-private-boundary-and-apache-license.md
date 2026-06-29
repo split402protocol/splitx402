@@ -46,6 +46,8 @@ sanitized for public release:
 The public repository is licensed under Apache-2.0. Private hosted services,
 commercial operations, production deployments, custody tooling, provider
 registries, and non-public evidence are not licensed by this repository.
+Apache-2.0 is the launch-facing license; MIT should not be reintroduced in the
+README, package metadata, GitHub profile, or release materials.
 
 This boundary must be enforced before publication, not repaired afterward. Code
 or documents already published under MIT or Apache-2.0 may have been cloned,
@@ -68,3 +70,6 @@ history from the start.
 - Public/private decisions are launch blockers: if a file contains commercial
   strategy, custody, live infrastructure, partner details, private URLs, or
   non-public evidence, it must be moved private or sanitized before release.
+- Every launch candidate should be reviewed against the public/private
+  classification matrix in `docs/PUBLIC_PRIVATE_BOUNDARY.md` before promotion
+  from public alpha to real hosted production.
