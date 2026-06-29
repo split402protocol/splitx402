@@ -175,6 +175,9 @@ approval_notes: checked evidence is intentionally incomplete
     expect(brief).toContain(
       "Fix Phase 6 custody evidence blockers reported by corepack pnpm phase6:evidence:status --brief.",
     );
+    expect(brief).toContain(
+      "more actions hidden; run corepack pnpm phase7:staging:status --brief split402-launch-evidence/phase7-staging-proof.txt and corepack pnpm phase6:evidence:status --brief split402-launch-evidence/phase6-custody-evidence.txt for full phase blockers.",
+    );
     expect(report.nextActions.join("\n")).toContain(
       "Fill direct Phase 6 custody review fields in split402-launch-evidence/phase6-evidence.env",
     );
