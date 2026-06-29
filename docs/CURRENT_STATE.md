@@ -111,7 +111,10 @@ present. Run
 `corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence`
 to check whether the local launch workspace, scaffold `source_commit` values,
 Phase 6 custody evidence env paths, and required Phase 7 hosted proof
-environment values are ready before collection starts. Run
+environment values are ready before collection starts. The preflight output also
+prints redacted Phase 6 custody and Phase 7 hosted env summaries so operators
+can see missing/configured values without exposing tokens, private keys, funding
+wallet values, or review notes. Run
 `corepack pnpm product:launch-checklist --brief` for the exact remaining local
 validation, hosted proof, custody evidence, and combined status commands; pass
 `--workspace split402-launch-evidence` or the Phase 6 and Phase 7 evidence files
@@ -119,4 +122,5 @@ to show checked, blocked, or ready section statuses from real files. Then run
 `corepack pnpm product:status --brief --workspace split402-launch-evidence`
 for a simple operator view of the Phase 7 hosted proof gate, Phase 6
 production custody gate, launch-gate percentages, evidence-env setup commands,
-and next actions.
+and next actions. If the concise combined status hides additional actions, it
+names the Phase 6 and Phase 7 status commands that show the full blocker lists.

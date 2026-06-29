@@ -372,7 +372,10 @@ custody evidence env paths, and required Phase 7 hosted proof identity,
 environment, webhook, and collector values are ready before collection starts.
 It also verifies that hosted proof and MCP live execution URLs are valid
 http(s) URLs and that MCP live execution uses the same hosted control-plane URL
-and token as the Phase 7 proof.
+and token as the Phase 7 proof. The brief output includes redacted summaries of
+the Phase 6 custody env file and Phase 7 hosted env file so operators can see
+which values are missing or configured without printing tokens, private keys, or
+custody values.
 `product:launch-checklist --brief` prints the exact remaining local
 validation, hosted proof, custody evidence, and combined status commands; pass
 `--workspace split402-launch-evidence` or the Phase 6 and Phase 7 evidence paths
@@ -391,7 +394,8 @@ and do not drift back to old launch-facing license claims.
 phase, whether the public-alpha hosted proof and production custody evidence are
 checked, launch-gate percentages, exact evidence-env setup commands, and why the
 launch decision remains `no-go` until both machine-checkable gates are
-satisfied.
+satisfied. When the concise status hides extra actions, it prints the exact
+Phase 6 and Phase 7 status commands to run for the full blocker list.
 
 Generate the Phase 6 image provenance review record after building immutable
 signer and control-plane images:
