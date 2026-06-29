@@ -92,10 +92,10 @@ and pass `--force` only when intentionally replacing scaffold files. Run
 evidence collection and assembly commands with the generated `--evidence-env-file`
 option, or use the default launch workspace paths that are auto-loaded when
 present. Run
-`corepack pnpm product:launch-preflight --brief` to check whether the local
-launch workspace, scaffold `source_commit` values, Phase 6 custody evidence env
-paths, and required Phase 7 hosted proof environment values are ready before
-collection starts. Run
+`corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence`
+to check whether the local launch workspace, scaffold `source_commit` values,
+Phase 6 custody evidence env paths, and required Phase 7 hosted proof
+environment values are ready before collection starts. Run
 `corepack pnpm product:launch-checklist --brief` for the exact remaining local
 validation, hosted proof, custody evidence, and combined status commands; pass
 `--workspace split402-launch-evidence` or the Phase 6 and Phase 7 evidence files

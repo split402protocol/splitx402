@@ -336,6 +336,7 @@ corepack pnpm product:evidence:init --refresh-source
 corepack pnpm product:evidence:init --force
 corepack pnpm product:launch-preflight --help
 corepack pnpm product:launch-preflight --brief
+corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence
 corepack pnpm product:launch-checklist --help
 corepack pnpm product:launch-checklist --brief
 corepack pnpm product:launch-checklist --brief --workspace split402-launch-evidence
@@ -354,10 +355,10 @@ for attachment paths. It refuses to overwrite existing scaffold files; use
 `--refresh-source` to update only stale scaffold `source_commit` values before
 evidence collection, and rerun with `--force` only when intentionally replacing
 local scaffold content.
-`product:launch-preflight --brief` checks whether the local launch workspace,
-scaffold `source_commit` values, Phase 6 custody evidence env paths, and
-required Phase 7 hosted proof environment values are ready before collection
-starts.
+`product:launch-preflight --brief --workspace split402-launch-evidence` checks
+whether the local launch workspace, scaffold `source_commit` values, Phase 6
+custody evidence env paths, and required Phase 7 hosted proof environment values
+are ready before collection starts.
 `product:launch-checklist --brief` prints the exact remaining local
 validation, hosted proof, custody evidence, and combined status commands; pass
 `--workspace split402-launch-evidence` or the Phase 6 and Phase 7 evidence paths

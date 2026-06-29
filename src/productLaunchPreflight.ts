@@ -37,38 +37,64 @@ export interface Split402LaunchPreflightCliArgs {
 }
 
 export const PRODUCT_LAUNCH_PREFLIGHT_USAGE =
-  "Usage: corepack pnpm product:launch-preflight [--brief] [directory]";
+  "Usage: corepack pnpm product:launch-preflight [--brief] [--workspace directory] [directory]";
 
 export function parseSplit402LaunchPreflightCliArgs(
   args: readonly string[],
 ): Split402LaunchPreflightCliArgs {
-  const help = args.includes("--help") || args.includes("-h");
-  const brief = args.includes("--brief");
-  const unknownOptions = args.filter(
-    (arg) =>
-      arg.startsWith("-") &&
-      arg !== "--help" &&
-      arg !== "-h" &&
-      arg !== "--brief",
-  );
-  if (unknownOptions.length > 0) {
-    throw new Error(
-      `${PRODUCT_LAUNCH_PREFLIGHT_USAGE}\nUnknown option: ${unknownOptions[0]}`,
-    );
+  const positionalArgs: string[] = [];
+  let brief = false;
+  let help = false;
+  let workspaceDirectory: string | undefined;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === undefined) {
+      continue;
+    }
+    if (arg === "--help" || arg === "-h") {
+      help = true;
+    } else if (arg === "--brief") {
+      brief = true;
+    } else if (arg === "--workspace") {
+      const value = args[index + 1];
+      if (value === undefined || value.startsWith("-")) {
+        throw new Error(
+          `${PRODUCT_LAUNCH_PREFLIGHT_USAGE}\n--workspace requires a directory.`,
+        );
+      }
+      workspaceDirectory = value;
+      index += 1;
+    } else if (arg.startsWith("--workspace=")) {
+      const value = arg.slice("--workspace=".length);
+      if (value.trim().length === 0) {
+        throw new Error(
+          `${PRODUCT_LAUNCH_PREFLIGHT_USAGE}\n--workspace requires a directory.`,
+        );
+      }
+      workspaceDirectory = value;
+    } else if (arg.startsWith("-")) {
+      throw new Error(
+        `${PRODUCT_LAUNCH_PREFLIGHT_USAGE}\nUnknown option: ${arg}`,
+      );
+    } else {
+      positionalArgs.push(arg);
+    }
   }
 
-  const positionalArgs = args.filter(
-    (arg) => arg !== "--help" && arg !== "-h" && arg !== "--brief",
-  );
+  if (workspaceDirectory !== undefined && positionalArgs.length > 0) {
+    throw new Error(
+      `${PRODUCT_LAUNCH_PREFLIGHT_USAGE}\nDo not pass a directory path with --workspace.`,
+    );
+  }
   if (positionalArgs.length > 1) {
     throw new Error(PRODUCT_LAUNCH_PREFLIGHT_USAGE);
   }
+  const directory = workspaceDirectory ?? positionalArgs[0];
 
   return {
     brief,
-    ...(help || positionalArgs[0] === undefined
-      ? {}
-      : { directory: positionalArgs[0] }),
+    ...(help || directory === undefined ? {} : { directory }),
     help,
   };
 }
