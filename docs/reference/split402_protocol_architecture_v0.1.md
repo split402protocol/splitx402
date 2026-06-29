@@ -1175,7 +1175,7 @@ Changing the payout wallet MUST create a new signed claim. Historical receipts c
 
 ## 11.5 Receipt ingestion
 
-### `POST /v1/receipts/ingest`
+### `POST /v1/receipts`
 
 Public, rate-limited, idempotent endpoint.
 
