@@ -25,6 +25,13 @@ License: Apache-2.0 for the public repository. Private hosted operations,
 production custody infrastructure, provider strategy, real staging evidence,
 and commercial deployment details remain outside this public license surface.
 
+## Launch Boundary
+
+The public GitHub repository should present Split402 as an open protocol
+foundation and public-alpha implementation. It should not present the private
+hosted router, commercial provider strategy, custody operations, production
+dashboard, or real staging/mainnet evidence as public repository contents.
+
 ## Contributor Metadata
 
 Contributors are generated from commit author metadata in Git history. The

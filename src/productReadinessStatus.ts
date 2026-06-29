@@ -209,7 +209,6 @@ function createProductNextActions(
       "Run corepack pnpm product:evidence:init --refresh-source before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist.",
     );
   }
-
   if (!phase7.proofChecked && !phase6.evidenceBundleChecked) {
     return [
       "Create a combined launch evidence workspace with corepack pnpm product:evidence:init.",
@@ -221,6 +220,10 @@ function createProductNextActions(
       "Run corepack pnpm product:status --brief --workspace split402-launch-evidence.",
     ];
   }
+
+  leadActions.push(
+    "Run corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence for grouped env/setup blockers before collecting or recollecting evidence.",
+  );
 
   if (!phase7.readyForPublicAlphaDemo) {
     leadActions.push(

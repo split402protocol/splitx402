@@ -736,3 +736,7 @@ This public repository is licensed under
 [Apache-2.0](LICENSE). Private Split402 hosted services, commercial operations,
 production deployment configuration, custody tooling, provider registries, and
 non-public evidence are not automatically licensed by this repository.
+Run `corepack pnpm product:public-surface-check --brief` before launch-facing
+updates to verify that the public repository still presents the Apache-2.0
+protocol foundation and keeps private operations outside the public license
+surface.

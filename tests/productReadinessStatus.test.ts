@@ -162,14 +162,20 @@ approval_notes: checked evidence is intentionally incomplete
     expect(report.nextActions).toContain(
       "Run corepack pnpm product:evidence:init --refresh-source before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist.",
     );
+    expect(report.nextActions).toContain(
+      "Run corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence for grouped env/setup blockers before collecting or recollecting evidence.",
+    );
     const brief = formatSplit402ProductReadinessBrief(report);
+    expect(brief).toContain(
+      "Run corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence for grouped env/setup blockers before collecting or recollecting evidence.",
+    );
     expect(brief).toContain(
       "Fix Phase 7 hosted proof blockers reported by corepack pnpm phase7:staging:status --brief.",
     );
     expect(brief).toContain(
       "Fix Phase 6 custody evidence blockers reported by corepack pnpm phase6:evidence:status --brief.",
     );
-    expect(brief).toContain(
+    expect(report.nextActions.join("\n")).toContain(
       "Fill direct Phase 6 custody review fields in split402-launch-evidence/phase6-evidence.env",
     );
     expect(report.phase6.nextActions.join("\n")).toContain(
