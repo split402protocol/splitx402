@@ -329,6 +329,7 @@ corepack pnpm audit --audit-level high
 Check the combined product readiness gates:
 
 ```bash
+corepack pnpm product:evidence:init --help
 corepack pnpm product:evidence:init
 corepack pnpm product:evidence:init --missing
 corepack pnpm product:evidence:init --force
