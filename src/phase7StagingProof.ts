@@ -223,12 +223,17 @@ function isPlaceholder(value: string | undefined): boolean {
   if (value === undefined) {
     return false;
   }
+  const normalized = value.trim().toLowerCase();
   return (
-    value === "TODO" ||
-    value === "TBD" ||
-    value === "pending" ||
-    value.startsWith("<") ||
-    value.includes("...")
+    normalized.length === 0 ||
+    normalized === "todo" ||
+    normalized === "tbd" ||
+    normalized === "pending" ||
+    normalized === "replace-me" ||
+    normalized.startsWith("<") ||
+    normalized.includes("...") ||
+    normalized.includes("replace-with") ||
+    normalized.includes("yyyy")
   );
 }
 

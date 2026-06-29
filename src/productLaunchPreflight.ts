@@ -573,17 +573,27 @@ function parseRecordField(text: string, fieldName: string): string | undefined {
 
 function hasConfiguredEnvValue(env: ReadonlyMap<string, string>, key: string): boolean {
   const value = env.get(key);
-  return (
-    value !== undefined &&
-    value.length > 0 &&
-    value !== "TODO" &&
-    !/^<.*>$/u.test(value)
-  );
+  return value !== undefined && !isPlaceholderEnvValue(value);
 }
 
 function hasTruthyEnvValue(env: ReadonlyMap<string, string>, key: string): boolean {
   const value = env.get(key)?.trim().toLowerCase();
   return value === "1" || value === "true" || value === "yes";
+}
+
+function isPlaceholderEnvValue(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized.length === 0 ||
+    normalized === "todo" ||
+    normalized === "tbd" ||
+    normalized === "pending" ||
+    normalized === "replace-me" ||
+    normalized.startsWith("<") ||
+    normalized.includes("...") ||
+    normalized.includes("replace-with") ||
+    normalized.includes("yyyy")
+  );
 }
 
 function phase7AttachmentEnvName(field: string): string {
