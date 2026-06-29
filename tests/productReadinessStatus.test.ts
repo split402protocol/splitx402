@@ -86,6 +86,36 @@ describe("Split402 product readiness status", () => {
     );
   });
 
+  it("rejects stale local proof artifacts missing current checks", () => {
+    const report = createSplit402ProductReadinessReport({
+      localProofText: JSON.stringify({
+        schema: "split402.local_public_alpha_proof.v1",
+        status: "passed",
+        launchApproval: "not_approved",
+        generatedAt: "2026-06-29T19:00:00.000Z",
+        checks: [
+          { id: "repo_hygiene", status: "passed" },
+          { id: "protocol_vectors", status: "passed" },
+          { id: "router_alpha", status: "passed" },
+          { id: "mcp_gateway_smoke", status: "passed" },
+        ],
+        notes: [],
+      }),
+    });
+
+    expect(report.localProof).toMatchObject({
+      checked: true,
+      ready: false,
+      status: "failed",
+    });
+    expect(report.localProof.blockers).toContain(
+      "local proof is stale; rerun product:local-proof because it is missing current checks: public_surface",
+    );
+    expect(report.nextActions).toContain(
+      "Run corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json.",
+    );
+  });
+
   it("surfaces blockers from checked but incomplete evidence", () => {
     const report = createSplit402ProductReadinessReport({
       phase6EvidenceText: `review_id: pending
@@ -161,6 +191,7 @@ function createPassingLocalProofText(): string {
     generatedAt: "2026-06-29T20:00:00.000Z",
     checks: [
       { id: "repo_hygiene", status: "passed" },
+      { id: "public_surface", status: "passed" },
       { id: "protocol_vectors", status: "passed" },
       { id: "router_alpha", status: "passed" },
       { id: "mcp_gateway_smoke", status: "passed" },

@@ -7,7 +7,10 @@ import {
   type Phase7StagingStatusReport,
   createPhase7StagingStatusReport,
 } from "./phase7StagingStatus.js";
-import type { Split402LocalProofReport } from "./productLocalProof.js";
+import {
+  LOCAL_PUBLIC_ALPHA_PROOF_CHECKS,
+  type Split402LocalProofReport,
+} from "./productLocalProof.js";
 
 export interface Split402ProductReadinessInput {
   localProofText?: string;
@@ -185,16 +188,20 @@ function createProductNextActions(
   const leadActions: string[] = [];
   const phase7DetailActions: string[] = [];
   const phase6DetailActions: string[] = [];
+  if (localProof?.ready !== true) {
+    leadActions.push(
+      "Run corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json.",
+    );
+    if (localProof?.checked === true) {
+      leadActions.push(...localProof.blockers);
+    }
+  }
 
   if (!phase7.proofChecked && !phase6.evidenceBundleChecked) {
     return [
       "Create a combined launch evidence workspace with corepack pnpm product:evidence:init.",
       "Run corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence and follow its next action.",
-      ...(localProof?.ready === true
-        ? []
-        : [
-            "Run corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json.",
-          ]),
+      ...leadActions,
       "Fill the generated Phase 7 and Phase 6 env files with hosted staging and custody evidence values.",
       "Collect Phase 7 hosted proof and Phase 6 custody evidence from the same deployed environment and source commit.",
       "Run hosted Phase 7 staging proof collection and status validation.",
@@ -276,6 +283,17 @@ function createLocalProofStatus(
         `local proof failed checks: ${failedChecks
           .map((check) => check.id)
           .join(", ")}`,
+      );
+    }
+    const actualCheckIds = new Set(report.checks.map((check) => check.id));
+    const missingCurrentChecks = LOCAL_PUBLIC_ALPHA_PROOF_CHECKS.filter(
+      (check) => !actualCheckIds.has(check.id),
+    ).map((check) => check.id);
+    if (missingCurrentChecks.length > 0) {
+      blockers.push(
+        `local proof is stale; rerun product:local-proof because it is missing current checks: ${missingCurrentChecks.join(
+          ", ",
+        )}`,
       );
     }
   }
