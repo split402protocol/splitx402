@@ -124,6 +124,23 @@ describe("repository presentation", () => {
     );
   });
 
+  it("keeps public receipt ingestion endpoint docs aligned", () => {
+    const readme = readFileSync("README.md", "utf8");
+    const controlPlaneReadme = readFileSync(
+      "packages/control-plane/README.md",
+      "utf8",
+    );
+    const architecture = readFileSync(
+      "docs/reference/split402_protocol_architecture_v0.1.md",
+      "utf8",
+    );
+
+    for (const text of [readme, controlPlaneReadme, architecture]) {
+      expect(text).toContain("POST /v1/receipts");
+      expect(text).not.toContain("POST /v1/receipts/ingest");
+    }
+  });
+
   it("keeps Phase 6 payout safety docs aligned with implemented hardening", () => {
     const phase6 = readFileSync("docs/PHASE_6.md", "utf8");
     const roadmap = readFileSync("docs/ROADMAP.md", "utf8");
