@@ -163,6 +163,28 @@ approval_notes: checked evidence is intentionally incomplete
     });
   });
 
+  it("marks local validation ready when saved local proof passes", () => {
+    const checklist = createSplit402LaunchChecklist(
+      createSplit402ProductReadinessReport({
+        localProofText: JSON.stringify({
+          schema: "split402.local_public_alpha_proof.v1",
+          status: "passed",
+          launchApproval: "not_approved",
+          generatedAt: "2026-06-29T20:00:00.000Z",
+          checks: [{ id: "mcp_gateway_smoke", status: "passed" }],
+          notes: [],
+        }),
+      }),
+    );
+
+    expect(checklist.sections[1]).toMatchObject({
+      title: "Run local repository validation",
+      status: "ready",
+      externalEvidenceRequired: false,
+    });
+    expect(checklist.nextCommand).toBe("corepack pnpm product:evidence:init");
+  });
+
   it("marks local validation blocked when command evidence is invalid", () => {
     const artifacts = new Map<string, Uint8Array>([
       ["evidence/commands.log", encode("$ corepack pnpm lint\n")],

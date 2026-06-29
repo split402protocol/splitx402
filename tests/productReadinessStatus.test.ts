@@ -35,6 +35,9 @@ describe("Split402 product readiness status", () => {
       "Run corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence and follow its next action.",
     );
     expect(report.nextActions).toContain(
+      "Run corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json.",
+    );
+    expect(report.nextActions).toContain(
       "Fill the generated Phase 7 and Phase 6 env files with hosted staging and custody evidence values.",
     );
     expect(report.nextActions).toContain(
@@ -48,6 +51,38 @@ describe("Split402 product readiness status", () => {
     );
     expect(report.nextActions).not.toContain(
       "Create the evidence workspace with corepack pnpm phase7:staging:init.",
+    );
+  });
+
+  it("reports saved local public-alpha proof without approving launch", () => {
+    const report = createSplit402ProductReadinessReport({
+      localProofText: createPassingLocalProofText(),
+    });
+
+    expect(report.localProof).toMatchObject({
+      checked: true,
+      ready: true,
+      status: "passed",
+      generatedAt: "2026-06-29T20:00:00.000Z",
+    });
+    expect(report.launchDecision).toBe("no-go");
+    expect(report.nextActions).not.toContain(
+      "Run corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json.",
+    );
+    expect(formatSplit402ProductReadinessBrief(report)).toContain(
+      "Local public-alpha proof: ready",
+    );
+  });
+
+  it("fails closed for invalid local proof artifacts", () => {
+    const report = createSplit402ProductReadinessReport({
+      localProofText: '{"schema":"wrong","status":"passed"}',
+    });
+
+    expect(report.localProof.ready).toBe(false);
+    expect(report.localProof.status).toBe("failed");
+    expect(report.localProof.blockers).toContain(
+      "local proof schema is not split402.local_public_alpha_proof.v1",
     );
   });
 
@@ -117,3 +152,19 @@ approval_notes: checked evidence is intentionally incomplete
     expect(brief).toContain("corepack pnpm product:launch-preflight");
   });
 });
+
+function createPassingLocalProofText(): string {
+  return JSON.stringify({
+    schema: "split402.local_public_alpha_proof.v1",
+    status: "passed",
+    launchApproval: "not_approved",
+    generatedAt: "2026-06-29T20:00:00.000Z",
+    checks: [
+      { id: "repo_hygiene", status: "passed" },
+      { id: "protocol_vectors", status: "passed" },
+      { id: "router_alpha", status: "passed" },
+      { id: "mcp_gateway_smoke", status: "passed" },
+    ],
+    notes: [],
+  });
+}

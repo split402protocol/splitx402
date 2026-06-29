@@ -121,9 +121,9 @@ function createLocalValidationSection(
 ): Split402LaunchChecklistSection {
   const commandEvidenceStatus = report.phase7.commandEvidenceStatus.status;
   const status =
-    commandEvidenceStatus === "valid"
+    report.localProof.ready || commandEvidenceStatus === "valid"
       ? "ready"
-      : commandEvidenceStatus === "invalid"
+      : report.localProof.checked || commandEvidenceStatus === "invalid"
         ? "blocked"
         : "not_checked";
 
@@ -141,8 +141,9 @@ function createLocalValidationSection(
       "corepack pnpm audit --audit-level high",
     ],
     notes: [
-      "This section is marked ready only when Phase 7 commands_run evidence includes the required validation commands.",
+      "This section is marked ready when local-public-alpha-proof.json passes or when Phase 7 commands_run evidence includes the required validation commands.",
       "If SPLIT402_TEST_DATABASE_URL is configured, also run corepack pnpm test:postgres.",
+      ...report.localProof.blockers,
     ],
   };
 }
