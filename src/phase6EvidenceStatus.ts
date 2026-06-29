@@ -191,9 +191,17 @@ function createNextActions(
       `Replace placeholder fields: ${placeholderFieldsToReplace.join(", ")}`,
     );
   }
-  actions.push(...validation.invalidFields);
+  actions.push(...createOperatorInvalidFieldActions(validation.invalidFields));
   actions.push(...sourceCommitBlockers);
   return actions;
+}
+
+function createOperatorInvalidFieldActions(invalidFields: readonly string[]): string[] {
+  return invalidFields.map((field) =>
+    field === "approval_decision must be approved before Phase 6 custody can go live"
+      ? "Keep approval_decision=no-go until all Phase 6 custody evidence fields and reviews are complete; set it to approved only during final human custody approval."
+      : field,
+  );
 }
 
 function createSourceCommitStatus(
