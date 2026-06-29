@@ -330,6 +330,7 @@ Check the combined product readiness gates:
 
 ```bash
 corepack pnpm product:evidence:init
+corepack pnpm product:evidence:init --missing
 corepack pnpm product:evidence:init --force
 corepack pnpm product:launch-preflight --brief
 corepack pnpm product:launch-checklist --brief
@@ -341,8 +342,9 @@ corepack pnpm product:status <phase6-custody-evidence.txt> <phase7-staging-proof
 
 `product:evidence:init` creates a local evidence workspace for the remaining
 Phase 7 hosted proof and Phase 6 custody bundle, including local env templates
-for attachment paths. It refuses to overwrite existing scaffold files; rerun
-with `--force` only when intentionally replacing local scaffold content.
+for attachment paths. It refuses to overwrite existing scaffold files; use
+`--missing` to create only absent scaffold files in a partial workspace, and
+rerun with `--force` only when intentionally replacing local scaffold content.
 `product:launch-preflight --brief` checks whether the local launch workspace,
 Phase 6 custody evidence env paths, and required Phase 7 hosted proof
 environment values are ready before collection starts.

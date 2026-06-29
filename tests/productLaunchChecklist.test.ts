@@ -71,6 +71,9 @@ describe("Split402 launch checklist", () => {
       "Mainnet ready: no",
     );
     expect(formatSplit402LaunchChecklistBrief(checklist)).toContain(
+      "corepack pnpm product:evidence:init --missing",
+    );
+    expect(formatSplit402LaunchChecklistBrief(checklist)).toContain(
       "corepack pnpm product:evidence:init --force",
     );
     expect(formatSplit402LaunchChecklistBrief(checklist)).toContain(

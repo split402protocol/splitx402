@@ -16,22 +16,25 @@ const workspace = createSplit402ProductEvidenceWorkspace({
   reviewDate: isoDate(),
 });
 const writes = createProductEvidenceInitWrites(workspace);
-const existingFiles = args.force
-  ? []
-  : findExistingProductEvidenceInitWrites(writes, existsSync);
+const existingFiles = findExistingProductEvidenceInitWrites(writes, existsSync);
+const writesToCreate = args.force
+  ? writes
+  : args.missing
+    ? writes.filter((write) => !existsSync(write.path))
+    : writes;
 
-if (existingFiles.length > 0) {
+if (!args.force && !args.missing && existingFiles.length > 0) {
   console.error(
     [
       "Refusing to overwrite existing Split402 launch evidence scaffold files.",
-      "Review or move these files first, or rerun with `corepack pnpm product:evidence:init --force` to replace them intentionally:",
+      "Review or move these files first, run `corepack pnpm product:evidence:init --missing` to create only absent scaffold files, or rerun with `corepack pnpm product:evidence:init --force` to replace them intentionally:",
       ...existingFiles.map((path) => `- ${path}`),
     ].join("\n"),
   );
   process.exit(1);
 }
 
-for (const write of writes) {
+for (const write of writesToCreate) {
   mkdirSync(dirname(write.path), { recursive: true });
   writeFileSync(write.path, write.contents);
 }
@@ -50,6 +53,9 @@ console.log(
       phase7EnvFile: join(workspace.directory, workspace.phase7EnvFileName),
       phase7EvidenceDirectory: workspace.phase7.directory,
       readmeFile: join(workspace.directory, workspace.readmeFileName),
+      mode: args.force ? "force" : args.missing ? "missing" : "create",
+      writtenFiles: writesToCreate.map((write) => write.path),
+      skippedExistingFiles: args.missing ? existingFiles : [],
       nextCommands: workspace.nextCommands,
     },
     null,

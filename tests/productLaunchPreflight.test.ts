@@ -45,7 +45,7 @@ describe("Split402 launch preflight", () => {
 
     expect(report.readyToCollectEvidence).toBe(false);
     expect(report.nextActions).toEqual([
-      "Review or move the existing partial launch evidence workspace, then run corepack pnpm product:evidence:init --force only if intentionally replacing scaffold files.",
+      "Review the existing partial launch evidence workspace, then run corepack pnpm product:evidence:init --missing to create only absent scaffold files or --force only if intentionally replacing scaffold files.",
     ]);
     expect(report.checks.find((check) => check.id === "launch_workspace_files"))
       .toMatchObject({

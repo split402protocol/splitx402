@@ -5,6 +5,7 @@ import type { Split402ProductEvidenceWorkspace } from "./productEvidenceWorkspac
 export interface ProductEvidenceInitArgs {
   directory: string;
   force: boolean;
+  missing: boolean;
 }
 
 export interface ProductEvidenceInitWrite {
@@ -16,17 +17,27 @@ export function parseProductEvidenceInitArgs(
   args: readonly string[],
 ): ProductEvidenceInitArgs {
   const force = args.includes("--force");
-  const directoryArgs = args.filter((arg) => arg !== "--force");
+  const missing = args.includes("--missing");
+  const directoryArgs = args.filter(
+    (arg) => arg !== "--force" && arg !== "--missing",
+  );
+
+  if (force && missing) {
+    throw new Error(
+      "Usage: corepack pnpm product:evidence:init [--force|--missing] [directory]",
+    );
+  }
 
   if (directoryArgs.length > 1) {
     throw new Error(
-      "Usage: corepack pnpm product:evidence:init [--force] [directory]",
+      "Usage: corepack pnpm product:evidence:init [--force|--missing] [directory]",
     );
   }
 
   return {
     directory: directoryArgs[0] ?? "split402-launch-evidence",
     force,
+    missing,
   };
 }
 

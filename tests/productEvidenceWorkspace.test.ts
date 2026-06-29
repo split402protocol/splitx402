@@ -117,21 +117,34 @@ describe("Split402 product evidence workspace", () => {
     ]);
   });
 
-  it("parses an intentional force flag for evidence scaffold replacement", () => {
+  it("parses intentional scaffold replacement and missing-only modes", () => {
     expect(parseProductEvidenceInitArgs(["--force", "evidence/launch"])).toEqual(
       {
         directory: "evidence/launch",
         force: true,
+        missing: false,
       },
     );
+    expect(parseProductEvidenceInitArgs(["--missing", "evidence/launch"]))
+      .toEqual({
+        directory: "evidence/launch",
+        force: false,
+        missing: true,
+      });
     expect(parseProductEvidenceInitArgs([])).toEqual({
       directory: "split402-launch-evidence",
       force: false,
+      missing: false,
     });
     expect(() =>
       parseProductEvidenceInitArgs(["one", "two"]),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: Usage: corepack pnpm product:evidence:init [--force] [directory]]`,
+      `[Error: Usage: corepack pnpm product:evidence:init [--force|--missing] [directory]]`,
+    );
+    expect(() =>
+      parseProductEvidenceInitArgs(["--force", "--missing"]),
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: Usage: corepack pnpm product:evidence:init [--force|--missing] [directory]]`,
     );
   });
 });
