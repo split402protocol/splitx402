@@ -449,6 +449,25 @@ describe("MCP demo gateway", () => {
           status: "executed",
           executionMode: "router-demo-mock",
           providerId: "split402-demo-merchant",
+          provider: {
+            providerId: "split402-demo-merchant",
+            capability: "solana.wallet-risk",
+            merchantOrigin: "http://localhost:4021",
+            path: "/v1/risk",
+            method: "POST",
+            operationId: "wallet-risk-score",
+            campaignId: "cmp_00000000000000000000000000000002",
+            network: expect.any(String),
+            asset: expect.any(String),
+            payToWallet: expect.any(String),
+            amountAtomic: "10000",
+            referrerWallet: expect.any(String),
+            payoutWallet: expect.any(String),
+            reliability: {
+              successRateBps: 9500,
+              medianLatencyMs: 250
+            }
+          },
           amountPaidAtomic: "10000",
           receiptId: expect.stringMatching(/^rcp_[0-9a-f]{32}$/u),
           receiptVerificationStatus: "verified",
