@@ -68,3 +68,7 @@ Before production launch, every new file should be checked against one question:
 If it helps protocol adoption, it can be public. If it exposes operations,
 commercial strategy, custody, live infrastructure, partner details, or private
 evidence, it belongs in private infrastructure.
+
+`corepack pnpm repo:guard` enforces the most important parts of this rule by
+rejecting tracked launch-evidence workspaces, raw environment files, and common
+private key or credential artifact extensions.
