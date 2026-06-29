@@ -7,11 +7,13 @@ paying, losing allocations, or hiding funding deficits.
 ## Current Status
 
 Status: in progress. The payout engine now has preview, allocation, transaction
-planning, simulation, signer-policy checks, signed-byte persistence, broadcast
-submission, local-dev signer wiring, remote signer client wiring, signer
-appliance scaffold, signer deployment artifacts, finality monitoring, status
-rollup, idempotent ledger closure, and payout lifecycle outbox/webhook events,
-plus an unknown-outcome reconciliation queue and referrer payout views.
+planning, simulation, signer-policy checks, signer byte verification,
+signed-byte persistence, payout transaction-to-item mapping, broadcast
+submission, local-dev signer wiring, remote signer client wiring,
+signer appliance scaffold, signer deployment artifacts, finality monitoring,
+finalized transfer-content verification before ledger closure, status rollup,
+idempotent ledger closure, and payout lifecycle outbox/webhook events, plus an
+unknown-outcome reconciliation queue and referrer payout views.
 
 ## What Changed
 
@@ -48,6 +50,9 @@ plus an unknown-outcome reconciliation queue and referrer payout views.
   mint, allowed SPL Token program, destination/amount list hash, amount caps,
   serialized transaction coverage, and successful simulation before delegating
   to an isolated signing function.
+- Added fail-closed Solana payout transaction byte verification so the local-dev
+  signer and remote signer service reject serialized transactions that do not
+  match the approved payout plan.
 - Added a disposable local-dev Solana payout signer factory that loads explicit
   key material or `SPLIT402_PAYOUT_SIGNER_*` environment variables, verifies the
   signer address against the payout policy, signs serialized transactions, and
@@ -124,6 +129,8 @@ plus an unknown-outcome reconciliation queue and referrer payout views.
 - Added signed payout transaction records and PostgreSQL persistence for exact
   signed bytes, expected signature, sequence, attempt, blockhash metadata, and
   submitted state before broadcast.
+- Added durable payout transaction-to-item mappings so finality rollup only
+  advances the payout items included in each finalized or failed transaction.
 - Added a Solana RPC broadcaster boundary that sends persisted signed bytes via
   `sendTransaction` and retries the same bytes across configured RPC URLs.
 - Added payout transaction finality persistence and a Solana RPC finality monitor
@@ -132,8 +139,13 @@ plus an unknown-outcome reconciliation queue and referrer payout views.
 - Added payout batch finality rollup so submitted, confirmed, finalized, failed,
   expired, and outcome-unknown transaction states update payout batch and item
   status conservatively.
-- Added idempotent payout-batch ledger closure for finalized batches so referrer
-  payable and merchant commission liability accounts close exactly once.
+- Added finalized payout transfer-content verification before ledger closure so
+  finalized signatures must prove the expected mint, source, authority,
+  recipient accounts, owners, and amounts with no extra funding-account
+  transfers.
+- Added idempotent payout-batch ledger closure for finalized, transfer-verified
+  batches so referrer payable and merchant commission liability accounts close
+  exactly once.
 - Added finalized-payout internal and webhook outbox events that commit
   atomically with first-time payout-batch ledger closure and remain idempotent on
   repeated closure calls.
@@ -210,4 +222,4 @@ the merchant has enough funding.
 - `corepack pnpm phase6:signer-smoke`
 - `corepack pnpm phase6:signer-policy`
 - `corepack pnpm payout:finality:failover-drill`
-- `corepack pnpm product:status <phase6-custody-evidence.txt> <phase7-staging-proof.txt>`
+- `corepack pnpm product:status --brief --workspace split402-launch-evidence`
