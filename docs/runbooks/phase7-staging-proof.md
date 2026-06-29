@@ -14,26 +14,31 @@ proof sequence.
 ```bash
 git rev-parse HEAD
 git status --short --branch
-corepack pnpm phase7:staging:init
+corepack pnpm product:evidence:init --missing
+corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence
 SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed
-corepack pnpm phase7:staging-proof --evidence-env-file phase7-staging-evidence/phase7-staging.env phase7-staging-proof.txt
-corepack pnpm phase7:hosted:preflight --evidence-env-file phase7-staging-evidence/phase7-staging.env
+corepack pnpm phase7:staging-proof --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-proof.txt
+corepack pnpm phase7:hosted:preflight --evidence-env-file split402-launch-evidence/phase7-staging.env
 # Confirm hosted control plane has SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc.
-corepack pnpm phase7:staging:collect-reads --evidence-env-file phase7-staging-evidence/phase7-staging.env
-corepack pnpm phase7:staging:collect-mcp-gateway --evidence-env-file phase7-staging-evidence/phase7-staging.env
+corepack pnpm phase7:staging:collect-reads --evidence-env-file split402-launch-evidence/phase7-staging.env
+corepack pnpm phase7:staging:collect-mcp-gateway --evidence-env-file split402-launch-evidence/phase7-staging.env
 corepack pnpm demo:mcp-gateway:smoke
-corepack pnpm phase7:staging:commands-template phase7-staging-evidence/commands.log
-corepack pnpm demo:mcp-bundle phase7-staging-evidence/mcp-bundle.json
-corepack pnpm demo:paid-suite phase7-staging-evidence/paid-suite.log
-corepack pnpm phase7:staging:derive-receipt-verification --evidence-env-file phase7-staging-evidence/phase7-staging.env phase7-staging-evidence/paid-suite.log phase7-staging-evidence/receipt-verification.json
-corepack pnpm phase7:staging:manifest phase7-staging-proof.txt phase7-staging-evidence/artifact-manifest.json
-corepack pnpm phase7:staging:assemble --evidence-env-file phase7-staging-evidence/phase7-staging.env phase7-staging-proof.txt
-corepack pnpm phase7:staging:status phase7-staging-proof.txt
+corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log
+corepack pnpm demo:mcp-bundle split402-launch-evidence/phase7-staging-evidence/mcp-bundle.json
+corepack pnpm demo:paid-suite split402-launch-evidence/phase7-staging-evidence/paid-suite.log
+corepack pnpm phase7:staging:derive-receipt-verification --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-evidence/paid-suite.log split402-launch-evidence/phase7-staging-evidence/receipt-verification.json
+corepack pnpm phase7:staging:manifest split402-launch-evidence/phase7-staging-proof.txt split402-launch-evidence/phase7-staging-evidence/artifact-manifest.json
+corepack pnpm phase7:staging:assemble --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-proof.txt
+corepack pnpm phase7:staging:status split402-launch-evidence/phase7-staging-proof.txt
+corepack pnpm product:status --brief --workspace split402-launch-evidence
 ```
 
-`phase7:staging:init` creates a `phase7-staging-evidence/` directory README and
-`phase7-staging.env` attachment-path template. It does not create evidence
-artifact files; those must be captured from the hosted staging run.
+`product:evidence:init --missing` creates the combined
+`split402-launch-evidence/` workspace, including Phase 6 custody scaffolds,
+`split402-launch-evidence/phase7-staging.env`, and the
+`split402-launch-evidence/phase7-staging-evidence/` artifact directory README.
+It does not create real evidence artifact files; those must be captured from
+the hosted staging run.
 The collection and assembly commands auto-load the default evidence env files
 when present; use `--evidence-env-file <path>` when the evidence workspace is
 not at the default path.
@@ -44,8 +49,10 @@ close. `phase7:staging:status` also compares the proof `source_commit` with the
 current checkout's `git rev-parse HEAD`; rerun the proof after any source commit
 change instead of approving stale evidence. Run the final status check from a
 clean source checkout because uncommitted source changes also keep the proof
-no-go. Local proof artifacts such as `phase7-staging-proof.txt` and files under
-`phase7-staging-evidence/` are allowed during the status check.
+no-go. Local proof artifacts such as
+`split402-launch-evidence/phase7-staging-proof.txt` and files under
+`split402-launch-evidence/phase7-staging-evidence/` are allowed during the
+status check.
 `phase7:staging:seed` is an operator-only PostgreSQL seed for hosted Devnet
 staging. It creates or verifies the active demo merchant, verified origin,
 offer/receipt key, payout wallet, active campaign, and active referral route
@@ -170,7 +177,7 @@ local-only proof artifacts; use local `attached:` artifacts for evidence that
 the status checker parses. Leave `approval_decision` as `no-go` until all
 attached evidence is from the same staging environment and source commit.
 Include `artifact_manifest_evidence` from
-`corepack pnpm phase7:staging:manifest phase7-staging-proof.txt phase7-staging-evidence/artifact-manifest.json`.
+`corepack pnpm phase7:staging:manifest split402-launch-evidence/phase7-staging-proof.txt split402-launch-evidence/phase7-staging-evidence/artifact-manifest.json`.
 
 The validator requires:
 

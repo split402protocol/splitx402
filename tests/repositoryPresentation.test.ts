@@ -144,6 +144,39 @@ describe("repository presentation", () => {
     );
   });
 
+  it("keeps Phase 7 proof docs on the launch evidence workspace flow", () => {
+    const proofDocs = [
+      "README.md",
+      "docs/PHASE_7.md",
+      "docs/runbooks/phase7-hosted-staging.md",
+      "docs/runbooks/phase7-staging-proof.md",
+    ].map((filePath) => ({
+      filePath,
+      text: readFileSync(filePath, "utf8"),
+    }));
+
+    for (const { filePath, text } of proofDocs) {
+      expect(text, filePath).toContain(
+        "split402-launch-evidence/phase7-staging.env",
+      );
+      expect(text, filePath).toContain(
+        "split402-launch-evidence/phase7-staging-proof.txt",
+      );
+      expect(text, filePath).toContain(
+        "split402-launch-evidence/phase7-staging-evidence/artifact-manifest.json",
+      );
+      expect(text, filePath).not.toMatch(
+        /--evidence-env-file phase7-staging-evidence\//u,
+      );
+      expect(text, filePath).not.toContain(
+        "phase7:staging:manifest phase7-staging-proof.txt phase7-staging-evidence/artifact-manifest.json",
+      );
+      expect(text, filePath).not.toContain(
+        "phase7:staging:assemble --evidence-env-file phase7-staging-evidence/phase7-staging.env phase7-staging-proof.txt",
+      );
+    }
+  });
+
   it("documents the combined product readiness status command", () => {
     const readme = readFileSync("README.md", "utf8");
     const currentState = readFileSync("docs/CURRENT_STATE.md", "utf8");
