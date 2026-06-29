@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   createProductEvidenceInitWrites,
+  createProductEvidenceSourceRefreshWrites,
   findExistingProductEvidenceInitWrites,
   parseProductEvidenceInitArgs,
 } from "../src/productEvidenceInitPlan.js";
@@ -130,6 +131,7 @@ describe("Split402 product evidence workspace", () => {
         force: true,
         help: false,
         missing: false,
+        refreshSource: false,
       },
     );
     expect(parseProductEvidenceInitArgs(["--missing", "evidence/launch"]))
@@ -138,34 +140,107 @@ describe("Split402 product evidence workspace", () => {
         force: false,
         help: false,
         missing: true,
+        refreshSource: false,
+      });
+    expect(parseProductEvidenceInitArgs(["--refresh-source", "evidence/launch"]))
+      .toEqual({
+        directory: "evidence/launch",
+        force: false,
+        help: false,
+        missing: false,
+        refreshSource: true,
       });
     expect(parseProductEvidenceInitArgs(["--help"])).toEqual({
       directory: "split402-launch-evidence",
       force: false,
       help: true,
       missing: false,
+      refreshSource: false,
     });
     expect(parseProductEvidenceInitArgs([])).toEqual({
       directory: "split402-launch-evidence",
       force: false,
       help: false,
       missing: false,
+      refreshSource: false,
     });
     expect(() =>
       parseProductEvidenceInitArgs(["one", "two"]),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: Usage: corepack pnpm product:evidence:init [--force|--missing] [directory]]`,
+      `[Error: Usage: corepack pnpm product:evidence:init [--force|--missing|--refresh-source] [directory]]`,
     );
     expect(() =>
-      parseProductEvidenceInitArgs(["--force", "--missing"]),
+      parseProductEvidenceInitArgs(["--force", "--refresh-source"]),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: Usage: corepack pnpm product:evidence:init [--force|--missing] [directory]]`,
+      `[Error: Usage: corepack pnpm product:evidence:init [--force|--missing|--refresh-source] [directory]]`,
     );
     expect(() =>
       parseProductEvidenceInitArgs(["--froce"]),
     ).toThrowErrorMatchingInlineSnapshot(`
-      [Error: Usage: corepack pnpm product:evidence:init [--force|--missing] [directory]
+      [Error: Usage: corepack pnpm product:evidence:init [--force|--missing|--refresh-source] [directory]
       Unknown option: --froce]
+    `);
+  });
+
+  it("plans source-commit refreshes without rewriting env templates", () => {
+    const previous = createSplit402ProductEvidenceWorkspace({
+      sourceCommit: "abc1234",
+    });
+    const next = createSplit402ProductEvidenceWorkspace({
+      sourceCommit: "def5678",
+    });
+
+    const writes = createProductEvidenceSourceRefreshWrites({
+      workspace: next,
+      readText: (path) => {
+        if (path.endsWith(previous.phase6EvidenceFileName)) {
+          return previous.phase6EvidenceText;
+        }
+        if (path.endsWith(previous.phase7ProofFileName)) {
+          return previous.phase7ProofText;
+        }
+        throw new Error(`unexpected read ${path}`);
+      },
+    });
+
+    expect(writes.map((write) => write.path)).toEqual([
+      join("split402-launch-evidence", "phase6-custody-evidence.txt"),
+      join("split402-launch-evidence", "phase7-staging-proof.txt"),
+    ]);
+    expect(writes[0]?.contents).toContain("source_commit: def5678");
+    expect(writes[1]?.contents).toContain("source_commit: def5678");
+    expect(writes[0]?.contents).not.toContain("source_commit: abc1234");
+    expect(writes[1]?.contents).not.toContain("source_commit: abc1234");
+  });
+
+  it("refuses to refresh source commits after evidence values are filled", () => {
+    const previous = createSplit402ProductEvidenceWorkspace({
+      sourceCommit: "abc1234",
+    });
+    const next = createSplit402ProductEvidenceWorkspace({
+      sourceCommit: "def5678",
+    });
+
+    expect(() =>
+      createProductEvidenceSourceRefreshWrites({
+        workspace: next,
+        readText: (path) => {
+          if (path.endsWith(previous.phase6EvidenceFileName)) {
+            return previous.phase6EvidenceText.replace(
+              "funding_wallet:",
+              "funding_wallet: merchant-funded-wallet",
+            );
+          }
+          if (path.endsWith(previous.phase7ProofFileName)) {
+            return previous.phase7ProofText;
+          }
+          throw new Error(`unexpected read ${path}`);
+        },
+      }),
+    ).toThrowErrorMatchingInlineSnapshot(`
+      [Error: Refusing to refresh source_commit in split402-launch-evidence\\phase6-custody-evidence.txt because it already contains non-scaffold evidence fields.
+      Non-refreshable fields: funding_wallet
+      Recollect evidence from the current checkout instead of rewriting source_commit.]
     `);
   });
 });

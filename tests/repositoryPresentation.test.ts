@@ -151,6 +151,7 @@ describe("repository presentation", () => {
     expect(readme).toContain("corepack pnpm product:evidence:init");
     expect(readme).toContain("corepack pnpm product:evidence:init --help");
     expect(readme).toContain("corepack pnpm product:evidence:init --missing");
+    expect(readme).toContain("corepack pnpm product:evidence:init --refresh-source");
     expect(readme).toContain("corepack pnpm product:evidence:init --force");
     expect(readme).toContain("corepack pnpm product:launch-preflight --help");
     expect(readme).toContain("corepack pnpm product:launch-preflight --brief");
@@ -185,6 +186,7 @@ describe("repository presentation", () => {
     expect(currentState).toContain("scaffold `source_commit` values");
     expect(currentState).toContain("corepack pnpm product:launch-checklist");
     expect(currentState).toContain("local env templates");
+    expect(currentState).toContain("`--refresh-source`");
     expect(currentState).toContain("checked, blocked, or ready");
     expect(currentState).toContain("refuses to overwrite existing scaffold");
     expect(currentState).toContain("corepack pnpm product:status");
