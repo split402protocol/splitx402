@@ -1,9 +1,32 @@
 import { describe, expect, it } from "vitest";
 
+import { parsePhase7StagingInitCliArgs } from "../src/phase7-staging-init.js";
 import { createPhase7StagingEvidenceWorkspace } from "../src/phase7StagingEvidenceWorkspace.js";
 import { PHASE7_STAGING_ATTACHMENT_FIELDS } from "../src/phase7StagingProofAssembly.js";
 
 describe("Phase 7 staging evidence workspace", () => {
+  it("parses help and rejects unknown init CLI options", () => {
+    expect(parsePhase7StagingInitCliArgs(["--help"])).toEqual({
+      directory: "phase7-staging-evidence",
+      help: true,
+    });
+    expect(parsePhase7StagingInitCliArgs(["evidence/phase7"])).toEqual({
+      directory: "evidence/phase7",
+      help: false,
+    });
+    expect(() =>
+      parsePhase7StagingInitCliArgs(["--directory"]),
+    ).toThrowErrorMatchingInlineSnapshot(`
+      [Error: Usage: corepack pnpm phase7:staging:init [evidence-directory]
+      Unknown option: --directory]
+    `);
+    expect(() =>
+      parsePhase7StagingInitCliArgs(["one", "two"]),
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: Usage: corepack pnpm phase7:staging:init [evidence-directory]]`,
+    );
+  });
+
   it("creates an env template for every staging attachment field", () => {
     const workspace = createPhase7StagingEvidenceWorkspace({
       directory: "evidence/phase7",
