@@ -162,7 +162,8 @@ function createProductNextActions(
   phase6: Phase6EvidenceStatusReport,
   phase7: Phase7StagingStatusReport,
 ): string[] {
-  const actions: string[] = [];
+  const leadActions: string[] = [];
+  const detailActions: string[] = [];
 
   if (!phase7.proofChecked && !phase6.evidenceBundleChecked) {
     return [
@@ -176,24 +177,24 @@ function createProductNextActions(
   }
 
   if (!phase7.readyForPublicAlphaDemo) {
-    actions.push(
+    leadActions.push(
       phase7.proofChecked
         ? "Fix Phase 7 hosted proof blockers reported by corepack pnpm phase7:staging:status."
         : "Run corepack pnpm product:launch-preflight --brief split402-launch-evidence before collecting hosted proof.",
     );
-    actions.push(...phase7.nextActions.slice(0, 5));
+    detailActions.push(...phase7.nextActions.slice(0, 5));
   }
 
   if (!phase6.readyForCustody) {
-    actions.push(
+    leadActions.push(
       phase6.evidenceBundleChecked
         ? "Fix Phase 6 custody evidence blockers reported by corepack pnpm phase6:evidence:status."
         : "Generate and assemble the Phase 6 custody evidence bundle.",
     );
-    actions.push(...phase6.nextActions.slice(0, 5));
+    detailActions.push(...phase6.nextActions.slice(0, 5));
   }
 
-  return [...new Set(actions)];
+  return [...new Set([...leadActions, ...detailActions])];
 }
 
 function createSummary(input: {
