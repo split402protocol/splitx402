@@ -116,6 +116,7 @@ export function createSplit402ProductReadinessReport(
 export function formatSplit402ProductReadinessBrief(
   report: Split402ProductReadinessReport,
 ): string {
+  const nextActionLimit = 6;
   const localProofLine = report.localProof.ready
     ? "- Local public-alpha proof: ready"
     : report.localProof.checked
@@ -129,7 +130,17 @@ export function formatSplit402ProductReadinessBrief(
         : "not checked";
     return `- ${gate.label}: ${status}`;
   });
-  const nextActions = report.nextActions.slice(0, 6).map((action) => `- ${action}`);
+  const displayedNextActions = report.nextActions
+    .slice(0, nextActionLimit)
+    .map((action) => `- ${action}`);
+  const hiddenNextActionCount = report.nextActions.length - displayedNextActions.length;
+  const nextActions =
+    hiddenNextActionCount > 0
+      ? [
+          ...displayedNextActions,
+          `- ${hiddenNextActionCount} more actions hidden; run corepack pnpm phase7:staging:status --brief split402-launch-evidence/phase7-staging-proof.txt and corepack pnpm phase6:evidence:status --brief split402-launch-evidence/phase6-custody-evidence.txt for full phase blockers.`,
+        ]
+      : displayedNextActions;
 
   return [
     `Split402 status: ${report.launchDecision}`,
