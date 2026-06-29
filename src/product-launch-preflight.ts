@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 
 import {
@@ -15,6 +16,7 @@ if (help) {
 
 const report = createSplit402LaunchPreflightReport({
   ...(directory === undefined ? {} : { directory }),
+  currentSourceCommit: readCurrentGitCommit(),
   exists: existsSync,
   readText: (path) => readFileSync(path, "utf8"),
 });
@@ -34,4 +36,11 @@ function parseArgs() {
     console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
+}
+
+function readCurrentGitCommit(): string {
+  return execFileSync("git", ["rev-parse", "HEAD"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  }).trim();
 }
