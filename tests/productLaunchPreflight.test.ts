@@ -556,6 +556,55 @@ describe("Split402 launch preflight", () => {
     });
   });
 
+  it("rejects MCP proof preflight when capability does not match the Phase 7 demo target", () => {
+    const workspace = createSplit402ProductEvidenceWorkspace({
+      sourceCommit: "abc1234",
+    });
+    const files = createWorkspaceFileMap(
+      [
+        workspace.phase7.envText,
+        "SPLIT402_PHASE7_PROOF_ID=phase7-staging-2026-06-29",
+        "SPLIT402_PHASE7_PROOF_REVIEWERS=Split402 operators",
+        "SPLIT402_PHASE7_STAGING_ENVIRONMENT=hosted-devnet-public-alpha",
+        "SPLIT402_PHASE7_CONTROL_PLANE_URL=https://control.staging.example",
+        "SPLIT402_PHASE7_DASHBOARD_URL=https://dashboard.staging.example",
+        "SPLIT402_PHASE7_DEMO_MERCHANT_URL=https://merchant.staging.example",
+        "SPLIT402_PHASE7_WEBHOOK_RECEIVER_URL=https://webhook.staging.example",
+        "SPLIT402_PHASE7_CONTROL_PLANE_TOKEN=merchant-session-token",
+        "SPLIT402_PHASE7_MERCHANT_ID=mrc_123",
+        "SPLIT402_PHASE7_REFERRER_WALLET=referrer-wallet",
+        "SPLIT402_MCP_CONTROL_PLANE_URL=https://control.staging.example",
+        "SPLIT402_MCP_CONTROL_PLANE_TOKEN=merchant-session-token",
+        "SPLIT402_MCP_CAPABILITY=evm.wallet-risk",
+        "SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1",
+        "SPLIT402_MCP_SVM_PRIVATE_KEY=funded-devnet-buyer-key",
+      ].join("\n"),
+      createFilledPhase6EnvText(workspace.phase6EnvText),
+      workspace,
+    );
+
+    const report = createSplit402LaunchPreflightReport({
+      currentSourceCommit: "abc1234",
+      exists: (path) => files.has(path),
+      readText: (path) => files.get(path) ?? "",
+    });
+
+    expect(report.readyToCollectEvidence).toBe(false);
+    expect(
+      report.checks.find(
+        (check) => check.id === "phase7_mcp_live_execution_env",
+      ),
+    ).toMatchObject({
+      ok: false,
+      details: expect.arrayContaining([
+        "Set SPLIT402_MCP_CAPABILITY=solana.wallet-risk in split402-launch-evidence/phase7-staging.env for the Phase 7 public-alpha MCP proof.",
+      ]),
+    });
+    expect(report.nextActions).toContain(
+      "Fill Phase 7 MCP live execution env values in split402-launch-evidence/phase7-staging.env: SPLIT402_MCP_CAPABILITY=solana.wallet-risk.",
+    );
+  });
+
   it("rejects MCP proof preflight when live execution points at a different hosted control plane", () => {
     const workspace = createSplit402ProductEvidenceWorkspace({
       sourceCommit: "abc1234",

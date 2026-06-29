@@ -110,9 +110,11 @@ status, or zero referrer credit. Demo mode is a local
 contract check only and remains no-go for hosted Phase 7 proof. Proof-ready
 MCP gateway evidence must run in `router-live-agent-sdk` mode: set
 `SPLIT402_MCP_CONTROL_PLANE_URL` for hosted route discovery, set
-`SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1`, and provide a funded buyer key in
+`SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1`, set
+`SPLIT402_MCP_CAPABILITY=solana.wallet-risk`, and provide a funded buyer key in
 `SPLIT402_MCP_SVM_PRIVATE_KEY` or `SVM_PRIVATE_KEY` for the router-backed x402
-execution path.
+execution path. The launch preflight rejects other capability values so the
+hosted proof stays aligned to the public-alpha demo target.
 The status checker also compares `mcp_gateway_evidence` with
 `agent_discovery_evidence`: the selected provider route id must appear in route
 discovery, and the discovered campaign, referrer wallet, and payout wallet must
