@@ -79,6 +79,41 @@ approval_decision: no-go
     );
   });
 
+  it("rejects copied template placeholders", () => {
+    const validation = validatePhase7StagingProof(
+      createPhase7StagingProofRecord({
+        proof_id: "phase7-staging-YYYY-MM-DD",
+        proof_date: "YYYY-MM-DD",
+        reviewers: "Split402 operators",
+        source_commit: "fd88024",
+        staging_environment: "hosted-devnet-public-alpha",
+        control_plane_url: "https://control.staging.example",
+        dashboard_url: "https://dashboard.staging.example",
+        demo_merchant_url: "https://merchant.staging.example",
+        webhook_receiver_url: "https://webhook.staging.example",
+        hosted_preflight_evidence: "attached: hosted-preflight.json",
+        agent_discovery_evidence: "attached: agent-discovery.json",
+        paid_request_evidence: "attached: paid-suite.log",
+        receipt_verification_evidence: "attached: receipt-verification.json",
+        referrer_balance_evidence: "attached: referrer-balances.json",
+        dashboard_summary_evidence: "attached: dashboard-summary.json",
+        webhook_delivery_evidence: "attached: webhook-events.json",
+        payout_obligation_evidence: "attached: payout-obligations.json",
+        funding_balance_evidence: "attached: funding-balance.json",
+        mcp_bundle_evidence: "attached: mcp-bundle.json",
+        mcp_gateway_evidence: "attached: mcp-gateway.jsonl",
+        artifact_manifest_evidence: "attached: artifact-manifest.json",
+        commands_run: "attached: commands.log",
+        approval_decision: "approved",
+      }),
+    );
+
+    expect(validation.approved).toBe(false);
+    expect(validation.placeholderFields).toContain("proof_id");
+    expect(validation.placeholderFields).toContain("proof_date");
+    expect(validation.invalidFields).toContain("proof_date must use YYYY-MM-DD");
+  });
+
   it("approves a complete staging proof record", () => {
     const validation = validatePhase7StagingProof(
       createPhase7StagingProofRecord({

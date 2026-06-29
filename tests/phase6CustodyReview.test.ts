@@ -56,6 +56,21 @@ approval_decision: no-go
     );
   });
 
+  it("rejects copied template placeholders", () => {
+    const result = validatePhase6CustodyEvidence(
+      VALID_EVIDENCE.replace(
+        "review_id: phase6-review-001",
+        "review_id: phase6-review-YYYY-MM-DD",
+      )
+        .replace("review_date: 2026-06-25", "review_date: YYYY-MM-DD"),
+    );
+
+    expect(result.approved).toBe(false);
+    expect(result.placeholderFields).toEqual(
+      expect.arrayContaining(["review_id", "review_date"]),
+    );
+  });
+
   it("rejects mutable image tags and non-SHA source commits", () => {
     const result = validatePhase6CustodyEvidence(
       VALID_EVIDENCE.replace("source_commit: f932ddb", "source_commit: main")

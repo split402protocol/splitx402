@@ -184,6 +184,7 @@ function isPlaceholderValue(value: string): boolean {
     normalized === "no-go" ||
     normalized === "replace-me" ||
     normalized.startsWith("<") ||
-    normalized.includes("replace-with")
+    normalized.includes("replace-with") ||
+    normalized.includes("yyyy")
   );
 }
