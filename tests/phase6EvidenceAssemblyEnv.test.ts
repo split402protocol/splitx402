@@ -12,16 +12,26 @@ describe("Phase 6 evidence assembly env template", () => {
       directory: "evidence/launch",
       help: false,
     });
+    expect(
+      parsePhase6EvidenceEnvTemplateCliArgs([
+        "evidence/launch",
+        "evidence/launch/phase6-evidence.env",
+      ]),
+    ).toEqual({
+      directory: "evidence/launch",
+      outputPath: "evidence/launch/phase6-evidence.env",
+      help: false,
+    });
     expect(() =>
       parsePhase6EvidenceEnvTemplateCliArgs(["--directory"]),
     ).toThrowErrorMatchingInlineSnapshot(`
-      [Error: Usage: corepack pnpm phase6:evidence:env-template [evidence-directory]
+      [Error: Usage: corepack pnpm phase6:evidence:env-template [evidence-directory] [phase6-evidence.env]
       Unknown option: --directory]
     `);
     expect(() =>
-      parsePhase6EvidenceEnvTemplateCliArgs(["one", "two"]),
+      parsePhase6EvidenceEnvTemplateCliArgs(["one", "two", "three"]),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: Usage: corepack pnpm phase6:evidence:env-template [evidence-directory]]`,
+      `[Error: Usage: corepack pnpm phase6:evidence:env-template [evidence-directory] [phase6-evidence.env]]`,
     );
   });
 

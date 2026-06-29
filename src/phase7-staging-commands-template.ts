@@ -1,3 +1,7 @@
+import { writeCliTextOutput } from "./cliOutput.js";
 import { createPhase7CommandEvidenceTemplate } from "./phase7CommandEvidence.js";
 
-console.log(createPhase7CommandEvidenceTemplate());
+writeCliTextOutput({
+  text: createPhase7CommandEvidenceTemplate(),
+  outputPath: process.argv[2],
+});

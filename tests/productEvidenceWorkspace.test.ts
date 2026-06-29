@@ -77,13 +77,13 @@ describe("Split402 product evidence workspace", () => {
       "corepack pnpm phase7:staging:collect-reads --evidence-env-file split402-launch-evidence/phase7-staging.env",
     );
     expect(workspace.nextCommands).toContain(
-      "corepack pnpm phase7:staging:commands-template > split402-launch-evidence/phase7-staging-evidence/commands.log",
+      "corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log",
     );
     expect(workspace.nextCommands).toContain(
       "Review split402-launch-evidence/phase7-staging-proof.txt and fill direct hosted proof fields.",
     );
     expect(workspace.nextCommands).toContain(
-      "Review generated split402-launch-evidence/phase6-evidence.env before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template split402-launch-evidence > split402-launch-evidence/phase6-evidence.env",
+      "Review generated split402-launch-evidence/phase6-evidence.env before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template split402-launch-evidence split402-launch-evidence/phase6-evidence.env",
     );
     expect(workspace.nextCommands).toContain(
       "Generate Phase 6 custody records at the paths listed in split402-launch-evidence/phase6-evidence.env.",

@@ -147,7 +147,7 @@ function createPhase7Section(
       "corepack pnpm phase7:staging:collect-reads --evidence-env-file split402-launch-evidence/phase7-staging.env",
       "SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 corepack pnpm phase7:staging:collect-mcp-gateway --evidence-env-file split402-launch-evidence/phase7-staging.env",
       "corepack pnpm demo:mcp-gateway:smoke",
-      "corepack pnpm phase7:staging:commands-template > split402-launch-evidence/phase7-staging-evidence/commands.log",
+      "corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log",
       "corepack pnpm demo:mcp-bundle split402-launch-evidence/phase7-staging-evidence/mcp-bundle.json",
       "corepack pnpm demo:paid-suite > split402-launch-evidence/phase7-staging-evidence/paid-suite.log",
       "corepack pnpm phase7:staging:derive-receipt-verification --evidence-env-file split402-launch-evidence/phase7-staging.env",
@@ -174,7 +174,7 @@ function createPhase6Section(
         : "not_checked",
     externalEvidenceRequired: true,
     commands: [
-      "Review generated split402-launch-evidence/phase6-evidence.env before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template split402-launch-evidence > split402-launch-evidence/phase6-evidence.env",
+      "Review generated split402-launch-evidence/phase6-evidence.env before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template split402-launch-evidence split402-launch-evidence/phase6-evidence.env",
       "Generate Phase 6 custody records at the paths listed in split402-launch-evidence/phase6-evidence.env.",
       "Fill split402-launch-evidence/phase6-custody-evidence.txt with generated Phase 6 custody records.",
       "corepack pnpm phase6:image-provenance",

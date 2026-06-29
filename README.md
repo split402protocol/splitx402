@@ -444,7 +444,7 @@ List the Phase 6 evidence commands and check the current custody bundle:
 ```bash
 corepack pnpm phase6:evidence:bundle
 # Review split402-launch-evidence/phase6-evidence.env first; regenerate only if missing:
-corepack pnpm phase6:evidence:env-template split402-launch-evidence > split402-launch-evidence/phase6-evidence.env
+corepack pnpm phase6:evidence:env-template split402-launch-evidence split402-launch-evidence/phase6-evidence.env
 corepack pnpm phase6:evidence:assemble --evidence-env-file split402-launch-evidence/phase6-evidence.env split402-launch-evidence/phase6-custody-evidence.txt
 corepack pnpm phase6:evidence:status split402-launch-evidence/phase6-custody-evidence.txt
 corepack pnpm phase6:custody:check split402-launch-evidence/phase6-custody-evidence.txt
@@ -454,7 +454,7 @@ corepack pnpm phase6:custody:check split402-launch-evidence/phase6-custody-evide
 Review that generated file before editing it. Use `phase6:evidence:env-template`
 only to recreate the local, commented `.env` helper when it is missing. Pass a
 custom launch evidence directory when not using the default:
-`corepack pnpm phase6:evidence:env-template evidence/launch > evidence/launch/phase6-evidence.env`.
+`corepack pnpm phase6:evidence:env-template evidence/launch evidence/launch/phase6-evidence.env`.
 `phase6:evidence:assemble` auto-loads the default launch env file when present;
 for any other directory, pass `--evidence-env-file <path>` and an explicit
 output file path.
@@ -541,7 +541,7 @@ SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 \
 SPLIT402_MCP_SVM_PRIVATE_KEY=<funded-buyer-key-base58> \
 corepack pnpm phase7:staging:collect-mcp-gateway --evidence-env-file split402-launch-evidence/phase7-staging.env
 corepack pnpm demo:mcp-gateway:smoke
-corepack pnpm phase7:staging:commands-template > phase7-staging-evidence/commands.log
+corepack pnpm phase7:staging:commands-template phase7-staging-evidence/commands.log
 corepack pnpm demo:mcp-bundle phase7-staging-evidence/mcp-bundle.json
 corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log
 corepack pnpm phase7:staging:derive-receipt-verification --evidence-env-file split402-launch-evidence/phase7-staging.env
