@@ -242,7 +242,7 @@ describe("Split402 product evidence workspace", () => {
         },
       }),
     ).toThrowErrorMatchingInlineSnapshot(`
-      [Error: Refusing to refresh source_commit in split402-launch-evidence\\phase6-custody-evidence.txt because it already contains non-scaffold evidence fields.
+      [Error: Refusing to refresh source_commit in split402-launch-evidence/phase6-custody-evidence.txt because it already contains non-scaffold evidence fields.
       Non-refreshable fields: funding_wallet
       Recollect evidence from the current checkout instead of rewriting source_commit.]
     `);

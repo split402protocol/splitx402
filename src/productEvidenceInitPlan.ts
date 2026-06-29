@@ -1,5 +1,6 @@
 import { join } from "node:path";
 
+import { toDisplayPath } from "./displayPath.js";
 import type { Split402ProductEvidenceWorkspace } from "./productEvidenceWorkspace.js";
 
 export interface ProductEvidenceInitArgs {
@@ -178,7 +179,7 @@ function refreshSourceCommitField(input: {
   if (nonRefreshableFields.length > 0) {
     throw new Error(
       [
-        `Refusing to refresh source_commit in ${input.path} because it already contains non-scaffold evidence fields.`,
+        `Refusing to refresh source_commit in ${toDisplayPath(input.path)} because it already contains non-scaffold evidence fields.`,
         `Non-refreshable fields: ${nonRefreshableFields.join(", ")}`,
         "Recollect evidence from the current checkout instead of rewriting source_commit.",
       ].join("\n"),

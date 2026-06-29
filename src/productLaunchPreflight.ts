@@ -1,5 +1,6 @@
 import { join } from "node:path";
 
+import { toDisplayPath } from "./displayPath.js";
 import { createPhase6EvidenceAssemblyEnvMappings } from "./phase6EvidenceAssemblyEnv.js";
 import { createSplit402ProductEvidenceWorkspace } from "./productEvidenceWorkspace.js";
 
@@ -169,15 +170,17 @@ export function createSplit402LaunchPreflightReport(
     !hasConfiguredEnvValue(phase7Env, "SPLIT402_MCP_SVM_PRIVATE_KEY") &&
     !hasConfiguredEnvValue(phase7Env, "SVM_PRIVATE_KEY");
   const missingMcpDetails = [
-    ...missingMcpKeys.map((key) => `Fill ${key} in ${phase7EnvPath}.`),
+    ...missingMcpKeys.map(
+      (key) => `Fill ${key} in ${toDisplayPath(phase7EnvPath)}.`,
+    ),
     ...(liveExecutionEnabled
       ? []
       : [
-          `Set ${MCP_LIVE_EXECUTION_ENV_KEY}=1 in ${phase7EnvPath} for live router execution.`,
+          `Set ${MCP_LIVE_EXECUTION_ENV_KEY}=1 in ${toDisplayPath(phase7EnvPath)} for live router execution.`,
         ]),
     ...(missingBuyerKey
       ? [
-          `Fill SPLIT402_MCP_SVM_PRIVATE_KEY or SVM_PRIVATE_KEY in ${phase7EnvPath}.`,
+          `Fill SPLIT402_MCP_SVM_PRIVATE_KEY or SVM_PRIVATE_KEY in ${toDisplayPath(phase7EnvPath)}.`,
         ]
       : []),
   ];
@@ -205,7 +208,7 @@ export function createSplit402LaunchPreflightReport(
         missingPhase6DirectKeys.length === 0
           ? ["Required Phase 6 custody env values are configured."]
           : missingPhase6DirectKeys.map(
-              (key) => `Fill ${key} in ${phase6EnvPath}.`,
+              (key) => `Fill ${key} in ${toDisplayPath(phase6EnvPath)}.`,
             ),
     },
     {
@@ -251,7 +254,9 @@ export function createSplit402LaunchPreflightReport(
       details:
         missingHostedKeys.length === 0
           ? ["Required hosted proof values are configured."]
-          : missingHostedKeys.map((key) => `Fill ${key} in ${phase7EnvPath}.`),
+          : missingHostedKeys.map(
+              (key) => `Fill ${key} in ${toDisplayPath(phase7EnvPath)}.`,
+            ),
     },
     {
       id: "phase7_mcp_live_execution_env",
@@ -347,8 +352,8 @@ function createLaunchWorkspaceMissingDetails(input: {
 
   return [
     recoveryAction,
-    ...input.missingRequiredFiles.map((path) => `Missing ${path}`),
-    ...input.existingRequiredFiles.map((path) => `Existing ${path}`),
+    ...input.missingRequiredFiles.map((path) => `Missing ${toDisplayPath(path)}`),
+    ...input.existingRequiredFiles.map((path) => `Existing ${toDisplayPath(path)}`),
   ];
 }
 
@@ -402,10 +407,12 @@ function createSourceCommitBlockers(input: {
     },
   ] as const) {
     if (item.sourceCommit === undefined || item.sourceCommit.length === 0) {
-      blockers.push(`${item.label} source_commit is missing in ${item.path}.`);
+      blockers.push(
+        `${item.label} source_commit is missing in ${toDisplayPath(item.path)}.`,
+      );
     } else if (item.sourceCommit !== currentSourceCommit) {
       blockers.push(
-        `Regenerate ${item.path} from checkout ${currentSourceCommit} before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist; found source_commit ${item.sourceCommit}.`,
+        `Regenerate ${toDisplayPath(item.path)} from checkout ${currentSourceCommit} before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist; found source_commit ${item.sourceCommit}.`,
       );
     }
   }
