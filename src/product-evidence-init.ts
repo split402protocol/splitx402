@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import {
+  PRODUCT_EVIDENCE_INIT_USAGE,
   createProductEvidenceInitWrites,
   findExistingProductEvidenceInitWrites,
   parseProductEvidenceInitArgs,
@@ -10,6 +11,11 @@ import {
 import { createSplit402ProductEvidenceWorkspace } from "./productEvidenceWorkspace.js";
 
 const args = parseArgs();
+if (args.help) {
+  console.log(PRODUCT_EVIDENCE_INIT_USAGE);
+  process.exit(0);
+}
+
 const workspace = createSplit402ProductEvidenceWorkspace({
   directory: args.directory,
   sourceCommit: readCurrentGitCommit(),
