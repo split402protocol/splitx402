@@ -60,7 +60,7 @@ export const PHASE7_STAGING_COMMANDS = [
   {
     gate: "agent_paid_suite",
     command:
-      "corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log",
+      "corepack pnpm demo:paid-suite phase7-staging-evidence/paid-suite.log",
     evidenceField: "paid_request_evidence",
   },
   {
@@ -2574,7 +2574,7 @@ function createNextActions(
       "Capture MCP gateway transcript evidence with corepack pnpm phase7:staging:collect-mcp-gateway.",
       "Run the MCP gateway smoke check with corepack pnpm demo:mcp-gateway:smoke.",
       "Capture MCP bundle evidence with corepack pnpm demo:mcp-bundle phase7-staging-evidence/mcp-bundle.json.",
-      "Capture paid-suite evidence with corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log.",
+      "Capture paid-suite evidence with corepack pnpm demo:paid-suite phase7-staging-evidence/paid-suite.log.",
       "Derive receipt-verification evidence with corepack pnpm phase7:staging:derive-receipt-verification.",
       "Generate artifact hashes with corepack pnpm phase7:staging:manifest <phase7-staging-proof.txt> phase7-staging-evidence/artifact-manifest.json.",
       "Attach response URLs, logs, or artifact paths with corepack pnpm phase7:staging:assemble.",

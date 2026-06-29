@@ -1,8 +1,9 @@
 import "./env.js";
 
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { setTimeout as delay } from "node:timers/promises";
-import path from "node:path";
+import path, { dirname, isAbsolute, resolve } from "node:path";
 
 import {
   deriveEd25519PublicKey,
@@ -27,11 +28,15 @@ const EXPECTED_VALID_COMMISSION_BPS = Number.parseInt(
   process.env.SPLIT402_COMMISSION_BPS ?? "2000",
   10
 );
+const outputPath = process.argv[2];
+const stdoutChunks: string[] = [];
 
 try {
   await main();
+  writeOutputFile();
 } catch (error) {
   console.error(errorMessage(error));
+  writeOutputFile();
   process.exitCode = 1;
 }
 
@@ -39,7 +44,7 @@ async function main(): Promise<void> {
   const merchant = startMerchant();
   try {
     await waitForHealth(MERCHANT_ORIGIN, 20_000);
-    console.log(`merchant ready at ${MERCHANT_ORIGIN}`);
+    writeStdout(`merchant ready at ${MERCHANT_ORIGIN}\n`);
 
     await runStep("preflight", "apps/demo-agent/dist/preflight.js", baseEnv());
 
@@ -68,7 +73,7 @@ async function main(): Promise<void> {
     );
     assertReceipt(invalidReceipt, 0, "invalid claim receipt");
 
-    console.log(
+    writeStdout(
       JSON.stringify(
         {
           paidSuitePassed: true,
@@ -77,7 +82,7 @@ async function main(): Promise<void> {
         },
         null,
         2
-      )
+      ) + "\n"
     );
   } finally {
     await stopMerchant(merchant);
@@ -97,7 +102,7 @@ function startMerchant(): ChildProcessWithoutNullStreams {
     windowsHide: true
   });
   child.stdout.on("data", (chunk: Buffer) => {
-    process.stdout.write(`[merchant] ${chunk.toString()}`);
+    writeStdout(`[merchant] ${chunk.toString()}`);
   });
   child.stderr.on("data", (chunk: Buffer) => {
     process.stderr.write(`[merchant] ${chunk.toString()}`);
@@ -110,10 +115,10 @@ async function runStep(
   scriptPath: string,
   env: NodeJS.ProcessEnv
 ): Promise<void> {
-  console.log(`\n--- ${label} ---`);
+  writeStdout(`\n--- ${label} ---\n`);
   const result = await runNode(scriptPath, env);
   if (result.stdout.length > 0) {
-    process.stdout.write(result.stdout);
+    writeStdout(result.stdout);
   }
   if (result.stderr.length > 0) {
     process.stderr.write(result.stderr);
@@ -252,4 +257,20 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function writeStdout(text: string): void {
+  stdoutChunks.push(text);
+  process.stdout.write(text);
+}
+
+function writeOutputFile(): void {
+  if (outputPath === undefined || outputPath.trim().length === 0) {
+    return;
+  }
+  const resolvedOutputPath = isAbsolute(outputPath)
+    ? outputPath
+    : resolve(process.env.INIT_CWD ?? WORKSPACE_ROOT, outputPath);
+  mkdirSync(dirname(resolvedOutputPath), { recursive: true });
+  writeFileSync(resolvedOutputPath, stdoutChunks.join(""), "utf8");
 }
