@@ -955,6 +955,24 @@ funding_balance_evidence: funding.json
     );
   });
 
+  it("accepts PowerShell env-prefixed command evidence lines", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/commands.log",
+      encode(createPowerShellCommandsLog()),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.commandEvidenceStatus.blockers).toEqual([]);
+  });
+
   it("accepts PowerShell UTF-16LE redirected text artifacts", () => {
     const proofText = createManifestProof();
     const artifacts = createManifestArtifacts(proofText);
@@ -2820,6 +2838,22 @@ function createValidCommandsLog(): string {
     "$ corepack pnpm audit --audit-level high",
     "",
   ].join("\n");
+}
+
+function createPowerShellCommandsLog(): string {
+  return createValidCommandsLog()
+    .replace(
+      "$ corepack pnpm phase7:staging:init",
+      "PS C:\\split402> corepack pnpm product:evidence:init --missing",
+    )
+    .replace(
+      "$ SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",
+      "PS C:\\split402> $env:SPLIT402_PHASE7_SEED_CONFIRM='seed-hosted-staging'; corepack pnpm phase7:staging:seed",
+    )
+    .replace(
+      "$ corepack pnpm phase7:staging:collect-mcp-gateway",
+      "PS C:\\split402> $env:SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE='1'; corepack pnpm phase7:staging:collect-mcp-gateway --evidence-env-file split402-launch-evidence/phase7-staging.env",
+    );
 }
 
 function createValidMcpGatewayTranscript(

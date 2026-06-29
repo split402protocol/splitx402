@@ -2130,7 +2130,8 @@ function isCommandEvidenceLine(line: string): boolean {
     line.startsWith("pnpm ") ||
     line.startsWith("npm ") ||
     line.startsWith("node ") ||
-    line.startsWith("SPLIT402_")
+    line.startsWith("SPLIT402_") ||
+    line.startsWith("$env:SPLIT402_")
   );
 }
 
