@@ -47,6 +47,15 @@ The public repository is licensed under Apache-2.0. Private hosted services,
 commercial operations, production deployments, custody tooling, provider
 registries, and non-public evidence are not licensed by this repository.
 
+This boundary must be enforced before publication, not repaired afterward. Code
+or documents already published under MIT or Apache-2.0 may have been cloned,
+downloaded, mirrored, or forked while that license was in effect. Changing the
+repository license, rewriting history, or making the repository private later
+does not reliably pull back copies that were already distributed. Sensitive
+commercial logic, custody details, partner terms, private endpoints, keys,
+credentials, and real evidence artifacts must therefore stay out of public Git
+history from the start.
+
 ## Consequences
 
 - Public docs must distinguish the open protocol from private hosted operations.
@@ -56,3 +65,6 @@ registries, and non-public evidence are not licensed by this repository.
   separate written agreement applies.
 - Production launch work should use a private repository or private deployment
   workspace for sensitive operational implementation.
+- Public/private decisions are launch blockers: if a file contains commercial
+  strategy, custody, live infrastructure, partner details, private URLs, or
+  non-public evidence, it must be moved private or sanitized before release.
