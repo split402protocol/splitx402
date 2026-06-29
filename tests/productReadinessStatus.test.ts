@@ -43,6 +43,9 @@ describe("Split402 product readiness status", () => {
     expect(report.nextActions).toContain(
       "Run hosted Phase 7 staging proof collection and status validation.",
     );
+    expect(report.nextActions).toContain(
+      "Run corepack pnpm product:status --brief --workspace split402-launch-evidence.",
+    );
     expect(report.nextActions).not.toContain(
       "Create the evidence workspace with corepack pnpm phase7:staging:init.",
     );

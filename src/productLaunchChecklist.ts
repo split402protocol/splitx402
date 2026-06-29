@@ -162,7 +162,7 @@ function createPhase6Section(
     externalEvidenceRequired: true,
     commands: [
       "Review generated split402-launch-evidence/phase6-evidence.env before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template split402-launch-evidence > split402-launch-evidence/phase6-evidence.env",
-      "Fill split402-launch-evidence/phase6-evidence.env with generated Phase 6 custody record paths.",
+      "Generate Phase 6 custody records at the paths listed in split402-launch-evidence/phase6-evidence.env.",
       "Fill split402-launch-evidence/phase6-custody-evidence.txt with generated Phase 6 custody records.",
       "corepack pnpm phase6:image-provenance",
       "corepack pnpm phase6:signer-policy",
@@ -197,9 +197,7 @@ function createFinalStatusSection(
     title: "Check combined launch readiness",
     status: report.launchDecision === "go" ? "ready" : checked ? "blocked" : "not_checked",
     externalEvidenceRequired: false,
-    commands: [
-      "corepack pnpm product:status --brief split402-launch-evidence/phase6-custody-evidence.txt split402-launch-evidence/phase7-staging-proof.txt",
-    ],
+    commands: ["corepack pnpm product:status --brief --workspace split402-launch-evidence"],
     notes: [
       "The combined status remains no-go until both machine-checkable gates pass.",
     ],
