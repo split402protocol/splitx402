@@ -2982,6 +2982,7 @@ function createOperatorInvalidFieldActions(invalidFields: readonly string[]): st
 
 function createOperatorBlockerActions(blockers: readonly string[]): string[] {
   const uniqueBlockers = [...new Set(blockers)];
+  const commandEvidenceBlockers = uniqueBlockers.filter(isCommandEvidenceBlocker);
   const missingArtifactFields = [
     ...new Set(
       uniqueBlockers.flatMap((blocker) => {
@@ -3006,7 +3007,14 @@ function createOperatorBlockerActions(blockers: readonly string[]): string[] {
         ]),
     ...nonReadCollectorFields.flatMap((field) => createMissingArtifactAction(field)),
   ];
+  const commandEvidenceActions =
+    commandEvidenceBlockers.length === 0
+      ? []
+      : [createCommandEvidenceAction(commandEvidenceBlockers)];
   const otherBlockers = uniqueBlockers.filter((blocker) => {
+    if (isCommandEvidenceBlocker(blocker)) {
+      return false;
+    }
     const missingMatch = /^([a-z][a-z0-9_]*) artifact is missing:/u.exec(blocker);
     if (
       missingMatch?.[1] !== undefined &&
@@ -3022,7 +3030,30 @@ function createOperatorBlockerActions(blockers: readonly string[]): string[] {
     );
   });
 
-  return [...missingArtifactActions, ...otherBlockers];
+  return [...missingArtifactActions, ...commandEvidenceActions, ...otherBlockers];
+}
+
+function isCommandEvidenceBlocker(blocker: string): boolean {
+  return (
+    blocker === "commands_run artifact is empty" ||
+    blocker ===
+      "commands_run artifact must include shell command lines, not only prose" ||
+    blocker.startsWith("commands_run missing required command:")
+  );
+}
+
+function createCommandEvidenceAction(blockers: readonly string[]): string {
+  const missingCommands = blockers.flatMap((blocker) => {
+    const match = /^commands_run missing required command:\s*(.+)$/u.exec(blocker);
+    return match?.[1] === undefined ? [] : [match[1]];
+  });
+  const missingSummary =
+    missingCommands.length === 0
+      ? ""
+      : ` Missing commands include: ${missingCommands.slice(0, 5).join(", ")}${
+          missingCommands.length > 5 ? `, and ${missingCommands.length - 5} more` : ""
+        }.`;
+  return `Replace split402-launch-evidence/phase7-staging-evidence/commands.log with a real command transcript: run corepack pnpm phase7:staging:commands-template to get the checklist, then paste executed shell command lines and outputs with command lines uncommented.${missingSummary}`;
 }
 
 function isReadCollectorArtifactField(field: string): boolean {
