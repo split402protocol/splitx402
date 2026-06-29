@@ -442,7 +442,7 @@ function createNextActions(checks: readonly Split402LaunchPreflightCheck[]): str
 
   return checks
     .filter((check) => check.severity === "required" && !check.ok)
-    .flatMap((check) => check.details)
+    .flatMap((check) => createCheckNextActions(check))
     .filter(
       (detail) =>
         detail.startsWith("Run ") ||
@@ -450,6 +450,59 @@ function createNextActions(checks: readonly Split402LaunchPreflightCheck[]): str
         detail.startsWith("Set ") ||
         detail.startsWith("Regenerate "),
     );
+}
+
+function createCheckNextActions(check: Split402LaunchPreflightCheck): string[] {
+  switch (check.id) {
+    case "phase6_evidence_env_values":
+      return createGroupedEnvActions("Fill Phase 6 custody env values", check.details);
+    case "phase7_hosted_env_values":
+      return createGroupedEnvActions("Fill Phase 7 hosted proof env values", check.details);
+    case "phase7_mcp_live_execution_env":
+      return createGroupedEnvActions(
+        "Fill Phase 7 MCP live execution env values",
+        check.details,
+      );
+    default:
+      return check.details;
+  }
+}
+
+function createGroupedEnvActions(
+  label: string,
+  details: readonly string[],
+): string[] {
+  const groupedByPath = new Map<string, string[]>();
+  const ungrouped: string[] = [];
+
+  for (const detail of details) {
+    const fillMatch = /^Fill (.+) in (.+)\.$/u.exec(detail);
+    if (fillMatch?.[1] !== undefined && fillMatch[2] !== undefined) {
+      addGroupedEnvItem(groupedByPath, fillMatch[2], fillMatch[1]);
+      continue;
+    }
+    const setMatch = /^Set (.+) in (.+?) for .+\.$/u.exec(detail);
+    if (setMatch?.[1] !== undefined && setMatch[2] !== undefined) {
+      addGroupedEnvItem(groupedByPath, setMatch[2], setMatch[1]);
+      continue;
+    }
+    ungrouped.push(detail);
+  }
+
+  const groupedActions = [...groupedByPath].map(
+    ([path, items]) => `${label} in ${path}: ${items.join(", ")}.`,
+  );
+  return [...groupedActions, ...ungrouped];
+}
+
+function addGroupedEnvItem(
+  groupedByPath: Map<string, string[]>,
+  path: string,
+  item: string,
+): void {
+  const currentItems = groupedByPath.get(path) ?? [];
+  currentItems.push(item);
+  groupedByPath.set(path, currentItems);
 }
 
 function createLaunchWorkspaceMissingDetails(input: {
