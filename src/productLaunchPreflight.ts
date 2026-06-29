@@ -490,7 +490,7 @@ function createSourceCommitBlockers(input: {
       blockers.push(
         `${item.label} source_commit is missing in ${toDisplayPath(item.path)}.`,
       );
-    } else if (item.sourceCommit !== currentSourceCommit) {
+    } else if (!gitShasMatch(item.sourceCommit, currentSourceCommit)) {
       blockers.push(
         `Regenerate ${toDisplayPath(item.path)} from checkout ${currentSourceCommit} before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist; found source_commit ${item.sourceCommit}.`,
       );
@@ -635,6 +635,21 @@ function normalizeUrlForComparison(value: string | undefined): string | undefine
   } catch {
     return value.trim().replace(/\/+$/u, "");
   }
+}
+
+function gitShasMatch(left: string, right: string): boolean {
+  const normalizedLeft = left.trim().toLowerCase();
+  const normalizedRight = right.trim().toLowerCase();
+  if (
+    !/^[0-9a-f]{7,40}$/u.test(normalizedLeft) ||
+    !/^[0-9a-f]{7,40}$/u.test(normalizedRight)
+  ) {
+    return false;
+  }
+  return (
+    normalizedLeft.startsWith(normalizedRight) ||
+    normalizedRight.startsWith(normalizedLeft)
+  );
 }
 
 function parseRecordField(text: string, fieldName: string): string | undefined {
