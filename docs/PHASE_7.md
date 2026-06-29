@@ -165,8 +165,10 @@ commission/protocol-fee amounts derived from the receipt
 `commissionBps` and `protocolFeeBpsOfCommission` fields. It must also connect
 the selected provider route back to the collected route-discovery artifact. The
 command transcript must include the Phase 7 evidence commands and full
-validation suite. Its `git status --short --branch` output must show only the
-branch/status header and no changed-file rows.
+validation suite, including `corepack pnpm product:public-surface-check --brief`
+so the Apache-2.0/public-private launch boundary is verified in the same proof.
+Its `git status --short --branch` output must show only the branch/status
+header and no changed-file rows.
 The funding-balance artifact is checked separately, requiring every asset to
 show a resolved `covered` or `deficit` state instead of unresolved funding.
 The top-level `product:status` command combines this Phase 7 result with the
