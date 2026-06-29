@@ -176,6 +176,12 @@ describe("repository presentation", () => {
     expect(readme).toContain(
       "corepack pnpm product:status --brief --workspace split402-launch-evidence",
     );
+    expect(readme).toContain(
+      "corepack pnpm phase7:staging-proof --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-proof.txt",
+    );
+    expect(readme).toContain(
+      "corepack pnpm phase7:staging:manifest split402-launch-evidence/phase7-staging-proof.txt split402-launch-evidence/phase7-staging-evidence/artifact-manifest.json",
+    );
     expect(readme).toContain("creates a local evidence workspace");
     expect(readme).toContain("refuses to overwrite");
     expect(readme).toContain("existing scaffold files");
