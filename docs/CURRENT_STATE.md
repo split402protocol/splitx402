@@ -85,8 +85,9 @@ The hosted staging proof remains `no-go` until a real hosted environment
 supplies all required evidence from the same source commit.
 Use `corepack pnpm product:evidence:init` to scaffold a local launch-evidence
 workspace with Phase 6 and Phase 7 evidence files plus local env templates. The
-initializer refuses to overwrite existing scaffold files unless `--force` is
-passed intentionally. Run
+initializer refuses to overwrite existing scaffold files; use `--missing` to
+create only absent scaffold files in a partial workspace, and pass `--force`
+only when intentionally replacing scaffold files. Run
 `corepack pnpm product:launch-preflight --brief` to check whether the local
 launch workspace, Phase 6 custody evidence env paths, and required Phase 7
 hosted proof environment values are ready before collection starts. Run
