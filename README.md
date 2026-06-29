@@ -445,10 +445,9 @@ List the Phase 6 evidence commands and check the current custody bundle:
 corepack pnpm phase6:evidence:bundle
 # Review split402-launch-evidence/phase6-evidence.env first; regenerate only if missing:
 corepack pnpm phase6:evidence:env-template split402-launch-evidence > split402-launch-evidence/phase6-evidence.env
-corepack pnpm phase6:evidence:assemble --evidence-env-file split402-launch-evidence/phase6-evidence.env
-corepack pnpm phase6:evidence:status
-corepack pnpm phase6:evidence:status <evidence-bundle.txt>
-corepack pnpm phase6:evidence:bundle | corepack pnpm phase6:custody:check -
+corepack pnpm phase6:evidence:assemble --evidence-env-file split402-launch-evidence/phase6-evidence.env split402-launch-evidence/phase6-custody-evidence.txt
+corepack pnpm phase6:evidence:status split402-launch-evidence/phase6-custody-evidence.txt
+corepack pnpm phase6:custody:check split402-launch-evidence/phase6-custody-evidence.txt
 ```
 
 `product:evidence:init` creates `split402-launch-evidence/phase6-evidence.env`.
@@ -457,7 +456,8 @@ only to recreate the local, commented `.env` helper when it is missing. Pass a
 custom launch evidence directory when not using the default:
 `corepack pnpm phase6:evidence:env-template evidence/launch > evidence/launch/phase6-evidence.env`.
 `phase6:evidence:assemble` auto-loads the default launch env file when present;
-for any other directory, pass `--evidence-env-file <path>`.
+for any other directory, pass `--evidence-env-file <path>` and an explicit
+output file path.
 Keep private URLs, secrets, private keys, and transaction bytes out of the file
 and out of Git.
 

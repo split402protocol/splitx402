@@ -36,10 +36,9 @@ and fill every field. Then run:
 corepack pnpm phase6:evidence:bundle > phase6-custody-evidence.txt
 # Review split402-launch-evidence/phase6-evidence.env first; regenerate only if missing:
 corepack pnpm phase6:evidence:env-template split402-launch-evidence > split402-launch-evidence/phase6-evidence.env
-corepack pnpm phase6:evidence:assemble --evidence-env-file split402-launch-evidence/phase6-evidence.env > phase6-custody-evidence.txt
-corepack pnpm phase6:evidence:status <evidence-bundle.txt>
-corepack pnpm phase6:custody:check <evidence-bundle.txt>
-corepack pnpm phase6:evidence:bundle | corepack pnpm phase6:custody:check -
+corepack pnpm phase6:evidence:assemble --evidence-env-file split402-launch-evidence/phase6-evidence.env split402-launch-evidence/phase6-custody-evidence.txt
+corepack pnpm phase6:evidence:status split402-launch-evidence/phase6-custody-evidence.txt
+corepack pnpm phase6:custody:check split402-launch-evidence/phase6-custody-evidence.txt
 ```
 
 Use `phase6:evidence:bundle` for a blank scaffold and

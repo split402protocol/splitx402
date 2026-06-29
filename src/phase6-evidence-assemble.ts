@@ -15,12 +15,13 @@ import {
   PHASE6_ATTACHMENT_ENV,
   PHASE6_RECORD_EXTRACTION_ENV,
 } from "./phase6EvidenceAssemblyEnv.js";
+import { writeCliTextOutput } from "./cliOutput.js";
 import { loadEvidenceEnvFiles } from "./evidenceEnvFile.js";
 
 const env = process.env;
 
 try {
-  loadEvidenceEnvFiles({
+  const cli = loadEvidenceEnvFiles({
     argv: process.argv.slice(2),
     defaultEnvFiles: ["split402-launch-evidence/phase6-evidence.env"],
   });
@@ -38,12 +39,15 @@ try {
     attachments: readAttachmentPaths(),
   };
 
-  console.log(assemblePhase6CustodyEvidenceBundle(input));
+  writeCliTextOutput({
+    text: assemblePhase6CustodyEvidenceBundle(input),
+    outputPath: cli.args[0],
+  });
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
   console.error(
     [
-      "Usage: corepack pnpm phase6:evidence:assemble",
+      "Usage: corepack pnpm phase6:evidence:assemble [phase6-custody-evidence.txt]",
       "Env file options:",
       "  --evidence-env-file <path> (optional; defaults to split402-launch-evidence/phase6-evidence.env when present)",
       "  SPLIT402_ENV_FILE=<path> (optional; uses platform path separator for multiple files)",
