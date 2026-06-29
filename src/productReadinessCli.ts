@@ -14,20 +14,48 @@ import {
 
 export interface Split402ProductReadinessCliInput {
   brief: boolean;
+  help: boolean;
   phase6EvidencePath?: string;
   phase7ProofPath?: string;
   report: Split402ProductReadinessReport;
 }
 
+export const PRODUCT_STATUS_USAGE =
+  "Usage: corepack pnpm product:status [--brief] [phase6-custody-evidence.txt] [phase7-staging-proof.txt]";
+
+export const PRODUCT_LAUNCH_CHECKLIST_USAGE =
+  "Usage: corepack pnpm product:launch-checklist [--brief] [phase6-custody-evidence.txt] [phase7-staging-proof.txt]";
+
 export function readSplit402ProductReadinessCliInput(
   args: readonly string[],
+  usage = PRODUCT_STATUS_USAGE,
 ): Split402ProductReadinessCliInput {
+  const help = args.includes("--help") || args.includes("-h");
   const brief = args.includes("--brief");
-  const positionalArgs = args.filter((arg) => arg !== "--brief");
+  const unknownOptions = args.filter(
+    (arg) =>
+      arg.startsWith("-") &&
+      arg !== "--help" &&
+      arg !== "-h" &&
+      arg !== "--brief",
+  );
+  if (unknownOptions.length > 0) {
+    throw new Error(`${usage}\nUnknown option: ${unknownOptions[0]}`);
+  }
+
+  const positionalArgs = args.filter(
+    (arg) => arg !== "--help" && arg !== "-h" && arg !== "--brief",
+  );
+  if (positionalArgs.length > 2) {
+    throw new Error(usage);
+  }
+
   const phase6EvidencePath =
-    positionalArgs[0] ?? process.env.SPLIT402_PHASE6_CUSTODY_EVIDENCE;
+    help
+      ? undefined
+      : positionalArgs[0] ?? process.env.SPLIT402_PHASE6_CUSTODY_EVIDENCE;
   const phase7ProofPath =
-    positionalArgs[1] ?? process.env.SPLIT402_PHASE7_STAGING_PROOF;
+    help ? undefined : positionalArgs[1] ?? process.env.SPLIT402_PHASE7_STAGING_PROOF;
   const phase6EvidenceText = readOptionalText(phase6EvidencePath);
   const phase7ProofText = readOptionalText(phase7ProofPath);
   const phase7ArtifactBaseDir =
@@ -37,6 +65,7 @@ export function readSplit402ProductReadinessCliInput(
 
   return {
     brief,
+    help,
     phase6EvidencePath,
     phase7ProofPath,
     report: createSplit402ProductReadinessReport({

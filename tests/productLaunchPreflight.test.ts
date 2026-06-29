@@ -5,10 +5,35 @@ import { describe, expect, it } from "vitest";
 import {
   createSplit402LaunchPreflightReport,
   formatSplit402LaunchPreflightBrief,
+  parseSplit402LaunchPreflightCliArgs,
 } from "../src/productLaunchPreflight.js";
 import { createSplit402ProductEvidenceWorkspace } from "../src/productEvidenceWorkspace.js";
 
 describe("Split402 launch preflight", () => {
+  it("parses help and rejects unknown CLI flags", () => {
+    expect(parseSplit402LaunchPreflightCliArgs(["--help", "--brief"])).toEqual({
+      brief: true,
+      help: true,
+    });
+    expect(parseSplit402LaunchPreflightCliArgs(["--brief", "evidence/launch"]))
+      .toEqual({
+        brief: true,
+        directory: "evidence/launch",
+        help: false,
+      });
+    expect(() =>
+      parseSplit402LaunchPreflightCliArgs(["--brieff"]),
+    ).toThrowErrorMatchingInlineSnapshot(`
+      [Error: Usage: corepack pnpm product:launch-preflight [--brief] [directory]
+      Unknown option: --brieff]
+    `);
+    expect(() =>
+      parseSplit402LaunchPreflightCliArgs(["one", "two"]),
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: Usage: corepack pnpm product:launch-preflight [--brief] [directory]]`,
+    );
+  });
+
   it("fails fast when the launch evidence workspace has not been created", () => {
     const report = createSplit402LaunchPreflightReport({
       exists: () => false,
