@@ -352,8 +352,9 @@ for attachment paths. It refuses to overwrite existing scaffold files; use
 `--missing` to create only absent scaffold files in a partial workspace, and
 rerun with `--force` only when intentionally replacing local scaffold content.
 `product:launch-preflight --brief` checks whether the local launch workspace,
-Phase 6 custody evidence env paths, and required Phase 7 hosted proof
-environment values are ready before collection starts.
+scaffold `source_commit` values, Phase 6 custody evidence env paths, and
+required Phase 7 hosted proof environment values are ready before collection
+starts.
 `product:launch-checklist --brief` prints the exact remaining local
 validation, hosted proof, custody evidence, and combined status commands; pass
 `--workspace split402-launch-evidence` or the Phase 6 and Phase 7 evidence paths

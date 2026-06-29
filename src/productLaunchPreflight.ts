@@ -4,6 +4,7 @@ import { createPhase6EvidenceAssemblyEnvMappings } from "./phase6EvidenceAssembl
 import { createSplit402ProductEvidenceWorkspace } from "./productEvidenceWorkspace.js";
 
 export interface Split402LaunchPreflightInput {
+  currentSourceCommit?: string;
   directory?: string;
   exists: (path: string) => boolean;
   readText: (path: string) => string;
@@ -109,6 +110,24 @@ export function createSplit402LaunchPreflightReport(
   ];
   const missingRequiredFiles = requiredFiles.filter((path) => !input.exists(path));
   const existingRequiredFiles = requiredFiles.filter((path) => input.exists(path));
+  const phase6EvidencePath = join(
+    workspace.directory,
+    workspace.phase6EvidenceFileName,
+  );
+  const phase6EvidenceText = input.exists(phase6EvidencePath)
+    ? input.readText(phase6EvidencePath)
+    : "";
+  const phase7ProofPath = join(workspace.directory, workspace.phase7ProofFileName);
+  const phase7ProofText = input.exists(phase7ProofPath)
+    ? input.readText(phase7ProofPath)
+    : "";
+  const sourceCommitBlockers = createSourceCommitBlockers({
+    currentSourceCommit: input.currentSourceCommit,
+    phase6EvidencePath,
+    phase6EvidenceText,
+    phase7ProofPath,
+    phase7ProofText,
+  });
   const phase7EnvPath = join(workspace.directory, workspace.phase7EnvFileName);
   const phase7EnvText = input.exists(phase7EnvPath)
     ? input.readText(phase7EnvPath)
@@ -188,6 +207,16 @@ export function createSplit402LaunchPreflightReport(
           : missingPhase6DirectKeys.map(
               (key) => `Fill ${key} in ${phase6EnvPath}.`,
             ),
+    },
+    {
+      id: "launch_workspace_source_commit",
+      label: "Launch evidence source commit matches checkout",
+      ok: sourceCommitBlockers.length === 0,
+      severity: "required",
+      details:
+        sourceCommitBlockers.length === 0
+          ? ["Launch evidence source_commit values match the current checkout."]
+          : sourceCommitBlockers,
     },
     {
       id: "phase6_evidence_env_mappings",
@@ -302,7 +331,8 @@ function createNextActions(checks: readonly Split402LaunchPreflightCheck[]): str
       (detail) =>
         detail.startsWith("Run ") ||
         detail.startsWith("Fill ") ||
-        detail.startsWith("Set "),
+        detail.startsWith("Set ") ||
+        detail.startsWith("Regenerate "),
     );
 }
 
@@ -339,6 +369,57 @@ function parseEnvText(text: string): Map<string, string> {
     );
   }
   return env;
+}
+
+function createSourceCommitBlockers(input: {
+  currentSourceCommit?: string;
+  phase6EvidencePath: string;
+  phase6EvidenceText: string;
+  phase7ProofPath: string;
+  phase7ProofText: string;
+}): string[] {
+  const currentSourceCommit = input.currentSourceCommit?.trim();
+  if (currentSourceCommit === undefined || currentSourceCommit.length === 0) {
+    return [];
+  }
+
+  const phase6SourceCommit = parseRecordField(
+    input.phase6EvidenceText,
+    "source_commit",
+  );
+  const phase7SourceCommit = parseRecordField(input.phase7ProofText, "source_commit");
+  const blockers: string[] = [];
+  for (const item of [
+    {
+      label: "Phase 6 custody evidence",
+      path: input.phase6EvidencePath,
+      sourceCommit: phase6SourceCommit,
+    },
+    {
+      label: "Phase 7 staging proof",
+      path: input.phase7ProofPath,
+      sourceCommit: phase7SourceCommit,
+    },
+  ] as const) {
+    if (item.sourceCommit === undefined || item.sourceCommit.length === 0) {
+      blockers.push(`${item.label} source_commit is missing in ${item.path}.`);
+    } else if (item.sourceCommit !== currentSourceCommit) {
+      blockers.push(
+        `Regenerate ${item.path} from checkout ${currentSourceCommit} before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist; found source_commit ${item.sourceCommit}.`,
+      );
+    }
+  }
+  return blockers;
+}
+
+function parseRecordField(text: string, fieldName: string): string | undefined {
+  for (const line of text.split(/\r?\n/u)) {
+    const match = /^([a-z][a-z0-9_]*):\s*(.*)$/u.exec(line);
+    if (match?.[1] === fieldName) {
+      return match[2]?.trim();
+    }
+  }
+  return undefined;
 }
 
 function hasConfiguredEnvValue(env: ReadonlyMap<string, string>, key: string): boolean {
