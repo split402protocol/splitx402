@@ -100,6 +100,16 @@ describe("Phase 7 MCP gateway evidence collector", () => {
       providerRouteId: "rte_00000000000000000000000000000003",
       providerReferrerWallet: sample.artifacts.receipt.referrerWallet,
       providerPayoutWallet: sample.artifacts.receipt.payoutWallet,
+      executeProviderNetwork: bundle.mcp.tools[0].x402.network,
+      executeProviderAsset: bundle.mcp.tools[0].x402.asset,
+      executeProviderMerchantOrigin: bundle.merchant.origin,
+      executeProviderOperationId: bundle.mcp.tools[0].split402.operationId,
+      executeProviderCampaignId: bundle.mcp.tools[0].split402.campaignId,
+      executeProviderAmountAtomic: "10000",
+      executeProviderPayToWallet: bundle.mcp.tools[0].x402.payToWallet,
+      executeProviderRouteId: "rte_00000000000000000000000000000003",
+      executeProviderReferrerWallet: sample.artifacts.receipt.referrerWallet,
+      executeProviderPayoutWallet: sample.artifacts.receipt.payoutWallet,
       amountPaidAtomic: "10000",
       receiptVerificationStatus: "verified",
       executeExecutionMode: "router-demo-mock",
@@ -128,6 +138,7 @@ describe("Phase 7 MCP gateway evidence collector", () => {
     expect(transcript).toContain('"split402.getReceipt"');
     expect(transcript).toContain('"budget":{"maxAmountAtomic":"50000"}');
     expect(transcript).toContain('"providerId":"split402-demo-merchant"');
+    expect(transcript).toContain('"provider":{"providerId":"split402-demo-merchant"');
     expect(transcript).toContain('"amountPaidAtomic":"10000"');
     expect(transcript).toContain(`"receiptId":"${report.receiptId}"`);
     expect(transcript).toContain('"receiptVerificationStatus":"verified"');
