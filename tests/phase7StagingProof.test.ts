@@ -8,6 +8,7 @@ import {
 import {
   PHASE7_STAGING_COMMANDS,
   createPhase7StagingStatusReport,
+  formatPhase7StagingStatusBrief,
 } from "../src/phase7StagingStatus.js";
 
 describe("Phase 7 staging proof", () => {
@@ -298,6 +299,9 @@ approval_decision: no-go
     expect(report.nextActions).not.toContain(
       "Run the dashboard, MCP bundle, paid-suite, control-plane read checks, and funding-balance check against staging.",
     );
+    expect(formatPhase7StagingStatusBrief(report)).toContain(
+      "Phase 7 hosted staging proof: not checked",
+    );
   });
 
   it("reports gate-level blockers for incomplete proof evidence", () => {
@@ -329,6 +333,15 @@ funding_balance_evidence: funding.json
       status: "missing",
       blockers: ["mcp_bundle_evidence is missing"],
     });
+    expect(report.nextActions.join("\n")).not.toContain(
+      "Replace placeholder fields: approval_decision",
+    );
+    const brief = formatPhase7StagingStatusBrief(report);
+    expect(brief).toContain("Phase 7 hosted staging proof: checked, blocked");
+    expect(brief).toContain("Ready gates:");
+    expect(brief).toContain(
+      "Launch posture: public-alpha approval remains no-go until hosted proof gates pass.",
+    );
     expect(report.gateStatuses).toContainEqual({
       gate: "mcp_gateway",
       evidenceField: "mcp_gateway_evidence",

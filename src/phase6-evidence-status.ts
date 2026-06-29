@@ -1,10 +1,19 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
-import { createPhase6EvidenceStatusReport } from "./phase6EvidenceStatus.js";
+import {
+  createPhase6EvidenceStatusReport,
+  formatPhase6EvidenceStatusBrief,
+} from "./phase6EvidenceStatus.js";
 
-const evidencePath =
-  process.argv[2] ?? process.env.SPLIT402_PHASE6_CUSTODY_EVIDENCE;
+const { brief, evidencePath, help } = parseCliArgs(process.argv.slice(2));
+
+if (help) {
+  console.log(
+    "Usage: corepack pnpm phase6:evidence:status [--brief] [evidence-bundle.txt]",
+  );
+  process.exit(0);
+}
 
 const evidenceText =
   evidencePath === undefined || evidencePath.trim().length === 0
@@ -14,10 +23,44 @@ const evidenceText =
 const report = createPhase6EvidenceStatusReport(evidenceText, {
   currentSourceCommit: readCurrentGitCommit(),
 });
-console.log(JSON.stringify(report, null, 2));
+console.log(
+  brief ? formatPhase6EvidenceStatusBrief(report) : JSON.stringify(report, null, 2),
+);
 
 if (report.evidenceBundleChecked && !report.readyForCustody) {
   process.exitCode = 1;
+}
+
+function parseCliArgs(args: readonly string[]): {
+  brief: boolean;
+  evidencePath?: string;
+  help: boolean;
+} {
+  let brief = false;
+  let help = false;
+  let evidencePath: string | undefined;
+
+  for (const arg of args) {
+    if (arg === "--help" || arg === "-h") {
+      help = true;
+    } else if (arg === "--brief") {
+      brief = true;
+    } else if (arg.startsWith("-")) {
+      throw new Error(`Unknown option: ${arg}`);
+    } else if (evidencePath === undefined) {
+      evidencePath = arg;
+    } else {
+      throw new Error(
+        "Usage: corepack pnpm phase6:evidence:status [--brief] [evidence-bundle.txt]",
+      );
+    }
+  }
+
+  return {
+    brief,
+    help,
+    evidencePath: evidencePath ?? process.env.SPLIT402_PHASE6_CUSTODY_EVIDENCE,
+  };
 }
 
 function readCurrentGitCommit(): string {

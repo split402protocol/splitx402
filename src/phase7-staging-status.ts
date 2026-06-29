@@ -7,10 +7,19 @@ import {
   PHASE7_EVIDENCE_FIELDS,
   parsePhase7ProofRecord,
 } from "./phase7StagingProof.js";
-import { createPhase7StagingStatusReport } from "./phase7StagingStatus.js";
+import {
+  createPhase7StagingStatusReport,
+  formatPhase7StagingStatusBrief,
+} from "./phase7StagingStatus.js";
 
-const proofPath =
-  process.argv[2] ?? process.env.SPLIT402_PHASE7_STAGING_PROOF;
+const { brief, help, proofPath } = parseCliArgs(process.argv.slice(2));
+
+if (help) {
+  console.log(
+    "Usage: corepack pnpm phase7:staging:status [--brief] [phase7-staging-proof.txt]",
+  );
+  process.exit(0);
+}
 
 const proofText =
   proofPath === undefined || proofPath.trim().length === 0
@@ -34,10 +43,44 @@ const report = createPhase7StagingStatusReport(proofText, {
           isAbsolute(artifactPath) ? artifactPath : resolve(baseDir, artifactPath),
       }),
 });
-console.log(JSON.stringify(report, null, 2));
+console.log(
+  brief ? formatPhase7StagingStatusBrief(report) : JSON.stringify(report, null, 2),
+);
 
 if (report.proofChecked && !report.readyForPublicAlphaDemo) {
   process.exitCode = 1;
+}
+
+function parseCliArgs(args: readonly string[]): {
+  brief: boolean;
+  help: boolean;
+  proofPath?: string;
+} {
+  let brief = false;
+  let help = false;
+  let proofPath: string | undefined;
+
+  for (const arg of args) {
+    if (arg === "--help" || arg === "-h") {
+      help = true;
+    } else if (arg === "--brief") {
+      brief = true;
+    } else if (arg.startsWith("-")) {
+      throw new Error(`Unknown option: ${arg}`);
+    } else if (proofPath === undefined) {
+      proofPath = arg;
+    } else {
+      throw new Error(
+        "Usage: corepack pnpm phase7:staging:status [--brief] [phase7-staging-proof.txt]",
+      );
+    }
+  }
+
+  return {
+    brief,
+    help,
+    proofPath: proofPath ?? process.env.SPLIT402_PHASE7_STAGING_PROOF,
+  };
 }
 
 function readCurrentGitCommit(): string {
