@@ -147,7 +147,7 @@ function createNextCommands(input: {
     `corepack pnpm demo:paid-suite > ${input.directory}/phase7-staging-evidence/paid-suite.log`,
     `corepack pnpm phase7:staging:derive-receipt-verification ${phase7EnvOption}`,
     `corepack pnpm phase7:staging:manifest ${input.directory}/${input.phase7ProofFileName} ${input.directory}/phase7-staging-evidence/artifact-manifest.json`,
-    `corepack pnpm phase7:staging:assemble ${phase7EnvOption} > ${input.directory}/${input.phase7ProofFileName}`,
+    `corepack pnpm phase7:staging:assemble ${phase7EnvOption} ${input.directory}/${input.phase7ProofFileName}`,
     `corepack pnpm phase7:staging:status ${input.directory}/${input.phase7ProofFileName}`,
     `corepack pnpm phase6:evidence:assemble --evidence-env-file ${phase6EnvFile} > ${input.directory}/${input.phase6EvidenceFileName}`,
     `corepack pnpm phase6:evidence:status ${input.directory}/${input.phase6EvidenceFileName}`,

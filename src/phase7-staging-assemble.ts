@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 
+import { writeCliTextOutput } from "./cliOutput.js";
 import {
   PHASE7_STAGING_ATTACHMENT_FIELDS,
   assemblePhase7StagingProof,
@@ -16,7 +17,7 @@ import { loadEvidenceEnvFiles } from "./evidenceEnvFile.js";
 const env = process.env;
 
 try {
-  loadEvidenceEnvFiles({
+  const cli = loadEvidenceEnvFiles({
     argv: process.argv.slice(2),
     defaultEnvFiles: [
       "split402-launch-evidence/phase7-staging.env",
@@ -29,12 +30,15 @@ try {
     attachments: readAttachmentPaths(),
   };
 
-  console.log(assemblePhase7StagingProof(input));
+  writeCliTextOutput({
+    text: assemblePhase7StagingProof(input),
+    outputPath: cli.args[0],
+  });
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
   console.error(
     [
-      "Usage: corepack pnpm phase7:staging:assemble",
+      "Usage: corepack pnpm phase7:staging:assemble [phase7-staging-proof.txt]",
       "Env file options:",
       "  --evidence-env-file <path> (optional; defaults to split402-launch-evidence/phase7-staging.env when present)",
       "  SPLIT402_ENV_FILE=<path> (optional; uses platform path separator for multiple files)",
