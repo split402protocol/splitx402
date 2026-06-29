@@ -210,6 +210,10 @@ export function createSplit402LaunchPreflightReport(
         ]
       : []),
   ];
+  const mcpHostedMismatchDetails = createMcpHostedMismatchDetails({
+    env: phase7Env,
+    envPath: phase7EnvPath,
+  });
 
   const checks: Split402LaunchPreflightCheck[] = [
     {
@@ -296,6 +300,16 @@ export function createSplit402LaunchPreflightReport(
         missingMcpDetails.length === 0
           ? ["Required MCP live execution values are configured."]
           : missingMcpDetails,
+    },
+    {
+      id: "phase7_mcp_matches_hosted_env",
+      label: "Phase 7 MCP live execution targets the hosted proof environment",
+      ok: mcpHostedMismatchDetails.length === 0,
+      severity: "required",
+      details:
+        mcpHostedMismatchDetails.length === 0
+          ? ["MCP live execution control-plane values match the hosted proof environment."]
+          : mcpHostedMismatchDetails,
     },
     {
       id: "mainnet_not_ready",
@@ -443,6 +457,51 @@ function createSourceCommitBlockers(input: {
     }
   }
   return blockers;
+}
+
+function createMcpHostedMismatchDetails(input: {
+  env: ReadonlyMap<string, string>;
+  envPath: string;
+}): string[] {
+  const details: string[] = [];
+  const hostedControlPlaneUrl = input.env.get("SPLIT402_PHASE7_CONTROL_PLANE_URL");
+  const mcpControlPlaneUrl = input.env.get("SPLIT402_MCP_CONTROL_PLANE_URL");
+  if (
+    hasConfiguredEnvValue(input.env, "SPLIT402_PHASE7_CONTROL_PLANE_URL") &&
+    hasConfiguredEnvValue(input.env, "SPLIT402_MCP_CONTROL_PLANE_URL") &&
+    normalizeUrlForComparison(hostedControlPlaneUrl) !==
+      normalizeUrlForComparison(mcpControlPlaneUrl)
+  ) {
+    details.push(
+      `Set SPLIT402_MCP_CONTROL_PLANE_URL to match SPLIT402_PHASE7_CONTROL_PLANE_URL in ${toDisplayPath(input.envPath)} so MCP evidence uses the same hosted control plane.`,
+    );
+  }
+
+  const hostedToken = input.env.get("SPLIT402_PHASE7_CONTROL_PLANE_TOKEN");
+  const mcpToken = input.env.get("SPLIT402_MCP_CONTROL_PLANE_TOKEN");
+  if (
+    hasConfiguredEnvValue(input.env, "SPLIT402_PHASE7_CONTROL_PLANE_TOKEN") &&
+    hasConfiguredEnvValue(input.env, "SPLIT402_MCP_CONTROL_PLANE_TOKEN") &&
+    hostedToken !== mcpToken
+  ) {
+    details.push(
+      `Set SPLIT402_MCP_CONTROL_PLANE_TOKEN to match SPLIT402_PHASE7_CONTROL_PLANE_TOKEN in ${toDisplayPath(input.envPath)} so MCP evidence uses the same hosted control-plane auth context.`,
+    );
+  }
+  return details;
+}
+
+function normalizeUrlForComparison(value: string | undefined): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  try {
+    const url = new URL(value);
+    url.pathname = url.pathname.replace(/\/+$/u, "");
+    return url.toString();
+  } catch {
+    return value.trim().replace(/\/+$/u, "");
+  }
 }
 
 function parseRecordField(text: string, fieldName: string): string | undefined {
