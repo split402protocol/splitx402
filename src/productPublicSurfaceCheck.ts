@@ -27,11 +27,25 @@ const REQUIRED_FILES = [
   "LICENSE",
   "README.md",
   "SECURITY.md",
+  "docs/GITHUB_PUBLIC_PROFILE.md",
   "docs/PUBLIC_PRIVATE_BOUNDARY.md",
   "docs/decisions/0009-public-private-boundary-and-apache-license.md",
 ] as const;
 
 const MIT_FREE_PUBLIC_FILES = ["LICENSE", "README.md", "package.json"] as const;
+const GITHUB_PROFILE_FILE = "docs/GITHUB_PUBLIC_PROFILE.md";
+const EXPECTED_GITHUB_DESCRIPTION =
+  "Agent payment routing and verifiable referral accounting for x402 APIs.";
+const EXPECTED_GITHUB_TOPICS = [
+  "agents",
+  "mcp",
+  "payments",
+  "protocol",
+  "solana",
+  "typescript",
+  "usdc",
+  "x402",
+] as const;
 
 export function createSplit402PublicSurfaceCheckReport(
   input: Split402PublicSurfaceCheckInput = {},
@@ -54,6 +68,7 @@ export function createSplit402PublicSurfaceCheckReport(
     createPackageLicenseCheck(exists, readText),
     createApacheLicenseFileCheck(exists, readText),
     createReadmeBoundaryCheck(exists, readText),
+    createGitHubProfileContractCheck(exists, readText),
     createBoundaryPolicyCheck(exists, readText),
     createDecisionRecordCheck(exists, readText),
     createNoMitLaunchClaimCheck(exists, readText),
@@ -81,6 +96,7 @@ export function formatSplit402PublicSurfaceCheckBrief(
     "",
     "Launch posture:",
     "- Public repository: Apache-2.0 protocol foundation.",
+    `- GitHub About description: ${EXPECTED_GITHUB_DESCRIPTION}`,
     "- Private infrastructure: hosted operations, production custody, provider strategy, private evidence, and commercial deployment details.",
   ].join("\n");
 }
@@ -218,6 +234,66 @@ function createBoundaryPolicyCheck(
     details:
       blockers.length === 0
         ? ["Public/private boundary policy is explicit."]
+        : blockers,
+  };
+}
+
+function createGitHubProfileContractCheck(
+  exists: (path: string) => boolean,
+  readText: (path: string) => string,
+): Split402PublicSurfaceCheck {
+  const profile = readIfExists(GITHUB_PROFILE_FILE, exists, readText);
+  if (profile === undefined) {
+    return {
+      id: "github_public_profile_contract",
+      label: "GitHub public profile contract is professional",
+      ok: false,
+      details: [`Missing ${GITHUB_PROFILE_FILE}.`],
+    };
+  }
+
+  const missingTopics = EXPECTED_GITHUB_TOPICS.filter(
+    (topic) => !profile.includes(`- ${topic}`),
+  );
+  const blockers = [
+    ...(profile.includes(`Description: ${EXPECTED_GITHUB_DESCRIPTION}`)
+      ? []
+      : [
+          `${GITHUB_PROFILE_FILE} must include the canonical GitHub About description.`,
+        ]),
+    ...(missingTopics.length === 0
+      ? []
+      : [
+          `${GITHUB_PROFILE_FILE} must list canonical GitHub topics: ${missingTopics.join(
+            ", ",
+          )}.`,
+        ]),
+    ...(profile.includes(
+      "Homepage: unset until a hosted public docs or demo URL is live and proof-gated.",
+    )
+      ? []
+      : [
+          `${GITHUB_PROFILE_FILE} must keep homepage unset until public hosted evidence is ready.`,
+        ]),
+    ...(profile.includes("Apache-2.0")
+      ? []
+      : [`${GITHUB_PROFILE_FILE} must state the public license as Apache-2.0.`]),
+    ...(profile.includes("Contributors are generated from commit author metadata")
+      ? []
+      : [
+          `${GITHUB_PROFILE_FILE} must document how GitHub contributor metadata is generated.`,
+        ]),
+  ];
+
+  return {
+    id: "github_public_profile_contract",
+    label: "GitHub public profile contract is professional",
+    ok: blockers.length === 0,
+    details:
+      blockers.length === 0
+        ? [
+            "GitHub profile contract records the canonical About description, topics, homepage posture, license, and contributor metadata note.",
+          ]
         : blockers,
   };
 }
