@@ -171,7 +171,7 @@ function createProductNextActions(
       "Fill the generated Phase 7 and Phase 6 env files with hosted staging and custody evidence values.",
       "Collect Phase 7 hosted proof and Phase 6 custody evidence from the same deployed environment and source commit.",
       "Run hosted Phase 7 staging proof collection and status validation.",
-      "Run corepack pnpm product:status --brief split402-launch-evidence/phase6-custody-evidence.txt split402-launch-evidence/phase7-staging-proof.txt.",
+      "Run corepack pnpm product:status --brief --workspace split402-launch-evidence.",
     ];
   }
 

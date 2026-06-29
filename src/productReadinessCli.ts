@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, isAbsolute, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 
 import { isPhase7SourceWorktreeDirty } from "./phase7GitStatus.js";
 import {
@@ -18,44 +18,47 @@ export interface Split402ProductReadinessCliInput {
   phase6EvidencePath?: string;
   phase7ProofPath?: string;
   report: Split402ProductReadinessReport;
+  workspaceDirectory?: string;
 }
 
 export const PRODUCT_STATUS_USAGE =
-  "Usage: corepack pnpm product:status [--brief] [phase6-custody-evidence.txt] [phase7-staging-proof.txt]";
+  "Usage: corepack pnpm product:status [--brief] [--workspace directory] [phase6-custody-evidence.txt] [phase7-staging-proof.txt]";
 
 export const PRODUCT_LAUNCH_CHECKLIST_USAGE =
-  "Usage: corepack pnpm product:launch-checklist [--brief] [phase6-custody-evidence.txt] [phase7-staging-proof.txt]";
+  "Usage: corepack pnpm product:launch-checklist [--brief] [--workspace directory] [phase6-custody-evidence.txt] [phase7-staging-proof.txt]";
 
 export function readSplit402ProductReadinessCliInput(
   args: readonly string[],
   usage = PRODUCT_STATUS_USAGE,
 ): Split402ProductReadinessCliInput {
-  const help = args.includes("--help") || args.includes("-h");
-  const brief = args.includes("--brief");
-  const unknownOptions = args.filter(
-    (arg) =>
-      arg.startsWith("-") &&
-      arg !== "--help" &&
-      arg !== "-h" &&
-      arg !== "--brief",
-  );
-  if (unknownOptions.length > 0) {
-    throw new Error(`${usage}\nUnknown option: ${unknownOptions[0]}`);
-  }
-
-  const positionalArgs = args.filter(
-    (arg) => arg !== "--help" && arg !== "-h" && arg !== "--brief",
-  );
+  const parsed = parseReadinessCliArgs(args, usage);
+  const { brief, help, positionalArgs, workspaceDirectory } = parsed;
   if (positionalArgs.length > 2) {
     throw new Error(usage);
   }
+  if (workspaceDirectory !== undefined && positionalArgs.length > 0) {
+    throw new Error(
+      `${usage}\nDo not pass evidence file paths with --workspace.`,
+    );
+  }
+
+  const workspaceEvidencePaths =
+    help || workspaceDirectory === undefined
+      ? undefined
+      : createWorkspaceEvidencePaths(workspaceDirectory);
 
   const phase6EvidencePath =
     help
       ? undefined
-      : positionalArgs[0] ?? process.env.SPLIT402_PHASE6_CUSTODY_EVIDENCE;
+      : positionalArgs[0] ??
+        workspaceEvidencePaths?.phase6EvidencePath ??
+        process.env.SPLIT402_PHASE6_CUSTODY_EVIDENCE;
   const phase7ProofPath =
-    help ? undefined : positionalArgs[1] ?? process.env.SPLIT402_PHASE7_STAGING_PROOF;
+    help
+      ? undefined
+      : positionalArgs[1] ??
+        workspaceEvidencePaths?.phase7ProofPath ??
+        process.env.SPLIT402_PHASE7_STAGING_PROOF;
   const phase6EvidenceText = readOptionalText(phase6EvidencePath);
   const phase7ProofText = readOptionalText(phase7ProofPath);
   const phase7ArtifactBaseDir =
@@ -68,6 +71,7 @@ export function readSplit402ProductReadinessCliInput(
     help,
     phase6EvidencePath,
     phase7ProofPath,
+    workspaceDirectory,
     report: createSplit402ProductReadinessReport({
       phase6EvidenceText,
       phase7ProofText,
@@ -90,6 +94,69 @@ export function readSplit402ProductReadinessCliInput(
             }),
       },
     }),
+  };
+}
+
+interface ParsedReadinessCliArgs {
+  brief: boolean;
+  help: boolean;
+  positionalArgs: string[];
+  workspaceDirectory?: string;
+}
+
+function parseReadinessCliArgs(
+  args: readonly string[],
+  usage: string,
+): ParsedReadinessCliArgs {
+  const positionalArgs: string[] = [];
+  let brief = false;
+  let help = false;
+  let workspaceDirectory: string | undefined;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === undefined) {
+      continue;
+    }
+    if (arg === "--help" || arg === "-h") {
+      help = true;
+    } else if (arg === "--brief") {
+      brief = true;
+    } else if (arg === "--workspace") {
+      const value = args[index + 1];
+      if (value === undefined || value.startsWith("-")) {
+        throw new Error(`${usage}\n--workspace requires a directory.`);
+      }
+      workspaceDirectory = value;
+      index += 1;
+    } else if (arg.startsWith("--workspace=")) {
+      const value = arg.slice("--workspace=".length);
+      if (value.trim().length === 0) {
+        throw new Error(`${usage}\n--workspace requires a directory.`);
+      }
+      workspaceDirectory = value;
+    } else if (arg.startsWith("-")) {
+      throw new Error(`${usage}\nUnknown option: ${arg}`);
+    } else {
+      positionalArgs.push(arg);
+    }
+  }
+
+  return {
+    brief,
+    help,
+    positionalArgs,
+    ...(workspaceDirectory === undefined ? {} : { workspaceDirectory }),
+  };
+}
+
+function createWorkspaceEvidencePaths(directory: string): {
+  phase6EvidencePath: string;
+  phase7ProofPath: string;
+} {
+  return {
+    phase6EvidencePath: join(directory, "phase6-custody-evidence.txt"),
+    phase7ProofPath: join(directory, "phase7-staging-proof.txt"),
   };
 }
 
