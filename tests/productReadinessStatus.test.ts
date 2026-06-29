@@ -56,6 +56,7 @@ describe("Split402 product readiness status", () => {
 
   it("reports saved local public-alpha proof without approving launch", () => {
     const report = createSplit402ProductReadinessReport({
+      currentSourceCommit: "abc1234000000000000000000000000000000000",
       localProofText: createPassingLocalProofText(),
     });
 
@@ -64,6 +65,7 @@ describe("Split402 product readiness status", () => {
       ready: true,
       status: "passed",
       generatedAt: "2026-06-29T20:00:00.000Z",
+      sourceCommit: "abc1234",
     });
     expect(report.launchDecision).toBe("no-go");
     expect(report.nextActions).not.toContain(
@@ -83,6 +85,65 @@ describe("Split402 product readiness status", () => {
     expect(report.localProof.status).toBe("failed");
     expect(report.localProof.blockers).toContain(
       "local proof schema is not split402.local_public_alpha_proof.v1",
+    );
+  });
+
+  it("rejects local proof artifacts without source commit provenance", () => {
+    const report = createSplit402ProductReadinessReport({
+      currentSourceCommit: "abc1234000000000000000000000000000000000",
+      localProofText: JSON.stringify({
+        schema: "split402.local_public_alpha_proof.v1",
+        status: "passed",
+        launchApproval: "not_approved",
+        generatedAt: "2026-06-29T20:00:00.000Z",
+        checks: [
+          { id: "repo_hygiene", status: "passed" },
+          { id: "public_surface", status: "passed" },
+          { id: "protocol_vectors", status: "passed" },
+          { id: "router_alpha", status: "passed" },
+          { id: "mcp_gateway_smoke", status: "passed" },
+        ],
+        notes: [],
+      }),
+    });
+
+    expect(report.localProof.ready).toBe(false);
+    expect(report.localProof.blockers).toContain(
+      "local proof sourceCommit is missing; rerun product:local-proof",
+    );
+    expect(report.nextActions).toContain(
+      "local proof sourceCommit is missing; rerun product:local-proof",
+    );
+  });
+
+  it("rejects local proof artifacts from a different checkout", () => {
+    const report = createSplit402ProductReadinessReport({
+      currentSourceCommit: "def5678000000000000000000000000000000000",
+      localProofText: createPassingLocalProofText(),
+    });
+
+    expect(report.localProof.ready).toBe(false);
+    expect(report.localProof.blockers).toContain(
+      "local proof sourceCommit does not match current checkout; rerun product:local-proof for def5678000000000000000000000000000000000",
+    );
+    expect(report.nextActions).toContain(
+      "local proof sourceCommit does not match current checkout; rerun product:local-proof for def5678000000000000000000000000000000000",
+    );
+  });
+
+  it("rejects local proof artifacts when the source worktree is dirty", () => {
+    const report = createSplit402ProductReadinessReport({
+      currentSourceCommit: "abc1234000000000000000000000000000000000",
+      currentWorktreeDirty: true,
+      localProofText: createPassingLocalProofText(),
+    });
+
+    expect(report.localProof.ready).toBe(false);
+    expect(report.localProof.blockers).toContain(
+      "local proof is stale because the source worktree has uncommitted changes; commit or revert them, then rerun product:local-proof",
+    );
+    expect(report.nextActions).toContain(
+      "local proof is stale because the source worktree has uncommitted changes; commit or revert them, then rerun product:local-proof",
     );
   });
 
@@ -228,6 +289,7 @@ function createPassingLocalProofText(): string {
     status: "passed",
     launchApproval: "not_approved",
     generatedAt: "2026-06-29T20:00:00.000Z",
+    sourceCommit: "abc1234",
     checks: [
       { id: "repo_hygiene", status: "passed" },
       { id: "public_surface", status: "passed" },

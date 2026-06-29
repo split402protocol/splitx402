@@ -283,6 +283,8 @@ describe("repository presentation", () => {
     expect(readme).toContain("dotenv-style parsing");
     expect(readme).toContain("hides extra actions");
     expect(readme).toContain("adoption-layer smoke proof");
+    expect(readme).toContain("saved proof records the source commit");
+    expect(readme).toContain("source worktree has uncommitted changes");
     expect(currentState).toContain("corepack pnpm product:evidence:init");
     expect(currentState).toContain("corepack pnpm product:local-proof");
     expect(currentState).toContain("corepack pnpm product:launch-preflight");
@@ -296,6 +298,9 @@ describe("repository presentation", () => {
     expect(currentState).toContain("refuses to overwrite existing scaffold");
     expect(currentState).toContain("corepack pnpm product:status");
     expect(currentState).toContain("full blocker lists");
+    expect(currentState).toContain("saved proof");
+    expect(currentState).toContain("records the source");
+    expect(currentState).toContain("source worktree has");
   });
 });
 

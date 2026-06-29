@@ -387,7 +387,9 @@ runnable MCP gateway smoke path before hosted evidence collection. Pass
 `--output split402-launch-evidence/local-public-alpha-proof.json` to save that
 proof beside the launch evidence workspace. This is an adoption-layer smoke proof
 only; it does not approve hosted Phase 7, production custody, mainnet, or
-commercial operations.
+commercial operations. The saved proof records the source commit, and
+`product:status --workspace` treats it as stale if it does not match the current
+checkout or if the source worktree has uncommitted changes.
 `product:public-surface-check --brief` can also be run alone to verify that
 launch-facing files still present Apache-2.0, link the public/private boundary,
 and do not drift back to old launch-facing license claims.

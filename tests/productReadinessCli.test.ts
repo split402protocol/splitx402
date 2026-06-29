@@ -1,6 +1,7 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { execFileSync } from "node:child_process";
 
 import { describe, expect, it } from "vitest";
 
@@ -42,6 +43,7 @@ describe("Split402 product readiness CLI parsing", () => {
         status: "passed",
         launchApproval: "not_approved",
         generatedAt: "2026-06-29T20:00:00.000Z",
+        sourceCommit: readCurrentGitCommit(),
         checks: [
           { id: "repo_hygiene", status: "passed" },
           { id: "public_surface", status: "passed" },
@@ -98,7 +100,8 @@ describe("Split402 product readiness CLI parsing", () => {
     expect(input.localProofPath).toBe(
       join(directory, "local-public-alpha-proof.json"),
     );
-    expect(input.report.localProof.ready).toBe(true);
+    expect(input.report.localProof.checked).toBe(true);
+    expect(input.report.localProof.sourceCommit).toBe(readCurrentGitCommit());
     expect(input.phase7ProofPath).toBe(
       join(directory, "phase7-staging-proof.txt"),
     );
@@ -147,3 +150,10 @@ describe("Split402 product readiness CLI parsing", () => {
     );
   });
 });
+
+function readCurrentGitCommit(): string {
+  return execFileSync("git", ["rev-parse", "HEAD"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  }).trim();
+}

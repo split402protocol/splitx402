@@ -18,6 +18,7 @@ export interface Split402LocalProofReport {
   status: "passed" | "failed";
   launchApproval: "not_approved";
   generatedAt: string;
+  sourceCommit?: string;
   checks: Split402LocalProofCheckResult[];
   notes: string[];
 }
@@ -27,6 +28,7 @@ export interface Split402LocalProofOptions {
   runCommand?: (
     check: Split402LocalProofCheck,
   ) => Split402LocalProofCheckResult;
+  sourceCommit?: string;
 }
 
 export const LOCAL_PROOF_USAGE =
@@ -79,6 +81,9 @@ export function createSplit402LocalProofReport(
     status,
     launchApproval: "not_approved",
     generatedAt,
+    ...(options.sourceCommit === undefined
+      ? {}
+      : { sourceCommit: options.sourceCommit }),
     checks,
     notes: [
       "This proves the local public-alpha protocol, router, and MCP gateway path only.",
@@ -100,6 +105,9 @@ export function formatSplit402LocalProofBrief(
   const lines = [
     `Split402 local public-alpha proof: ${report.status}`,
     "Launch approval: not approved",
+    ...(report.sourceCommit === undefined
+      ? []
+      : [`Source commit: ${report.sourceCommit}`]),
     "",
     "Checks:",
     ...report.checks.map((check) => {

@@ -161,6 +161,7 @@ approval_notes: checked evidence is intentionally incomplete
           status: "passed",
           launchApproval: "not_approved",
           generatedAt: "2026-06-29T20:00:00.000Z",
+          sourceCommit: "abc1234",
           checks: [
             { id: "repo_hygiene", status: "passed" },
             { id: "public_surface", status: "passed" },
@@ -221,6 +222,7 @@ approval_decision: no-go
           status: "passed",
           launchApproval: "not_approved",
           generatedAt: "2026-06-29T20:00:00.000Z",
+          sourceCommit: "abc1234",
           checks: [
             { id: "repo_hygiene", status: "passed" },
             { id: "public_surface", status: "passed" },

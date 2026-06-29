@@ -73,6 +73,10 @@ export function readSplit402ProductReadinessCliInput(
       ? undefined
       : dirname(resolve(phase7ProofPath));
   const currentSourceCommit = readCurrentGitCommit();
+  const currentWorktreeDirty = readCurrentWorktreeDirty(
+    phase7ProofPath,
+    phase7ProofText,
+  );
 
   return {
     brief,
@@ -82,6 +86,8 @@ export function readSplit402ProductReadinessCliInput(
     phase7ProofPath,
     workspaceDirectory,
     report: createSplit402ProductReadinessReport({
+      currentSourceCommit,
+      currentWorktreeDirty,
       localProofText,
       phase6EvidenceText,
       phase6Options: {
@@ -90,10 +96,7 @@ export function readSplit402ProductReadinessCliInput(
       phase7ProofText,
       phase7Options: {
         currentSourceCommit,
-        currentWorktreeDirty: readCurrentWorktreeDirty(
-          phase7ProofPath,
-          phase7ProofText,
-        ),
+        currentWorktreeDirty,
         ...(phase7ArtifactBaseDir === undefined
           ? {}
           : {
