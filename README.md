@@ -692,6 +692,7 @@ assembled and approved.
 
 - [Canonical architecture spec](docs/reference/split402_protocol_architecture_v0.1.md)
 - [Current state](docs/CURRENT_STATE.md)
+- [GitHub public profile](docs/GITHUB_PUBLIC_PROFILE.md)
 - [Public and private boundary](docs/PUBLIC_PRIVATE_BOUNDARY.md)
 - [Architecture alignment note](docs/SPLIT402_ARCHITECTURE.md)
 - [Phase 6 custody review checklist](docs/checklists/phase6-custody-review.md)

@@ -25,6 +25,9 @@ describe("Split402 public surface check", () => {
     expect(formatSplit402PublicSurfaceCheckBrief(report)).toContain(
       "Public repository: Apache-2.0 protocol foundation.",
     );
+    expect(formatSplit402PublicSurfaceCheckBrief(report)).toContain(
+      "GitHub About description: Agent payment routing and verifiable referral accounting for x402 APIs.",
+    );
   });
 
   it("fails when launch-facing files drift back to MIT", () => {
@@ -64,6 +67,37 @@ describe("Split402 public surface check", () => {
       details: ["Missing docs/PUBLIC_PRIVATE_BOUNDARY.md."],
     });
   });
+
+  it("fails when the GitHub public profile contract drifts", () => {
+    const files = createPublicSurfaceFiles({
+      "docs/GITHUB_PUBLIC_PROFILE.md": [
+        "Description: vague x402 stuff",
+        "Topics:",
+        "- x402",
+        "License: MIT",
+      ].join("\n"),
+    });
+
+    const report = createSplit402PublicSurfaceCheckReport({
+      exists: (path) => files.has(path),
+      readText: (path) => files.get(path) ?? "",
+    });
+
+    expect(report.ok).toBe(false);
+    expect(
+      report.checks.find(
+        (check) => check.id === "github_public_profile_contract",
+      ),
+    ).toMatchObject({
+      ok: false,
+      details: expect.arrayContaining([
+        "docs/GITHUB_PUBLIC_PROFILE.md must include the canonical GitHub About description.",
+        "docs/GITHUB_PUBLIC_PROFILE.md must keep homepage unset until public hosted evidence is ready.",
+        "docs/GITHUB_PUBLIC_PROFILE.md must state the public license as Apache-2.0.",
+        "docs/GITHUB_PUBLIC_PROFILE.md must document how GitHub contributor metadata is generated.",
+      ]),
+    });
+  });
 });
 
 function createPublicSurfaceFiles(
@@ -84,6 +118,21 @@ function createPublicSurfaceFiles(
         "This public repository is licensed under [Apache-2.0](LICENSE).",
       ].join("\n"),
       "SECURITY.md": "Report vulnerabilities privately.\n",
+      "docs/GITHUB_PUBLIC_PROFILE.md": [
+        "Description: Agent payment routing and verifiable referral accounting for x402 APIs.",
+        "Homepage: unset until a hosted public docs or demo URL is live and proof-gated.",
+        "Topics:",
+        "- agents",
+        "- mcp",
+        "- payments",
+        "- protocol",
+        "- solana",
+        "- typescript",
+        "- usdc",
+        "- x402",
+        "License: Apache-2.0",
+        "Contributors are generated from commit author metadata.",
+      ].join("\n"),
       "docs/PUBLIC_PRIVATE_BOUNDARY.md": [
         "## Public Repository",
         "## Private Commercial Surface",
