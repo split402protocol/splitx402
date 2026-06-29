@@ -35,6 +35,16 @@ export interface Phase7McpGatewayEvidenceReport {
   providerRouteId?: string;
   providerReferrerWallet?: string;
   providerPayoutWallet?: string;
+  executeProviderNetwork?: string;
+  executeProviderAsset?: string;
+  executeProviderMerchantOrigin?: string;
+  executeProviderOperationId?: string;
+  executeProviderCampaignId?: string;
+  executeProviderAmountAtomic?: string;
+  executeProviderPayToWallet?: string;
+  executeProviderRouteId?: string;
+  executeProviderReferrerWallet?: string;
+  executeProviderPayoutWallet?: string;
   amountPaidAtomic?: string;
   receiptId?: string;
   receiptVerificationStatus?: string;
@@ -252,17 +262,40 @@ export async function collectPhase7McpGatewayEvidence(
         "mcp_gateway_evidence execute response executionMode does not match collector execution mode",
       );
     }
+    if (executionSummary.provider.providerId !== executionSummary.providerId) {
+      blockers.push(
+        "mcp_gateway_evidence execute provider providerId does not match execute providerId",
+      );
+    }
+    if (executionSummary.amountPaidAtomic !== executionSummary.provider.amountAtomic) {
+      blockers.push(
+        "mcp_gateway_evidence execute amountPaidAtomic does not match execute provider amountAtomic",
+      );
+    }
     if (providerSummary === undefined) {
       blockers.push(
         "mcp_gateway_evidence search response missing executed provider details",
       );
     } else {
+      compareProviderSummaries(
+        executionSummary.provider,
+        providerSummary,
+        "execute provider",
+        "selected provider",
+        blockers,
+      );
       if (executionSummary.amountPaidAtomic !== providerSummary.amountAtomic) {
         blockers.push(
           "mcp_gateway_evidence execute amountPaidAtomic does not match selected provider amountAtomic",
         );
       }
       if (receiptSummary !== undefined) {
+        compareReceiptToProviderSummary(
+          receiptSummary,
+          executionSummary.provider,
+          "execute provider",
+          blockers,
+        );
         if (receiptSummary.network !== providerSummary.network) {
           blockers.push(
             "mcp_gateway_evidence getReceipt network does not match selected provider",
@@ -363,6 +396,16 @@ export async function collectPhase7McpGatewayEvidence(
           receiptVerificationStatus: executionSummary.receiptVerificationStatus,
           executeExecutionMode: executionSummary.executionMode,
           referrerCreditAtomic: executionSummary.referrerCreditAtomic,
+          executeProviderNetwork: executionSummary.provider.network,
+          executeProviderAsset: executionSummary.provider.asset,
+          executeProviderMerchantOrigin: executionSummary.provider.merchantOrigin,
+          executeProviderOperationId: executionSummary.provider.operationId,
+          executeProviderCampaignId: executionSummary.provider.campaignId,
+          executeProviderAmountAtomic: executionSummary.provider.amountAtomic,
+          executeProviderPayToWallet: executionSummary.provider.payToWallet,
+          executeProviderRouteId: executionSummary.provider.routeId,
+          executeProviderReferrerWallet: executionSummary.provider.referrerWallet,
+          executeProviderPayoutWallet: executionSummary.provider.payoutWallet,
         }),
     ...(receiptSummary === undefined
       ? {}
@@ -416,6 +459,7 @@ interface McpGatewayExecutionSummary {
   receiptVerificationStatus: string;
   executionMode: Phase7McpGatewayEvidenceReport["executionMode"];
   referrerCreditAtomic: string;
+  provider: McpGatewayProviderSummary;
 }
 
 interface McpGatewayReceiptSummary {
@@ -436,7 +480,8 @@ interface McpGatewayReceiptSummary {
   protocolFeeAtomic: string;
 }
 
-interface McpGatewaySearchProviderSummary {
+interface McpGatewayProviderSummary {
+  providerId: string;
   network: string;
   asset: string;
   merchantOrigin: string;
@@ -448,6 +493,8 @@ interface McpGatewaySearchProviderSummary {
   referrerWallet: string;
   payoutWallet: string;
 }
+
+type McpGatewaySearchProviderSummary = McpGatewayProviderSummary;
 
 function readExecutionSummary(
   response: McpGatewayResponse,
@@ -464,13 +511,15 @@ function readExecutionSummary(
   const referrerCreditAtomic = readNonEmptyString(
     structuredContent?.referrerCreditAtomic,
   );
+  const provider = readProviderSummary(readRecord(structuredContent?.provider));
   if (
     providerId === undefined ||
     amountPaidAtomic === undefined ||
     receiptId === undefined ||
     receiptVerificationStatus === undefined ||
     executionMode === undefined ||
-    referrerCreditAtomic === undefined
+    referrerCreditAtomic === undefined ||
+    provider === undefined
   ) {
     return undefined;
   }
@@ -481,6 +530,7 @@ function readExecutionSummary(
     receiptVerificationStatus,
     executionMode,
     referrerCreditAtomic,
+    provider,
   };
 }
 
@@ -512,6 +562,11 @@ function addExecutionSummaryBlockers(
   if (readExecutionMode(structuredContent.executionMode) === undefined) {
     blockers.push(
       "mcp_gateway_evidence execute response executionMode is missing or unsupported",
+    );
+  }
+  if (readProviderSummary(readRecord(structuredContent.provider)) === undefined) {
+    blockers.push(
+      "mcp_gateway_evidence execute response missing selected provider summary",
     );
   }
   const referrerCreditAtomic = readNonEmptyString(
@@ -629,6 +684,7 @@ function readSearchProviderSummary(
       return undefined;
     }
     return {
+      providerId,
       network,
       asset,
       merchantOrigin,
@@ -642,6 +698,104 @@ function readSearchProviderSummary(
     };
   }
   return undefined;
+}
+
+function readProviderSummary(
+  provider: Record<string, unknown> | undefined,
+): McpGatewayProviderSummary | undefined {
+  const providerId = readNonEmptyString(provider?.providerId);
+  const network = readNonEmptyString(provider?.network);
+  const asset = readNonEmptyString(provider?.asset);
+  const merchantOrigin = readNonEmptyString(provider?.merchantOrigin);
+  const operationId = readNonEmptyString(provider?.operationId);
+  const campaignId = readNonEmptyString(provider?.campaignId);
+  const amountAtomic = readNonEmptyString(provider?.amountAtomic);
+  const payToWallet = readNonEmptyString(provider?.payToWallet);
+  const routeId = readNonEmptyString(provider?.routeId);
+  const referrerWallet = readNonEmptyString(provider?.referrerWallet);
+  const payoutWallet = readNonEmptyString(provider?.payoutWallet);
+  if (
+    providerId === undefined ||
+    network === undefined ||
+    asset === undefined ||
+    merchantOrigin === undefined ||
+    operationId === undefined ||
+    campaignId === undefined ||
+    amountAtomic === undefined ||
+    payToWallet === undefined ||
+    routeId === undefined ||
+    referrerWallet === undefined ||
+    payoutWallet === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    providerId,
+    network,
+    asset,
+    merchantOrigin,
+    operationId,
+    campaignId,
+    amountAtomic,
+    payToWallet,
+    routeId,
+    referrerWallet,
+    payoutWallet,
+  };
+}
+
+function compareProviderSummaries(
+  left: McpGatewayProviderSummary,
+  right: McpGatewayProviderSummary,
+  leftLabel: string,
+  rightLabel: string,
+  blockers: string[],
+): void {
+  for (const field of [
+    "providerId",
+    "network",
+    "asset",
+    "merchantOrigin",
+    "operationId",
+    "campaignId",
+    "amountAtomic",
+    "payToWallet",
+    "routeId",
+    "referrerWallet",
+    "payoutWallet",
+  ] as const) {
+    if (left[field] !== right[field]) {
+      blockers.push(
+        `mcp_gateway_evidence ${leftLabel} ${field} does not match ${rightLabel}`,
+      );
+    }
+  }
+}
+
+function compareReceiptToProviderSummary(
+  receipt: McpGatewayReceiptSummary,
+  provider: McpGatewayProviderSummary,
+  providerLabel: string,
+  blockers: string[],
+): void {
+  for (const [receiptField, providerField] of [
+    ["network", "network"],
+    ["asset", "asset"],
+    ["merchantOrigin", "merchantOrigin"],
+    ["operationId", "operationId"],
+    ["campaignId", "campaignId"],
+    ["requiredAmountAtomic", "amountAtomic"],
+    ["payToWallet", "payToWallet"],
+    ["routeId", "routeId"],
+    ["referrerWallet", "referrerWallet"],
+    ["payoutWallet", "payoutWallet"],
+  ] as const) {
+    if (receipt[receiptField] !== provider[providerField]) {
+      blockers.push(
+        `mcp_gateway_evidence getReceipt ${receiptField} does not match ${providerLabel}`,
+      );
+    }
+  }
 }
 
 function verifyReceiptEconomics(
