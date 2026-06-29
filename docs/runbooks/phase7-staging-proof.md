@@ -22,7 +22,7 @@ corepack pnpm phase7:hosted:preflight --evidence-env-file phase7-staging-evidenc
 corepack pnpm phase7:staging:collect-reads --evidence-env-file phase7-staging-evidence/phase7-staging.env
 corepack pnpm phase7:staging:collect-mcp-gateway --evidence-env-file phase7-staging-evidence/phase7-staging.env
 corepack pnpm demo:mcp-gateway:smoke
-corepack pnpm phase7:staging:commands-template > phase7-staging-evidence/commands.log
+corepack pnpm phase7:staging:commands-template phase7-staging-evidence/commands.log
 corepack pnpm demo:mcp-bundle phase7-staging-evidence/mcp-bundle.json
 corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log
 corepack pnpm phase7:staging:derive-receipt-verification --evidence-env-file phase7-staging-evidence/phase7-staging.env

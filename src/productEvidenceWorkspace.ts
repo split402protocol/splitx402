@@ -132,7 +132,7 @@ function createNextCommands(input: {
   const phase7EnvOption = `--evidence-env-file ${phase7EnvFile}`;
   return [
     `Fill ${phase7EnvFile} with hosted staging values.`,
-    `Review generated ${phase6EnvFile} before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template ${input.directory} > ${phase6EnvFile}`,
+    `Review generated ${phase6EnvFile} before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template ${input.directory} ${phase6EnvFile}`,
     `Generate Phase 6 custody records at the paths listed in ${phase6EnvFile}.`,
     `Fill ${input.directory}/${input.phase6EvidenceFileName} with generated Phase 6 custody records.`,
     `corepack pnpm product:launch-preflight --brief ${input.directory}`,
@@ -142,7 +142,7 @@ function createNextCommands(input: {
     `corepack pnpm phase7:staging:collect-reads ${phase7EnvOption}`,
     `SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 corepack pnpm phase7:staging:collect-mcp-gateway ${phase7EnvOption}`,
     "corepack pnpm demo:mcp-gateway:smoke",
-    `corepack pnpm phase7:staging:commands-template > ${input.directory}/phase7-staging-evidence/commands.log`,
+    `corepack pnpm phase7:staging:commands-template ${input.directory}/phase7-staging-evidence/commands.log`,
     `corepack pnpm demo:mcp-bundle ${input.directory}/phase7-staging-evidence/mcp-bundle.json`,
     `corepack pnpm demo:paid-suite > ${input.directory}/phase7-staging-evidence/paid-suite.log`,
     `corepack pnpm phase7:staging:derive-receipt-verification ${phase7EnvOption}`,

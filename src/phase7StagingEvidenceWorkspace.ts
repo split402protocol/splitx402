@@ -196,7 +196,7 @@ function createReadmeText(input: {
     "# Fill SPLIT402_MCP_* hosted proof variables and use a funded buyer key.",
     `SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 corepack pnpm phase7:staging:collect-mcp-gateway ${envOption}`,
     "corepack pnpm demo:mcp-gateway:smoke",
-    `corepack pnpm phase7:staging:commands-template > ${input.directory}/commands.log`,
+    `corepack pnpm phase7:staging:commands-template ${input.directory}/commands.log`,
     `corepack pnpm demo:mcp-bundle ${input.directory}/mcp-bundle.json`,
     `corepack pnpm demo:paid-suite > ${input.directory}/paid-suite.log`,
     `corepack pnpm phase7:staging:derive-receipt-verification ${envOption}`,

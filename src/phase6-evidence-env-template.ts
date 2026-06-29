@@ -1,12 +1,14 @@
 import { pathToFileURL } from "node:url";
 
+import { writeCliTextOutput } from "./cliOutput.js";
 import { createPhase6EvidenceAssemblyEnvTemplate } from "./phase6EvidenceAssemblyEnv.js";
 
 export const PHASE6_EVIDENCE_ENV_TEMPLATE_USAGE =
-  "Usage: corepack pnpm phase6:evidence:env-template [evidence-directory]";
+  "Usage: corepack pnpm phase6:evidence:env-template [evidence-directory] [phase6-evidence.env]";
 
 export interface Phase6EvidenceEnvTemplateCliArgs {
   directory?: string;
+  outputPath?: string;
   help: boolean;
 }
 
@@ -15,14 +17,17 @@ if (isMainModule()) {
 }
 
 function main(): void {
-  const { directory, help } = parseArgs();
+  const { directory, outputPath, help } = parseArgs();
 
   if (help) {
     console.log(PHASE6_EVIDENCE_ENV_TEMPLATE_USAGE);
     process.exit(0);
   }
 
-  console.log(createPhase6EvidenceAssemblyEnvTemplate({ directory }));
+  writeCliTextOutput({
+    text: createPhase6EvidenceAssemblyEnvTemplate({ directory }),
+    outputPath,
+  });
 }
 
 export function parsePhase6EvidenceEnvTemplateCliArgs(
@@ -39,7 +44,7 @@ export function parsePhase6EvidenceEnvTemplateCliArgs(
   }
 
   const positionalArgs = args.filter((arg) => arg !== "--help" && arg !== "-h");
-  if (positionalArgs.length > 1) {
+  if (positionalArgs.length > 2) {
     throw new Error(PHASE6_EVIDENCE_ENV_TEMPLATE_USAGE);
   }
 
@@ -47,6 +52,9 @@ export function parsePhase6EvidenceEnvTemplateCliArgs(
     ...(help || positionalArgs[0] === undefined
       ? {}
       : { directory: positionalArgs[0] }),
+    ...(help || positionalArgs[1] === undefined
+      ? {}
+      : { outputPath: positionalArgs[1] }),
     help,
   };
 }

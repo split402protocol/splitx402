@@ -6,6 +6,7 @@ import {
   type Phase6CustodyEvidenceBundleValues,
 } from "./phase6CustodyBundle.js";
 import { PHASE6_CUSTODY_REQUIRED_FIELDS } from "./phase6CustodyReview.js";
+import { writeCliTextOutput } from "./cliOutput.js";
 
 const values: Phase6CustodyEvidenceBundleValues = {};
 
@@ -19,7 +20,10 @@ for (const field of PHASE6_CUSTODY_REQUIRED_FIELDS) {
 values.review_date ??= isoDate();
 values.source_commit ??= readCurrentGitCommit();
 
-console.log(createPhase6CustodyEvidenceBundle(values));
+writeCliTextOutput({
+  text: createPhase6CustodyEvidenceBundle(values),
+  outputPath: process.argv[2],
+});
 
 function readCurrentGitCommit(): string {
   return execFileSync("git", ["rev-parse", "HEAD"], {

@@ -22,7 +22,7 @@ describe("Phase 6 evidence status", () => {
       "corepack pnpm phase6:evidence:assemble",
     );
     expect(report.commands.map((item) => item.command)).toContain(
-      "corepack pnpm phase6:evidence:env-template split402-launch-evidence > split402-launch-evidence/phase6-evidence.env",
+      "corepack pnpm phase6:evidence:env-template split402-launch-evidence split402-launch-evidence/phase6-evidence.env",
     );
     expect(report.commands.map((item) => item.command)).toContain(
       "corepack pnpm phase6:network-policy",
@@ -43,7 +43,7 @@ describe("Phase 6 evidence status", () => {
       "Generate a bundle scaffold with corepack pnpm phase6:evidence:bundle.",
     );
     expect(report.nextActions).toContain(
-      "Review generated split402-launch-evidence/phase6-evidence.env before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template split402-launch-evidence > split402-launch-evidence/phase6-evidence.env.",
+      "Review generated split402-launch-evidence/phase6-evidence.env before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template split402-launch-evidence split402-launch-evidence/phase6-evidence.env.",
     );
   });
 

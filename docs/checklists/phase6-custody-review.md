@@ -33,9 +33,9 @@ Copy [`docs/templates/phase6-custody-evidence.txt`](../templates/phase6-custody-
 and fill every field. Then run:
 
 ```bash
-corepack pnpm phase6:evidence:bundle > phase6-custody-evidence.txt
+corepack pnpm phase6:evidence:bundle phase6-custody-evidence.txt
 # Review split402-launch-evidence/phase6-evidence.env first; regenerate only if missing:
-corepack pnpm phase6:evidence:env-template split402-launch-evidence > split402-launch-evidence/phase6-evidence.env
+corepack pnpm phase6:evidence:env-template split402-launch-evidence split402-launch-evidence/phase6-evidence.env
 corepack pnpm phase6:evidence:assemble --evidence-env-file split402-launch-evidence/phase6-evidence.env split402-launch-evidence/phase6-custody-evidence.txt
 corepack pnpm phase6:evidence:status split402-launch-evidence/phase6-custody-evidence.txt
 corepack pnpm phase6:custody:check split402-launch-evidence/phase6-custody-evidence.txt
@@ -47,7 +47,7 @@ attachment-path helper. `product:evidence:init` creates the default
 `phase6-evidence.env`; review it before editing. Pass the launch evidence
 directory to `phase6:evidence:env-template` when using a non-default workspace,
 for example
-`corepack pnpm phase6:evidence:env-template evidence/launch > evidence/launch/phase6-evidence.env`.
+`corepack pnpm phase6:evidence:env-template evidence/launch evidence/launch/phase6-evidence.env`.
 Use `phase6:evidence:assemble` after generated evidence record files exist and
 the required environment values are set. The validator fails while any required
 field is empty, placeholder-like, uses a mutable image tag instead of a
