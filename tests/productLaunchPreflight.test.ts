@@ -143,6 +143,15 @@ describe("Split402 launch preflight", () => {
     expect(report.nextActions).toContain(
       "Fill SPLIT402_PHASE6_EVIDENCE_REVIEW_ID in split402-launch-evidence/phase6-evidence.env.",
     );
+    expect(report.nextActions).toContain(
+      "Fill SPLIT402_PHASE7_PROOF_ID in split402-launch-evidence/phase7-staging.env.",
+    );
+    expect(report.nextActions).toContain(
+      "Fill SPLIT402_PHASE7_STAGING_ENVIRONMENT in split402-launch-evidence/phase7-staging.env.",
+    );
+    expect(report.nextActions).toContain(
+      "Fill SPLIT402_PHASE7_WEBHOOK_RECEIVER_URL in split402-launch-evidence/phase7-staging.env.",
+    );
     expect(report.nextActions).not.toContain(
       "Set SPLIT402_PHASE6_ASSEMBLE_IMAGE_PROVENANCE_RECORD=split402-launch-evidence/phase6-image-provenance.txt",
     );
@@ -157,9 +166,13 @@ describe("Split402 launch preflight", () => {
     const files = createWorkspaceFileMap(
       [
         workspace.phase7.envText,
+        "SPLIT402_PHASE7_PROOF_ID=phase7-staging-2026-06-29",
+        "SPLIT402_PHASE7_PROOF_REVIEWERS=Split402 operators",
+        "SPLIT402_PHASE7_STAGING_ENVIRONMENT=hosted-devnet-public-alpha",
         "SPLIT402_PHASE7_CONTROL_PLANE_URL=https://control.staging.example",
         "SPLIT402_PHASE7_DASHBOARD_URL=https://dashboard.staging.example",
         "SPLIT402_PHASE7_DEMO_MERCHANT_URL=https://merchant.staging.example",
+        "SPLIT402_PHASE7_WEBHOOK_RECEIVER_URL=https://webhook.staging.example",
         "SPLIT402_PHASE7_CONTROL_PLANE_TOKEN=merchant-session-token",
         "SPLIT402_PHASE7_MERCHANT_ID=mrc_123",
         "SPLIT402_PHASE7_REFERRER_WALLET=referrer-wallet",
@@ -220,9 +233,13 @@ describe("Split402 launch preflight", () => {
     const files = createWorkspaceFileMap(
       [
         workspace.phase7.envText,
+        "SPLIT402_PHASE7_PROOF_ID=phase7-staging-2026-06-29",
+        "SPLIT402_PHASE7_PROOF_REVIEWERS=Split402 operators",
+        "SPLIT402_PHASE7_STAGING_ENVIRONMENT=hosted-devnet-public-alpha",
         "SPLIT402_PHASE7_CONTROL_PLANE_URL=https://control.staging.example",
         "SPLIT402_PHASE7_DASHBOARD_URL=https://dashboard.staging.example",
         "SPLIT402_PHASE7_DEMO_MERCHANT_URL=https://merchant.staging.example",
+        "SPLIT402_PHASE7_WEBHOOK_RECEIVER_URL=https://webhook.staging.example",
         "SPLIT402_PHASE7_CONTROL_PLANE_TOKEN=merchant-session-token",
         "SPLIT402_PHASE7_MERCHANT_ID=mrc_123",
         "SPLIT402_PHASE7_REFERRER_WALLET=referrer-wallet",
@@ -264,9 +281,13 @@ describe("Split402 launch preflight", () => {
     const files = createWorkspaceFileMap(
       [
         workspace.phase7.envText,
+        "SPLIT402_PHASE7_PROOF_ID=phase7-staging-2026-06-29",
+        "SPLIT402_PHASE7_PROOF_REVIEWERS=Split402 operators",
+        "SPLIT402_PHASE7_STAGING_ENVIRONMENT=hosted-devnet-public-alpha",
         "SPLIT402_PHASE7_CONTROL_PLANE_URL=https://control.staging.example",
         "SPLIT402_PHASE7_DASHBOARD_URL=https://dashboard.staging.example",
         "SPLIT402_PHASE7_DEMO_MERCHANT_URL=https://merchant.staging.example",
+        "SPLIT402_PHASE7_WEBHOOK_RECEIVER_URL=https://webhook.staging.example",
         "SPLIT402_PHASE7_CONTROL_PLANE_TOKEN=merchant-session-token",
         "SPLIT402_PHASE7_MERCHANT_ID=mrc_123",
         "SPLIT402_PHASE7_REFERRER_WALLET=referrer-wallet",
@@ -304,9 +325,13 @@ describe("Split402 launch preflight", () => {
     const files = createWorkspaceFileMap(
       [
         workspace.phase7.envText,
+        "SPLIT402_PHASE7_PROOF_ID=phase7-staging-2026-06-29",
+        "SPLIT402_PHASE7_PROOF_REVIEWERS=Split402 operators",
+        "SPLIT402_PHASE7_STAGING_ENVIRONMENT=hosted-devnet-public-alpha",
         "SPLIT402_PHASE7_CONTROL_PLANE_URL=https://control.staging.example",
         "SPLIT402_PHASE7_DASHBOARD_URL=https://dashboard.staging.example",
         "SPLIT402_PHASE7_DEMO_MERCHANT_URL=https://merchant.staging.example",
+        "SPLIT402_PHASE7_WEBHOOK_RECEIVER_URL=https://webhook.staging.example",
         "SPLIT402_PHASE7_CONTROL_PLANE_TOKEN=merchant-session-token",
         "SPLIT402_PHASE7_MERCHANT_ID=mrc_123",
         "SPLIT402_PHASE7_REFERRER_WALLET=referrer-wallet",
@@ -350,9 +375,13 @@ describe("Split402 launch preflight", () => {
     const files = createWorkspaceFileMap(
       [
         workspace.phase7.envText,
+        "SPLIT402_PHASE7_PROOF_ID=phase7-staging-2026-06-29",
+        "SPLIT402_PHASE7_PROOF_REVIEWERS=Split402 operators",
+        "SPLIT402_PHASE7_STAGING_ENVIRONMENT=hosted-devnet-public-alpha",
         "SPLIT402_PHASE7_CONTROL_PLANE_URL=not-a-url",
         "SPLIT402_PHASE7_DASHBOARD_URL=ftp://dashboard.staging.example",
         "SPLIT402_PHASE7_DEMO_MERCHANT_URL=https://merchant.staging.example",
+        "SPLIT402_PHASE7_WEBHOOK_RECEIVER_URL=webhook.staging.example",
         "SPLIT402_PHASE7_CONTROL_PLANE_TOKEN=merchant-session-token",
         "SPLIT402_PHASE7_MERCHANT_ID=mrc_123",
         "SPLIT402_PHASE7_REFERRER_WALLET=referrer-wallet",
@@ -380,6 +409,7 @@ describe("Split402 launch preflight", () => {
       details: expect.arrayContaining([
         "Set SPLIT402_PHASE7_CONTROL_PLANE_URL to an http(s) URL in split402-launch-evidence/phase7-staging.env.",
         "Set SPLIT402_PHASE7_DASHBOARD_URL to an http(s) URL in split402-launch-evidence/phase7-staging.env.",
+        "Set SPLIT402_PHASE7_WEBHOOK_RECEIVER_URL to an http(s) URL in split402-launch-evidence/phase7-staging.env.",
       ]),
     });
     expect(
@@ -404,9 +434,13 @@ describe("Split402 launch preflight", () => {
     const files = createWorkspaceFileMap(
       [
         workspace.phase7.envText,
+        "SPLIT402_PHASE7_PROOF_ID=phase7-staging-2026-06-29",
+        "SPLIT402_PHASE7_PROOF_REVIEWERS=Split402 operators",
+        "SPLIT402_PHASE7_STAGING_ENVIRONMENT=hosted-devnet-public-alpha",
         "SPLIT402_PHASE7_CONTROL_PLANE_URL=https://control.staging.example",
         "SPLIT402_PHASE7_DASHBOARD_URL=https://dashboard.staging.example",
         "SPLIT402_PHASE7_DEMO_MERCHANT_URL=https://merchant.staging.example",
+        "SPLIT402_PHASE7_WEBHOOK_RECEIVER_URL=https://webhook.staging.example",
         "SPLIT402_PHASE7_CONTROL_PLANE_TOKEN=merchant-session-token",
         "SPLIT402_PHASE7_MERCHANT_ID=mrc_123",
         "SPLIT402_PHASE7_REFERRER_WALLET=referrer-wallet",

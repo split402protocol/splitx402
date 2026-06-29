@@ -357,10 +357,11 @@ evidence collection, and rerun with `--force` only when intentionally replacing
 local scaffold content.
 `product:launch-preflight --brief --workspace split402-launch-evidence` checks
 whether the local launch workspace, scaffold `source_commit` values, Phase 6
-custody evidence env paths, and required Phase 7 hosted proof environment values
-are ready before collection starts. It also verifies that MCP live execution
-uses valid http(s) URLs and the same hosted control-plane URL and token as the
-Phase 7 proof.
+custody evidence env paths, and required Phase 7 hosted proof identity,
+environment, webhook, and collector values are ready before collection starts.
+It also verifies that hosted proof and MCP live execution URLs are valid
+http(s) URLs and that MCP live execution uses the same hosted control-plane URL
+and token as the Phase 7 proof.
 `product:launch-checklist --brief` prints the exact remaining local
 validation, hosted proof, custody evidence, and combined status commands; pass
 `--workspace split402-launch-evidence` or the Phase 6 and Phase 7 evidence paths
