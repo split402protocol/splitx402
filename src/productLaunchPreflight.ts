@@ -1,5 +1,7 @@
 import { join } from "node:path";
 
+import dotenv from "dotenv";
+
 import { toDisplayPath } from "./displayPath.js";
 import { createPhase6EvidenceAssemblyEnvMappings } from "./phase6EvidenceAssemblyEnv.js";
 import { createSplit402ProductEvidenceWorkspace } from "./productEvidenceWorkspace.js";
@@ -532,22 +534,7 @@ function createLaunchWorkspaceMissingDetails(input: {
 }
 
 function parseEnvText(text: string): Map<string, string> {
-  const env = new Map<string, string>();
-  for (const line of text.split(/\r?\n/u)) {
-    const trimmed = line.trim();
-    if (trimmed.length === 0 || trimmed.startsWith("#")) {
-      continue;
-    }
-    const separatorIndex = trimmed.indexOf("=");
-    if (separatorIndex <= 0) {
-      continue;
-    }
-    env.set(
-      trimmed.slice(0, separatorIndex).trim(),
-      trimmed.slice(separatorIndex + 1).trim(),
-    );
-  }
-  return env;
+  return new Map(Object.entries(dotenv.parse(text)));
 }
 
 function createSourceCommitBlockers(input: {

@@ -78,6 +78,12 @@ describe("Split402 product evidence workspace", () => {
     expect(workspace.readmeText).toContain(
       "commands_run` checker accepts PowerShell prompt lines",
     );
+    expect(workspace.readmeText).toContain(
+      "dotenv-style parsing",
+    );
+    expect(workspace.readmeText).toContain(
+      "quoted values are handled consistently",
+    );
     expect(workspace.nextCommands.slice(0, 3)).toEqual([
       "corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json",
       "corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence",

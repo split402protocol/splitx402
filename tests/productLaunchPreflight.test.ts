@@ -272,6 +272,55 @@ describe("Split402 launch preflight", () => {
     );
   });
 
+  it("accepts quoted env values consistently with the evidence collectors", () => {
+    const workspace = createSplit402ProductEvidenceWorkspace({
+      sourceCommit: "abc1234",
+    });
+    const files = createWorkspaceFileMap(
+      [
+        workspace.phase7.envText,
+        'SPLIT402_PHASE7_PROOF_ID="phase7-staging-2026-06-29"',
+        'SPLIT402_PHASE7_PROOF_REVIEWERS="Split402 operators"',
+        "SPLIT402_PHASE7_STAGING_ENVIRONMENT='hosted-devnet-public-alpha'",
+        'SPLIT402_PHASE7_CONTROL_PLANE_URL="https://control.staging.example" # hosted API',
+        'SPLIT402_PHASE7_DASHBOARD_URL="https://dashboard.staging.example"',
+        "SPLIT402_PHASE7_DEMO_MERCHANT_URL='https://merchant.staging.example'",
+        "SPLIT402_PHASE7_WEBHOOK_RECEIVER_URL='https://webhook.staging.example'",
+        'SPLIT402_PHASE7_CONTROL_PLANE_TOKEN="merchant-session-token"',
+        "SPLIT402_PHASE7_MERCHANT_ID='mrc_123'",
+        "SPLIT402_PHASE7_REFERRER_WALLET='referrer-wallet'",
+        'SPLIT402_MCP_CONTROL_PLANE_URL="https://control.staging.example"',
+        'SPLIT402_MCP_CONTROL_PLANE_TOKEN="merchant-session-token"',
+        'SPLIT402_MCP_CAPABILITY="solana.wallet-risk"',
+        "SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE='1'",
+        'SPLIT402_MCP_SVM_PRIVATE_KEY="funded-devnet-buyer-key"',
+      ].join("\n"),
+      quotePhase6DirectEnvValues(
+        createFilledPhase6EnvText(workspace.phase6EnvText),
+      ),
+      workspace,
+    );
+
+    const report = createSplit402LaunchPreflightReport({
+      currentSourceCommit: "abc1234",
+      exists: (path) => files.has(path),
+      readText: (path) => files.get(path) ?? "",
+    });
+
+    expect(report.readyToCollectEvidence).toBe(true);
+    expect(
+      report.checks.find((check) => check.id === "phase7_hosted_env_values"),
+    ).toMatchObject({ ok: true });
+    expect(
+      report.checks.find(
+        (check) => check.id === "phase7_mcp_matches_hosted_env",
+      ),
+    ).toMatchObject({ ok: true });
+    expect(
+      report.checks.find((check) => check.id === "phase6_evidence_env_values"),
+    ).toMatchObject({ ok: true });
+  });
+
   it("rejects approval decisions before launch evidence collection", () => {
     const workspace = createSplit402ProductEvidenceWorkspace({
       sourceCommit: "abc1234",
@@ -710,5 +759,41 @@ function createFilledPhase6EnvText(template: string): string {
     .replace(
       "SPLIT402_PHASE6_EVIDENCE_FUNDING_WALLET=<merchant-funding-wallet>",
       "SPLIT402_PHASE6_EVIDENCE_FUNDING_WALLET=merchant-funding-wallet",
+    );
+}
+
+function quotePhase6DirectEnvValues(text: string): string {
+  return text
+    .replace(
+      "SPLIT402_PHASE6_EVIDENCE_REVIEW_ID=phase6-custody-2026-06-29",
+      'SPLIT402_PHASE6_EVIDENCE_REVIEW_ID="phase6-custody-2026-06-29"',
+    )
+    .replace(
+      "SPLIT402_PHASE6_EVIDENCE_REVIEW_DATE=2026-06-29",
+      'SPLIT402_PHASE6_EVIDENCE_REVIEW_DATE="2026-06-29"',
+    )
+    .replace(
+      "SPLIT402_PHASE6_EVIDENCE_REVIEWERS=Split402 security, operations, protocol",
+      'SPLIT402_PHASE6_EVIDENCE_REVIEWERS="Split402 security, operations, protocol"',
+    )
+    .replace(
+      "SPLIT402_PHASE6_EVIDENCE_STAGING_ENVIRONMENT=hosted-devnet-public-alpha",
+      "SPLIT402_PHASE6_EVIDENCE_STAGING_ENVIRONMENT='hosted-devnet-public-alpha'",
+    )
+    .replace(
+      "SPLIT402_PHASE6_EVIDENCE_FUNDING_WALLET=merchant-funding-wallet",
+      'SPLIT402_PHASE6_EVIDENCE_FUNDING_WALLET="merchant-funding-wallet"',
+    )
+    .replace(
+      "SPLIT402_PHASE6_EVIDENCE_NETWORK=solana:devnet",
+      "SPLIT402_PHASE6_EVIDENCE_NETWORK='solana:devnet'",
+    )
+    .replace(
+      "SPLIT402_PHASE6_EVIDENCE_APPROVAL_NOTES=human approval pending",
+      'SPLIT402_PHASE6_EVIDENCE_APPROVAL_NOTES="human approval pending"',
+    )
+    .replace(
+      "SPLIT402_PHASE6_EVIDENCE_APPROVAL_DECISION=no-go",
+      'SPLIT402_PHASE6_EVIDENCE_APPROVAL_DECISION="no-go"',
     );
 }
