@@ -78,12 +78,11 @@ describe("Split402 product evidence workspace", () => {
     expect(workspace.readmeText).toContain(
       "commands_run` checker accepts PowerShell prompt lines",
     );
-    expect(workspace.nextCommands).toContain(
-      "corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence",
-    );
-    expect(workspace.nextCommands).toContain(
+    expect(workspace.nextCommands.slice(0, 3)).toEqual([
       "corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json",
-    );
+      "corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence",
+      "Fill split402-launch-evidence/phase7-staging.env with hosted staging values reported by launch preflight.",
+    ]);
     expect(workspace.nextCommands).toContain(
       "corepack pnpm phase7:staging:collect-reads --evidence-env-file split402-launch-evidence/phase7-staging.env",
     );

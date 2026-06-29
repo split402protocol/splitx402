@@ -136,13 +136,14 @@ function createNextCommands(input: {
   const phase6EnvFile = `${input.directory}/${input.phase6EnvFileName}`;
   const phase7EnvFile = `${input.directory}/${input.phase7EnvFileName}`;
   const phase7EnvOption = `--evidence-env-file ${phase7EnvFile}`;
+  const launchPreflightCommand = `corepack pnpm product:launch-preflight --brief --workspace ${input.directory}`;
   return [
-    `Fill ${phase7EnvFile} with hosted staging values.`,
     `corepack pnpm product:local-proof --brief --output ${input.directory}/${input.localProofFileName}`,
+    launchPreflightCommand,
+    `Fill ${phase7EnvFile} with hosted staging values reported by launch preflight.`,
     `Review generated ${phase6EnvFile} before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template ${input.directory} ${phase6EnvFile}`,
     `Generate Phase 6 custody records at the paths listed in ${phase6EnvFile}.`,
     `Fill ${input.directory}/${input.phase6EvidenceFileName} with generated Phase 6 custody records.`,
-    `corepack pnpm product:launch-preflight --brief --workspace ${input.directory}`,
     "SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",
     `Review ${input.directory}/${input.phase7ProofFileName} and fill direct hosted proof fields.`,
     `corepack pnpm phase7:hosted:preflight ${phase7EnvOption}`,
