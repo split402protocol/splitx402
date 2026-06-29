@@ -64,6 +64,7 @@ export function createSplit402LaunchPreflightReport(
     join(workspace.phase7.directory, workspace.phase7.readmeFileName),
   ];
   const missingRequiredFiles = requiredFiles.filter((path) => !input.exists(path));
+  const existingRequiredFiles = requiredFiles.filter((path) => input.exists(path));
   const phase7EnvPath = join(workspace.directory, workspace.phase7EnvFileName);
   const phase7EnvText = input.exists(phase7EnvPath)
     ? input.readText(phase7EnvPath)
@@ -118,10 +119,10 @@ export function createSplit402LaunchPreflightReport(
       details:
         missingRequiredFiles.length === 0
           ? ["Launch evidence workspace scaffold is present."]
-          : [
-              "Run corepack pnpm product:evidence:init.",
-              ...missingRequiredFiles.map((path) => `Missing ${path}`),
-            ],
+          : createLaunchWorkspaceMissingDetails({
+              missingRequiredFiles,
+              existingRequiredFiles,
+            }),
     },
     {
       id: "phase6_evidence_env_values",
@@ -234,7 +235,7 @@ function createNextActions(checks: readonly Split402LaunchPreflightCheck[]): str
   );
   if (missingWorkspaceCheck !== undefined) {
     return missingWorkspaceCheck.details.filter((detail) =>
-      detail.startsWith("Run "),
+      detail.startsWith("Run ") || detail.startsWith("Review "),
     );
   }
 
@@ -247,6 +248,22 @@ function createNextActions(checks: readonly Split402LaunchPreflightCheck[]): str
         detail.startsWith("Fill ") ||
         detail.startsWith("Set "),
     );
+}
+
+function createLaunchWorkspaceMissingDetails(input: {
+  missingRequiredFiles: readonly string[];
+  existingRequiredFiles: readonly string[];
+}): string[] {
+  const recoveryAction =
+    input.existingRequiredFiles.length === 0
+      ? "Run corepack pnpm product:evidence:init."
+      : "Review or move the existing partial launch evidence workspace, then run corepack pnpm product:evidence:init --force only if intentionally replacing scaffold files.";
+
+  return [
+    recoveryAction,
+    ...input.missingRequiredFiles.map((path) => `Missing ${path}`),
+    ...input.existingRequiredFiles.map((path) => `Existing ${path}`),
+  ];
 }
 
 function parseEnvText(text: string): Map<string, string> {

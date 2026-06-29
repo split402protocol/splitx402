@@ -36,6 +36,27 @@ describe("Split402 launch preflight", () => {
     );
   });
 
+  it("guides operators safely when the launch evidence workspace is partial", () => {
+    const report = createSplit402LaunchPreflightReport({
+      exists: (path) =>
+        path === join("split402-launch-evidence", "phase7-staging-proof.txt"),
+      readText: () => "",
+    });
+
+    expect(report.readyToCollectEvidence).toBe(false);
+    expect(report.nextActions).toEqual([
+      "Review or move the existing partial launch evidence workspace, then run corepack pnpm product:evidence:init --force only if intentionally replacing scaffold files.",
+    ]);
+    expect(report.checks.find((check) => check.id === "launch_workspace_files"))
+      .toMatchObject({
+        ok: false,
+        details: expect.arrayContaining([
+          "Missing split402-launch-evidence\\README.md",
+          "Existing split402-launch-evidence\\phase7-staging-proof.txt",
+        ]),
+      });
+  });
+
   it("recognizes scaffold files but requires Phase 6 and hosted Phase 7 env values", () => {
     const workspace = createSplit402ProductEvidenceWorkspace();
     const files = createWorkspaceFileMap(workspace.phase7.envText);
