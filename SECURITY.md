@@ -2,6 +2,12 @@
 
 Split402 is not ready for production or mainnet use.
 
+This public repository contains the open protocol foundation and public-alpha
+reference implementation. Production hosted services, commercial router
+operations, real custody evidence, private endpoints, provider credentials, and
+live transaction bytes must remain outside the public repository unless an
+artifact is intentionally sanitized for public release.
+
 ## Supported Versions
 
 No released versions are currently supported. Treat all code and documentation as
@@ -37,3 +43,10 @@ The first implementation must protect:
 - custom x402 schemes or custom facilitators;
 - atomic split settlement and `$SPLIT` route bonding;
 - unaudited on-chain programs.
+
+## Public/Private Boundary
+
+See [docs/PUBLIC_PRIVATE_BOUNDARY.md](docs/PUBLIC_PRIVATE_BOUNDARY.md) before
+adding deployment, custody, provider, dashboard, staging, or commercial
+operations material. When in doubt, keep operational details private and publish
+only the minimum sanitized protocol evidence needed for external trust.

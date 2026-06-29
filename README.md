@@ -6,6 +6,7 @@
 ![Status](https://img.shields.io/badge/status-public_alpha-orange)
 ![Runtime](https://img.shields.io/badge/node-%3E%3D22-339933)
 ![Protocol](https://img.shields.io/badge/x402-USDC-blue)
+![License](https://img.shields.io/badge/license-Apache--2.0-blue)
 
 > Referral, attribution, commission accounting, and payout infrastructure for
 > x402-paid APIs and agent tools.
@@ -31,6 +32,12 @@ Split402 is the protocol and product name. This repository,
 `split402protocol/splitx402`, is the canonical public implementation repository.
 The canonical protocol scope is captured in the
 [Split402 protocol architecture v0.1 spec](docs/reference/split402_protocol_architecture_v0.1.md).
+
+This public repository is the open protocol foundation, not the full production
+business machine. Production router operations, hosted control-plane
+configuration, commercial provider registries, payout custody operations, and
+real staging/mainnet evidence belong in private Split402 infrastructure. See
+[Public and private boundary](docs/PUBLIC_PRIVATE_BOUNDARY.md).
 
 ## Protocol In One Picture
 
@@ -670,6 +677,7 @@ assembled and approved.
 
 - [Canonical architecture spec](docs/reference/split402_protocol_architecture_v0.1.md)
 - [Current state](docs/CURRENT_STATE.md)
+- [Public and private boundary](docs/PUBLIC_PRIVATE_BOUNDARY.md)
 - [Architecture alignment note](docs/SPLIT402_ARCHITECTURE.md)
 - [Phase 6 custody review checklist](docs/checklists/phase6-custody-review.md)
 - [Phase 6 custody evidence template](docs/templates/phase6-custody-evidence.txt)
@@ -703,4 +711,12 @@ assembled and approved.
 - [Phase 7 staging proof runbook](docs/runbooks/phase7-staging-proof.md)
 - [Phase 7 staging proof template](docs/templates/phase7-staging-proof.txt)
 - [Architecture baseline decision](docs/decisions/0003-adopt-split402-architecture-baseline.md)
+- [Public/private and license decision](docs/decisions/0009-public-private-boundary-and-apache-license.md)
 - [Security policy](SECURITY.md)
+
+## License
+
+This public repository is licensed under
+[Apache-2.0](LICENSE). Private Split402 hosted services, commercial operations,
+production deployment configuration, custody tooling, provider registries, and
+non-public evidence are not automatically licensed by this repository.

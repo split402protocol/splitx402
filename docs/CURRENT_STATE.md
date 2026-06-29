@@ -3,6 +3,12 @@
 Split402 is a public-alpha implementation of referral attribution and commission
 accounting for x402-paid APIs.
 
+The public repository is now scoped as the open protocol foundation under
+Apache-2.0. Production hosted services, commercial router operations, private
+provider registries, custody evidence from real environments, and mainnet
+deployment details belong outside this public repository unless explicitly
+sanitized for release. See [Public and private boundary](PUBLIC_PRIVATE_BOUNDARY.md).
+
 In simple words: an agent pays a merchant through normal x402 USDC settlement and
 attaches a signed Split402 referral claim. The merchant still receives the gross
 x402 payment. Split402 records the referral commission as an auditable payable,
@@ -56,6 +62,9 @@ flowchart LR
 
 - The original x402 payment is not atomically split onchain in the MVP.
 - `$SPLIT` route bonding is not in the critical path yet.
+- The full production business machine is not public: hosted operations,
+  commercial provider strategy, custody evidence, private URLs, and live
+  deployment configuration belong in private Split402 infrastructure.
 - The dashboard UI is a public-alpha operations surface with a hosted-staging
   viewer gate and expiring sessions, not a production mainnet dashboard service
   yet.
