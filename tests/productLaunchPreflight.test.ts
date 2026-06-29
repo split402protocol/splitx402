@@ -144,6 +144,12 @@ describe("Split402 launch preflight", () => {
       "Fill SPLIT402_PHASE6_EVIDENCE_REVIEW_ID in split402-launch-evidence/phase6-evidence.env.",
     );
     expect(report.nextActions).toContain(
+      "Fill SPLIT402_PHASE6_EVIDENCE_FUNDING_WALLET in split402-launch-evidence/phase6-evidence.env.",
+    );
+    expect(report.nextActions).toContain(
+      "Fill SPLIT402_PHASE6_EVIDENCE_APPROVAL_NOTES in split402-launch-evidence/phase6-evidence.env.",
+    );
+    expect(report.nextActions).toContain(
       "Fill SPLIT402_PHASE7_PROOF_ID in split402-launch-evidence/phase7-staging.env.",
     );
     expect(report.nextActions).toContain(
@@ -681,5 +687,13 @@ function createFilledPhase6EnvText(template: string): string {
     .replace(
       "SPLIT402_PHASE6_EVIDENCE_REVIEW_ID=phase6-custody-YYYY-MM-DD",
       "SPLIT402_PHASE6_EVIDENCE_REVIEW_ID=phase6-custody-2026-06-29",
+    )
+    .replace(
+      "SPLIT402_PHASE6_EVIDENCE_REVIEW_DATE=YYYY-MM-DD",
+      "SPLIT402_PHASE6_EVIDENCE_REVIEW_DATE=2026-06-29",
+    )
+    .replace(
+      "SPLIT402_PHASE6_EVIDENCE_FUNDING_WALLET=<merchant-funding-wallet>",
+      "SPLIT402_PHASE6_EVIDENCE_FUNDING_WALLET=merchant-funding-wallet",
     );
 }
