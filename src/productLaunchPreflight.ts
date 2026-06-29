@@ -28,6 +28,49 @@ export interface Split402LaunchPreflightCheck {
   details: string[];
 }
 
+export interface Split402LaunchPreflightCliArgs {
+  brief: boolean;
+  directory?: string;
+  help: boolean;
+}
+
+export const PRODUCT_LAUNCH_PREFLIGHT_USAGE =
+  "Usage: corepack pnpm product:launch-preflight [--brief] [directory]";
+
+export function parseSplit402LaunchPreflightCliArgs(
+  args: readonly string[],
+): Split402LaunchPreflightCliArgs {
+  const help = args.includes("--help") || args.includes("-h");
+  const brief = args.includes("--brief");
+  const unknownOptions = args.filter(
+    (arg) =>
+      arg.startsWith("-") &&
+      arg !== "--help" &&
+      arg !== "-h" &&
+      arg !== "--brief",
+  );
+  if (unknownOptions.length > 0) {
+    throw new Error(
+      `${PRODUCT_LAUNCH_PREFLIGHT_USAGE}\nUnknown option: ${unknownOptions[0]}`,
+    );
+  }
+
+  const positionalArgs = args.filter(
+    (arg) => arg !== "--help" && arg !== "-h" && arg !== "--brief",
+  );
+  if (positionalArgs.length > 1) {
+    throw new Error(PRODUCT_LAUNCH_PREFLIGHT_USAGE);
+  }
+
+  return {
+    brief,
+    ...(help || positionalArgs[0] === undefined
+      ? {}
+      : { directory: positionalArgs[0] }),
+    help,
+  };
+}
+
 const REQUIRED_PHASE7_HOSTED_ENV_KEYS = [
   "SPLIT402_PHASE7_CONTROL_PLANE_URL",
   "SPLIT402_PHASE7_DASHBOARD_URL",
