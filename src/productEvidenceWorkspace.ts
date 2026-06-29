@@ -144,7 +144,7 @@ function createNextCommands(input: {
     "corepack pnpm demo:mcp-gateway:smoke",
     `corepack pnpm phase7:staging:commands-template ${input.directory}/phase7-staging-evidence/commands.log`,
     `corepack pnpm demo:mcp-bundle ${input.directory}/phase7-staging-evidence/mcp-bundle.json`,
-    `corepack pnpm demo:paid-suite > ${input.directory}/phase7-staging-evidence/paid-suite.log`,
+    `corepack pnpm demo:paid-suite ${input.directory}/phase7-staging-evidence/paid-suite.log`,
     `corepack pnpm phase7:staging:derive-receipt-verification ${phase7EnvOption}`,
     `corepack pnpm phase7:staging:manifest ${input.directory}/${input.phase7ProofFileName} ${input.directory}/phase7-staging-evidence/artifact-manifest.json`,
     `corepack pnpm phase7:staging:assemble ${phase7EnvOption} ${input.directory}/${input.phase7ProofFileName}`,

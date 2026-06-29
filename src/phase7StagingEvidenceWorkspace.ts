@@ -198,7 +198,7 @@ function createReadmeText(input: {
     "corepack pnpm demo:mcp-gateway:smoke",
     `corepack pnpm phase7:staging:commands-template ${input.directory}/commands.log`,
     `corepack pnpm demo:mcp-bundle ${input.directory}/mcp-bundle.json`,
-    `corepack pnpm demo:paid-suite > ${input.directory}/paid-suite.log`,
+    `corepack pnpm demo:paid-suite ${input.directory}/paid-suite.log`,
     `corepack pnpm phase7:staging:derive-receipt-verification ${envOption}`,
     `corepack pnpm phase7:staging:manifest phase7-staging-proof.txt ${input.directory}/artifact-manifest.json`,
     `corepack pnpm phase7:staging:assemble ${envOption} phase7-staging-proof.txt`,

@@ -36,7 +36,7 @@ describe("Phase 7 staging proof", () => {
       "corepack pnpm demo:mcp-bundle phase7-staging-evidence/mcp-bundle.json",
     );
     expect(commands).toContain(
-      "corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log",
+      "corepack pnpm demo:paid-suite phase7-staging-evidence/paid-suite.log",
     );
     expect(commands).toContain(
       "corepack pnpm phase7:staging:derive-receipt-verification",
@@ -48,7 +48,7 @@ describe("Phase 7 staging proof", () => {
       "corepack pnpm phase7:staging:collect-mcp-gateway",
       "corepack pnpm demo:mcp-gateway:smoke",
       "corepack pnpm demo:mcp-bundle phase7-staging-evidence/mcp-bundle.json",
-      "corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log",
+      "corepack pnpm demo:paid-suite phase7-staging-evidence/paid-suite.log",
       "corepack pnpm phase7:staging:derive-receipt-verification",
       "corepack pnpm phase7:staging:manifest <phase7-staging-proof.txt> phase7-staging-evidence/artifact-manifest.json",
       "corepack pnpm phase7:staging:assemble",
@@ -255,7 +255,7 @@ approval_decision: no-go
       "Capture MCP bundle evidence with corepack pnpm demo:mcp-bundle phase7-staging-evidence/mcp-bundle.json.",
     );
     expect(report.nextActions).toContain(
-      "Capture paid-suite evidence with corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log.",
+      "Capture paid-suite evidence with corepack pnpm demo:paid-suite phase7-staging-evidence/paid-suite.log.",
     );
     expect(report.nextActions).toContain(
       "Derive receipt-verification evidence with corepack pnpm phase7:staging:derive-receipt-verification.",
@@ -2533,7 +2533,7 @@ function createValidCommandsLog(): string {
     "$ corepack pnpm phase7:staging:collect-mcp-gateway",
     "$ corepack pnpm demo:mcp-gateway:smoke",
     "$ corepack pnpm demo:mcp-bundle phase7-staging-evidence/mcp-bundle.json",
-    "$ corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log",
+    "$ corepack pnpm demo:paid-suite phase7-staging-evidence/paid-suite.log",
     "$ corepack pnpm phase7:staging:derive-receipt-verification",
     "$ corepack pnpm phase7:staging:manifest phase7-staging-proof.txt phase7-staging-evidence/artifact-manifest.json",
     "$ corepack pnpm phase7:staging:assemble phase7-staging-proof.txt",
