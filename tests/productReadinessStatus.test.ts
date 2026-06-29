@@ -32,7 +32,7 @@ describe("Split402 product readiness status", () => {
       "Create a combined launch evidence workspace with corepack pnpm product:evidence:init.",
     );
     expect(report.nextActions).toContain(
-      "Run corepack pnpm product:launch-preflight --brief split402-launch-evidence and follow its next action.",
+      "Run corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence and follow its next action.",
     );
     expect(report.nextActions).toContain(
       "Fill the generated Phase 7 and Phase 6 env files with hosted staging and custody evidence values.",

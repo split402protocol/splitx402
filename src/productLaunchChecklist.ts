@@ -88,7 +88,7 @@ function createWorkspaceSection(
       "corepack pnpm product:evidence:init --missing",
       "corepack pnpm product:evidence:init --refresh-source",
       "corepack pnpm product:evidence:init --force",
-      "corepack pnpm product:launch-preflight --brief split402-launch-evidence",
+      "corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence",
     ],
     notes: [
       "Use --missing to create absent scaffold files without overwriting existing evidence.",

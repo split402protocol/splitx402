@@ -21,16 +21,51 @@ describe("Split402 launch preflight", () => {
         directory: "evidence/launch",
         help: false,
       });
+    expect(
+      parseSplit402LaunchPreflightCliArgs([
+        "--brief",
+        "--workspace",
+        "split402-launch-evidence",
+      ]),
+    ).toEqual({
+      brief: true,
+      directory: "split402-launch-evidence",
+      help: false,
+    });
+    expect(
+      parseSplit402LaunchPreflightCliArgs([
+        "--workspace=evidence/launch",
+      ]),
+    ).toEqual({
+      brief: false,
+      directory: "evidence/launch",
+      help: false,
+    });
     expect(() =>
       parseSplit402LaunchPreflightCliArgs(["--brieff"]),
     ).toThrowErrorMatchingInlineSnapshot(`
-      [Error: Usage: corepack pnpm product:launch-preflight [--brief] [directory]
+      [Error: Usage: corepack pnpm product:launch-preflight [--brief] [--workspace directory] [directory]
       Unknown option: --brieff]
+    `);
+    expect(() =>
+      parseSplit402LaunchPreflightCliArgs(["--workspace"]),
+    ).toThrowErrorMatchingInlineSnapshot(`
+      [Error: Usage: corepack pnpm product:launch-preflight [--brief] [--workspace directory] [directory]
+      --workspace requires a directory.]
+    `);
+    expect(() =>
+      parseSplit402LaunchPreflightCliArgs([
+        "--workspace=split402-launch-evidence",
+        "other-evidence",
+      ]),
+    ).toThrowErrorMatchingInlineSnapshot(`
+      [Error: Usage: corepack pnpm product:launch-preflight [--brief] [--workspace directory] [directory]
+      Do not pass a directory path with --workspace.]
     `);
     expect(() =>
       parseSplit402LaunchPreflightCliArgs(["one", "two"]),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: Usage: corepack pnpm product:launch-preflight [--brief] [directory]]`,
+      `[Error: Usage: corepack pnpm product:launch-preflight [--brief] [--workspace directory] [directory]]`,
     );
   });
 
