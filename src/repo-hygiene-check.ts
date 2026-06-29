@@ -6,6 +6,11 @@ interface ForbiddenPattern {
   pattern: RegExp;
 }
 
+interface ForbiddenPathPattern {
+  name: string;
+  pattern: RegExp;
+}
+
 const legacySegment = String.fromCharCode(102, 102, 102, 102);
 const legacyAccountName = String.fromCharCode(
   102,
@@ -77,6 +82,33 @@ const forbiddenPatterns: ForbiddenPattern[] = [
   }
 ];
 
+const forbiddenTrackedPathPatterns: ForbiddenPathPattern[] = [
+  {
+    name: "local launch evidence workspace",
+    pattern: /^split402-launch-evidence\//u
+  },
+  {
+    name: "local Phase 7 evidence workspace",
+    pattern: /^phase7-staging-evidence\//u
+  },
+  {
+    name: "generic local evidence workspace",
+    pattern: /^evidence\//u
+  },
+  {
+    name: "raw environment file",
+    pattern: /(^|\/)\.env(?:\.|$)/u
+  },
+  {
+    name: "non-example environment file",
+    pattern: /(^|\/)[^/]+\.env$/u
+  },
+  {
+    name: "private key or credential artifact",
+    pattern: /(^|\/)[^/]+\.(?:credentials|key|keystore|p12|pem|pfx|secret|token)$/iu
+  }
+];
+
 const ignoredPathPatterns = [
   /^src\/repo-hygiene-check\.ts$/u,
   /^node_modules\//u,
@@ -84,7 +116,7 @@ const ignoredPathPatterns = [
   /^dist\//u,
   /(^|\/)dist\//u,
   /(^|\/)coverage\//u,
-  /^phase7-staging-evidence\//u
+  /(^|\/)(?:[^/]+)?\.env\.example$/u
 ];
 
 const trackedFiles = execFileSync("git", ["ls-files"], {
@@ -97,6 +129,12 @@ const trackedFiles = execFileSync("git", ["ls-files"], {
 const violations: string[] = [];
 
 for (const file of trackedFiles) {
+  for (const forbiddenPath of forbiddenTrackedPathPatterns) {
+    if (forbiddenPath.pattern.test(file)) {
+      violations.push(`${file}: ${forbiddenPath.name}`);
+    }
+  }
+
   const contents = readFileSync(file, "utf8");
   const lines = contents.split(/\r?\n/u);
   lines.forEach((line, index) => {
