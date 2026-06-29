@@ -88,31 +88,49 @@ export interface Phase6EvidenceStatusReport {
   schema: "split402.phase6_evidence_status.v1";
   readyForCustody: boolean;
   evidenceBundleChecked: boolean;
+  sourceCommitStatus: Phase6SourceCommitStatus;
   commands: typeof PHASE6_EVIDENCE_COMMANDS;
   validation?: Phase6CustodyReviewValidation;
   nextActions: string[];
 }
 
+export interface Phase6EvidenceStatusOptions {
+  currentSourceCommit?: string;
+}
+
+export interface Phase6SourceCommitStatus {
+  status: "not_checked" | "not_applicable" | "valid" | "invalid";
+  evidenceSourceCommit?: string;
+  currentSourceCommit?: string;
+  blockers: string[];
+}
+
 export function createPhase6EvidenceStatusReport(
   evidenceText?: string,
+  options: Phase6EvidenceStatusOptions = {},
 ): Phase6EvidenceStatusReport {
   const validation =
     evidenceText === undefined
       ? undefined
       : validatePhase6CustodyEvidence(evidenceText);
+  const sourceCommitStatus = createSourceCommitStatus(evidenceText, options);
+  const sourceCommitBlockers = sourceCommitStatus.blockers;
 
   return {
     schema: "split402.phase6_evidence_status.v1",
-    readyForCustody: validation?.approved ?? false,
+    readyForCustody:
+      (validation?.approved ?? false) && sourceCommitBlockers.length === 0,
     evidenceBundleChecked: validation !== undefined,
+    sourceCommitStatus,
     commands: PHASE6_EVIDENCE_COMMANDS,
     validation,
-    nextActions: createNextActions(validation),
+    nextActions: createNextActions(validation, sourceCommitBlockers),
   };
 }
 
 function createNextActions(
   validation: Phase6CustodyReviewValidation | undefined,
+  sourceCommitBlockers: readonly string[] = [],
 ): string[] {
   if (validation === undefined) {
     return [
@@ -125,7 +143,9 @@ function createNextActions(
   }
 
   if (validation.approved) {
-    return ["Evidence bundle passes machine checks; proceed to human go/no-go review."];
+    return sourceCommitBlockers.length === 0
+      ? ["Evidence bundle passes machine checks; proceed to human go/no-go review."]
+      : [...sourceCommitBlockers];
   }
 
   const actions: string[] = [];
@@ -138,5 +158,71 @@ function createNextActions(
     );
   }
   actions.push(...validation.invalidFields);
+  actions.push(...sourceCommitBlockers);
   return actions;
+}
+
+function createSourceCommitStatus(
+  evidenceText: string | undefined,
+  options: Phase6EvidenceStatusOptions,
+): Phase6SourceCommitStatus {
+  if (evidenceText === undefined) {
+    return {
+      status: "not_checked",
+      blockers: [],
+    };
+  }
+
+  const evidenceSourceCommit = readRecordField(evidenceText, "source_commit");
+  const currentSourceCommit = options.currentSourceCommit?.trim();
+  if (currentSourceCommit === undefined || currentSourceCommit.length === 0) {
+    return {
+      status: "not_applicable",
+      ...(evidenceSourceCommit === undefined ? {} : { evidenceSourceCommit }),
+      blockers: [],
+    };
+  }
+
+  const blockers: string[] = [];
+  if (evidenceSourceCommit === undefined || evidenceSourceCommit.length === 0) {
+    blockers.push("source_commit is missing");
+  } else if (!gitShasMatch(evidenceSourceCommit, currentSourceCommit)) {
+    blockers.push("source_commit does not match current checkout");
+  }
+
+  if (!/^[0-9a-f]{7,40}$/iu.test(currentSourceCommit)) {
+    blockers.push("current checkout source commit is not a git SHA");
+  }
+
+  return {
+    status: blockers.length === 0 ? "valid" : "invalid",
+    ...(evidenceSourceCommit === undefined ? {} : { evidenceSourceCommit }),
+    currentSourceCommit,
+    blockers,
+  };
+}
+
+function readRecordField(text: string, fieldName: string): string | undefined {
+  for (const line of text.split(/\r?\n/u)) {
+    const match = /^([a-z][a-z0-9_]*):\s*(.*)$/u.exec(line);
+    if (match?.[1] === fieldName) {
+      return match[2]?.trim();
+    }
+  }
+  return undefined;
+}
+
+function gitShasMatch(left: string, right: string): boolean {
+  const normalizedLeft = left.trim().toLowerCase();
+  const normalizedRight = right.trim().toLowerCase();
+  if (
+    !/^[0-9a-f]{7,40}$/u.test(normalizedLeft) ||
+    !/^[0-9a-f]{7,40}$/u.test(normalizedRight)
+  ) {
+    return false;
+  }
+  return (
+    normalizedLeft.startsWith(normalizedRight) ||
+    normalizedRight.startsWith(normalizedLeft)
+  );
 }

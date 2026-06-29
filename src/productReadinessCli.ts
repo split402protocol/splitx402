@@ -72,6 +72,7 @@ export function readSplit402ProductReadinessCliInput(
     phase7ProofPath === undefined || phase7ProofPath.trim().length === 0
       ? undefined
       : dirname(resolve(phase7ProofPath));
+  const currentSourceCommit = readCurrentGitCommit();
 
   return {
     brief,
@@ -83,9 +84,12 @@ export function readSplit402ProductReadinessCliInput(
     report: createSplit402ProductReadinessReport({
       localProofText,
       phase6EvidenceText,
+      phase6Options: {
+        currentSourceCommit,
+      },
       phase7ProofText,
       phase7Options: {
-        currentSourceCommit: readCurrentGitCommit(),
+        currentSourceCommit,
         currentWorktreeDirty: readCurrentWorktreeDirty(
           phase7ProofPath,
           phase7ProofText,
