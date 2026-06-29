@@ -15,11 +15,13 @@ Canonical sources:
 The repository now contains the protocol core, test vectors, x402 extension,
 Express adapter, demo merchant, demo agent, agent SDK, merchant SDK primitives,
 control-plane ingestion, PostgreSQL persistence, outbox workers, Solana chain
-verification, and the first payout-engine execution boundaries, including payout
-lifecycle outbox/webhook events, an unknown-outcome reconciliation queue, and
-referrer payout views, payout reconciliation decision tooling, remote signer
-client wiring, and a production-packaged signer appliance scaffold. Phase 6
-remains active for staging deployment validation and payout custody review.
+verification, and the first payout-engine execution boundaries, including
+payout transaction byte verification, payout transaction-to-item mapping,
+finalized payout transfer-content verification, payout lifecycle
+outbox/webhook events, an unknown-outcome reconciliation queue, referrer payout
+views, payout reconciliation decision tooling, remote signer client wiring, and
+a production-packaged signer appliance scaffold. Phase 6 remains active for
+staging deployment validation and payout custody review.
 
 ## Architecture Rule
 
@@ -328,6 +330,7 @@ Current slice:
 - add Solana RPC payout transaction simulation with per-transaction
   succeeded/failed/retry outcomes;
 - add Solana payout signer interface and policy gate before isolated signing;
+- add fail-closed payout transaction byte verification before signer delegation;
 - add disposable local-dev signer wiring for Devnet payout tests;
 - add remote signer client wiring with optional HMAC request authentication;
 - add an isolated payout signer appliance scaffold with HMAC verification and
@@ -383,10 +386,12 @@ Current slice:
   failover drill passed and observed status from the secondary RPC;
 - add signed-byte payout transaction persistence and Solana broadcast submission
   boundary;
+- add payout transaction-to-item mapping for per-item finality;
 - add Solana payout transaction finality monitor with retry and outcome-unknown
   classification;
+- add finalized payout transfer-content verification before ledger closure;
 - add payout batch and item status rollup from transaction finality;
-- add idempotent payout-batch ledger closure for finalized payouts;
+- add idempotent payout-batch ledger closure for finalized, transfer-verified payouts;
 - add payout submitted, confirmed, finalized, failed, and outcome-unknown
   internal and webhook outbox events;
 - add an unknown-outcome payout reconciliation queue for merchant/operator review;
@@ -400,6 +405,7 @@ Current slice:
 - expose `POST /v1/merchants/:merchantId/payouts/preview`;
 - expose `GET /v1/merchants/:merchantId/payouts/reconciliation`;
 - expose `POST /v1/payout-batches/:batchId/reconcile`;
+- expose `POST /v1/payout-batches/:batchId/release-allocations`;
 - expose `POST /v1/merchants/:merchantId/payout-batches`.
 
 Exit criteria:
@@ -433,6 +439,14 @@ Current slice:
 - MCP-facing paid-tool demo bundle and stdio gateway with tool metadata, x402
   payment details, Split402 campaign metadata, expected referral economics, and
   proof commands.
+- `@split402/router` public-alpha package with static providers,
+  control-plane route discovery, budget enforcement, deterministic ranking,
+  retry/fallback, pay-to wallet checks, and fail-closed receipt verification.
+- Router-backed MCP demo tools, `split402.searchCapabilities`,
+  `split402.execute`, and `split402.getReceipt`, for capability search, demo
+  execution results, and session receipt lookup, plus optional control-plane
+  route discovery for live staging providers. The default execution path is
+  explicitly demo/mock mode, not production MCP hosting.
 - merchant/referrer dashboard UI with a narrow control-plane read proxy for
   summaries, reliability profiles, webhook delivery, routes, balances, and
   payouts.

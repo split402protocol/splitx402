@@ -127,14 +127,34 @@ describe("repository presentation", () => {
   it("keeps Phase 6 payout safety docs aligned with implemented hardening", () => {
     const phase6 = readFileSync("docs/PHASE_6.md", "utf8");
     const roadmap = readFileSync("docs/ROADMAP.md", "utf8");
+    const buildPlan = readFileSync("docs/BUILD_PLAN.md", "utf8");
 
-    for (const text of [phase6, roadmap]) {
+    for (const text of [phase6, roadmap, buildPlan]) {
       expect(text).toContain("payout transaction-to-item");
       expect(text).toContain("transfer-content verification");
+      expect(text).toContain("transaction byte verification");
+    }
+
+    for (const text of [phase6, roadmap]) {
       expect(text).toContain("signer byte verification");
       expect(text).toContain(
         "corepack pnpm product:status --brief --workspace split402-launch-evidence",
       );
+    }
+  });
+
+  it("keeps adoption-layer docs aligned with router and MCP gateway state", () => {
+    const buildPlan = readFileSync("docs/BUILD_PLAN.md", "utf8");
+    const currentState = readFileSync("docs/CURRENT_STATE.md", "utf8");
+    const roadmap = readFileSync("docs/ROADMAP.md", "utf8");
+
+    for (const text of [buildPlan, currentState, roadmap]) {
+      expect(text).toContain("@split402/router");
+      expect(text).toContain("control-plane route discovery");
+      expect(text).toContain("split402.searchCapabilities");
+      expect(text).toContain("split402.execute");
+      expect(text).toContain("split402.getReceipt");
+      expect(text).toContain("not production MCP hosting");
     }
   });
 
