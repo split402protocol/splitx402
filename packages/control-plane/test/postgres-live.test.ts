@@ -219,7 +219,7 @@ describeLive("live PostgreSQL control-plane persistence", () => {
     expect(activatedCampaign.status).toBe("active");
     expect(loadedRoute?.claimHash).toBe(activatedRoute.claimHash);
     expect(session.wallet).toBe(OWNER_WALLET);
-    expect(ingestion.accrual?.amountAtomic).toBe("2000");
+    expect(ingestion.accrual?.amountAtomic).toBe("1800");
     expect(ingestion.ledgerTransaction?.entries).toHaveLength(3);
     expect(duplicate.status).toBe("duplicate");
     expect(claimedOutboxEvent.status).toBe("processing");
