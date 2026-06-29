@@ -134,6 +134,90 @@ export interface Phase7SourceCommitStatus {
   blockers: string[];
 }
 
+interface Phase7MissingFieldAction {
+  fields: readonly string[];
+  createAction: (fields: readonly string[]) => string;
+}
+
+const PHASE7_MISSING_FIELD_ACTIONS: readonly Phase7MissingFieldAction[] = [
+  {
+    fields: ["proof_id", "proof_date", "reviewers", "staging_environment"],
+    createAction: (fields) =>
+      `Fill hosted proof identity fields in split402-launch-evidence/phase7-staging.env: ${fields.join(", ")}.`,
+  },
+  {
+    fields: [
+      "control_plane_url",
+      "dashboard_url",
+      "demo_merchant_url",
+      "webhook_receiver_url",
+    ],
+    createAction: (fields) =>
+      `Fill hosted endpoint URL fields in split402-launch-evidence/phase7-staging.env: ${fields.join(", ")}.`,
+  },
+  {
+    fields: ["source_commit"],
+    createAction: () =>
+      "Refresh source_commit with corepack pnpm product:evidence:init --refresh-source before collecting final hosted proof, or recollect proof from the current checkout.",
+  },
+  {
+    fields: ["hosted_preflight_evidence"],
+    createAction: () =>
+      "Capture hosted_preflight_evidence with corepack pnpm phase7:hosted:preflight --evidence-env-file split402-launch-evidence/phase7-staging.env.",
+  },
+  {
+    fields: [
+      "agent_discovery_evidence",
+      "referrer_balance_evidence",
+      "dashboard_summary_evidence",
+      "webhook_delivery_evidence",
+      "payout_obligation_evidence",
+      "funding_balance_evidence",
+    ],
+    createAction: (fields) =>
+      `Capture hosted read evidence (${fields.join(", ")}) with corepack pnpm phase7:staging:collect-reads --evidence-env-file split402-launch-evidence/phase7-staging.env.`,
+  },
+  {
+    fields: ["paid_request_evidence"],
+    createAction: () =>
+      "Capture paid_request_evidence with corepack pnpm demo:paid-suite split402-launch-evidence/phase7-staging-evidence/paid-suite.log.",
+  },
+  {
+    fields: ["receipt_verification_evidence"],
+    createAction: () =>
+      "Derive receipt_verification_evidence with corepack pnpm phase7:staging:derive-receipt-verification --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-evidence/paid-suite.log split402-launch-evidence/phase7-staging-evidence/receipt-verification.json.",
+  },
+  {
+    fields: ["mcp_bundle_evidence"],
+    createAction: () =>
+      "Capture mcp_bundle_evidence with corepack pnpm demo:mcp-bundle split402-launch-evidence/phase7-staging-evidence/mcp-bundle.json.",
+  },
+  {
+    fields: ["mcp_gateway_evidence"],
+    createAction: () =>
+      "Capture mcp_gateway_evidence with SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 corepack pnpm phase7:staging:collect-mcp-gateway --evidence-env-file split402-launch-evidence/phase7-staging.env.",
+  },
+  {
+    fields: ["artifact_manifest_evidence"],
+    createAction: () =>
+      "Generate artifact_manifest_evidence with corepack pnpm phase7:staging:manifest split402-launch-evidence/phase7-staging-proof.txt split402-launch-evidence/phase7-staging-evidence/artifact-manifest.json.",
+  },
+  {
+    fields: ["commands_run"],
+    createAction: () =>
+      "Capture commands_run with corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log, then replace template comments with the real command transcript.",
+  },
+  {
+    fields: ["approval_decision"],
+    createAction: () =>
+      "Set approval_decision=no-go until every Phase 7 hosted proof gate passes; use approved only during final human public-alpha review.",
+  },
+];
+
+const PHASE7_MISSING_FIELD_ACTION_FIELDS = new Set<string>(
+  PHASE7_MISSING_FIELD_ACTIONS.flatMap((action) => [...action.fields]),
+);
+
 export interface Phase7StagingArtifactStatus {
   evidenceField: (typeof PHASE7_EVIDENCE_FIELDS)[number];
   reference?: string;
@@ -2841,11 +2925,11 @@ function createNextActions(
   }
 
   const actions: string[] = [];
-  if (validation.missingFields.length > 0) {
-    actions.push(`Fill missing fields: ${validation.missingFields.join(", ")}`);
-  }
+  actions.push(...createMissingFieldActions(validation));
   const placeholderFieldsToReplace = validation.placeholderFields.filter(
-    (field) => field !== "approval_decision",
+    (field) =>
+      field !== "approval_decision" &&
+      !PHASE7_MISSING_FIELD_ACTION_FIELDS.has(field),
   );
   if (placeholderFieldsToReplace.length > 0) {
     actions.push(
@@ -2854,6 +2938,37 @@ function createNextActions(
   }
   actions.push(...createOperatorInvalidFieldActions(validation.invalidFields));
   actions.push(...createOperatorBlockerActions(artifactBlockers));
+  if (actions.length > 0) {
+    actions.push(
+      "Reassemble with corepack pnpm phase7:staging:assemble --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-proof.txt, then rerun corepack pnpm phase7:staging:status --brief split402-launch-evidence/phase7-staging-proof.txt.",
+    );
+  }
+  return actions;
+}
+
+function createMissingFieldActions(
+  validation: Phase7StagingProofValidation,
+): string[] {
+  const fieldsNeedingEvidence = new Set<string>([
+    ...validation.missingFields,
+    ...validation.placeholderFields.filter((field) => field !== "approval_decision"),
+  ]);
+  if (validation.missingFields.includes("approval_decision")) {
+    fieldsNeedingEvidence.add("approval_decision");
+  }
+
+  const actions = PHASE7_MISSING_FIELD_ACTIONS.flatMap((action) => {
+    const matchedFields = action.fields.filter((field) =>
+      fieldsNeedingEvidence.has(field),
+    );
+    return matchedFields.length === 0 ? [] : [action.createAction(matchedFields)];
+  });
+  const unhandledFields = [...fieldsNeedingEvidence].filter(
+    (field) => !PHASE7_MISSING_FIELD_ACTION_FIELDS.has(field),
+  );
+  if (unhandledFields.length > 0) {
+    actions.push(`Fill missing fields: ${unhandledFields.join(", ")}`);
+  }
   return actions;
 }
 
