@@ -84,8 +84,9 @@ const REQUIRED_MCP_LIVE_ENV_KEYS = [
   "SPLIT402_MCP_CONTROL_PLANE_URL",
   "SPLIT402_MCP_CONTROL_PLANE_TOKEN",
   "SPLIT402_MCP_CAPABILITY",
-  "SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE",
 ] as const;
+
+const MCP_LIVE_EXECUTION_ENV_KEY = "SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE";
 
 const REQUIRED_PHASE6_DIRECT_ENV_KEYS = [
   "SPLIT402_PHASE6_EVIDENCE_REVIEW_ID",
@@ -141,11 +142,20 @@ export function createSplit402LaunchPreflightReport(
   const missingMcpKeys = REQUIRED_MCP_LIVE_ENV_KEYS.filter(
     (key) => !hasConfiguredEnvValue(phase7Env, key),
   );
+  const liveExecutionEnabled = hasTruthyEnvValue(
+    phase7Env,
+    MCP_LIVE_EXECUTION_ENV_KEY,
+  );
   const missingBuyerKey =
     !hasConfiguredEnvValue(phase7Env, "SPLIT402_MCP_SVM_PRIVATE_KEY") &&
     !hasConfiguredEnvValue(phase7Env, "SVM_PRIVATE_KEY");
   const missingMcpDetails = [
     ...missingMcpKeys.map((key) => `Fill ${key} in ${phase7EnvPath}.`),
+    ...(liveExecutionEnabled
+      ? []
+      : [
+          `Set ${MCP_LIVE_EXECUTION_ENV_KEY}=1 in ${phase7EnvPath} for live router execution.`,
+        ]),
     ...(missingBuyerKey
       ? [
           `Fill SPLIT402_MCP_SVM_PRIVATE_KEY or SVM_PRIVATE_KEY in ${phase7EnvPath}.`,
@@ -217,7 +227,10 @@ export function createSplit402LaunchPreflightReport(
     {
       id: "phase7_mcp_live_execution_env",
       label: "Phase 7 MCP live execution env values are filled",
-      ok: missingMcpKeys.length === 0 && !missingBuyerKey,
+      ok:
+        missingMcpKeys.length === 0 &&
+        liveExecutionEnabled &&
+        !missingBuyerKey,
       severity: "required",
       details:
         missingMcpDetails.length === 0
@@ -336,6 +349,11 @@ function hasConfiguredEnvValue(env: ReadonlyMap<string, string>, key: string): b
     value !== "TODO" &&
     !/^<.*>$/u.test(value)
   );
+}
+
+function hasTruthyEnvValue(env: ReadonlyMap<string, string>, key: string): boolean {
+  const value = env.get(key)?.trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes";
 }
 
 function phase7AttachmentEnvName(field: string): string {
