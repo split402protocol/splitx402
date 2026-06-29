@@ -1,10 +1,11 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import {
   PRODUCT_EVIDENCE_INIT_USAGE,
   createProductEvidenceInitWrites,
+  createProductEvidenceSourceRefreshWrites,
   findExistingProductEvidenceInitWrites,
   parseProductEvidenceInitArgs,
 } from "./productEvidenceInitPlan.js";
@@ -23,17 +24,13 @@ const workspace = createSplit402ProductEvidenceWorkspace({
 });
 const writes = createProductEvidenceInitWrites(workspace);
 const existingFiles = findExistingProductEvidenceInitWrites(writes, existsSync);
-const writesToCreate = args.force
-  ? writes
-  : args.missing
-    ? writes.filter((write) => !existsSync(write.path))
-    : writes;
+const writesToCreate = createWritesToCreate();
 
-if (!args.force && !args.missing && existingFiles.length > 0) {
+if (!args.force && !args.missing && !args.refreshSource && existingFiles.length > 0) {
   console.error(
     [
       "Refusing to overwrite existing Split402 launch evidence scaffold files.",
-      "Review or move these files first, run `corepack pnpm product:evidence:init --missing` to create only absent scaffold files, or rerun with `corepack pnpm product:evidence:init --force` to replace them intentionally:",
+      "Review or move these files first, run `corepack pnpm product:evidence:init --missing` to create only absent scaffold files, run `corepack pnpm product:evidence:init --refresh-source` to update only stale scaffold source_commit values, or rerun with `corepack pnpm product:evidence:init --force` to replace them intentionally:",
       ...existingFiles.map((path) => `- ${path}`),
     ].join("\n"),
   );
@@ -59,7 +56,13 @@ console.log(
       phase7EnvFile: join(workspace.directory, workspace.phase7EnvFileName),
       phase7EvidenceDirectory: workspace.phase7.directory,
       readmeFile: join(workspace.directory, workspace.readmeFileName),
-      mode: args.force ? "force" : args.missing ? "missing" : "create",
+      mode: args.force
+        ? "force"
+        : args.missing
+          ? "missing"
+          : args.refreshSource
+            ? "refresh-source"
+            : "create",
       writtenFiles: writesToCreate.map((write) => write.path),
       skippedExistingFiles: args.missing ? existingFiles : [],
       nextCommands: workspace.nextCommands,
@@ -76,6 +79,22 @@ function parseArgs() {
     console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
+}
+
+function createWritesToCreate() {
+  if (args.force) {
+    return writes;
+  }
+  if (args.missing) {
+    return writes.filter((write) => !existsSync(write.path));
+  }
+  if (args.refreshSource) {
+    return createProductEvidenceSourceRefreshWrites({
+      workspace,
+      readText: (path) => readFileSync(path, "utf8"),
+    });
+  }
+  return writes;
 }
 
 function readCurrentGitCommit(): string {
