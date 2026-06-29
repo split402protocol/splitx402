@@ -101,22 +101,22 @@ git rev-parse HEAD
 git status --short --branch
 corepack pnpm phase7:staging:init
 SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed
-corepack pnpm phase7:staging-proof > phase7-staging-proof.txt
-corepack pnpm phase7:hosted:preflight
-corepack pnpm phase7:staging:collect-reads
+corepack pnpm phase7:staging-proof --evidence-env-file phase7-staging-evidence/phase7-staging.env > phase7-staging-proof.txt
+corepack pnpm phase7:hosted:preflight --evidence-env-file phase7-staging-evidence/phase7-staging.env
+corepack pnpm phase7:staging:collect-reads --evidence-env-file phase7-staging-evidence/phase7-staging.env
 SPLIT402_MCP_CONTROL_PLANE_URL="$SPLIT402_PHASE7_CONTROL_PLANE_URL" \
 SPLIT402_MCP_CONTROL_PLANE_TOKEN="$SPLIT402_PHASE7_CONTROL_PLANE_TOKEN" \
 SPLIT402_MCP_CAPABILITY=solana.wallet-risk \
 SPLIT402_MCP_SVM_PRIVATE_KEY="$SVM_PRIVATE_KEY" \
 SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 \
-corepack pnpm phase7:staging:collect-mcp-gateway
+corepack pnpm phase7:staging:collect-mcp-gateway --evidence-env-file phase7-staging-evidence/phase7-staging.env
 corepack pnpm demo:mcp-gateway:smoke
 corepack pnpm phase7:staging:commands-template > phase7-staging-evidence/commands.log
 corepack pnpm demo:mcp-bundle > phase7-staging-evidence/mcp-bundle.json
 corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log
-corepack pnpm phase7:staging:derive-receipt-verification
+corepack pnpm phase7:staging:derive-receipt-verification --evidence-env-file phase7-staging-evidence/phase7-staging.env
 corepack pnpm phase7:staging:manifest phase7-staging-proof.txt > phase7-staging-evidence/artifact-manifest.json
-corepack pnpm phase7:staging:assemble > phase7-staging-proof.txt
+corepack pnpm phase7:staging:assemble --evidence-env-file phase7-staging-evidence/phase7-staging.env > phase7-staging-proof.txt
 corepack pnpm phase7:staging:status phase7-staging-proof.txt
 ```
 

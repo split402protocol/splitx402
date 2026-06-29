@@ -1,9 +1,17 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { loadEvidenceEnvFiles } from "./evidenceEnvFile.js";
 import { collectPhase7McpGatewayEvidence } from "./phase7McpGatewayEvidence.js";
 
 try {
+  loadEvidenceEnvFiles({
+    argv: process.argv.slice(2),
+    defaultEnvFiles: [
+      "split402-launch-evidence/phase7-staging.env",
+      "phase7-staging-evidence/phase7-staging.env",
+    ],
+  });
   const outputDir =
     readOptionalEnv("SPLIT402_PHASE7_MCP_GATEWAY_OUTPUT_DIR") ??
     readOptionalEnv("SPLIT402_PHASE7_EVIDENCE_DIR") ??
@@ -28,6 +36,9 @@ try {
   console.error(
     [
       "Usage: corepack pnpm phase7:staging:collect-mcp-gateway",
+      "Env file options:",
+      "  --evidence-env-file <path> (optional; defaults to split402-launch-evidence/phase7-staging.env when present)",
+      "  SPLIT402_ENV_FILE=<path> (optional; uses platform path separator for multiple files)",
       "Optional environment:",
       "  SPLIT402_PHASE7_EVIDENCE_DIR",
       "  SPLIT402_PHASE7_MCP_GATEWAY_OUTPUT_DIR",

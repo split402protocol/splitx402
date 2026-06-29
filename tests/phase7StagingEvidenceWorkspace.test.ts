@@ -34,6 +34,7 @@ describe("Phase 7 staging evidence workspace", () => {
 
     expect(workspace.directory).toBe("evidence/phase7");
     expect(workspace.envFileName).toBe("phase7-staging.env");
+    expect(workspace.envFilePath).toBe("evidence/phase7/phase7-staging.env");
     expect(workspace.artifacts.map((artifact) => artifact.field)).toEqual(
       PHASE7_STAGING_ATTACHMENT_FIELDS,
     );
@@ -141,6 +142,9 @@ describe("Phase 7 staging evidence workspace", () => {
     expect(workspace.readmeText).toContain("git status --short --branch");
     expect(workspace.readmeText).toContain(
       "corepack pnpm phase7:hosted:preflight",
+    );
+    expect(workspace.readmeText).toContain(
+      "corepack pnpm phase7:hosted:preflight --evidence-env-file phase7-staging-evidence/phase7-staging.env",
     );
     expect(workspace.readmeText).toContain(
       "# Confirm hosted control plane has SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc.",

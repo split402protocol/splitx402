@@ -12,6 +12,7 @@ export interface Phase7StagingEvidenceArtifact {
 export interface Phase7StagingEvidenceWorkspace {
   directory: string;
   envFileName: string;
+  envFilePath: string;
   readmeFileName: string;
   artifacts: readonly Phase7StagingEvidenceArtifact[];
   envText: string;
@@ -91,15 +92,18 @@ const PHASE7_STAGING_EVIDENCE_ARTIFACTS: readonly Phase7StagingEvidenceArtifact[
 
 export function createPhase7StagingEvidenceWorkspace(input: {
   directory?: string;
+  envFilePath?: string;
 } = {}): Phase7StagingEvidenceWorkspace {
   const directory = input.directory ?? "phase7-staging-evidence";
   const envFileName = "phase7-staging.env";
+  const envFilePath = input.envFilePath ?? `${directory}/${envFileName}`;
   const readmeFileName = "README.md";
   const envText = createEnvText(directory);
-  const readmeText = createReadmeText(directory);
+  const readmeText = createReadmeText({ directory, envFilePath });
   return {
     directory,
     envFileName,
+    envFilePath,
     readmeFileName,
     artifacts: PHASE7_STAGING_EVIDENCE_ARTIFACTS,
     envText,
@@ -161,7 +165,11 @@ function createEnvText(directory: string): string {
   ].join("\n");
 }
 
-function createReadmeText(directory: string): string {
+function createReadmeText(input: {
+  directory: string;
+  envFilePath: string;
+}): string {
+  const envOption = `--evidence-env-file ${input.envFilePath}`;
   return [
     "# Phase 7 Staging Evidence",
     "",
@@ -181,19 +189,19 @@ function createReadmeText(directory: string): string {
     "git rev-parse HEAD",
     "git status --short --branch",
     "SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",
-    "corepack pnpm phase7:staging-proof > phase7-staging-proof.txt",
-    "corepack pnpm phase7:hosted:preflight",
+    `corepack pnpm phase7:staging-proof ${envOption} > phase7-staging-proof.txt`,
+    `corepack pnpm phase7:hosted:preflight ${envOption}`,
     "# Confirm hosted control plane has SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc.",
-    "corepack pnpm phase7:staging:collect-reads",
+    `corepack pnpm phase7:staging:collect-reads ${envOption}`,
     "# Fill SPLIT402_MCP_* hosted proof variables and use a funded buyer key.",
-    "SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 corepack pnpm phase7:staging:collect-mcp-gateway",
+    `SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 corepack pnpm phase7:staging:collect-mcp-gateway ${envOption}`,
     "corepack pnpm demo:mcp-gateway:smoke",
-    `corepack pnpm phase7:staging:commands-template > ${directory}/commands.log`,
-    `corepack pnpm demo:mcp-bundle > ${directory}/mcp-bundle.json`,
-    `corepack pnpm demo:paid-suite > ${directory}/paid-suite.log`,
-    "corepack pnpm phase7:staging:derive-receipt-verification",
-    `corepack pnpm phase7:staging:manifest phase7-staging-proof.txt > ${directory}/artifact-manifest.json`,
-    `corepack pnpm phase7:staging:assemble > phase7-staging-proof.txt`,
+    `corepack pnpm phase7:staging:commands-template > ${input.directory}/commands.log`,
+    `corepack pnpm demo:mcp-bundle > ${input.directory}/mcp-bundle.json`,
+    `corepack pnpm demo:paid-suite > ${input.directory}/paid-suite.log`,
+    `corepack pnpm phase7:staging:derive-receipt-verification ${envOption}`,
+    `corepack pnpm phase7:staging:manifest phase7-staging-proof.txt > ${input.directory}/artifact-manifest.json`,
+    `corepack pnpm phase7:staging:assemble ${envOption} > phase7-staging-proof.txt`,
     `corepack pnpm phase7:staging:status phase7-staging-proof.txt`,
     "```",
     "",
@@ -220,7 +228,10 @@ function createReadmeText(directory: string): string {
     "The collector rejects receipt evidence when commission, protocol fee, or",
     "referrer credit arithmetic does not match the receipt bps and amount.",
     "The staging seed prints `proofEnv`; copy those values into",
-    "`phase7-staging.env` before running hosted collectors.",
+    "`phase7-staging.env` before running hosted collectors. The commands above",
+    "load that file with `--evidence-env-file`; when using the default launch workspace,",
+    "the collectors also auto-load `split402-launch-evidence/phase7-staging.env`",
+    "if it exists.",
     "The proof remains no-go until",
     "all artifacts are real hosted staging evidence from the same source commit.",
     "`phase7:staging-proof` and `phase7:staging:assemble` fill `source_commit`",
@@ -233,7 +244,7 @@ function createReadmeText(directory: string): string {
     "`SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc`; otherwise the read",
     "collector will reject unresolved funding status.",
     "",
-    `Expected evidence directory: \`${directory}\``,
+    `Expected evidence directory: \`${input.directory}\``,
     "",
   ].join("\n");
 }

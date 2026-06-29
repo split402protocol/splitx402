@@ -40,7 +40,7 @@ describe("Split402 launch checklist", () => {
       "corepack pnpm product:launch-preflight --brief split402-launch-evidence",
     );
     expect(checklist.sections[2]?.commands).toContain(
-      "SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 corepack pnpm phase7:staging:collect-mcp-gateway",
+      "SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 corepack pnpm phase7:staging:collect-mcp-gateway --evidence-env-file split402-launch-evidence/phase7-staging.env",
     );
     expect(checklist.sections[2]?.commands).toContain(
       "corepack pnpm phase7:staging:commands-template > split402-launch-evidence/phase7-staging-evidence/commands.log",

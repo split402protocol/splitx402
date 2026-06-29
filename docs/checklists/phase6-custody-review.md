@@ -36,7 +36,7 @@ and fill every field. Then run:
 corepack pnpm phase6:evidence:bundle > phase6-custody-evidence.txt
 # Review split402-launch-evidence/phase6-evidence.env first; regenerate only if missing:
 corepack pnpm phase6:evidence:env-template split402-launch-evidence > split402-launch-evidence/phase6-evidence.env
-corepack pnpm phase6:evidence:assemble > phase6-custody-evidence.txt
+corepack pnpm phase6:evidence:assemble --evidence-env-file split402-launch-evidence/phase6-evidence.env > phase6-custody-evidence.txt
 corepack pnpm phase6:evidence:status <evidence-bundle.txt>
 corepack pnpm phase6:custody:check <evidence-bundle.txt>
 corepack pnpm phase6:evidence:bundle | corepack pnpm phase6:custody:check -
@@ -54,6 +54,8 @@ the required environment values are set. The validator fails while any required
 field is empty, placeholder-like, uses a mutable image tag instead of a
 `sha256:` digest, or leaves `approval_decision` as anything other than
 `approved`.
+The assembler auto-loads `split402-launch-evidence/phase6-evidence.env` when it
+exists; pass `--evidence-env-file <path>` for custom launch evidence directories.
 
 ```text
 review_id:

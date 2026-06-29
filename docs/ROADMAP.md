@@ -29,6 +29,9 @@ provider continuity, receipt lookup consistency, route attribution,
 route-discovery continuity, read-artifact continuity, paid-suite to
 receipt-verification continuity, positive referrer credit, and Split402 fee
 arithmetic derived from receipt bps fields.
+Launch evidence scaffolds now include env-file loading for the Phase 6 and
+Phase 7 collection/assembly commands so custom evidence directories can be run
+without copying every variable into the shell session.
 
 The MVP still uses normal x402 settlement to the merchant and records a
 commission liability for later merchant-funded payout. Protocol fee is a

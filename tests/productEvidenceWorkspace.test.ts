@@ -23,6 +23,7 @@ describe("Split402 product evidence workspace", () => {
     expect(workspace.phase6EnvFileName).toBe("phase6-evidence.env");
     expect(workspace.phase7ProofFileName).toBe("phase7-staging-proof.txt");
     expect(workspace.phase7EnvFileName).toBe("phase7-staging.env");
+    expect(workspace.phase7.envFilePath).toBe("evidence/launch/phase7-staging.env");
     expect(workspace.phase7.directory).toBe(
       "evidence/launch/phase7-staging-evidence",
     );
@@ -73,7 +74,7 @@ describe("Split402 product evidence workspace", () => {
       "corepack pnpm product:launch-preflight --brief split402-launch-evidence",
     );
     expect(workspace.nextCommands).toContain(
-      "corepack pnpm phase7:staging:collect-reads",
+      "corepack pnpm phase7:staging:collect-reads --evidence-env-file split402-launch-evidence/phase7-staging.env",
     );
     expect(workspace.nextCommands).toContain(
       "corepack pnpm phase7:staging:commands-template > split402-launch-evidence/phase7-staging-evidence/commands.log",
@@ -89,6 +90,9 @@ describe("Split402 product evidence workspace", () => {
     );
     expect(workspace.nextCommands).toContain(
       "corepack pnpm phase6:evidence:status split402-launch-evidence/phase6-custody-evidence.txt",
+    );
+    expect(workspace.nextCommands).toContain(
+      "corepack pnpm phase6:evidence:assemble --evidence-env-file split402-launch-evidence/phase6-evidence.env > split402-launch-evidence/phase6-custody-evidence.txt",
     );
     expect(workspace.nextCommands).toContain(
       "corepack pnpm product:status --brief --workspace split402-launch-evidence",

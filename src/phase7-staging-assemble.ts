@@ -11,10 +11,18 @@ import {
   type Phase7StagingProofField,
   type Phase7StagingProofValues,
 } from "./phase7StagingProof.js";
+import { loadEvidenceEnvFiles } from "./evidenceEnvFile.js";
 
 const env = process.env;
 
 try {
+  loadEvidenceEnvFiles({
+    argv: process.argv.slice(2),
+    defaultEnvFiles: [
+      "split402-launch-evidence/phase7-staging.env",
+      "phase7-staging-evidence/phase7-staging.env",
+    ],
+  });
   const values = readDirectValues();
   const input: Phase7StagingProofAssemblyInput = {
     values,
@@ -27,6 +35,9 @@ try {
   console.error(
     [
       "Usage: corepack pnpm phase7:staging:assemble",
+      "Env file options:",
+      "  --evidence-env-file <path> (optional; defaults to split402-launch-evidence/phase7-staging.env when present)",
+      "  SPLIT402_ENV_FILE=<path> (optional; uses platform path separator for multiple files)",
       "Direct field override environment:",
       "  SPLIT402_PHASE7_* fields from .env.example",
       "  SPLIT402_PHASE7_SOURCE_COMMIT (optional; defaults to git rev-parse HEAD)",
