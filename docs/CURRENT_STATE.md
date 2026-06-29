@@ -93,8 +93,9 @@ launch workspace, Phase 6 custody evidence env paths, and required Phase 7
 hosted proof environment values are ready before collection starts. Run
 `corepack pnpm product:launch-checklist --brief` for the exact remaining local
 validation, hosted proof, custody evidence, and combined status commands; pass
-the Phase 6 and Phase 7 evidence files to show checked, blocked, or ready
-section statuses from real files. Then run `corepack pnpm product:status
---brief` for a simple operator view of the Phase 7 hosted proof gate, Phase 6
+`--workspace split402-launch-evidence` or the Phase 6 and Phase 7 evidence files
+to show checked, blocked, or ready section statuses from real files. Then run
+`corepack pnpm product:status --brief --workspace split402-launch-evidence`
+for a simple operator view of the Phase 7 hosted proof gate, Phase 6
 production custody gate, launch-gate percentages, evidence-env setup commands,
 and next actions.

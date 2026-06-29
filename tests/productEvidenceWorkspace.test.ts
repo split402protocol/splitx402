@@ -90,7 +90,7 @@ describe("Split402 product evidence workspace", () => {
       "corepack pnpm phase6:evidence:status split402-launch-evidence/phase6-custody-evidence.txt",
     );
     expect(workspace.nextCommands).toContain(
-      "corepack pnpm product:status --brief split402-launch-evidence/phase6-custody-evidence.txt split402-launch-evidence/phase7-staging-proof.txt",
+      "corepack pnpm product:status --brief --workspace split402-launch-evidence",
     );
   });
 
