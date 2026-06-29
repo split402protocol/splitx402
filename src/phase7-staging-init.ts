@@ -59,7 +59,7 @@ function main(): void {
           "corepack pnpm demo:mcp-gateway:smoke",
           `corepack pnpm demo:mcp-bundle ${workspace.directory}/mcp-bundle.json`,
           `corepack pnpm demo:paid-suite ${workspace.directory}/paid-suite.log`,
-          `corepack pnpm phase7:staging:derive-receipt-verification --evidence-env-file ${envFilePath}`,
+          `corepack pnpm phase7:staging:derive-receipt-verification --evidence-env-file ${envFilePath} ${workspace.directory}/paid-suite.log ${workspace.directory}/receipt-verification.json`,
           `corepack pnpm phase7:staging:manifest phase7-staging-proof.txt ${workspace.directory}/artifact-manifest.json`,
           `corepack pnpm phase7:staging:assemble --evidence-env-file ${envFilePath} phase7-staging-proof.txt`,
           "corepack pnpm phase7:staging:status phase7-staging-proof.txt",

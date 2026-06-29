@@ -65,7 +65,8 @@ export const PHASE7_STAGING_COMMANDS = [
   },
   {
     gate: "receipt_verification_derivation",
-    command: "corepack pnpm phase7:staging:derive-receipt-verification",
+    command:
+      "corepack pnpm phase7:staging:derive-receipt-verification phase7-staging-evidence/paid-suite.log phase7-staging-evidence/receipt-verification.json",
     evidenceField: "receipt_verification_evidence",
   },
   {
@@ -2575,7 +2576,7 @@ function createNextActions(
       "Run the MCP gateway smoke check with corepack pnpm demo:mcp-gateway:smoke.",
       "Capture MCP bundle evidence with corepack pnpm demo:mcp-bundle phase7-staging-evidence/mcp-bundle.json.",
       "Capture paid-suite evidence with corepack pnpm demo:paid-suite phase7-staging-evidence/paid-suite.log.",
-      "Derive receipt-verification evidence with corepack pnpm phase7:staging:derive-receipt-verification.",
+      "Derive receipt-verification evidence with corepack pnpm phase7:staging:derive-receipt-verification phase7-staging-evidence/paid-suite.log phase7-staging-evidence/receipt-verification.json.",
       "Generate artifact hashes with corepack pnpm phase7:staging:manifest <phase7-staging-proof.txt> phase7-staging-evidence/artifact-manifest.json.",
       "Attach response URLs, logs, or artifact paths with corepack pnpm phase7:staging:assemble.",
       "Run corepack pnpm phase7:staging:status <phase7-staging-proof.txt>.",
