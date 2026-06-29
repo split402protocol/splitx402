@@ -122,6 +122,7 @@ describe("Split402 product evidence workspace", () => {
       {
         directory: "evidence/launch",
         force: true,
+        help: false,
         missing: false,
       },
     );
@@ -129,11 +130,19 @@ describe("Split402 product evidence workspace", () => {
       .toEqual({
         directory: "evidence/launch",
         force: false,
+        help: false,
         missing: true,
       });
+    expect(parseProductEvidenceInitArgs(["--help"])).toEqual({
+      directory: "split402-launch-evidence",
+      force: false,
+      help: true,
+      missing: false,
+    });
     expect(parseProductEvidenceInitArgs([])).toEqual({
       directory: "split402-launch-evidence",
       force: false,
+      help: false,
       missing: false,
     });
     expect(() =>
@@ -146,5 +155,11 @@ describe("Split402 product evidence workspace", () => {
     ).toThrowErrorMatchingInlineSnapshot(
       `[Error: Usage: corepack pnpm product:evidence:init [--force|--missing] [directory]]`,
     );
+    expect(() =>
+      parseProductEvidenceInitArgs(["--froce"]),
+    ).toThrowErrorMatchingInlineSnapshot(`
+      [Error: Usage: corepack pnpm product:evidence:init [--force|--missing] [directory]
+      Unknown option: --froce]
+    `);
   });
 });
