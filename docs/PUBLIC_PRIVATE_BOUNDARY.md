@@ -58,6 +58,13 @@ registries, and custody tooling are not automatically licensed by this public
 repository. They should use separate proprietary terms unless Split402
 explicitly publishes them under an open-source license later.
 
+Treat publication as effectively irreversible. Code or documents that were
+public under MIT or Apache-2.0 may already have been cloned, downloaded,
+mirrored, or forked. A later license change, history rewrite, or private
+visibility change does not reliably pull those copies back, so private business
+logic and custody material must be kept out of public Git history before it is
+pushed.
+
 ## Launch Rule
 
 Before production launch, every new file should be checked against one question:
