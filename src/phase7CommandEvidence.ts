@@ -42,6 +42,8 @@ export function createPhase7CommandEvidenceTemplate(): string {
     "# Paste the real terminal transcript for this hosted staging run under each",
     "# command. Keep executed command lines uncommented, for example",
     "# `$ corepack pnpm lint`, so the status checker can verify them.",
+    "# PowerShell command lines are accepted too, for example",
+    "# `PS C:\\split402> $env:SPLIT402_PHASE7_SEED_CONFIRM='seed-hosted-staging'; corepack pnpm phase7:staging:seed`.",
     "# Do not paste secrets, private keys, private URLs, or private transaction bytes.",
     "#",
     "# Required commands:",

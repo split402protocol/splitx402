@@ -42,6 +42,14 @@ the hosted staging run.
 The `commands.log` transcript may use `corepack pnpm product:evidence:init` as
 the workspace-initialization command; the status checker treats it as equivalent
 to `corepack pnpm phase7:staging:init` for the combined launch workspace.
+On Windows, PowerShell transcript lines with environment assignments are valid
+as long as the executed command remains on the same uncommented line, for
+example:
+
+```powershell
+PS C:\split402> $env:SPLIT402_PHASE7_SEED_CONFIRM='seed-hosted-staging'; corepack pnpm phase7:staging:seed
+```
+
 The collection and assembly commands auto-load the default evidence env files
 when present; use `--evidence-env-file <path>` when the evidence workspace is
 not at the default path.
