@@ -25,6 +25,7 @@ describe("local public-alpha product proof", () => {
     expect(report.generatedAt).toBe("2026-06-29T20:00:00.000Z");
     expect(report.sourceCommit).toBe("abc1234");
     expect(commands).toEqual([
+      "git status --porcelain",
       "corepack pnpm repo:guard",
       "corepack pnpm product:public-surface-check --brief",
       "corepack pnpm vectors:check",
@@ -76,6 +77,30 @@ describe("local public-alpha product proof", () => {
     });
   });
 
+  it("fails closed when the source worktree is dirty", () => {
+    const report = createSplit402LocalProofReport({
+      sourceCommit: "abc1234",
+      runCommand: (check) =>
+        check.id === "source_worktree_clean"
+          ? {
+              ...check,
+              durationMs: 5,
+              exitCode: 0,
+              output: " M README.md",
+              status: "failed",
+            }
+          : pass(check),
+    });
+
+    expect(report.status).toBe("failed");
+    expect(
+      report.checks.find((check) => check.id === "source_worktree_clean"),
+    ).toMatchObject({
+      output: " M README.md",
+      status: "failed",
+    });
+  });
+
   it("formats an honest brief report without launch approval", () => {
     const report = createSplit402LocalProofReport({
       sourceCommit: "abc1234",
@@ -99,7 +124,7 @@ function pass(check: Split402LocalProofCheck) {
     ...check,
     durationMs: 10,
     exitCode: 0,
-    output: "ok",
+    output: check.requireEmptyOutput === true ? "" : "ok",
     status: "passed" as const,
   };
 }

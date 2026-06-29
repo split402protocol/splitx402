@@ -45,6 +45,7 @@ describe("Split402 product readiness CLI parsing", () => {
         generatedAt: "2026-06-29T20:00:00.000Z",
         sourceCommit: readCurrentGitCommit(),
         checks: [
+          { id: "source_worktree_clean", status: "passed" },
           { id: "repo_hygiene", status: "passed" },
           { id: "public_surface", status: "passed" },
           { id: "protocol_vectors", status: "passed" },

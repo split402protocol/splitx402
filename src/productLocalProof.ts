@@ -4,6 +4,7 @@ export interface Split402LocalProofCheck {
   id: string;
   label: string;
   command: readonly string[];
+  requireEmptyOutput?: boolean;
 }
 
 export interface Split402LocalProofCheckResult extends Split402LocalProofCheck {
@@ -36,6 +37,12 @@ export const LOCAL_PROOF_USAGE =
 
 export const LOCAL_PUBLIC_ALPHA_PROOF_CHECKS: readonly Split402LocalProofCheck[] =
   [
+    {
+      id: "source_worktree_clean",
+      label: "Source worktree is clean",
+      command: ["git", "status", "--porcelain"],
+      requireEmptyOutput: true,
+    },
     {
       id: "repo_hygiene",
       label: "Repo hygiene and public/private boundary guard",
@@ -150,12 +157,17 @@ function createDefaultCommandRunner(
     );
     const exitCode = result.status;
 
+    const status =
+      exitCode === 0 && (check.requireEmptyOutput !== true || output.length === 0)
+        ? "passed"
+        : "failed";
+
     return {
       ...check,
       durationMs: Math.max(0, now() - startedAt),
       exitCode,
       output,
-      status: exitCode === 0 ? "passed" : "failed",
+      status,
     };
   };
 }

@@ -74,7 +74,10 @@ describe("Split402 product evidence workspace", () => {
     expect(workspace.readmeText).toContain(
       "saved local public-alpha proof records the source commit",
     );
-    expect(workspace.readmeText).toContain("source worktree");
+    expect(workspace.readmeText).toContain(
+      "`product:local-proof` also fails unless the",
+    );
+    expect(workspace.readmeText).toContain("source worktree is clean");
     expect(workspace.readmeText).toContain("On Windows PowerShell");
     expect(workspace.readmeText).toContain(
       "$env:SPLIT402_PHASE7_SEED_CONFIRM='seed-hosted-staging'; corepack",

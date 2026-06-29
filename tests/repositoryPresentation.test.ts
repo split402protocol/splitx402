@@ -284,6 +284,7 @@ describe("repository presentation", () => {
     expect(readme).toContain("hides extra actions");
     expect(readme).toContain("adoption-layer smoke proof");
     expect(readme).toContain("saved proof records the source commit");
+    expect(readme).toContain("fails unless the source worktree is clean");
     expect(readme).toContain("source worktree has uncommitted changes");
     expect(currentState).toContain("corepack pnpm product:evidence:init");
     expect(currentState).toContain("corepack pnpm product:local-proof");
@@ -300,6 +301,7 @@ describe("repository presentation", () => {
     expect(currentState).toContain("full blocker lists");
     expect(currentState).toContain("saved proof");
     expect(currentState).toContain("records the source");
+    expect(currentState).toContain("fails unless the source worktree is clean");
     expect(currentState).toContain("source worktree has");
   });
 });

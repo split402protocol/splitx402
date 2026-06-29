@@ -97,6 +97,7 @@ describe("Split402 product readiness status", () => {
         launchApproval: "not_approved",
         generatedAt: "2026-06-29T20:00:00.000Z",
         checks: [
+          { id: "source_worktree_clean", status: "passed" },
           { id: "repo_hygiene", status: "passed" },
           { id: "public_surface", status: "passed" },
           { id: "protocol_vectors", status: "passed" },
@@ -170,7 +171,7 @@ describe("Split402 product readiness status", () => {
       status: "failed",
     });
     expect(report.localProof.blockers).toContain(
-      "local proof is stale; rerun product:local-proof because it is missing current checks: public_surface",
+      "local proof is stale; rerun product:local-proof because it is missing current checks: source_worktree_clean, public_surface",
     );
     expect(report.nextActions).toContain(
       "Run corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json.",
@@ -291,6 +292,7 @@ function createPassingLocalProofText(): string {
     generatedAt: "2026-06-29T20:00:00.000Z",
     sourceCommit: "abc1234",
     checks: [
+      { id: "source_worktree_clean", status: "passed" },
       { id: "repo_hygiene", status: "passed" },
       { id: "public_surface", status: "passed" },
       { id: "protocol_vectors", status: "passed" },
