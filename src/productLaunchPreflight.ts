@@ -136,6 +136,17 @@ const REQUIRED_PHASE6_DIRECT_ENV_KEYS = [
   "SPLIT402_PHASE6_EVIDENCE_STAGING_ENVIRONMENT",
 ] as const;
 
+const PRE_COLLECTION_APPROVAL_ENV_KEYS = [
+  {
+    key: "SPLIT402_PHASE6_EVIDENCE_APPROVAL_DECISION",
+    envLabel: "Phase 6 custody",
+  },
+  {
+    key: "SPLIT402_PHASE7_APPROVAL_DECISION",
+    envLabel: "Phase 7 hosted proof",
+  },
+] as const;
+
 export function createSplit402LaunchPreflightReport(
   input: Split402LaunchPreflightInput,
 ): Split402LaunchPreflightReport {
@@ -240,6 +251,12 @@ export function createSplit402LaunchPreflightReport(
     env: phase7Env,
     envPath: phase7EnvPath,
   });
+  const prematureApprovalDetails = createPrematureApprovalDetails({
+    phase6Env,
+    phase6EnvPath,
+    phase7Env,
+    phase7EnvPath,
+  });
 
   const checks: Split402LaunchPreflightCheck[] = [
     {
@@ -340,6 +357,16 @@ export function createSplit402LaunchPreflightReport(
         mcpHostedMismatchDetails.length === 0
           ? ["MCP live execution control-plane values match the hosted proof environment."]
           : mcpHostedMismatchDetails,
+    },
+    {
+      id: "pre_collection_approval_decisions",
+      label: "Launch approval decisions remain no-go before evidence collection",
+      ok: prematureApprovalDetails.length === 0,
+      severity: "required",
+      details:
+        prematureApprovalDetails.length === 0
+          ? ["Approval decisions are unset or no-go before evidence collection."]
+          : prematureApprovalDetails,
     },
     {
       id: "phase7_redacted_env_summary",
@@ -529,6 +556,31 @@ function createMcpHostedMismatchDetails(input: {
     );
   }
   return details;
+}
+
+function createPrematureApprovalDetails(input: {
+  phase6Env: ReadonlyMap<string, string>;
+  phase6EnvPath: string;
+  phase7Env: ReadonlyMap<string, string>;
+  phase7EnvPath: string;
+}): string[] {
+  return PRE_COLLECTION_APPROVAL_ENV_KEYS.flatMap((item) => {
+    const env =
+      item.key === "SPLIT402_PHASE6_EVIDENCE_APPROVAL_DECISION"
+        ? input.phase6Env
+        : input.phase7Env;
+    const envPath =
+      item.key === "SPLIT402_PHASE6_EVIDENCE_APPROVAL_DECISION"
+        ? input.phase6EnvPath
+        : input.phase7EnvPath;
+    const value = env.get(item.key)?.trim().toLowerCase();
+    if (value === undefined || value.length === 0 || value === "no-go") {
+      return [];
+    }
+    return [
+      `Set ${item.key}=no-go in ${toDisplayPath(envPath)} until ${item.envLabel} status gates pass.`,
+    ];
+  });
 }
 
 function createPhase7RedactedEnvSummary(input: {
