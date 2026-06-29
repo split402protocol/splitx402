@@ -879,6 +879,15 @@ funding_balance_evidence: funding.json
     expect(report.commandEvidenceStatus.blockers).toContain(
       "commands_run missing required command: git status --short --branch",
     );
+    expect(report.nextActions.join("\n")).toContain(
+      "Replace split402-launch-evidence/phase7-staging-evidence/commands.log with a real command transcript",
+    );
+    expect(report.nextActions.join("\n")).toContain(
+      "Missing commands include: git rev-parse HEAD",
+    );
+    expect(report.nextActions).not.toContain(
+      "commands_run missing required command: corepack pnpm lint",
+    );
   });
 
   it("blocks staged proof status when command evidence only mentions commands in prose", () => {
@@ -912,6 +921,12 @@ funding_balance_evidence: funding.json
     );
     expect(report.commandEvidenceStatus.blockers).toContain(
       "commands_run missing required command: git rev-parse HEAD",
+    );
+    expect(report.nextActions.join("\n")).toContain(
+      "command lines uncommented",
+    );
+    expect(report.nextActions).not.toContain(
+      "commands_run artifact must include shell command lines, not only prose",
     );
   });
 
