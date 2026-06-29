@@ -51,7 +51,7 @@ describe("Split402 launch preflight", () => {
       "Run corepack pnpm product:evidence:init.",
     );
     expect(report.nextActions).not.toContain(
-      "Fill SPLIT402_PHASE6_EVIDENCE_REVIEW_ID in split402-launch-evidence\\phase6-evidence.env.",
+      "Fill SPLIT402_PHASE6_EVIDENCE_REVIEW_ID in split402-launch-evidence/phase6-evidence.env.",
     );
     expect(report.nextActions).not.toContain(
       "Set SPLIT402_PHASE6_ASSEMBLE_IMAGE_PROVENANCE_RECORD=split402-launch-evidence/phase6-image-provenance.txt",
@@ -76,8 +76,8 @@ describe("Split402 launch preflight", () => {
       .toMatchObject({
         ok: false,
         details: expect.arrayContaining([
-          "Missing split402-launch-evidence\\README.md",
-          "Existing split402-launch-evidence\\phase7-staging-proof.txt",
+          "Missing split402-launch-evidence/README.md",
+          "Existing split402-launch-evidence/phase7-staging-proof.txt",
         ]),
       });
   });
@@ -106,7 +106,7 @@ describe("Split402 launch preflight", () => {
       ),
     ).toMatchObject({ ok: true });
     expect(report.nextActions).toContain(
-      "Fill SPLIT402_PHASE6_EVIDENCE_REVIEW_ID in split402-launch-evidence\\phase6-evidence.env.",
+      "Fill SPLIT402_PHASE6_EVIDENCE_REVIEW_ID in split402-launch-evidence/phase6-evidence.env.",
     );
     expect(report.nextActions).not.toContain(
       "Set SPLIT402_PHASE6_ASSEMBLE_IMAGE_PROVENANCE_RECORD=split402-launch-evidence/phase6-image-provenance.txt",
@@ -211,12 +211,12 @@ describe("Split402 launch preflight", () => {
     ).toMatchObject({
       ok: false,
       details: expect.arrayContaining([
-        "Regenerate split402-launch-evidence\\phase6-custody-evidence.txt from checkout def5678 before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist; found source_commit abc1234.",
-        "Regenerate split402-launch-evidence\\phase7-staging-proof.txt from checkout def5678 before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist; found source_commit abc1234.",
+        "Regenerate split402-launch-evidence/phase6-custody-evidence.txt from checkout def5678 before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist; found source_commit abc1234.",
+        "Regenerate split402-launch-evidence/phase7-staging-proof.txt from checkout def5678 before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist; found source_commit abc1234.",
       ]),
     });
     expect(report.nextActions).toContain(
-      "Regenerate split402-launch-evidence\\phase6-custody-evidence.txt from checkout def5678 before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist; found source_commit abc1234.",
+      "Regenerate split402-launch-evidence/phase6-custody-evidence.txt from checkout def5678 before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist; found source_commit abc1234.",
     );
   });
 
@@ -253,7 +253,7 @@ describe("Split402 launch preflight", () => {
     ).toMatchObject({
       ok: false,
       details: expect.arrayContaining([
-        "Set SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 in split402-launch-evidence\\phase7-staging.env for live router execution.",
+        "Set SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 in split402-launch-evidence/phase7-staging.env for live router execution.",
       ]),
     });
   });
