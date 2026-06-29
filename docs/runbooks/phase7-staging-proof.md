@@ -16,7 +16,7 @@ git rev-parse HEAD
 git status --short --branch
 corepack pnpm phase7:staging:init
 SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed
-corepack pnpm phase7:staging-proof --evidence-env-file phase7-staging-evidence/phase7-staging.env > phase7-staging-proof.txt
+corepack pnpm phase7:staging-proof --evidence-env-file phase7-staging-evidence/phase7-staging.env phase7-staging-proof.txt
 corepack pnpm phase7:hosted:preflight --evidence-env-file phase7-staging-evidence/phase7-staging.env
 # Confirm hosted control plane has SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc.
 corepack pnpm phase7:staging:collect-reads --evidence-env-file phase7-staging-evidence/phase7-staging.env
@@ -27,7 +27,7 @@ corepack pnpm demo:mcp-bundle phase7-staging-evidence/mcp-bundle.json
 corepack pnpm demo:paid-suite > phase7-staging-evidence/paid-suite.log
 corepack pnpm phase7:staging:derive-receipt-verification --evidence-env-file phase7-staging-evidence/phase7-staging.env
 corepack pnpm phase7:staging:manifest phase7-staging-proof.txt phase7-staging-evidence/artifact-manifest.json
-corepack pnpm phase7:staging:assemble --evidence-env-file phase7-staging-evidence/phase7-staging.env > phase7-staging-proof.txt
+corepack pnpm phase7:staging:assemble --evidence-env-file phase7-staging-evidence/phase7-staging.env phase7-staging-proof.txt
 corepack pnpm phase7:staging:status phase7-staging-proof.txt
 ```
 

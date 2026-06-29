@@ -1,10 +1,11 @@
 import { execFileSync } from "node:child_process";
 
+import { writeCliTextOutput } from "./cliOutput.js";
 import { loadEvidenceEnvFiles } from "./evidenceEnvFile.js";
 import { createPhase7StagingProofRecord } from "./phase7StagingProof.js";
 
 try {
-  loadEvidenceEnvFiles({
+  const cli = loadEvidenceEnvFiles({
     argv: process.argv.slice(2),
     defaultEnvFiles: [
       "split402-launch-evidence/phase7-staging.env",
@@ -49,12 +50,15 @@ try {
     approval_notes: process.env.SPLIT402_PHASE7_APPROVAL_NOTES,
   };
 
-  console.log(createPhase7StagingProofRecord(values));
+  writeCliTextOutput({
+    text: createPhase7StagingProofRecord(values),
+    outputPath: cli.args[0],
+  });
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
   console.error(
     [
-      "Usage: corepack pnpm phase7:staging-proof",
+      "Usage: corepack pnpm phase7:staging-proof [phase7-staging-proof.txt]",
       "Env file options:",
       "  --evidence-env-file <path> (optional; defaults to split402-launch-evidence/phase7-staging.env when present)",
       "  SPLIT402_ENV_FILE=<path> (optional; uses platform path separator for multiple files)",

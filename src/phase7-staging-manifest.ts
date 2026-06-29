@@ -1,6 +1,7 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
 
+import { writeCliTextOutput } from "./cliOutput.js";
 import { createPhase7StagingArtifactManifest } from "./phase7StagingArtifactManifest.js";
 
 const proofPath =
@@ -22,11 +23,8 @@ if (proofPath === undefined || proofPath.trim().length === 0) {
     resolveArtifactPath: (artifactPath, baseDir) =>
       isAbsolute(artifactPath) ? artifactPath : resolve(baseDir, artifactPath),
   });
-  const manifestJson = `${JSON.stringify(manifest, null, 2)}\n`;
-  if (outputPath === undefined || outputPath.trim().length === 0) {
-    process.stdout.write(manifestJson);
-  } else {
-    mkdirSync(dirname(outputPath), { recursive: true });
-    writeFileSync(outputPath, manifestJson, "utf8");
-  }
+  writeCliTextOutput({
+    text: `${JSON.stringify(manifest, null, 2)}\n`,
+    outputPath,
+  });
 }

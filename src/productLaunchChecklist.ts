@@ -152,7 +152,7 @@ function createPhase7Section(
       "corepack pnpm demo:paid-suite > split402-launch-evidence/phase7-staging-evidence/paid-suite.log",
       "corepack pnpm phase7:staging:derive-receipt-verification --evidence-env-file split402-launch-evidence/phase7-staging.env",
       "corepack pnpm phase7:staging:manifest split402-launch-evidence/phase7-staging-proof.txt split402-launch-evidence/phase7-staging-evidence/artifact-manifest.json",
-      "corepack pnpm phase7:staging:assemble --evidence-env-file split402-launch-evidence/phase7-staging.env > split402-launch-evidence/phase7-staging-proof.txt",
+      "corepack pnpm phase7:staging:assemble --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-proof.txt",
       "corepack pnpm phase7:staging:status split402-launch-evidence/phase7-staging-proof.txt",
     ],
     notes: [
