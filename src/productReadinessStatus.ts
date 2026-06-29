@@ -163,7 +163,8 @@ function createProductNextActions(
   phase7: Phase7StagingStatusReport,
 ): string[] {
   const leadActions: string[] = [];
-  const detailActions: string[] = [];
+  const phase7DetailActions: string[] = [];
+  const phase6DetailActions: string[] = [];
 
   if (!phase7.proofChecked && !phase6.evidenceBundleChecked) {
     return [
@@ -182,7 +183,7 @@ function createProductNextActions(
         ? "Fix Phase 7 hosted proof blockers reported by corepack pnpm phase7:staging:status."
         : "Run corepack pnpm product:launch-preflight --brief split402-launch-evidence before collecting hosted proof.",
     );
-    detailActions.push(...phase7.nextActions.slice(0, 5));
+    phase7DetailActions.push(...phase7.nextActions.slice(0, 5));
   }
 
   if (!phase6.readyForCustody) {
@@ -191,10 +192,31 @@ function createProductNextActions(
         ? "Fix Phase 6 custody evidence blockers reported by corepack pnpm phase6:evidence:status."
         : "Generate and assemble the Phase 6 custody evidence bundle.",
     );
-    detailActions.push(...phase6.nextActions.slice(0, 5));
+    phase6DetailActions.push(...phase6.nextActions.slice(0, 5));
   }
 
-  return [...new Set([...leadActions, ...detailActions])];
+  return [
+    ...new Set([
+      ...leadActions,
+      ...interleaveActions(phase7DetailActions, phase6DetailActions),
+    ]),
+  ];
+}
+
+function interleaveActions(left: readonly string[], right: readonly string[]): string[] {
+  const actions: string[] = [];
+  const maxLength = Math.max(left.length, right.length);
+  for (let index = 0; index < maxLength; index += 1) {
+    const leftAction = left[index];
+    if (leftAction !== undefined) {
+      actions.push(leftAction);
+    }
+    const rightAction = right[index];
+    if (rightAction !== undefined) {
+      actions.push(rightAction);
+    }
+  }
+  return actions;
 }
 
 function createSummary(input: {

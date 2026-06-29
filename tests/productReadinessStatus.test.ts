@@ -98,6 +98,8 @@ approval_notes: checked evidence is intentionally incomplete
     expect(brief).toContain(
       "Fix Phase 6 custody evidence blockers reported by corepack pnpm phase6:evidence:status.",
     );
+    expect(brief.indexOf("Fill missing fields: reviewers")).toBeGreaterThan(-1);
+    expect(brief.indexOf("Fill missing fields: review_date")).toBeGreaterThan(-1);
   });
 
   it("formats a simple operator-facing summary", () => {
