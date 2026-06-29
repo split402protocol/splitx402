@@ -44,6 +44,9 @@ describe("Split402 launch checklist", () => {
     expect(checklist.sections[1]?.commands).toContain(
       "corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json",
     );
+    expect(checklist.sections[1]?.commands).toContain(
+      "corepack pnpm product:public-surface-check --brief",
+    );
     expect(checklist.sections[2]?.commands).toContain(
       "SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 corepack pnpm phase7:staging:collect-mcp-gateway --evidence-env-file split402-launch-evidence/phase7-staging.env",
     );

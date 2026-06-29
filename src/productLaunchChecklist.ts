@@ -134,6 +134,7 @@ function createLocalValidationSection(
     commands: [
       "corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json",
       "corepack pnpm lint",
+      "corepack pnpm product:public-surface-check --brief",
       "corepack pnpm typecheck",
       "corepack pnpm test",
       "corepack pnpm build",

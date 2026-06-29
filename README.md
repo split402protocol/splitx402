@@ -344,6 +344,7 @@ corepack pnpm product:evidence:init --force
 corepack pnpm product:local-proof --help
 corepack pnpm product:local-proof --brief
 corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json
+corepack pnpm product:public-surface-check --brief
 corepack pnpm product:launch-preflight --help
 corepack pnpm product:launch-preflight --brief
 corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence
@@ -376,12 +377,16 @@ and token as the Phase 7 proof.
 validation, hosted proof, custody evidence, and combined status commands; pass
 `--workspace split402-launch-evidence` or the Phase 6 and Phase 7 evidence paths
 to show checked, blocked, or ready section statuses from real files.
-`product:local-proof --brief` proves the local public-alpha protocol vectors,
-router alpha tests, and runnable MCP gateway smoke path before hosted evidence
-collection. Pass `--output split402-launch-evidence/local-public-alpha-proof.json`
-to save that proof beside the launch evidence workspace. This is an
-adoption-layer smoke proof only; it does not approve hosted Phase 7, production
-custody, mainnet, or commercial operations.
+`product:local-proof --brief` proves the local public-alpha repository hygiene,
+public/private license surface, protocol vectors, router alpha tests, and
+runnable MCP gateway smoke path before hosted evidence collection. Pass
+`--output split402-launch-evidence/local-public-alpha-proof.json` to save that
+proof beside the launch evidence workspace. This is an adoption-layer smoke proof
+only; it does not approve hosted Phase 7, production custody, mainnet, or
+commercial operations.
+`product:public-surface-check --brief` can also be run alone to verify that
+launch-facing files still present Apache-2.0, link the public/private boundary,
+and do not drift back to old launch-facing license claims.
 `product:status` reports the current Split402
 phase, whether the public-alpha hosted proof and production custody evidence are
 checked, launch-gate percentages, exact evidence-env setup commands, and why the

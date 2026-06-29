@@ -100,9 +100,11 @@ to update only stale scaffold `source_commit` values before evidence collection,
 and pass `--force` only when intentionally replacing scaffold files. Run
 `corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json`
 to prove and save the local public-alpha protocol vectors, router alpha tests,
-and runnable MCP gateway smoke path before hosted collection. This command does
-not approve hosted staging, production custody, mainnet, or commercial
-operations. Run
+public/private license surface, and runnable MCP gateway smoke path before
+hosted collection. This command does not approve hosted staging, production
+custody, mainnet, or commercial operations. Run
+`corepack pnpm product:public-surface-check --brief` when you only need to
+verify the launch-facing Apache-2.0/public-private boundary. Run
 evidence collection and assembly commands with the generated `--evidence-env-file`
 option, or use the default launch workspace paths that are auto-loaded when
 present. Run

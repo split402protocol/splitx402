@@ -24,6 +24,7 @@ describe("local public-alpha product proof", () => {
     expect(report.generatedAt).toBe("2026-06-29T20:00:00.000Z");
     expect(commands).toEqual([
       "corepack pnpm repo:guard",
+      "corepack pnpm product:public-surface-check --brief",
       "corepack pnpm vectors:check",
       "corepack pnpm --filter @split402/router test",
       "corepack pnpm demo:mcp-gateway:smoke",
