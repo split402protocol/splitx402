@@ -12,6 +12,8 @@ describe("Phase 7 command evidence template", () => {
 
     expect(template).toContain("# Split402 Phase 7 command evidence transcript");
     expect(template).toContain("Do not paste secrets");
+    expect(template).toContain("git status --short --branch");
+    expect(template).toContain("no changed-file rows");
     for (const command of PHASE7_REQUIRED_COMMAND_EVIDENCE) {
       expect(template).toContain(`# $ ${command}`);
       expect(template).not.toContain(`\n$ ${command}`);

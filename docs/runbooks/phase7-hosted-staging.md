@@ -126,6 +126,10 @@ corepack pnpm phase7:staging:status --brief split402-launch-evidence/phase7-stag
 corepack pnpm product:status --brief --workspace split402-launch-evidence
 ```
 
+The `commands_run` transcript must include the real output for
+`git status --short --branch`; it must show only the branch/status header and no
+changed-file rows.
+
 `phase7:staging:collect-reads` writes both payout-obligation and
 funding-balance artifacts from the payout-obligations endpoint and validates
 all captured read artifacts before writing them. It fails fast unless route

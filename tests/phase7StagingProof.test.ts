@@ -939,6 +939,56 @@ funding_balance_evidence: funding.json
     );
   });
 
+  it("blocks staged proof status when command evidence shows a dirty source worktree", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/commands.log",
+      encode(
+        createValidCommandsLog().replace(
+          "## main...origin/main",
+          ["## main...origin/main", " M README.md"].join("\n"),
+        ),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.commandEvidenceStatus.blockers).toContain(
+      "commands_run git status output must show a clean source worktree",
+    );
+    expect(report.nextActions.join("\n")).toContain(
+      "Replace split402-launch-evidence/phase7-staging-evidence/commands.log with a real command transcript",
+    );
+  });
+
+  it("blocks staged proof status when command evidence omits git status output", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/commands.log",
+      encode(createValidCommandsLog().replace("## main...origin/main\n", "")),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.commandEvidenceStatus.blockers).toContain(
+      "commands_run git status output is missing",
+    );
+  });
+
   it("accepts combined launch evidence workspace init as Phase 7 workspace evidence", () => {
     const proofText = createManifestProof();
     const artifacts = createManifestArtifacts(proofText);
