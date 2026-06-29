@@ -114,7 +114,8 @@ Phase 6 custody evidence env paths, and required Phase 7 hosted proof
 environment values are ready before collection starts. The preflight output also
 prints redacted Phase 6 custody and Phase 7 hosted env summaries so operators
 can see missing/configured values without exposing tokens, private keys, funding
-wallet values, or review notes. Run
+wallet values, or review notes. It uses dotenv-style parsing so quoted local env
+values are interpreted consistently with the evidence collectors. Run
 `corepack pnpm product:launch-checklist --brief` for the exact remaining local
 validation, hosted proof, custody evidence, and combined status commands; pass
 `--workspace split402-launch-evidence` or the Phase 6 and Phase 7 evidence files

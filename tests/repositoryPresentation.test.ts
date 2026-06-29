@@ -280,6 +280,7 @@ describe("repository presentation", () => {
     expect(readme).toContain("redacted summaries");
     expect(readme).toContain("without printing tokens, private keys");
     expect(readme).toContain("custody values");
+    expect(readme).toContain("dotenv-style parsing");
     expect(readme).toContain("hides extra actions");
     expect(readme).toContain("adoption-layer smoke proof");
     expect(currentState).toContain("corepack pnpm product:evidence:init");
@@ -287,6 +288,7 @@ describe("repository presentation", () => {
     expect(currentState).toContain("corepack pnpm product:launch-preflight");
     expect(currentState).toContain("scaffold `source_commit` values");
     expect(currentState).toContain("redacted Phase 6 custody and Phase 7 hosted env summaries");
+    expect(currentState).toContain("dotenv-style parsing");
     expect(currentState).toContain("corepack pnpm product:launch-checklist");
     expect(currentState).toContain("local env templates");
     expect(currentState).toContain("`--refresh-source`");

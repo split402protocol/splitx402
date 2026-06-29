@@ -218,7 +218,8 @@ function createReadmeText(input: {
     "that hosted proof identity, environment, webhook, and collector values are",
     "filled, that hosted proof URLs are valid http(s) URLs, and that MCP live",
     "execution targets the same hosted control-plane URL and token as the Phase",
-    "7 proof environment.",
+    "7 proof environment. It reads local env files with dotenv-style parsing,",
+    "so quoted values are handled consistently with the evidence collectors.",
     "",
   ].join("\n");
 }
