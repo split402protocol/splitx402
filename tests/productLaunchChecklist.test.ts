@@ -50,8 +50,14 @@ describe("Split402 launch checklist", () => {
     expect(checklist.sections[2]?.commands).toContain(
       "SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 corepack pnpm phase7:staging:collect-mcp-gateway --evidence-env-file split402-launch-evidence/phase7-staging.env",
     );
+    expect(checklist.sections[2]?.commands[0]).toBe(
+      "corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence",
+    );
     expect(checklist.sections[2]?.commands).toContain(
       "corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log",
+    );
+    expect(checklist.sections[3]?.commands[0]).toBe(
+      "corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence",
     );
     expect(checklist.sections[3]?.commands).toContain(
       "Review generated split402-launch-evidence/phase6-evidence.env before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template split402-launch-evidence split402-launch-evidence/phase6-evidence.env",
@@ -141,6 +147,44 @@ approval_notes: checked evidence is intentionally incomplete
     );
     expect(formatSplit402LaunchChecklistBrief(checklist)).toContain(
       "Collect Phase 7 hosted public-alpha proof [blocked]",
+    );
+  });
+
+  it("points checked external-evidence blockers back to grouped launch preflight after local proof is ready", () => {
+    const checklist = createSplit402LaunchChecklist(
+      createSplit402ProductReadinessReport({
+        localProofText: JSON.stringify({
+          schema: "split402.local_public_alpha_proof.v1",
+          status: "passed",
+          launchApproval: "not_approved",
+          generatedAt: "2026-06-29T20:00:00.000Z",
+          checks: [
+            { id: "repo_hygiene", status: "passed" },
+            { id: "public_surface", status: "passed" },
+            { id: "protocol_vectors", status: "passed" },
+            { id: "router_alpha", status: "passed" },
+            { id: "mcp_gateway_smoke", status: "passed" },
+          ],
+          notes: [],
+        }),
+        phase6EvidenceText: `review_id: pending
+approval_decision: no-go
+`,
+        phase7ProofText: `proof_id: pending
+approval_decision: no-go
+`,
+      }),
+    );
+
+    expect(checklist.sections.map((section) => section.status)).toEqual([
+      "ready",
+      "ready",
+      "blocked",
+      "blocked",
+      "blocked",
+    ]);
+    expect(checklist.nextCommand).toBe(
+      "corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence",
     );
   });
 
