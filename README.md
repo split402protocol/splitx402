@@ -372,11 +372,13 @@ custody evidence env paths, and required Phase 7 hosted proof identity,
 environment, webhook, and collector values are ready before collection starts.
 It also verifies that hosted proof and MCP live execution URLs are valid
 http(s) URLs and that MCP live execution uses the same hosted control-plane URL
-and token as the Phase 7 proof. The brief output includes redacted summaries of
-the Phase 6 custody env file and Phase 7 hosted env file so operators can see
-which values are missing or configured without printing tokens, private keys, or
-custody values. It reads the local env files with dotenv-style parsing, so
-quoted values are handled the same way as the evidence collectors.
+and token as the Phase 7 proof. For the public-alpha proof, MCP live execution
+must target `SPLIT402_MCP_CAPABILITY=solana.wallet-risk` so evidence matches the
+documented router/MCP demo. The brief output includes redacted summaries of the
+Phase 6 custody env file and Phase 7 hosted env file so operators can see which
+values are missing or configured without printing tokens, private keys, or
+custody values. It reads the local env files with dotenv-style parsing, so quoted
+values are handled the same way as the evidence collectors.
 `product:launch-checklist --brief` prints the exact remaining local
 validation, hosted proof, custody evidence, and combined status commands; pass
 `--workspace split402-launch-evidence` or the Phase 6 and Phase 7 evidence paths

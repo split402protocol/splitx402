@@ -120,6 +120,8 @@ const REQUIRED_MCP_LIVE_ENV_KEYS = [
   "SPLIT402_MCP_CAPABILITY",
 ] as const;
 
+const EXPECTED_PHASE7_MCP_CAPABILITY = "solana.wallet-risk";
+
 const REQUIRED_PHASE7_HOSTED_URL_ENV_KEYS = [
   "SPLIT402_PHASE7_CONTROL_PLANE_URL",
   "SPLIT402_PHASE7_DASHBOARD_URL",
@@ -225,6 +227,10 @@ export function createSplit402LaunchPreflightReport(
   const missingMcpKeys = REQUIRED_MCP_LIVE_ENV_KEYS.filter(
     (key) => !hasConfiguredEnvValue(phase7Env, key),
   );
+  const invalidMcpCapabilityDetails = createMcpCapabilityDetails({
+    env: phase7Env,
+    envPath: phase7EnvPath,
+  });
   const invalidMcpUrlDetails = createHttpUrlEnvDetails({
     env: phase7Env,
     envPath: phase7EnvPath,
@@ -251,6 +257,7 @@ export function createSplit402LaunchPreflightReport(
           `Fill SPLIT402_MCP_SVM_PRIVATE_KEY or SVM_PRIVATE_KEY in ${toDisplayPath(phase7EnvPath)}.`,
         ]
       : []),
+    ...invalidMcpCapabilityDetails,
     ...invalidMcpUrlDetails,
   ];
   const mcpHostedMismatchDetails = createMcpHostedMismatchDetails({
@@ -347,6 +354,7 @@ export function createSplit402LaunchPreflightReport(
         missingMcpKeys.length === 0 &&
         liveExecutionEnabled &&
         !missingBuyerKey &&
+        invalidMcpCapabilityDetails.length === 0 &&
         invalidMcpUrlDetails.length === 0,
       severity: "required",
       details:
@@ -610,6 +618,24 @@ function createMcpHostedMismatchDetails(input: {
     );
   }
   return details;
+}
+
+function createMcpCapabilityDetails(input: {
+  env: ReadonlyMap<string, string>;
+  envPath: string;
+}): string[] {
+  const capability = input.env.get("SPLIT402_MCP_CAPABILITY")?.trim();
+  if (
+    capability === undefined ||
+    capability.length === 0 ||
+    isPlaceholderEnvValue(capability) ||
+    capability === EXPECTED_PHASE7_MCP_CAPABILITY
+  ) {
+    return [];
+  }
+  return [
+    `Set SPLIT402_MCP_CAPABILITY=${EXPECTED_PHASE7_MCP_CAPABILITY} in ${toDisplayPath(input.envPath)} for the Phase 7 public-alpha MCP proof.`,
+  ];
 }
 
 function createPrematureApprovalDetails(input: {
