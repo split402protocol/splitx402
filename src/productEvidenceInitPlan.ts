@@ -180,18 +180,23 @@ export function createProductEvidenceSourceRefreshWrites(input: {
   return [
     {
       path: githubSettingsReviewPath,
-      contents: refreshSourceCommitField({
-        allowedNonEmptyFields: GITHUB_SETTINGS_REFRESH_ALLOWED_NON_EMPTY_FIELDS,
+      contents: addMissingRecordFields({
+        fields: ["review_method", "evidence_source"],
         nextText: input.workspace.githubSettingsReviewText,
-        path: githubSettingsReviewPath,
-        previousText: input.readText(githubSettingsReviewPath),
-        scaffoldPlaceholderValues: new Set([
-          "<reviewer handles>",
-          "no",
-          "no-go",
-          "scaffold only; replace with live GitHub UI/API evidence before approval",
-          "template only; replace with live GitHub UI/API evidence before approval",
-        ]),
+        text: refreshSourceCommitField({
+          allowedNonEmptyFields: GITHUB_SETTINGS_REFRESH_ALLOWED_NON_EMPTY_FIELDS,
+          nextText: input.workspace.githubSettingsReviewText,
+          path: githubSettingsReviewPath,
+          previousText: input.readText(githubSettingsReviewPath),
+          scaffoldPlaceholderValues: new Set([
+            "<reviewer handles>",
+            "pending",
+            "no",
+            "no-go",
+            "scaffold only; replace with live GitHub UI/API evidence before approval",
+            "template only; replace with live GitHub UI/API evidence before approval",
+          ]),
+        }),
       }),
     },
     {
@@ -275,6 +280,26 @@ function replaceRecordField(text: string, fieldName: string, value: string): str
     nextLines.push(`${fieldName}: ${value}`);
   }
   return nextLines.join("\n");
+}
+
+function addMissingRecordFields(input: {
+  fields: readonly string[];
+  nextText: string;
+  text: string;
+}): string {
+  const currentFields = parseRecordFields(input.text);
+  const nextFields = parseRecordFields(input.nextText);
+  const lines = input.text.split(/\r?\n/u);
+  for (const field of input.fields) {
+    if (currentFields.some((entry) => entry.field === field)) {
+      continue;
+    }
+    const nextValue = nextFields.find((entry) => entry.field === field)?.value;
+    if (nextValue !== undefined) {
+      lines.push(`${field}: ${nextValue}`);
+    }
+  }
+  return lines.join("\n");
 }
 
 function readRecordField(text: string, fieldName: string): string | undefined {

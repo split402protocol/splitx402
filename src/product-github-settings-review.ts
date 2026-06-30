@@ -31,6 +31,10 @@ try {
       reviewId: readRequiredEnv("SPLIT402_GITHUB_SETTINGS_REVIEW_ID"),
       reviewDate: env.SPLIT402_GITHUB_SETTINGS_REVIEW_DATE ?? isoDate(),
       reviewers: readRequiredEnv("SPLIT402_GITHUB_SETTINGS_REVIEWERS"),
+      reviewMethod: readRequiredEnv("SPLIT402_GITHUB_SETTINGS_REVIEW_METHOD"),
+      evidenceSource: readRequiredEnv(
+        "SPLIT402_GITHUB_SETTINGS_EVIDENCE_SOURCE",
+      ),
       repository:
         env.SPLIT402_GITHUB_SETTINGS_REPOSITORY ??
         "split402protocol/splitx402",

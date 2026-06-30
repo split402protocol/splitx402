@@ -2,6 +2,8 @@ export interface GitHubRepositorySettingsReviewInput {
   reviewId: string;
   reviewDate: string;
   reviewers: string;
+  reviewMethod: string;
+  evidenceSource: string;
   repository: string;
   sourceCommit: string;
   branch: string;
@@ -35,6 +37,8 @@ const REQUIRED_RECORD_FIELDS = [
   "review_id",
   "review_date",
   "reviewers",
+  "review_method",
+  "evidence_source",
   "repository",
   "source_commit",
   "branch",
@@ -91,6 +95,8 @@ export function createGitHubRepositorySettingsReviewRecord(
     review_id: assertRequired(input.reviewId, "reviewId"),
     review_date: assertRequired(input.reviewDate, "reviewDate"),
     reviewers: assertRequired(input.reviewers, "reviewers"),
+    review_method: assertRequired(input.reviewMethod, "reviewMethod"),
+    evidence_source: assertRequired(input.evidenceSource, "evidenceSource"),
     repository: assertRepository(input.repository),
     source_commit: assertGitSha(input.sourceCommit, "sourceCommit"),
     branch: assertRequired(input.branch, "branch"),
@@ -151,6 +157,8 @@ export function createGitHubRepositorySettingsReviewTemplate(): string {
     reviewId: "github-settings-review-001",
     reviewDate: "YYYY-MM-DD",
     reviewers: "<reviewer handles>",
+    reviewMethod: "pending",
+    evidenceSource: "pending",
     repository: "split402protocol/splitx402",
     sourceCommit: "0000000",
     branch: "main",
@@ -227,6 +235,11 @@ export function verifyGitHubRepositorySettingsReviewRecord(
     errors.push("review_decision must be no-go or approved");
   }
   if (reviewDecision === "approved") {
+    for (const field of ["reviewers", "review_method", "evidence_source"] as const) {
+      if (isPlaceholderReviewValue(fields.get(field))) {
+        errors.push(`${field} must be real review evidence before approval`);
+      }
+    }
     for (const field of YES_NO_RECORD_FIELDS) {
       if (fields.get(field) !== "yes") {
         errors.push(`${field} must be yes before approval`);
@@ -253,6 +266,8 @@ export function githubRepositorySettingsReviewRequiredEnv(): string[] {
   return [
     "SPLIT402_GITHUB_SETTINGS_REVIEW_ID",
     "SPLIT402_GITHUB_SETTINGS_REVIEWERS",
+    "SPLIT402_GITHUB_SETTINGS_REVIEW_METHOD",
+    "SPLIT402_GITHUB_SETTINGS_EVIDENCE_SOURCE",
     "SPLIT402_GITHUB_SETTINGS_ABOUT_DESCRIPTION_MATCHES",
     "SPLIT402_GITHUB_SETTINGS_TOPICS_MATCH",
     "SPLIT402_GITHUB_SETTINGS_HOMEPAGE_POLICY_MATCHES",
@@ -318,6 +333,23 @@ function hasRequiredField(
 ): boolean {
   const value = fields.get(field);
   return value !== undefined && value.length > 0;
+}
+
+function isPlaceholderReviewValue(value: string | undefined): boolean {
+  if (value === undefined) {
+    return true;
+  }
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized.length === 0 ||
+    normalized === "pending" ||
+    normalized === "todo" ||
+    normalized === "tbd" ||
+    normalized === "template" ||
+    normalized.includes("template only") ||
+    normalized.includes("replace") ||
+    normalized.startsWith("<")
+  );
 }
 
 function parseRecordFields(text: string): Map<string, string> {

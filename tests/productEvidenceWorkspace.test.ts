@@ -77,6 +77,12 @@ describe("Split402 product evidence workspace", () => {
       "source_commit: 096f190",
     );
     expect(workspace.githubSettingsReviewText).toContain(
+      "review_method: pending",
+    );
+    expect(workspace.githubSettingsReviewText).toContain(
+      "evidence_source: pending",
+    );
+    expect(workspace.githubSettingsReviewText).toContain(
       "review_decision: no-go",
     );
     expect(workspace.mainnetCanaryEnvText).toContain(
@@ -323,6 +329,38 @@ describe("Split402 product evidence workspace", () => {
     expect(writes[0]?.contents).not.toContain("source_commit: abc1234");
     expect(writes[1]?.contents).not.toContain("source_commit: abc1234");
     expect(writes[2]?.contents).not.toContain("source_commit: abc1234");
+  });
+
+  it("adds missing GitHub review evidence fields during scaffold source refresh", () => {
+    const previous = createSplit402ProductEvidenceWorkspace({
+      sourceCommit: "abc1234",
+    });
+    const next = createSplit402ProductEvidenceWorkspace({
+      sourceCommit: "def5678",
+    });
+
+    const previousGithubReview = previous.githubSettingsReviewText
+      .replace("review_method: pending\n", "")
+      .replace("evidence_source: pending\n", "");
+    const writes = createProductEvidenceSourceRefreshWrites({
+      workspace: next,
+      readText: (path) => {
+        if (path.endsWith(previous.githubSettingsReviewFileName)) {
+          return previousGithubReview;
+        }
+        if (path.endsWith(previous.phase6EvidenceFileName)) {
+          return previous.phase6EvidenceText;
+        }
+        if (path.endsWith(previous.phase7ProofFileName)) {
+          return previous.phase7ProofText;
+        }
+        throw new Error(`unexpected read ${path}`);
+      },
+    });
+
+    expect(writes[0]?.contents).toContain("source_commit: def5678");
+    expect(writes[0]?.contents).toContain("review_method: pending");
+    expect(writes[0]?.contents).toContain("evidence_source: pending");
   });
 
   it("refuses to refresh source commits after evidence values are filled", () => {

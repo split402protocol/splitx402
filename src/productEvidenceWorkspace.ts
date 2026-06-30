@@ -165,6 +165,8 @@ function createGithubSettingsReviewText(
     reviewId: "github-settings-review-001",
     reviewDate: input.reviewDate ?? "YYYY-MM-DD",
     reviewers: "<reviewer handles>",
+    reviewMethod: "pending",
+    evidenceSource: "pending",
     repository: "split402protocol/splitx402",
     sourceCommit: input.sourceCommit ?? "0000000",
     branch: "main",

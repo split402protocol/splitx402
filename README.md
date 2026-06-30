@@ -416,7 +416,10 @@ After verifying branch protection, Code Owners review, required checks, issue
 intake, and release posture in the GitHub UI/API, run
 `product:github-settings-review` with the required `SPLIT402_GITHUB_SETTINGS_*`
 environment values and keep the output with launch evidence. This command
-records the review; it does not itself prove live GitHub branch protection.
+records the review; it does not itself prove live GitHub branch protection. An
+approved review must include real `SPLIT402_GITHUB_SETTINGS_REVIEW_METHOD` and
+`SPLIT402_GITHUB_SETTINGS_EVIDENCE_SOURCE` values, such as an attached private
+UI/API evidence record.
 `product:public-surface-check --brief` can also be run alone to verify that
 launch-facing files still present Apache-2.0, link the public/private boundary,
 and do not drift back to old launch-facing license claims.
