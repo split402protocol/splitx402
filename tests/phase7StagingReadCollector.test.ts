@@ -74,6 +74,57 @@ describe("Phase 7 staging read collector", () => {
     );
   });
 
+  it("trims valid webhook status before building the capture URL", async () => {
+    const calls: string[] = [];
+
+    await collectPhase7ReadArtifacts({
+      controlPlaneUrl: "https://control.staging.example",
+      merchantId: "mrc_001",
+      referrerWallet: "referrer",
+      outputDir: "evidence",
+      webhookStatus: " delivered ",
+      fetch: async (url) => {
+        calls.push(url);
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify(createReadArtifact(url)),
+        };
+      },
+      writeArtifact: () => undefined,
+    });
+
+    expect(calls).toContain(
+      "https://control.staging.example/v1/merchants/mrc_001/webhook-events?status=delivered",
+    );
+  });
+
+  it("rejects unsupported webhook status before hosted reads", async () => {
+    const calls: string[] = [];
+
+    await expect(
+      collectPhase7ReadArtifacts({
+        controlPlaneUrl: "https://control.staging.example",
+        merchantId: "mrc_001",
+        referrerWallet: "referrer",
+        outputDir: "evidence",
+        webhookStatus: "done",
+        fetch: async (url) => {
+          calls.push(url);
+          return {
+            ok: true,
+            status: 200,
+            text: async () => JSON.stringify(createReadArtifact(url)),
+          };
+        },
+        writeArtifact: () => undefined,
+      }),
+    ).rejects.toThrow(
+      "webhookStatus must be pending, processing, delivered, or dead_letter",
+    );
+    expect(calls).toEqual([]);
+  });
+
   it("fails fast when a read artifact request fails", async () => {
     await expect(
       collectPhase7ReadArtifacts({
