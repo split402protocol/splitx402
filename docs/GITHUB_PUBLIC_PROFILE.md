@@ -47,6 +47,8 @@ Recommended GitHub UI settings:
 - Website: leave blank until hosted evidence is ready.
 - Topics: use the exact topic list above.
 - Releases and packages: publish only when installable artifacts are ready.
+- Branch protection, CODEOWNERS review, issue intake, and release posture: follow
+  [`docs/GITHUB_REPOSITORY_SETTINGS.md`](GITHUB_REPOSITORY_SETTINGS.md).
 
 Run this check before launch-facing updates:
 

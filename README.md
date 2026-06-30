@@ -709,6 +709,7 @@ assembled and approved.
 - [Canonical architecture spec](docs/reference/split402_protocol_architecture_v0.1.md)
 - [Current state](docs/CURRENT_STATE.md)
 - [GitHub public profile](docs/GITHUB_PUBLIC_PROFILE.md)
+- [GitHub repository settings](docs/GITHUB_REPOSITORY_SETTINGS.md)
 - [Public and private boundary](docs/PUBLIC_PRIVATE_BOUNDARY.md)
 - [Release policy](docs/RELEASE_POLICY.md)
 - [Architecture alignment note](docs/SPLIT402_ARCHITECTURE.md)

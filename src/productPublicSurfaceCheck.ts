@@ -30,6 +30,7 @@ const REQUIRED_FILES = [
   "SUPPORT.md",
   ".github/CODEOWNERS",
   "docs/GITHUB_PUBLIC_PROFILE.md",
+  "docs/GITHUB_REPOSITORY_SETTINGS.md",
   "docs/PUBLIC_PRIVATE_BOUNDARY.md",
   "docs/RELEASE_POLICY.md",
   "docs/checklists/prelaunch-public-private-review.md",
@@ -89,6 +90,7 @@ export function createSplit402PublicSurfaceCheckReport(
     createApacheLicenseFileCheck(exists, readText),
     createReadmeBoundaryCheck(exists, readText),
     createGitHubProfileContractCheck(exists, readText),
+    createGitHubRepositorySettingsCheck(exists, readText),
     createCodeownersCheck(exists, readText),
     createSupportPolicyCheck(exists, readText),
     createReleasePolicyCheck(exists, readText),
@@ -255,6 +257,9 @@ function createReadmeBoundaryCheck(
     ...(readme?.includes("docs/PUBLIC_PRIVATE_BOUNDARY.md") === true
       ? []
       : ["README.md must link to docs/PUBLIC_PRIVATE_BOUNDARY.md."]),
+    ...(readme?.includes("docs/GITHUB_REPOSITORY_SETTINGS.md") === true
+      ? []
+      : ["README.md must link to docs/GITHUB_REPOSITORY_SETTINGS.md."]),
     ...(readme?.includes("docs/RELEASE_POLICY.md") === true
       ? []
       : ["README.md must link to docs/RELEASE_POLICY.md."]),
@@ -282,6 +287,44 @@ function createReadmeBoundaryCheck(
       blockers.length === 0
         ? ["README presents Apache-2.0 and the public/private boundary."]
         : blockers,
+  };
+}
+
+function createGitHubRepositorySettingsCheck(
+  exists: (path: string) => boolean,
+  readText: (path: string) => string,
+): Split402PublicSurfaceCheck {
+  const path = "docs/GITHUB_REPOSITORY_SETTINGS.md";
+  const settings = readIfExists(path, exists, readText);
+  const requiredPhrases = [
+    "require pull request before merging",
+    "require review from Code Owners",
+    "require status checks to pass before merge",
+    "block force pushes",
+    "block branch deletion",
+    "Local public-alpha proof",
+    "PostgreSQL integration tests",
+    "CodeQL",
+    "Secret scan",
+    "Keep blank issues disabled",
+    "GitHub Security Advisories",
+    'Workspace packages stay `"private": true`',
+    "local checks prove the tracked repository surface, not live branch protection settings",
+  ];
+  const missingPhrases = requiredPhrases.filter(
+    (phrase) => settings?.includes(phrase) !== true,
+  );
+
+  return {
+    id: "github_repository_settings_policy",
+    label: "GitHub repository settings policy protects launch-facing main",
+    ok: missingPhrases.length === 0,
+    details:
+      missingPhrases.length === 0
+        ? [
+            "GitHub settings policy records branch protection, CODEOWNERS review, issue intake, required checks, and release posture.",
+          ]
+        : missingPhrases.map((phrase) => `${path} must include "${phrase}".`),
   };
 }
 
@@ -487,6 +530,11 @@ function createGitHubProfileContractCheck(
     ...(profile.includes("## Launch Boundary")
       ? []
       : [`${GITHUB_PROFILE_FILE} must include the launch boundary section.`]),
+    ...(profile.includes("docs/GITHUB_REPOSITORY_SETTINGS.md")
+      ? []
+      : [
+          `${GITHUB_PROFILE_FILE} must link to the GitHub repository settings policy.`,
+        ]),
     ...(profile.includes("Contributors are generated from commit author metadata")
       ? []
       : [
