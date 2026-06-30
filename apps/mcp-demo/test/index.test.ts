@@ -316,6 +316,41 @@ describe("MCP demo gateway", () => {
     });
   });
 
+  it("rejects malformed router capability search budgets", async () => {
+    const context = createMcpGatewayContext(
+      createMcpDemoBundle({
+        generatedAt: "2026-06-26T00:00:00.000Z"
+      })
+    );
+
+    const response = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "search-bad-budget",
+        method: "tools/call",
+        params: {
+          name: "split402.searchCapabilities",
+          arguments: {
+            capability: "solana.wallet-risk",
+            budget: {
+              maxAmountAtomic: "1.5"
+            }
+          }
+        }
+      }),
+      context
+    );
+
+    expect(response).toEqual({
+      jsonrpc: "2.0",
+      id: "search-bad-budget",
+      error: {
+        code: -32602,
+        message: "budget.maxAmountAtomic must be a non-negative atomic amount string"
+      }
+    });
+  });
+
   it("can build the gateway router from control-plane discovery", async () => {
     const calls: string[] = [];
     const bundle = createMcpDemoBundle({
@@ -810,6 +845,44 @@ describe("MCP demo gateway", () => {
       error: {
         code: -32602,
         message: "no providers match capability and budget: solana.wallet-risk"
+      }
+    });
+  });
+
+  it("rejects malformed router execution budgets before provider lookup", async () => {
+    const context = createMcpGatewayContext(
+      createMcpDemoBundle({
+        generatedAt: "2026-06-26T00:00:00.000Z"
+      })
+    );
+
+    const response = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "execute-bad-budget",
+        method: "tools/call",
+        params: {
+          name: "split402.execute",
+          arguments: {
+            capability: "solana.wallet-risk",
+            input: {
+              wallet: "wallet-123"
+            },
+            budget: {
+              maxAmountAtomic: "01"
+            }
+          }
+        }
+      }),
+      context
+    );
+
+    expect(response).toEqual({
+      jsonrpc: "2.0",
+      id: "execute-bad-budget",
+      error: {
+        code: -32602,
+        message: "budget.maxAmountAtomic must be a non-negative atomic amount string"
       }
     });
   });
