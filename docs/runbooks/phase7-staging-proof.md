@@ -237,7 +237,8 @@ The validator requires:
   `corepack pnpm audit --audit-level high`. The pasted
   `git status --short --branch` output must show only the branch/status header
   and no changed-file rows. The pasted launch-preflight output must include
-  `Split402 launch preflight: ready`.
+  `Split402 launch preflight: ready`, and the pasted public-surface output must
+  include `Split402 public surface check: passed`.
 - `funding_balance_evidence` must be a local attached
   `funding-balance.json` artifact containing a merchant obligation summary.
   Each asset must report `covered` with `fundingDeficitAtomic: "0"` or

@@ -1041,6 +1041,58 @@ funding_balance_evidence: funding.json
     );
   });
 
+  it("blocks staged proof status when public surface check output is missing", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/commands.log",
+      encode(
+        createValidCommandsLog().replace(
+          "Split402 public surface check: passed\n",
+          "",
+        ),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.commandEvidenceStatus.blockers).toContain(
+      "commands_run public surface check output is missing",
+    );
+  });
+
+  it("blocks staged proof status when public surface check fails", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/commands.log",
+      encode(
+        createValidCommandsLog().replace(
+          "Split402 public surface check: passed",
+          "Split402 public surface check: failed",
+        ),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.commandEvidenceStatus.blockers).toContain(
+      "commands_run public surface check output must pass",
+    );
+  });
+
   it("accepts combined launch evidence workspace init as Phase 7 workspace evidence", () => {
     const proofText = createManifestProof();
     const artifacts = createManifestArtifacts(proofText);
@@ -2945,6 +2997,7 @@ function createValidCommandsLog(): string {
     "$ corepack pnpm phase7:staging:status phase7-staging-proof.txt",
     "$ corepack pnpm lint",
     "$ corepack pnpm product:public-surface-check --brief",
+    "Split402 public surface check: passed",
     "$ corepack pnpm typecheck",
     "$ corepack pnpm test",
     "$ corepack pnpm build",

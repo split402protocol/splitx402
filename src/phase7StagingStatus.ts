@@ -2094,6 +2094,7 @@ function validateCommandEvidence(text: string, blockers: string[]): void {
   }
   validateGitStatusCommandOutput(text, blockers);
   validateLaunchPreflightCommandOutput(text, blockers);
+  validatePublicSurfaceCommandOutput(text, blockers);
 }
 
 interface CommandEvidenceBlock {
@@ -2144,6 +2145,31 @@ function validateLaunchPreflightCommandOutput(
   }
   if (!outputLines.some((line) => line === "Split402 launch preflight: ready")) {
     blockers.push("commands_run launch preflight output must be ready");
+  }
+}
+
+function validatePublicSurfaceCommandOutput(
+  text: string,
+  blockers: string[],
+): void {
+  const publicSurfaceBlock = extractCommandEvidenceBlocks(text).find((block) =>
+    block.command.includes("corepack pnpm product:public-surface-check"),
+  );
+  if (publicSurfaceBlock === undefined) {
+    return;
+  }
+
+  const outputLines = publicSurfaceBlock.outputLines
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  if (outputLines.length === 0) {
+    blockers.push("commands_run public surface check output is missing");
+    return;
+  }
+  if (
+    !outputLines.some((line) => line === "Split402 public surface check: passed")
+  ) {
+    blockers.push("commands_run public surface check output must pass");
   }
 }
 
