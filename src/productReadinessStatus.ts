@@ -12,10 +12,14 @@ import {
   LOCAL_PUBLIC_ALPHA_PROOF_CHECKS,
   type Split402LocalProofReport,
 } from "./productLocalProof.js";
+import {
+  verifyGitHubRepositorySettingsReviewRecord,
+} from "./githubRepositorySettingsReview.js";
 
 export interface Split402ProductReadinessInput {
   currentSourceCommit?: string;
   currentWorktreeDirty?: boolean;
+  githubSettingsReviewText?: string;
   localProofText?: string;
   phase6EvidenceText?: string;
   phase6Options?: Phase6EvidenceStatusOptions;
@@ -32,6 +36,14 @@ export interface Split402LocalProofStatus {
   blockers: string[];
 }
 
+export interface Split402GitHubSettingsReviewStatus {
+  checked: boolean;
+  ready: boolean;
+  status: "not_checked" | "approved" | "failed";
+  sourceCommit?: string;
+  blockers: string[];
+}
+
 export interface Split402ProductReadinessReport {
   schema: "split402.product_readiness_status.v1";
   product: "Split402";
@@ -40,9 +52,11 @@ export interface Split402ProductReadinessReport {
   implementationState: "public-alpha foundation implemented";
   readiness: Split402ProductReadinessProgress;
   launchDecision: "go" | "no-go";
+  readyForPublicBoundary: boolean;
   readyForPublicAlphaDemo: boolean;
   readyForProductionCustody: boolean;
   readyForMainnet: boolean;
+  githubSettingsReview: Split402GitHubSettingsReviewStatus;
   localProof: Split402LocalProofStatus;
   phase6: Phase6EvidenceStatusReport;
   phase7: Phase7StagingStatusReport;
@@ -51,12 +65,18 @@ export interface Split402ProductReadinessReport {
 }
 
 export interface Split402ProductReadinessProgress {
-  totalLaunchGates: 2;
+  totalLaunchGates: 3;
   checkedLaunchGates: number;
   readyLaunchGates: number;
   checkedLaunchGatePercent: number;
   readyLaunchGatePercent: number;
   gates: [
+    {
+      gate: "public_boundary_review";
+      label: "GitHub public/private and license review";
+      checked: boolean;
+      ready: boolean;
+    },
     {
       gate: "phase7_public_alpha_demo";
       label: "Phase 7 hosted public-alpha proof";
@@ -75,6 +95,10 @@ export interface Split402ProductReadinessProgress {
 export function createSplit402ProductReadinessReport(
   input: Split402ProductReadinessInput = {},
 ): Split402ProductReadinessReport {
+  const githubSettingsReview = createGitHubSettingsReviewStatus({
+    currentSourceCommit: input.currentSourceCommit,
+    githubSettingsReviewText: input.githubSettingsReviewText,
+  });
   const localProof = createLocalProofStatus({
     currentSourceCommit: input.currentSourceCommit,
     currentWorktreeDirty: input.currentWorktreeDirty,
@@ -88,13 +112,21 @@ export function createSplit402ProductReadinessReport(
     input.phase7ProofText,
     input.phase7Options,
   );
+  const readyForPublicBoundary = githubSettingsReview.ready;
   const readyForPublicAlphaDemo = phase7.readyForPublicAlphaDemo;
   const readyForProductionCustody = phase6.readyForCustody;
   const readyForMainnet = false;
   const launchDecision =
-    readyForPublicAlphaDemo && readyForProductionCustody ? "go" : "no-go";
-  const readiness = createReadinessProgress(phase6, phase7);
-  const nextActions = createProductNextActions(phase6, phase7, localProof);
+    readyForPublicBoundary && readyForPublicAlphaDemo && readyForProductionCustody
+      ? "go"
+      : "no-go";
+  const readiness = createReadinessProgress(githubSettingsReview, phase6, phase7);
+  const nextActions = createProductNextActions(
+    githubSettingsReview,
+    phase6,
+    phase7,
+    localProof,
+  );
 
   return {
     schema: "split402.product_readiness_status.v1",
@@ -104,16 +136,20 @@ export function createSplit402ProductReadinessReport(
     implementationState: "public-alpha foundation implemented",
     readiness,
     launchDecision,
+    readyForPublicBoundary,
     readyForPublicAlphaDemo,
     readyForProductionCustody,
     readyForMainnet,
+    githubSettingsReview,
     localProof,
     phase6,
     phase7,
     nextActions,
     summary: createSummary({
+      readyForPublicBoundary,
       readyForPublicAlphaDemo,
       readyForProductionCustody,
+      githubSettingsReviewChecked: githubSettingsReview.checked,
       phase6Checked: phase6.evidenceBundleChecked,
       phase7Checked: phase7.proofChecked,
     }),
@@ -168,10 +204,17 @@ export function formatSplit402ProductReadinessBrief(
 }
 
 function createReadinessProgress(
+  githubSettingsReview: Split402GitHubSettingsReviewStatus,
   phase6: Phase6EvidenceStatusReport,
   phase7: Phase7StagingStatusReport,
 ): Split402ProductReadinessProgress {
   const gates: Split402ProductReadinessProgress["gates"] = [
+    {
+      gate: "public_boundary_review",
+      label: "GitHub public/private and license review",
+      checked: githubSettingsReview.checked,
+      ready: githubSettingsReview.ready,
+    },
     {
       gate: "phase7_public_alpha_demo",
       label: "Phase 7 hosted public-alpha proof",
@@ -185,7 +228,7 @@ function createReadinessProgress(
       ready: phase6.readyForCustody,
     },
   ];
-  const totalLaunchGates = 2;
+  const totalLaunchGates = 3;
   const checkedLaunchGates = gates.filter((gate) => gate.checked).length;
   const readyLaunchGates = gates.filter((gate) => gate.ready).length;
 
@@ -204,6 +247,7 @@ function createReadinessProgress(
 }
 
 function createProductNextActions(
+  githubSettingsReview: Split402GitHubSettingsReviewStatus,
   phase6: Phase6EvidenceStatusReport,
   phase7: Phase7StagingStatusReport,
   localProof?: Split402LocalProofStatus,
@@ -219,9 +263,20 @@ function createProductNextActions(
       leadActions.push(...localProof.blockers);
     }
   }
+  if (!githubSettingsReview.ready) {
+    leadActions.push(
+      githubSettingsReview.checked
+        ? "Fix GitHub public/private/license review blockers, then regenerate split402-launch-evidence/github-settings-review.txt with corepack pnpm product:github-settings-review."
+        : "Run corepack pnpm product:github-settings-review --template > split402-launch-evidence/github-settings-review.txt, verify live GitHub settings, then regenerate it with corepack pnpm product:github-settings-review.",
+    );
+    if (githubSettingsReview.checked) {
+      leadActions.push(...githubSettingsReview.blockers);
+    }
+  }
   if (
     hasStaleSourceCommit(phase7.sourceCommitStatus) ||
-    hasStaleSourceCommit(phase6.sourceCommitStatus)
+    hasStaleSourceCommit(phase6.sourceCommitStatus) ||
+    hasStaleSourceCommit(githubSettingsReview)
   ) {
     leadActions.push(
       "Run corepack pnpm product:evidence:init --refresh-source before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist.",
@@ -366,6 +421,55 @@ function createLocalProofStatus(input: {
   };
 }
 
+function createGitHubSettingsReviewStatus(input: {
+  currentSourceCommit?: string;
+  githubSettingsReviewText?: string;
+}): Split402GitHubSettingsReviewStatus {
+  const reviewText = input.githubSettingsReviewText;
+  if (reviewText === undefined || reviewText.trim().length === 0) {
+    return {
+      checked: false,
+      ready: false,
+      status: "not_checked",
+      blockers: [
+        "Run product:github-settings-review and save github-settings-review.txt.",
+      ],
+    };
+  }
+
+  const verification = verifyGitHubRepositorySettingsReviewRecord(reviewText);
+  const blockers = [...verification.errors];
+  const reviewDecision = parseRecordField(reviewText, "review_decision");
+  if (verification.ok && reviewDecision !== "approved") {
+    blockers.push(
+      "github settings review decision is not approved; keep launch no-go until live public/private/license review is complete",
+    );
+  }
+  const sourceCommit = parseRecordField(reviewText, "source_commit");
+  const currentSourceCommit = input.currentSourceCommit?.trim();
+  if (
+    sourceCommit !== undefined &&
+    currentSourceCommit !== undefined &&
+    currentSourceCommit.length > 0 &&
+    !gitShasMatch(sourceCommit, currentSourceCommit)
+  ) {
+    blockers.push("source_commit does not match current checkout");
+  }
+
+  return {
+    checked: true,
+    ready: blockers.length === 0,
+    status: blockers.length === 0 ? "approved" : "failed",
+    ...(sourceCommit === undefined ? {} : { sourceCommit }),
+    blockers,
+  };
+}
+
+function parseRecordField(text: string, field: string): string | undefined {
+  const expression = new RegExp(`^${field}:\\s*(.*)$`, "mu");
+  return expression.exec(text)?.[1]?.trim();
+}
+
 function hasStaleSourceCommit(input: { blockers: readonly string[] }): boolean {
   return input.blockers.includes("source_commit does not match current checkout");
 }
@@ -402,16 +506,25 @@ function interleaveActions(left: readonly string[], right: readonly string[]): s
 }
 
 function createSummary(input: {
+  readyForPublicBoundary: boolean;
   readyForPublicAlphaDemo: boolean;
   readyForProductionCustody: boolean;
+  githubSettingsReviewChecked: boolean;
   phase6Checked: boolean;
   phase7Checked: boolean;
 }): string {
-  if (input.readyForPublicAlphaDemo && input.readyForProductionCustody) {
-    return "Split402 machine-checkable public-alpha demo and production custody gates are ready for human launch review. Mainnet approval remains outside this local status command.";
+  if (
+    input.readyForPublicBoundary &&
+    input.readyForPublicAlphaDemo &&
+    input.readyForProductionCustody
+  ) {
+    return "Split402 machine-checkable public boundary, public-alpha demo, and production custody gates are ready for human launch review. Mainnet approval remains outside this local status command.";
   }
 
   const unchecked: string[] = [];
+  if (!input.githubSettingsReviewChecked) {
+    unchecked.push("GitHub public/private and license review");
+  }
   if (!input.phase7Checked) {
     unchecked.push("Phase 7 hosted proof");
   }
@@ -420,6 +533,9 @@ function createSummary(input: {
   }
 
   const blocked: string[] = [];
+  if (!input.readyForPublicBoundary) {
+    blocked.push("public repository boundary approval");
+  }
   if (!input.readyForPublicAlphaDemo) {
     blocked.push("public-alpha demo approval");
   }

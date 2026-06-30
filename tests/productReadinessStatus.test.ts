@@ -15,13 +15,14 @@ describe("Split402 product readiness status", () => {
       repository: "split402protocol/splitx402",
       implementationState: "public-alpha foundation implemented",
       readiness: {
-        totalLaunchGates: 2,
+        totalLaunchGates: 3,
         checkedLaunchGates: 0,
         readyLaunchGates: 0,
         checkedLaunchGatePercent: 0,
         readyLaunchGatePercent: 0,
       },
       launchDecision: "no-go",
+      readyForPublicBoundary: false,
       readyForPublicAlphaDemo: false,
       readyForProductionCustody: false,
       readyForMainnet: false,
@@ -36,6 +37,9 @@ describe("Split402 product readiness status", () => {
     );
     expect(report.nextActions).toContain(
       "Run corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json.",
+    );
+    expect(report.nextActions).toContain(
+      "Run corepack pnpm product:github-settings-review --template > split402-launch-evidence/github-settings-review.txt, verify live GitHub settings, then regenerate it with corepack pnpm product:github-settings-review.",
     );
     expect(report.nextActions).toContain(
       "Fill the generated Phase 7 and Phase 6 env files with hosted staging and custody evidence values.",
@@ -180,6 +184,7 @@ describe("Split402 product readiness status", () => {
 
   it("surfaces blockers from checked but incomplete evidence", () => {
     const report = createSplit402ProductReadinessReport({
+      githubSettingsReviewText: createApprovedGitHubSettingsReviewText(),
       phase6EvidenceText: `review_id: pending
 approval_decision: no-go
 `,
@@ -211,10 +216,11 @@ approval_notes: checked evidence is intentionally incomplete
     });
 
     expect(report.launchDecision).toBe("no-go");
+    expect(report.githubSettingsReview.ready).toBe(true);
     expect(report.phase6.evidenceBundleChecked).toBe(true);
     expect(report.phase7.proofChecked).toBe(true);
     expect(report.readiness.checkedLaunchGatePercent).toBe(100);
-    expect(report.readiness.readyLaunchGatePercent).toBe(0);
+    expect(report.readiness.readyLaunchGatePercent).toBe(33);
     expect(report.nextActions.join("\n")).toContain(
       "Fix Phase 7 hosted proof blockers",
     );
@@ -273,14 +279,82 @@ approval_decision: no-go
     const brief = formatSplit402ProductReadinessBrief(report);
 
     expect(brief).toContain("Split402 status: no-go");
-    expect(brief).toContain("Launch gates ready: 0/2 (0%)");
-    expect(brief).toContain("Launch gates checked: 0/2 (0%)");
+    expect(brief).toContain("Launch gates ready: 0/3 (0%)");
+    expect(brief).toContain("Launch gates checked: 0/3 (0%)");
+    expect(brief).toContain(
+      "GitHub public/private and license review: not checked",
+    );
     expect(brief).toContain("Phase 7 hosted public-alpha proof: not checked");
     expect(brief).toContain("Phase 6 production custody evidence: not checked");
     expect(brief).toContain("Mainnet ready: no");
     expect(brief).toContain("corepack pnpm product:evidence:init");
     expect(brief).toContain("generated Phase 7 and Phase 6 env files");
     expect(brief).toContain("corepack pnpm product:launch-preflight");
+  });
+
+  it("keeps launch no-go when GitHub settings review is missing", () => {
+    const report = createSplit402ProductReadinessReport({
+      phase6EvidenceText: `review_id: phase6-custody-2026-06-30
+approval_decision: no-go
+`,
+      phase7ProofText: `proof_id: phase7-staging-2026-06-30
+approval_decision: no-go
+`,
+    });
+
+    expect(report.readiness.gates[0]).toEqual({
+      gate: "public_boundary_review",
+      label: "GitHub public/private and license review",
+      checked: false,
+      ready: false,
+    });
+    expect(report.readyForPublicBoundary).toBe(false);
+    expect(report.launchDecision).toBe("no-go");
+    expect(report.nextActions).toContain(
+      "Run corepack pnpm product:github-settings-review --template > split402-launch-evidence/github-settings-review.txt, verify live GitHub settings, then regenerate it with corepack pnpm product:github-settings-review.",
+    );
+  });
+
+  it("keeps launch no-go when GitHub settings review is no-go", () => {
+    const report = createSplit402ProductReadinessReport({
+      currentSourceCommit: "fd88024000000000000000000000000000000000",
+      githubSettingsReviewText: createApprovedGitHubSettingsReviewText().replace(
+        "review_decision: approved",
+        "review_decision: no-go",
+      ),
+    });
+
+    expect(report.githubSettingsReview).toMatchObject({
+      checked: true,
+      ready: false,
+      status: "failed",
+    });
+    expect(report.githubSettingsReview.blockers).toContain(
+      "github settings review decision is not approved; keep launch no-go until live public/private/license review is complete",
+    );
+    expect(report.readyForPublicBoundary).toBe(false);
+    expect(report.launchDecision).toBe("no-go");
+  });
+
+  it("marks public boundary ready with an approved current GitHub settings review", () => {
+    const report = createSplit402ProductReadinessReport({
+      currentSourceCommit: "fd88024000000000000000000000000000000000",
+      githubSettingsReviewText: createApprovedGitHubSettingsReviewText(),
+    });
+
+    expect(report.githubSettingsReview).toMatchObject({
+      checked: true,
+      ready: true,
+      status: "approved",
+      sourceCommit: "fd88024000000000000000000000000000000000",
+      blockers: [],
+    });
+    expect(report.readyForPublicBoundary).toBe(true);
+    expect(report.readiness.gates[0]).toMatchObject({
+      gate: "public_boundary_review",
+      ready: true,
+    });
+    expect(report.launchDecision).toBe("no-go");
   });
 });
 
@@ -301,4 +375,30 @@ function createPassingLocalProofText(): string {
     ],
     notes: [],
   });
+}
+
+function createApprovedGitHubSettingsReviewText(): string {
+  return `schema: split402.github_repository_settings_review.v1
+review_id: github-settings-review-001
+review_date: 2026-06-30
+reviewers: split402protocol
+repository: split402protocol/splitx402
+source_commit: fd88024000000000000000000000000000000000
+branch: main
+about_description_matches: yes
+topics_match: yes
+homepage_policy_matches: yes
+branch_protection_enabled: yes
+requires_pull_request: yes
+requires_code_owner_review: yes
+requires_status_checks: yes
+required_checks: Lint, Public surface check, Typecheck, Test, Build, Check vectors, Audit, Local public-alpha proof, PostgreSQL integration tests, CodeQL, Secret scan
+blocks_force_pushes: yes
+blocks_deletion: yes
+blank_issues_disabled: yes
+security_advisories_enabled: yes
+packages_and_releases_unpublished: yes
+review_decision: approved
+review_notes: live settings reviewed before launch
+`;
 }

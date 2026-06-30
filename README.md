@@ -417,10 +417,11 @@ records the review; it does not itself prove live GitHub branch protection.
 launch-facing files still present Apache-2.0, link the public/private boundary,
 and do not drift back to old launch-facing license claims.
 `product:status` reports the current Split402
-phase, whether the public-alpha hosted proof and production custody evidence are
-checked, launch-gate percentages, exact evidence-env setup commands, and why the
-launch decision remains `no-go` until both machine-checkable gates are
-satisfied. When the concise status hides extra actions, it prints the exact
+phase, whether the GitHub public/private license review, public-alpha hosted
+proof, and production custody evidence are checked, launch-gate percentages,
+exact evidence-env setup commands, and why the launch decision remains `no-go`
+until every machine-checkable launch gate is satisfied. When the concise status
+hides extra actions, it prints the exact
 Phase 6 and Phase 7 status commands to run for the full blocker list.
 
 Generate the Phase 6 image provenance review record after building immutable

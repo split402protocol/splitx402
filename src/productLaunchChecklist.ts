@@ -314,7 +314,7 @@ function createFinalStatusSection(
     externalEvidenceRequired: false,
     commands: ["corepack pnpm product:status --brief --workspace split402-launch-evidence"],
     notes: [
-      "The combined status remains no-go until both machine-checkable gates pass.",
+      "The combined status remains no-go until every machine-checkable launch gate passes.",
     ],
   };
 }

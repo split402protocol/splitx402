@@ -122,7 +122,7 @@ describe("Split402 launch checklist", () => {
       "local-public-alpha-proof.json",
     );
     expect(formatSplit402LaunchChecklistBrief(checklist)).toContain(
-      "The combined status remains no-go until both machine-checkable gates pass.",
+      "The combined status remains no-go until every machine-checkable launch gate passes.",
     );
   });
 
