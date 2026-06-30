@@ -244,9 +244,10 @@ export function createSplit402LaunchPreflightReport(
     !hasConfiguredEnvValue(phase7Env, "SPLIT402_MCP_SVM_PRIVATE_KEY") &&
     !hasConfiguredEnvValue(phase7Env, "SVM_PRIVATE_KEY");
   const missingMcpDetails = [
-    ...missingMcpKeys.map(
-      (key) => `Fill ${key} in ${toDisplayPath(phase7EnvPath)}.`,
-    ),
+    ...createMissingMcpKeyDetails({
+      keys: missingMcpKeys,
+      envPath: phase7EnvPath,
+    }),
     ...(liveExecutionEnabled
       ? []
       : [
@@ -618,6 +619,17 @@ function createMcpHostedMismatchDetails(input: {
     );
   }
   return details;
+}
+
+function createMissingMcpKeyDetails(input: {
+  keys: readonly string[];
+  envPath: string;
+}): string[] {
+  return input.keys.map((key) =>
+    key === "SPLIT402_MCP_CAPABILITY"
+      ? `Set SPLIT402_MCP_CAPABILITY=${EXPECTED_PHASE7_MCP_CAPABILITY} in ${toDisplayPath(input.envPath)} for the Phase 7 public-alpha MCP proof.`
+      : `Fill ${key} in ${toDisplayPath(input.envPath)}.`,
+  );
 }
 
 function createMcpCapabilityDetails(input: {

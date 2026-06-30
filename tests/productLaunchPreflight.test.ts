@@ -157,6 +157,9 @@ describe("Split402 launch preflight", () => {
     expect(report.nextActions).toContain(
       "Fill Phase 7 hosted proof env values in split402-launch-evidence/phase7-staging.env: SPLIT402_PHASE7_PROOF_ID, SPLIT402_PHASE7_PROOF_REVIEWERS, SPLIT402_PHASE7_STAGING_ENVIRONMENT, SPLIT402_PHASE7_CONTROL_PLANE_URL, SPLIT402_PHASE7_DASHBOARD_URL, SPLIT402_PHASE7_DEMO_MERCHANT_URL, SPLIT402_PHASE7_WEBHOOK_RECEIVER_URL, SPLIT402_PHASE7_CONTROL_PLANE_TOKEN, SPLIT402_PHASE7_MERCHANT_ID, SPLIT402_PHASE7_REFERRER_WALLET.",
     );
+    expect(report.nextActions).toContain(
+      "Fill Phase 7 MCP live execution env values in split402-launch-evidence/phase7-staging.env: SPLIT402_MCP_CONTROL_PLANE_URL, SPLIT402_MCP_CONTROL_PLANE_TOKEN, SPLIT402_MCP_CAPABILITY=solana.wallet-risk, SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1, SPLIT402_MCP_SVM_PRIVATE_KEY or SVM_PRIVATE_KEY.",
+    );
     expect(report.nextActions).not.toContain(
       "Set SPLIT402_PHASE6_ASSEMBLE_IMAGE_PROVENANCE_RECORD=split402-launch-evidence/phase6-image-provenance.txt",
     );
