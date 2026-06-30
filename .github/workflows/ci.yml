@@ -46,6 +46,9 @@ jobs:
       - name: Audit
         run: corepack pnpm audit --audit-level high
 
+      - name: Local public-alpha proof
+        run: corepack pnpm product:local-proof --brief
+
   postgres-integration:
     runs-on: ubuntu-latest
 

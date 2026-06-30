@@ -66,6 +66,12 @@ describe("repository presentation", () => {
     expect(pullRequestTemplate).toContain(
       "corepack pnpm product:public-surface-check --brief",
     );
+    expect(pullRequestTemplate).toContain(
+      "corepack pnpm product:local-proof --brief",
+    );
+    expect(pullRequestTemplate).toContain(
+      "product:local-proof` intentionally fails when the source worktree is dirty",
+    );
   });
 
   it("keeps required GitHub validation and security automation configured", () => {
@@ -89,6 +95,7 @@ describe("repository presentation", () => {
     expect(ciWorkflow).toContain("corepack pnpm build");
     expect(ciWorkflow).toContain("corepack pnpm vectors:check");
     expect(ciWorkflow).toContain("corepack pnpm audit --audit-level high");
+    expect(ciWorkflow).toContain("corepack pnpm product:local-proof --brief");
     expect(ciWorkflow).toContain("corepack pnpm test:postgres");
     expect(ciWorkflow).toContain("postgres:16");
 
