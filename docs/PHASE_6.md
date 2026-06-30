@@ -123,6 +123,9 @@ unknown-outcome reconciliation queue and referrer payout views.
 - Added `corepack pnpm phase6:evidence:env-template` to generate a local,
   commented environment helper for Phase 6 custody record extraction and
   attachment paths, with optional custom launch workspace path support.
+  Launch preflight requires `SPLIT402_PHASE6_EVIDENCE_NETWORK=solana:devnet`;
+  mainnet custody remains outside this evidence workspace until separate
+  approval.
 - Added `corepack pnpm phase6:evidence:assemble` to assemble the canonical
   custody evidence bundle from generated evidence records, attachment paths, and
   explicit field overrides.
