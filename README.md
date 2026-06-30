@@ -373,6 +373,9 @@ local scaffold content.
 whether the local launch workspace, scaffold `source_commit` values, Phase 6
 custody evidence env paths, and required Phase 7 hosted proof identity,
 environment, webhook, and collector values are ready before collection starts.
+It also confirms the guarded mainnet canary env points at the private dry-run
+and rollback evidence templates, while keeping mainnet approval outside the
+local preflight.
 The Phase 6 launch evidence workspace is devnet-only until separate mainnet
 approval, so preflight requires
 `SPLIT402_PHASE6_EVIDENCE_NETWORK=solana:devnet`.
