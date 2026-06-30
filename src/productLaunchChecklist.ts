@@ -13,6 +13,7 @@ export interface Split402LaunchChecklist {
     directory: "split402-launch-evidence";
     phase6EvidenceFile: "split402-launch-evidence/phase6-custody-evidence.txt";
     localProofFile: "split402-launch-evidence/local-public-alpha-proof.json";
+    mainnetCanaryEnvFile: "split402-launch-evidence/mainnet-canary.env";
     phase6EnvFile: "split402-launch-evidence/phase6-evidence.env";
     phase7ProofFile: "split402-launch-evidence/phase7-staging-proof.txt";
     phase7EnvFile: "split402-launch-evidence/phase7-staging.env";
@@ -49,6 +50,7 @@ export function createSplit402LaunchChecklist(
     createPhase7Section(report),
     createPhase6Section(report),
     createFinalStatusSection(report),
+    createMainnetCanarySection(report),
   ];
 
   return {
@@ -60,6 +62,7 @@ export function createSplit402LaunchChecklist(
     workspace: {
       directory: "split402-launch-evidence",
       localProofFile: "split402-launch-evidence/local-public-alpha-proof.json",
+      mainnetCanaryEnvFile: "split402-launch-evidence/mainnet-canary.env",
       phase6EvidenceFile: "split402-launch-evidence/phase6-custody-evidence.txt",
       phase6EnvFile: "split402-launch-evidence/phase6-evidence.env",
       phase7ProofFile: "split402-launch-evidence/phase7-staging-proof.txt",
@@ -315,6 +318,25 @@ function createFinalStatusSection(
     commands: ["corepack pnpm product:status --brief --workspace split402-launch-evidence"],
     notes: [
       "The combined status remains no-go until every machine-checkable launch gate passes.",
+    ],
+  };
+}
+
+function createMainnetCanarySection(
+  report: Split402ProductReadinessReport,
+): Split402LaunchChecklistSection {
+  return {
+    title: "Prepare guarded mainnet canary",
+    status: report.launchDecision === "go" ? "not_checked" : "blocked",
+    externalEvidenceRequired: true,
+    commands: [
+      "Review split402-launch-evidence/mainnet-canary.env only after product:status is go.",
+      "corepack pnpm product:mainnet-canary --brief --workspace split402-launch-evidence",
+    ],
+    notes: [
+      "This is a one-merchant, one-campaign, one-route, one-wallet canary only; it does not approve production mainnet launch.",
+      "The canary validates referral accounting plus later payout, not atomic on-chain split settlement.",
+      "Keep canary evidence, private URLs, tokens, custody details, transaction bytes, and partner-identifying records out of the public repository unless sanitized and intentionally approved.",
     ],
   };
 }

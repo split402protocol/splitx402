@@ -389,10 +389,10 @@ When required preflight inputs are ready, the next action reminds operators to
 run the GitHub settings/public-private license review and keep that record with
 launch evidence before collection.
 `product:launch-checklist --brief` prints the exact remaining public/private
-license review, local validation, hosted proof, custody evidence, and combined
-status commands; pass `--workspace split402-launch-evidence` or the Phase 6 and
-Phase 7 evidence paths to show checked, blocked, or ready section statuses from
-real files.
+license review, local validation, hosted proof, custody evidence, combined
+status, and guarded mainnet canary commands; pass
+`--workspace split402-launch-evidence` or the Phase 6 and Phase 7 evidence
+paths to show checked, blocked, or ready section statuses from real files.
 `product:local-proof --brief` proves the local public-alpha repository hygiene,
 public/private license surface, protocol vectors, router alpha tests, and
 runnable MCP gateway smoke path before hosted evidence collection. Pass
