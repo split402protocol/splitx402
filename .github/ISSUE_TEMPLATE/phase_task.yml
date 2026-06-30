@@ -1,0 +1,71 @@
+name: Phase task
+description: Track reviewable work against the Split402 roadmap.
+title: "[phase] "
+labels:
+  - phase-task
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: State the concrete protocol, product, security, or documentation goal.
+      placeholder: Implement or verify one focused piece of the Split402 roadmap.
+    validations:
+      required: true
+  - type: dropdown
+    id: phase
+    attributes:
+      label: Phase
+      options:
+        - Phase 0 protocol foundation
+        - Phase 1 local x402 demo
+        - Phase 2 repository hardening
+        - Phase 3 control plane
+        - Phase 4 dashboard and webhooks
+        - Phase 5 payout accounting
+        - Phase 6 custody and signer readiness
+        - Phase 7 public-alpha staging proof
+        - Router and MCP adoption layer
+        - Repository hygiene
+    validations:
+      required: true
+  - type: textarea
+    id: deliverables
+    attributes:
+      label: Deliverables
+      description: List the files, behavior, docs, or tests expected from the task.
+      placeholder: |
+        - Add ...
+        - Update ...
+        - Prove ...
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance checks
+      description: List exact commands, proofs, or review gates that must pass.
+      placeholder: |
+        - corepack pnpm lint
+        - corepack pnpm typecheck
+        - corepack pnpm test
+        - corepack pnpm vectors:check
+    validations:
+      required: true
+  - type: textarea
+    id: protocol_security_notes
+    attributes:
+      label: Protocol and security notes
+      description: Call out signed-object changes, schema changes, custody impact, private-boundary concerns, or mainnet claims.
+      placeholder: No signed-object changes. No production/mainnet readiness claim.
+    validations:
+      required: true
+  - type: checkboxes
+    id: guardrails
+    attributes:
+      label: Guardrails
+      options:
+        - label: This task does not claim production or mainnet readiness unless Phase 6 and Phase 7 evidence gates are approved.
+          required: true
+        - label: This task does not require public exposure of provider strategy, custody evidence, private URLs, credentials, or live transaction bytes.
+          required: true

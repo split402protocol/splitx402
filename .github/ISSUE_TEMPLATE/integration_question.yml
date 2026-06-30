@@ -1,0 +1,51 @@
+name: Integration question
+description: Ask about building with the public Split402 protocol, router, or demos.
+title: "[integration] "
+labels:
+  - integration
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Split402 is public alpha and not mainnet approved. Keep hosted operations, provider credentials, custody details, private URLs, and live transaction bytes out of public issues.
+  - type: dropdown
+    id: integration_area
+    attributes:
+      label: Integration area
+      options:
+        - agent paid request flow
+        - merchant x402 integration
+        - router provider setup
+        - MCP demo gateway
+        - receipt verification
+        - control-plane receipt ingestion
+        - dashboard or public-alpha proof
+        - payout preview or custody readiness
+        - documentation
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: What are you trying to build?
+      description: Describe the integration goal without private credentials or partner details.
+      placeholder: I want an agent to discover and execute a paid capability...
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Current context
+      description: Mention package versions, commit SHA, network, asset, and commands run when useful.
+      placeholder: Commit SHA, package, network, asset, and relevant command output.
+    validations:
+      required: false
+  - type: checkboxes
+    id: launch_posture
+    attributes:
+      label: Launch posture acknowledgement
+      options:
+        - label: I understand Split402 is public alpha and not approved for production mainnet custody.
+          required: true
+        - label: I did not include secrets, private URLs, live transaction bytes, or custody evidence.
+          required: true

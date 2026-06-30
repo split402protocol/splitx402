@@ -110,6 +110,46 @@ describe("repository presentation", () => {
     expect(dependabotConfig).toContain('package-ecosystem: "npm"');
   });
 
+  it("keeps public issue intake structured and security-aware", () => {
+    const issueConfig = readFileSync(".github/ISSUE_TEMPLATE/config.yml", "utf8");
+    const bugReport = readFileSync(
+      ".github/ISSUE_TEMPLATE/bug_report.yml",
+      "utf8",
+    );
+    const integrationQuestion = readFileSync(
+      ".github/ISSUE_TEMPLATE/integration_question.yml",
+      "utf8",
+    );
+    const phaseTask = readFileSync(
+      ".github/ISSUE_TEMPLATE/phase_task.yml",
+      "utf8",
+    );
+    const contributing = readFileSync("CONTRIBUTING.md", "utf8");
+
+    expect(issueConfig).toContain("blank_issues_enabled: false");
+    expect(issueConfig).toContain(
+      "https://github.com/split402protocol/splitx402/security/advisories/new",
+    );
+    expect(issueConfig).toContain("docs/PUBLIC_PRIVATE_BOUNDARY.md");
+
+    for (const issueForm of [bugReport, integrationQuestion, phaseTask]) {
+      expect(issueForm).toContain("description:");
+      expect(issueForm).toContain("labels:");
+      expect(issueForm).toContain("validations:");
+      expect(issueForm).toContain("required: true");
+    }
+
+    expect(bugReport).toContain("Report a reproducible Split402 public-alpha issue");
+    expect(bugReport).toContain("This is not a suspected security vulnerability");
+    expect(integrationQuestion).toContain(
+      "Split402 is public alpha and not mainnet approved",
+    );
+    expect(phaseTask).toContain("No production/mainnet readiness claim");
+    expect(phaseTask).toContain("Phase 7 public-alpha staging proof");
+    expect(contributing).toContain("Use the structured GitHub issue forms");
+    expect(contributing).toContain("Use GitHub Security Advisories");
+  });
+
   it("keeps README status badges aligned with GitHub validation workflows", () => {
     const readme = readFileSync("README.md", "utf8");
 
