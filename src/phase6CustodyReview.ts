@@ -33,6 +33,20 @@ export const PHASE6_CUSTODY_REQUIRED_FIELDS = [
 export type Phase6CustodyRequiredField =
   (typeof PHASE6_CUSTODY_REQUIRED_FIELDS)[number];
 
+const PHASE6_ATTACHMENT_FIELDS: readonly Phase6CustodyRequiredField[] = [
+  "signer_image_dependency_audit_output",
+  "network_policy_record",
+  "signer_policy_record",
+  "smoke_check_output",
+  "unknown_outcome_reconciliation_record",
+  "rotation_drill_record",
+  "emergency_revocation_drill_record",
+  "key_custody_record",
+  "incident_drill_record",
+  "rollback_drill_record",
+  "rpc_failover_record",
+];
+
 export interface Phase6CustodyReviewValidation {
   approved: boolean;
   missingFields: Phase6CustodyRequiredField[];
@@ -56,6 +70,13 @@ export function validatePhase6CustodyEvidence(
     }
     if (isPlaceholderValue(value)) {
       placeholderFields.push(field);
+    }
+  }
+
+  for (const field of PHASE6_ATTACHMENT_FIELDS) {
+    const value = fields.get(field)?.trim();
+    if (value !== undefined && value.length > 0 && !isAttachedArtifact(value)) {
+      invalidFields.push(`${field} must use attached: <path>`);
     }
   }
 
@@ -196,6 +217,15 @@ function isPlaceholderValue(value: string): boolean {
     normalized.includes("replace-with") ||
     normalized.includes("yyyy")
   );
+}
+
+function isAttachedArtifact(value: string): boolean {
+  const prefix = "attached:";
+  if (!value.trim().toLowerCase().startsWith(prefix)) {
+    return false;
+  }
+  const artifactPath = value.trim().slice(prefix.length).trim();
+  return artifactPath.length > 0 && !isPlaceholderValue(artifactPath);
 }
 
 function isIsoCalendarDate(value: string): boolean {
