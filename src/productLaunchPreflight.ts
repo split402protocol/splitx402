@@ -3,6 +3,7 @@ import { join } from "node:path";
 import dotenv from "dotenv";
 
 import { toDisplayPath } from "./displayPath.js";
+import { verifyGitHubRepositorySettingsReviewRecord } from "./githubRepositorySettingsReview.js";
 import { createPhase6EvidenceAssemblyEnvMappings } from "./phase6EvidenceAssemblyEnv.js";
 import { createSplit402ProductEvidenceWorkspace } from "./productEvidenceWorkspace.js";
 
@@ -181,6 +182,9 @@ export function createSplit402LaunchPreflightReport(
   const githubSettingsReviewText = input.exists(githubSettingsReviewPath)
     ? input.readText(githubSettingsReviewPath)
     : "";
+  const githubSettingsReviewVerification = input.exists(githubSettingsReviewPath)
+    ? verifyGitHubRepositorySettingsReviewRecord(githubSettingsReviewText)
+    : { ok: false, errors: [`Missing ${toDisplayPath(githubSettingsReviewPath)}`] };
   const phase6EvidencePath = join(
     workspace.directory,
     workspace.phase6EvidenceFileName,
@@ -320,6 +324,18 @@ export function createSplit402LaunchPreflightReport(
               }),
               ...invalidPhase6NetworkDetails,
             ],
+    },
+    {
+      id: "github_settings_review_record",
+      label: "GitHub settings review record is well formed",
+      ok: githubSettingsReviewVerification.ok,
+      severity: "required",
+      details: githubSettingsReviewVerification.ok
+        ? ["GitHub settings review record is parseable and targets split402protocol/splitx402 main."]
+        : githubSettingsReviewVerification.errors.map(
+            (error) =>
+              `Fix ${toDisplayPath(githubSettingsReviewPath)}: ${error}.`,
+          ),
     },
     {
       id: "launch_workspace_source_commit",
@@ -505,6 +521,7 @@ function createNextActions(checks: readonly Split402LaunchPreflightCheck[]): str
     .filter(
       (detail) =>
         detail.startsWith("Run ") ||
+        detail.startsWith("Fix ") ||
         detail.startsWith("Fill ") ||
         detail.startsWith("Set ") ||
         detail.startsWith("Regenerate "),

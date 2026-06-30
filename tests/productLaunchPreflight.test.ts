@@ -172,6 +172,7 @@ describe("Split402 launch preflight", () => {
 
   it("passes when scaffold and required Phase 6 and hosted Phase 7 env values are filled", () => {
     const workspace = createSplit402ProductEvidenceWorkspace({
+      reviewDate: "2026-06-29",
       sourceCommit: "abc1234",
     });
     const files = createWorkspaceFileMap(
@@ -295,6 +296,7 @@ describe("Split402 launch preflight", () => {
 
   it("accepts quoted env values consistently with the evidence collectors", () => {
     const workspace = createSplit402ProductEvidenceWorkspace({
+      reviewDate: "2026-06-29",
       sourceCommit: "abc1234",
     });
     const files = createWorkspaceFileMap(
@@ -538,6 +540,62 @@ describe("Split402 launch preflight", () => {
     });
     expect(report.nextActions).toContain(
       "Regenerate split402-launch-evidence/github-settings-review.txt from checkout def5678 before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist; found source_commit abc1234.",
+    );
+  });
+
+  it("rejects malformed GitHub settings review records before collection", () => {
+    const workspace = createSplit402ProductEvidenceWorkspace({
+      sourceCommit: "abc1234",
+    });
+    const files = createWorkspaceFileMap(
+      [
+        workspace.phase7.envText,
+        "SPLIT402_PHASE7_PROOF_ID=phase7-staging-2026-06-29",
+        "SPLIT402_PHASE7_PROOF_REVIEWERS=Split402 operators",
+        "SPLIT402_PHASE7_STAGING_ENVIRONMENT=hosted-devnet-public-alpha",
+        "SPLIT402_PHASE7_CONTROL_PLANE_URL=https://control.staging.example",
+        "SPLIT402_PHASE7_DASHBOARD_URL=https://dashboard.staging.example",
+        "SPLIT402_PHASE7_DEMO_MERCHANT_URL=https://merchant.staging.example",
+        "SPLIT402_PHASE7_WEBHOOK_RECEIVER_URL=https://webhook.staging.example",
+        "SPLIT402_PHASE7_CONTROL_PLANE_TOKEN=merchant-session-token",
+        "SPLIT402_PHASE7_MERCHANT_ID=mrc_123",
+        "SPLIT402_PHASE7_REFERRER_WALLET=referrer-wallet",
+        "SPLIT402_MCP_CONTROL_PLANE_URL=https://control.staging.example",
+        "SPLIT402_MCP_CONTROL_PLANE_TOKEN=merchant-session-token",
+        "SPLIT402_MCP_CAPABILITY=solana.wallet-risk",
+        "SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1",
+        "SPLIT402_MCP_SVM_PRIVATE_KEY=funded-devnet-buyer-key",
+      ].join("\n"),
+      createFilledPhase6EnvText(workspace.phase6EnvText),
+      workspace,
+    );
+    files.set(
+      join(workspace.directory, workspace.githubSettingsReviewFileName),
+      workspace.githubSettingsReviewText
+        .replace("repository: split402protocol/splitx402", "repository: other/project")
+        .replace("requires_status_checks: no", "requires_status_checks: maybe"),
+    );
+
+    const report = createSplit402LaunchPreflightReport({
+      currentSourceCommit: "abc1234",
+      exists: (path) => files.has(path),
+      readText: (path) => files.get(path) ?? "",
+    });
+
+    expect(report.readyToCollectEvidence).toBe(false);
+    expect(
+      report.checks.find(
+        (check) => check.id === "github_settings_review_record",
+      ),
+    ).toMatchObject({
+      ok: false,
+      details: expect.arrayContaining([
+        "Fix split402-launch-evidence/github-settings-review.txt: repository must be split402protocol/splitx402.",
+        "Fix split402-launch-evidence/github-settings-review.txt: requires_status_checks must be yes or no.",
+      ]),
+    });
+    expect(report.nextActions).toContain(
+      "Fix split402-launch-evidence/github-settings-review.txt: repository must be split402protocol/splitx402.",
     );
   });
 
@@ -802,6 +860,7 @@ describe("Split402 launch preflight", () => {
   it("uses custom launch workspace paths for Phase 6 env checks", () => {
     const workspace = createSplit402ProductEvidenceWorkspace({
       directory: "evidence/launch",
+      reviewDate: "2026-06-29",
     });
     const files = createWorkspaceFileMap(
       [

@@ -22,11 +22,58 @@ export interface GitHubRepositorySettingsReviewInput {
   reviewNotes?: string;
 }
 
+export interface GitHubRepositorySettingsReviewVerificationResult {
+  ok: boolean;
+  errors: string[];
+}
+
+const GITHUB_SETTINGS_REVIEW_SCHEMA =
+  "split402.github_repository_settings_review.v1";
+
+const REQUIRED_RECORD_FIELDS = [
+  "schema",
+  "review_id",
+  "review_date",
+  "reviewers",
+  "repository",
+  "source_commit",
+  "branch",
+  "about_description_matches",
+  "topics_match",
+  "homepage_policy_matches",
+  "branch_protection_enabled",
+  "requires_pull_request",
+  "requires_code_owner_review",
+  "requires_status_checks",
+  "required_checks",
+  "blocks_force_pushes",
+  "blocks_deletion",
+  "blank_issues_disabled",
+  "security_advisories_enabled",
+  "packages_and_releases_unpublished",
+  "review_decision",
+] as const;
+
+const YES_NO_RECORD_FIELDS = [
+  "about_description_matches",
+  "topics_match",
+  "homepage_policy_matches",
+  "branch_protection_enabled",
+  "requires_pull_request",
+  "requires_code_owner_review",
+  "requires_status_checks",
+  "blocks_force_pushes",
+  "blocks_deletion",
+  "blank_issues_disabled",
+  "security_advisories_enabled",
+  "packages_and_releases_unpublished",
+] as const;
+
 export function createGitHubRepositorySettingsReviewRecord(
   input: GitHubRepositorySettingsReviewInput,
 ): string {
   const record = {
-    schema: "split402.github_repository_settings_review.v1",
+    schema: GITHUB_SETTINGS_REVIEW_SCHEMA,
     review_id: assertRequired(input.reviewId, "reviewId"),
     review_date: assertRequired(input.reviewDate, "reviewDate"),
     reviewers: assertRequired(input.reviewers, "reviewers"),
@@ -113,6 +160,65 @@ export function createGitHubRepositorySettingsReviewTemplate(): string {
   });
 }
 
+export function verifyGitHubRepositorySettingsReviewRecord(
+  text: string,
+): GitHubRepositorySettingsReviewVerificationResult {
+  const fields = parseRecordFields(text);
+  const errors: string[] = [];
+
+  for (const field of REQUIRED_RECORD_FIELDS) {
+    if (!hasRequiredField(fields, field)) {
+      errors.push(`${field} is required`);
+    }
+  }
+
+  const schema = fields.get("schema");
+  if (schema !== undefined && schema !== GITHUB_SETTINGS_REVIEW_SCHEMA) {
+    errors.push(`schema must be ${GITHUB_SETTINGS_REVIEW_SCHEMA}`);
+  }
+
+  const repository = fields.get("repository");
+  if (repository !== undefined && repository !== "split402protocol/splitx402") {
+    errors.push("repository must be split402protocol/splitx402");
+  }
+
+  const sourceCommit = fields.get("source_commit");
+  if (sourceCommit !== undefined && !/^[a-f0-9]{7,40}$/u.test(sourceCommit)) {
+    errors.push("source_commit must be a git SHA");
+  }
+
+  const reviewDate = fields.get("review_date");
+  if (reviewDate !== undefined && !/^\d{4}-\d{2}-\d{2}$/u.test(reviewDate)) {
+    errors.push("review_date must be YYYY-MM-DD");
+  }
+
+  const branch = fields.get("branch");
+  if (branch !== undefined && branch !== "main") {
+    errors.push("branch must be main");
+  }
+
+  for (const field of YES_NO_RECORD_FIELDS) {
+    const value = fields.get(field);
+    if (value !== undefined && value !== "yes" && value !== "no") {
+      errors.push(`${field} must be yes or no`);
+    }
+  }
+
+  const reviewDecision = fields.get("review_decision");
+  if (
+    reviewDecision !== undefined &&
+    reviewDecision !== "no-go" &&
+    reviewDecision !== "approved"
+  ) {
+    errors.push("review_decision must be no-go or approved");
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+  };
+}
+
 export function githubRepositorySettingsReviewRequiredEnv(): string[] {
   return [
     "SPLIT402_GITHUB_SETTINGS_REVIEW_ID",
@@ -174,4 +280,24 @@ function assertRequired(value: string, fieldName: string): string {
     throw new Error(`${fieldName} is required`);
   }
   return trimmed;
+}
+
+function hasRequiredField(
+  fields: ReadonlyMap<string, string>,
+  field: string,
+): boolean {
+  const value = fields.get(field);
+  return value !== undefined && value.length > 0;
+}
+
+function parseRecordFields(text: string): Map<string, string> {
+  const fields = new Map<string, string>();
+  for (const line of text.split(/\r?\n/u)) {
+    const match = /^([a-z][a-z0-9_]*):\s*(.*)$/u.exec(line);
+    if (match?.[1] === undefined || match[2] === undefined) {
+      continue;
+    }
+    fields.set(match[1], match[2].trim());
+  }
+  return fields;
 }
