@@ -17,10 +17,7 @@ console.log(
     : JSON.stringify(report, null, 2),
 );
 
-if (
-  (report.phase6.evidenceBundleChecked || report.phase7.proofChecked) &&
-  report.launchDecision !== "go"
-) {
+if (report.readiness.checkedLaunchGates > 0 && report.launchDecision !== "go") {
   process.exitCode = 1;
 }
 

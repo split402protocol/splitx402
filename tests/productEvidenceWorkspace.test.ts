@@ -80,7 +80,7 @@ describe("Split402 product evidence workspace", () => {
     expect(workspace.readmeText).toContain(
       "# Split402 Launch Evidence Workspace",
     );
-    expect(workspace.readmeText).toContain("Launch gates ready: 0/2 (0%)");
+    expect(workspace.readmeText).toContain("Launch gates ready: 0/3 (0%)");
     expect(workspace.readmeText).toContain("local-public-alpha-proof.json");
     expect(workspace.readmeText).toContain("github-settings-review.txt");
     expect(workspace.readmeText).toContain(
@@ -88,7 +88,7 @@ describe("Split402 product evidence workspace", () => {
     );
     expect(workspace.readmeText).toContain("Mainnet ready: no");
     expect(workspace.readmeText).toContain(
-      "The product remains `no-go` until the Phase 7 hosted proof and Phase 6",
+      "The product remains `no-go` until the GitHub public/private license",
     );
     expect(workspace.readmeText).toContain(
       "saved local public-alpha proof records the source commit",

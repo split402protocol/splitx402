@@ -129,7 +129,8 @@ and combined status commands; pass `--workspace split402-launch-evidence` or
 the Phase 6 and Phase 7 evidence files to show checked, blocked, or ready
 section statuses from real files. Then run
 `corepack pnpm product:status --brief --workspace split402-launch-evidence`
-for a simple operator view of the Phase 7 hosted proof gate, Phase 6
-production custody gate, launch-gate percentages, evidence-env setup commands,
-and next actions. If the concise combined status hides additional actions, it
-names the Phase 6 and Phase 7 status commands that show the full blocker lists.
+for a simple operator view of the GitHub public/private license review gate,
+Phase 7 hosted proof gate, Phase 6 production custody gate, launch-gate
+percentages, evidence-env setup commands, and next actions. If the concise
+combined status hides additional actions, it names the Phase 6 and Phase 7
+status commands that show the full blocker lists.

@@ -98,6 +98,7 @@ export function readSplit402ProductReadinessCliInput(
     report: createSplit402ProductReadinessReport({
       currentSourceCommit,
       currentWorktreeDirty,
+      githubSettingsReviewText,
       localProofText,
       phase6EvidenceText,
       phase6Options: {
