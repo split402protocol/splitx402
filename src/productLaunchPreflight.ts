@@ -144,6 +144,8 @@ const REQUIRED_PHASE6_DIRECT_ENV_KEYS = [
   "SPLIT402_PHASE6_EVIDENCE_APPROVAL_NOTES",
 ] as const;
 
+const EXPECTED_PHASE6_EVIDENCE_NETWORK = "solana:devnet";
+
 const PRE_COLLECTION_APPROVAL_ENV_KEYS = [
   {
     key: "SPLIT402_PHASE6_EVIDENCE_APPROVAL_DECISION",
@@ -202,6 +204,10 @@ export function createSplit402LaunchPreflightReport(
   const missingPhase6DirectKeys = REQUIRED_PHASE6_DIRECT_ENV_KEYS.filter(
     (key) => !hasConfiguredEnvValue(phase6Env, key),
   );
+  const invalidPhase6NetworkDetails = createPhase6NetworkDetails({
+    env: phase6Env,
+    envPath: phase6EnvPath,
+  });
   const missingPhase6Mappings = createPhase6EvidenceAssemblyEnvMappings({
     directory: workspace.directory,
   }).filter(
@@ -289,14 +295,21 @@ export function createSplit402LaunchPreflightReport(
     {
       id: "phase6_evidence_env_values",
       label: "Phase 6 custody env values are filled",
-      ok: missingPhase6DirectKeys.length === 0,
+      ok:
+        missingPhase6DirectKeys.length === 0 &&
+        invalidPhase6NetworkDetails.length === 0,
       severity: "required",
       details:
-        missingPhase6DirectKeys.length === 0
+        missingPhase6DirectKeys.length === 0 &&
+        invalidPhase6NetworkDetails.length === 0
           ? ["Required Phase 6 custody env values are configured."]
-          : missingPhase6DirectKeys.map(
-              (key) => `Fill ${key} in ${toDisplayPath(phase6EnvPath)}.`,
-            ),
+          : [
+              ...createMissingPhase6KeyDetails({
+                keys: missingPhase6DirectKeys,
+                envPath: phase6EnvPath,
+              }),
+              ...invalidPhase6NetworkDetails,
+            ],
     },
     {
       id: "launch_workspace_source_commit",
@@ -619,6 +632,35 @@ function createMcpHostedMismatchDetails(input: {
     );
   }
   return details;
+}
+
+function createMissingPhase6KeyDetails(input: {
+  keys: readonly string[];
+  envPath: string;
+}): string[] {
+  return input.keys.map((key) =>
+    key === "SPLIT402_PHASE6_EVIDENCE_NETWORK"
+      ? `Set SPLIT402_PHASE6_EVIDENCE_NETWORK=${EXPECTED_PHASE6_EVIDENCE_NETWORK} in ${toDisplayPath(input.envPath)} for launch evidence collection.`
+      : `Fill ${key} in ${toDisplayPath(input.envPath)}.`,
+  );
+}
+
+function createPhase6NetworkDetails(input: {
+  env: ReadonlyMap<string, string>;
+  envPath: string;
+}): string[] {
+  const network = input.env.get("SPLIT402_PHASE6_EVIDENCE_NETWORK")?.trim();
+  if (
+    network === undefined ||
+    network.length === 0 ||
+    isPlaceholderEnvValue(network) ||
+    network === EXPECTED_PHASE6_EVIDENCE_NETWORK
+  ) {
+    return [];
+  }
+  return [
+    `Set SPLIT402_PHASE6_EVIDENCE_NETWORK=${EXPECTED_PHASE6_EVIDENCE_NETWORK} in ${toDisplayPath(input.envPath)} for launch evidence collection; launch evidence remains devnet-only until separate mainnet approval.`,
+  ];
 }
 
 function createMissingMcpKeyDetails(input: {

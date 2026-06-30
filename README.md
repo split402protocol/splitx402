@@ -370,6 +370,9 @@ local scaffold content.
 whether the local launch workspace, scaffold `source_commit` values, Phase 6
 custody evidence env paths, and required Phase 7 hosted proof identity,
 environment, webhook, and collector values are ready before collection starts.
+The Phase 6 launch evidence workspace is devnet-only until separate mainnet
+approval, so preflight requires
+`SPLIT402_PHASE6_EVIDENCE_NETWORK=solana:devnet`.
 It also verifies that hosted proof and MCP live execution URLs are valid
 http(s) URLs and that MCP live execution uses the same hosted control-plane URL
 and token as the Phase 7 proof. For the public-alpha proof, MCP live execution
