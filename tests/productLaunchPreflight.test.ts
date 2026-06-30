@@ -599,6 +599,58 @@ describe("Split402 launch preflight", () => {
     );
   });
 
+  it("rejects approved GitHub settings review records with incomplete protections", () => {
+    const workspace = createSplit402ProductEvidenceWorkspace({
+      reviewDate: "2026-06-29",
+      sourceCommit: "abc1234",
+    });
+    const files = createWorkspaceFileMap(
+      [
+        workspace.phase7.envText,
+        "SPLIT402_PHASE7_PROOF_ID=phase7-staging-2026-06-29",
+        "SPLIT402_PHASE7_PROOF_REVIEWERS=Split402 operators",
+        "SPLIT402_PHASE7_STAGING_ENVIRONMENT=hosted-devnet-public-alpha",
+        "SPLIT402_PHASE7_CONTROL_PLANE_URL=https://control.staging.example",
+        "SPLIT402_PHASE7_DASHBOARD_URL=https://dashboard.staging.example",
+        "SPLIT402_PHASE7_DEMO_MERCHANT_URL=https://merchant.staging.example",
+        "SPLIT402_PHASE7_WEBHOOK_RECEIVER_URL=https://webhook.staging.example",
+        "SPLIT402_PHASE7_CONTROL_PLANE_TOKEN=merchant-session-token",
+        "SPLIT402_PHASE7_MERCHANT_ID=mrc_123",
+        "SPLIT402_PHASE7_REFERRER_WALLET=referrer-wallet",
+        "SPLIT402_MCP_CONTROL_PLANE_URL=https://control.staging.example",
+        "SPLIT402_MCP_CONTROL_PLANE_TOKEN=merchant-session-token",
+        "SPLIT402_MCP_CAPABILITY=solana.wallet-risk",
+        "SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1",
+        "SPLIT402_MCP_SVM_PRIVATE_KEY=funded-devnet-buyer-key",
+      ].join("\n"),
+      createFilledPhase6EnvText(workspace.phase6EnvText),
+      workspace,
+    );
+    files.set(
+      join(workspace.directory, workspace.githubSettingsReviewFileName),
+      workspace.githubSettingsReviewText
+        .replace("review_decision: no-go", "review_decision: approved")
+        .replace("branch_protection_enabled: no", "branch_protection_enabled: no"),
+    );
+
+    const report = createSplit402LaunchPreflightReport({
+      currentSourceCommit: "abc1234",
+      exists: (path) => files.has(path),
+      readText: (path) => files.get(path) ?? "",
+    });
+
+    expect(
+      report.checks.find(
+        (check) => check.id === "github_settings_review_record",
+      ),
+    ).toMatchObject({
+      ok: false,
+      details: expect.arrayContaining([
+        "Fix split402-launch-evidence/github-settings-review.txt: branch_protection_enabled must be yes before approval.",
+      ]),
+    });
+  });
+
   it("accepts short scaffold source commits matching the full checkout SHA", () => {
     const workspace = createSplit402ProductEvidenceWorkspace({
       sourceCommit: "abc1234",

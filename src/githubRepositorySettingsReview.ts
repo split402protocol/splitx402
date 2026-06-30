@@ -69,6 +69,20 @@ const YES_NO_RECORD_FIELDS = [
   "packages_and_releases_unpublished",
 ] as const;
 
+const REQUIRED_CHECK_LABELS = [
+  "Lint",
+  "Public surface check",
+  "Typecheck",
+  "Test",
+  "Build",
+  "Check vectors",
+  "Audit",
+  "Local public-alpha proof",
+  "PostgreSQL integration tests",
+  "CodeQL",
+  "Secret scan",
+] as const;
+
 export function createGitHubRepositorySettingsReviewRecord(
   input: GitHubRepositorySettingsReviewInput,
 ): string {
@@ -211,6 +225,22 @@ export function verifyGitHubRepositorySettingsReviewRecord(
     reviewDecision !== "approved"
   ) {
     errors.push("review_decision must be no-go or approved");
+  }
+  if (reviewDecision === "approved") {
+    for (const field of YES_NO_RECORD_FIELDS) {
+      if (fields.get(field) !== "yes") {
+        errors.push(`${field} must be yes before approval`);
+      }
+    }
+  }
+
+  const requiredChecks = fields.get("required_checks");
+  if (requiredChecks !== undefined) {
+    for (const label of REQUIRED_CHECK_LABELS) {
+      if (!requiredChecks.includes(label)) {
+        errors.push(`required_checks must include ${label}`);
+      }
+    }
   }
 
   return {
