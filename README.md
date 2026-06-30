@@ -344,6 +344,8 @@ corepack pnpm product:evidence:init --force
 corepack pnpm product:local-proof --help
 corepack pnpm product:local-proof --brief
 corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json
+corepack pnpm product:github-settings-review --template
+corepack pnpm product:github-settings-review
 corepack pnpm product:public-surface-check --brief
 corepack pnpm product:launch-preflight --help
 corepack pnpm product:launch-preflight --brief
@@ -396,6 +398,14 @@ commercial operations. The saved proof records the source commit, and
 `product:local-proof` fails unless the source worktree is clean.
 `product:status --workspace` also treats saved proof as stale if it does not
 match the current checkout or if the source worktree has uncommitted changes.
+`product:github-settings-review --template` prints a fillable review record for
+the live GitHub repository settings in
+[`docs/GITHUB_REPOSITORY_SETTINGS.md`](docs/GITHUB_REPOSITORY_SETTINGS.md).
+After verifying branch protection, Code Owners review, required checks, issue
+intake, and release posture in the GitHub UI/API, run
+`product:github-settings-review` with the required `SPLIT402_GITHUB_SETTINGS_*`
+environment values and keep the output with launch evidence. This command
+records the review; it does not itself prove live GitHub branch protection.
 `product:public-surface-check --brief` can also be run alone to verify that
 launch-facing files still present Apache-2.0, link the public/private boundary,
 and do not drift back to old launch-facing license claims.

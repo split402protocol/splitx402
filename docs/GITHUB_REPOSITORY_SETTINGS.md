@@ -76,6 +76,7 @@ support statement.
 Run this before launch-facing updates:
 
 ```bash
+corepack pnpm product:github-settings-review --template
 corepack pnpm product:public-surface-check --brief
 corepack pnpm product:local-proof --brief
 ```
@@ -83,3 +84,12 @@ corepack pnpm product:local-proof --brief
 Then confirm the GitHub UI still matches this file.
 
 The local checks prove the tracked repository surface, not live branch protection settings.
+
+After verifying the live GitHub UI, generate a review record with:
+
+```bash
+corepack pnpm product:github-settings-review
+```
+
+Keep the generated record with private launch evidence if it contains reviewer
+names, screenshots, or operational context that should not be public.

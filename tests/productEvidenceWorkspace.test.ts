@@ -91,8 +91,12 @@ describe("Split402 product evidence workspace", () => {
     expect(workspace.readmeText).toContain(
       "quoted values are handled consistently",
     );
-    expect(workspace.nextCommands.slice(0, 3)).toEqual([
+    expect(workspace.readmeText).toContain(
+      "corepack pnpm product:github-settings-review --template",
+    );
+    expect(workspace.nextCommands.slice(0, 4)).toEqual([
       "corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json",
+      "corepack pnpm product:github-settings-review --template",
       "corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence",
       "Fill split402-launch-evidence/phase7-staging.env with hosted staging values reported by launch preflight.",
     ]);
