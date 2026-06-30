@@ -203,14 +203,14 @@ approval_decision: no-go
 
     expect(checklist.sections.map((section) => section.status)).toEqual([
       "ready",
-      "ready",
+      "not_checked",
       "ready",
       "blocked",
       "blocked",
       "blocked",
     ]);
     expect(checklist.nextCommand).toBe(
-      "corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence",
+      "corepack pnpm product:github-settings-review --template",
     );
   });
 
@@ -231,7 +231,7 @@ approval_decision: no-go
 
     expect(checklist.sections[1]).toMatchObject({
       title: "Review public/private and license boundary",
-      status: "ready",
+      status: "not_checked",
       externalEvidenceRequired: false,
     });
     expect(checklist.sections[2]).toMatchObject({
@@ -288,7 +288,7 @@ approval_decision: no-go
 
     expect(checklist.sections[1]).toMatchObject({
       title: "Review public/private and license boundary",
-      status: "blocked",
+      status: "not_checked",
       externalEvidenceRequired: false,
     });
     expect(checklist.sections[2]).toMatchObject({
@@ -296,6 +296,71 @@ approval_decision: no-go
       status: "blocked",
       externalEvidenceRequired: false,
     });
+  });
+
+  it("marks public review ready only after the GitHub settings review is approved", () => {
+    const checklist = createSplit402LaunchChecklist(
+      createSplit402ProductReadinessReport(),
+      {
+        githubSettingsReviewPath:
+          "split402-launch-evidence/github-settings-review.txt",
+        githubSettingsReviewText: createApprovedGitHubSettingsReview(),
+      },
+    );
+
+    expect(checklist.sections[1]).toMatchObject({
+      title: "Review public/private and license boundary",
+      status: "ready",
+      externalEvidenceRequired: false,
+    });
+    expect(checklist.sections[1]?.notes).toContain(
+      "split402-launch-evidence/github-settings-review.txt is approved and well formed.",
+    );
+  });
+
+  it("blocks public review when the GitHub settings review is malformed", () => {
+    const checklist = createSplit402LaunchChecklist(
+      createSplit402ProductReadinessReport(),
+      {
+        githubSettingsReviewPath:
+          "split402-launch-evidence/github-settings-review.txt",
+        githubSettingsReviewText: `schema: split402.github_repository_settings_review.v1
+review_decision: approved
+`,
+      },
+    );
+
+    expect(checklist.sections[1]).toMatchObject({
+      title: "Review public/private and license boundary",
+      status: "blocked",
+      externalEvidenceRequired: false,
+    });
+    expect(checklist.sections[1]?.notes.join("\n")).toContain(
+      "Fix split402-launch-evidence/github-settings-review.txt: review_id is required.",
+    );
+  });
+
+  it("blocks public review when the GitHub settings review remains no-go", () => {
+    const checklist = createSplit402LaunchChecklist(
+      createSplit402ProductReadinessReport(),
+      {
+        githubSettingsReviewPath:
+          "split402-launch-evidence/github-settings-review.txt",
+        githubSettingsReviewText: createApprovedGitHubSettingsReview().replace(
+          "review_decision: approved",
+          "review_decision: no-go",
+        ),
+      },
+    );
+
+    expect(checklist.sections[1]).toMatchObject({
+      title: "Review public/private and license boundary",
+      status: "blocked",
+      externalEvidenceRequired: false,
+    });
+    expect(checklist.sections[1]?.notes).toContain(
+      "Set split402-launch-evidence/github-settings-review.txt review_decision to approved only after the live public/private/license review is complete.",
+    );
   });
 });
 
@@ -345,4 +410,30 @@ function readArtifact(
 
 function encode(value: string): Uint8Array {
   return new TextEncoder().encode(value);
+}
+
+function createApprovedGitHubSettingsReview(): string {
+  return `schema: split402.github_repository_settings_review.v1
+review_id: github-settings-review-001
+review_date: 2026-06-30
+reviewers: split402protocol
+repository: split402protocol/splitx402
+source_commit: fd88024000000000000000000000000000000000
+branch: main
+about_description_matches: yes
+topics_match: yes
+homepage_policy_matches: yes
+branch_protection_enabled: yes
+requires_pull_request: yes
+requires_code_owner_review: yes
+requires_status_checks: yes
+required_checks: Lint, Public surface check, Typecheck, Test, Build, Check vectors, Audit, Local public-alpha proof, PostgreSQL integration tests, CodeQL, Secret scan
+blocks_force_pushes: yes
+blocks_deletion: yes
+blank_issues_disabled: yes
+security_advisories_enabled: yes
+packages_and_releases_unpublished: yes
+review_decision: approved
+review_notes: live settings reviewed before launch
+`;
 }

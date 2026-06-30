@@ -15,6 +15,8 @@ import {
 export interface Split402ProductReadinessCliInput {
   brief: boolean;
   help: boolean;
+  githubSettingsReviewPath?: string;
+  githubSettingsReviewText?: string;
   localProofPath?: string;
   phase6EvidencePath?: string;
   phase7ProofPath?: string;
@@ -65,6 +67,12 @@ export function readSplit402ProductReadinessCliInput(
       ? undefined
       : workspaceEvidencePaths?.localProofPath ??
         process.env.SPLIT402_LOCAL_PUBLIC_ALPHA_PROOF;
+  const githubSettingsReviewPath =
+    help
+      ? undefined
+      : workspaceEvidencePaths?.githubSettingsReviewPath ??
+        process.env.SPLIT402_GITHUB_SETTINGS_REVIEW;
+  const githubSettingsReviewText = readOptionalText(githubSettingsReviewPath);
   const localProofText = readOptionalText(localProofPath);
   const phase6EvidenceText = readOptionalText(phase6EvidencePath);
   const phase7ProofText = readOptionalText(phase7ProofPath);
@@ -81,6 +89,8 @@ export function readSplit402ProductReadinessCliInput(
   return {
     brief,
     help,
+    githubSettingsReviewPath,
+    githubSettingsReviewText,
     localProofPath,
     phase6EvidencePath,
     phase7ProofPath,
@@ -167,11 +177,13 @@ function parseReadinessCliArgs(
 }
 
 function createWorkspaceEvidencePaths(directory: string): {
+  githubSettingsReviewPath: string;
   localProofPath: string;
   phase6EvidencePath: string;
   phase7ProofPath: string;
 } {
   return {
+    githubSettingsReviewPath: join(directory, "github-settings-review.txt"),
     localProofPath: join(directory, "local-public-alpha-proof.json"),
     phase6EvidencePath: join(directory, "phase6-custody-evidence.txt"),
     phase7ProofPath: join(directory, "phase7-staging-proof.txt"),
