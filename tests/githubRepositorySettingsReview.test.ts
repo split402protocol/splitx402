@@ -5,6 +5,7 @@ import {
   createGitHubRepositorySettingsReviewRecord,
   createGitHubRepositorySettingsReviewTemplate,
   githubRepositorySettingsReviewRequiredEnv,
+  verifyGitHubRepositorySettingsReviewRecord,
 } from "../src/githubRepositorySettingsReview.js";
 
 describe("GitHub repository settings review", () => {
@@ -63,6 +64,36 @@ describe("GitHub repository settings review", () => {
         repository: "someone/else",
       }),
     ).toThrow("repository must be split402protocol/splitx402");
+  });
+
+  it("verifies saved review records before launch evidence collection", () => {
+    const validRecord = createGitHubRepositorySettingsReviewRecord(createValidInput());
+
+    expect(verifyGitHubRepositorySettingsReviewRecord(validRecord)).toEqual({
+      ok: true,
+      errors: [],
+    });
+    expect(
+      verifyGitHubRepositorySettingsReviewRecord(
+        validRecord
+          .replace("repository: split402protocol/splitx402", "repository: other/project")
+          .replace("branch_protection_enabled: yes", "branch_protection_enabled: maybe"),
+      ),
+    ).toEqual({
+      ok: false,
+      errors: [
+        "repository must be split402protocol/splitx402",
+        "branch_protection_enabled must be yes or no",
+      ],
+    });
+    expect(
+      verifyGitHubRepositorySettingsReviewRecord(
+        validRecord.replace("review_date: 2026-06-30", "review_date: soon"),
+      ),
+    ).toEqual({
+      ok: false,
+      errors: ["review_date must be YYYY-MM-DD"],
+    });
   });
 
   it("lists required environment variables for the CLI", () => {
