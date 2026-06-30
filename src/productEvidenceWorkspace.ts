@@ -8,6 +8,12 @@ import {
   type Phase7StagingEvidenceWorkspace,
 } from "./phase7StagingEvidenceWorkspace.js";
 import { createGitHubRepositorySettingsReviewRecord } from "./githubRepositorySettingsReview.js";
+import {
+  MAINNET_CANARY_CONFIRMATION,
+  MAINNET_CANARY_MAX_GROSS_AMOUNT_ATOMIC,
+  MAINNET_CANARY_NETWORK,
+  MAINNET_CANARY_NON_ATOMIC_ACKNOWLEDGEMENT,
+} from "./mainnetCanaryPlan.js";
 import { assemblePhase7StagingProof } from "./phase7StagingProofAssembly.js";
 
 export interface Split402ProductEvidenceWorkspaceInput {
@@ -21,6 +27,7 @@ export interface Split402ProductEvidenceWorkspace {
   readmeFileName: "README.md";
   githubSettingsReviewFileName: "github-settings-review.txt";
   localProofFileName: "local-public-alpha-proof.json";
+  mainnetCanaryEnvFileName: "mainnet-canary.env";
   phase6EvidenceFileName: "phase6-custody-evidence.txt";
   phase6EnvFileName: "phase6-evidence.env";
   phase7ProofFileName: "phase7-staging-proof.txt";
@@ -30,6 +37,7 @@ export interface Split402ProductEvidenceWorkspace {
   phase6EnvText: string;
   phase7ProofText: string;
   githubSettingsReviewText: string;
+  mainnetCanaryEnvText: string;
   readmeText: string;
   nextCommands: string[];
 }
@@ -49,6 +57,7 @@ export function createSplit402ProductEvidenceWorkspace(
   const phase6EvidenceText = createPhase6CustodyEvidenceBundle(phase6Values);
   const localProofFileName = "local-public-alpha-proof.json" as const;
   const githubSettingsReviewFileName = "github-settings-review.txt" as const;
+  const mainnetCanaryEnvFileName = "mainnet-canary.env" as const;
   const phase6EvidenceFileName = "phase6-custody-evidence.txt" as const;
   const phase6EnvFileName = "phase6-evidence.env" as const;
   const phase7ProofFileName = "phase7-staging-proof.txt" as const;
@@ -63,6 +72,7 @@ export function createSplit402ProductEvidenceWorkspace(
     directory,
     githubSettingsReviewFileName,
     localProofFileName,
+    mainnetCanaryEnvFileName,
     phase6EvidenceFileName,
     phase6EnvFileName,
     phase7ProofFileName,
@@ -74,6 +84,7 @@ export function createSplit402ProductEvidenceWorkspace(
     readmeFileName: "README.md",
     githubSettingsReviewFileName,
     localProofFileName,
+    mainnetCanaryEnvFileName,
     phase6EvidenceFileName,
     phase6EnvFileName,
     phase7ProofFileName,
@@ -86,10 +97,12 @@ export function createSplit402ProductEvidenceWorkspace(
     }),
     phase7ProofText,
     githubSettingsReviewText: createGithubSettingsReviewText(input),
+    mainnetCanaryEnvText: createMainnetCanaryEnvText(),
     readmeText: createReadmeText({
       directory,
       githubSettingsReviewFileName,
       localProofFileName,
+      mainnetCanaryEnvFileName,
       phase6EvidenceFileName,
       phase6EnvFileName,
       phase7ProofFileName,
@@ -98,6 +111,26 @@ export function createSplit402ProductEvidenceWorkspace(
     }),
     nextCommands,
   };
+}
+
+function createMainnetCanaryEnvText(): string {
+  return [
+    "# Split402 mainnet canary preflight values.",
+    "# This file is local evidence workspace configuration. Do not commit filled values.",
+    "# Run only after product:status reports every launch gate ready.",
+    `SPLIT402_MAINNET_CANARY_CONFIRM=${MAINNET_CANARY_CONFIRMATION}`,
+    `SPLIT402_MAINNET_CANARY_NON_ATOMIC_ACK=${MAINNET_CANARY_NON_ATOMIC_ACKNOWLEDGEMENT}`,
+    `SPLIT402_MAINNET_CANARY_NETWORK=${MAINNET_CANARY_NETWORK}`,
+    `SPLIT402_MAINNET_CANARY_MAX_GROSS_AMOUNT_ATOMIC=${MAINNET_CANARY_MAX_GROSS_AMOUNT_ATOMIC}`,
+    "SPLIT402_MAINNET_CANARY_MERCHANT_ID=",
+    "SPLIT402_MAINNET_CANARY_CAMPAIGN_ID=",
+    "SPLIT402_MAINNET_CANARY_ROUTE_ID=",
+    "SPLIT402_MAINNET_CANARY_WALLET=",
+    "SPLIT402_MAINNET_CANARY_DRY_RUN_EVIDENCE=",
+    "SPLIT402_MAINNET_CANARY_ROLLBACK_PLAN=",
+    "SPLIT402_MAINNET_CANARY_REVIEW_DECISION=no-go",
+    "",
+  ].join("\n");
 }
 
 function createGithubSettingsReviewText(
@@ -167,6 +200,7 @@ function createNextCommands(input: {
   directory: string;
   githubSettingsReviewFileName: string;
   localProofFileName: string;
+  mainnetCanaryEnvFileName: string;
   phase6EvidenceFileName: string;
   phase6EnvFileName: string;
   phase7ProofFileName: string;
@@ -201,6 +235,8 @@ function createNextCommands(input: {
     `corepack pnpm phase6:evidence:assemble --evidence-env-file ${phase6EnvFile} ${input.directory}/${input.phase6EvidenceFileName}`,
     `corepack pnpm phase6:evidence:status --brief ${input.directory}/${input.phase6EvidenceFileName}`,
     `corepack pnpm product:status --brief --workspace ${input.directory}`,
+    `Review ${input.directory}/${input.mainnetCanaryEnvFileName} only after product:status is go.`,
+    `corepack pnpm product:mainnet-canary --brief --workspace ${input.directory}`,
   ];
 }
 
@@ -208,6 +244,7 @@ function createReadmeText(input: {
   directory: string;
   githubSettingsReviewFileName: string;
   localProofFileName: string;
+  mainnetCanaryEnvFileName: string;
   phase6EvidenceFileName: string;
   phase6EnvFileName: string;
   phase7ProofFileName: string;
@@ -229,6 +266,7 @@ function createReadmeText(input: {
     "| --- | --- |",
     `| \`${input.localProofFileName}\` | Saved local public-alpha protocol/router/MCP proof artifact. |`,
     `| \`${input.githubSettingsReviewFileName}\` | Live GitHub settings and public/private license review record. |`,
+    `| \`${input.mainnetCanaryEnvFileName}\` | Local fail-closed mainnet canary preflight environment template. |`,
     `| \`${input.phase6EvidenceFileName}\` | Phase 6 custody evidence bundle scaffold. |`,
     `| \`${input.phase6EnvFileName}\` | Local Phase 6 custody evidence assembly environment template. |`,
     `| \`${input.phase7ProofFileName}\` | Phase 7 staging proof record after assembly. |`,
@@ -257,6 +295,9 @@ function createReadmeText(input: {
     "",
     "The product remains `no-go` until the GitHub public/private license",
     "review, Phase 7 hosted proof, and Phase 6 custody evidence all pass.",
+    "The mainnet canary env template is not a launch approval. Fill it only",
+    "after every launch gate is ready, and keep private canary evidence out of",
+    "the public repository.",
     "The saved local public-alpha proof records the source commit. Rerun it",
     "after changing the checkout. `product:local-proof` also fails unless the",
     "source worktree is clean.",

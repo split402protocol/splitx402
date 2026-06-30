@@ -144,4 +144,6 @@ Run
 only after those gates are ready. It checks the explicit one-merchant,
 one-campaign, one-route, one-wallet mainnet canary controls, amount cap,
 non-atomic-settlement acknowledgement, dry-run evidence, rollback plan, and
-human canary approval without broadcasting transactions.
+human canary approval without broadcasting transactions. With `--workspace`, it
+auto-loads `split402-launch-evidence/mainnet-canary.env`, while shell
+environment variables override local file values.

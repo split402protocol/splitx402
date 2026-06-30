@@ -22,6 +22,7 @@ describe("Split402 product evidence workspace", () => {
     expect(workspace.githubSettingsReviewFileName).toBe(
       "github-settings-review.txt",
     );
+    expect(workspace.mainnetCanaryEnvFileName).toBe("mainnet-canary.env");
     expect(workspace.phase6EvidenceFileName).toBe("phase6-custody-evidence.txt");
     expect(workspace.phase6EnvFileName).toBe("phase6-evidence.env");
     expect(workspace.phase7ProofFileName).toBe("phase7-staging-proof.txt");
@@ -72,6 +73,15 @@ describe("Split402 product evidence workspace", () => {
     expect(workspace.githubSettingsReviewText).toContain(
       "review_decision: no-go",
     );
+    expect(workspace.mainnetCanaryEnvText).toContain(
+      "SPLIT402_MAINNET_CANARY_CONFIRM=split402-mainnet-canary",
+    );
+    expect(workspace.mainnetCanaryEnvText).toContain(
+      "SPLIT402_MAINNET_CANARY_NON_ATOMIC_ACK=referral-accounting-not-atomic-split",
+    );
+    expect(workspace.mainnetCanaryEnvText).toContain(
+      "SPLIT402_MAINNET_CANARY_REVIEW_DECISION=no-go",
+    );
   });
 
   it("documents the no-go launch posture and next commands", () => {
@@ -83,12 +93,16 @@ describe("Split402 product evidence workspace", () => {
     expect(workspace.readmeText).toContain("Launch gates ready: 0/3 (0%)");
     expect(workspace.readmeText).toContain("local-public-alpha-proof.json");
     expect(workspace.readmeText).toContain("github-settings-review.txt");
+    expect(workspace.readmeText).toContain("mainnet-canary.env");
     expect(workspace.readmeText).toContain(
       "Live GitHub settings and public/private license review record",
     );
     expect(workspace.readmeText).toContain("Mainnet ready: no");
     expect(workspace.readmeText).toContain(
       "The product remains `no-go` until the GitHub public/private license",
+    );
+    expect(workspace.readmeText).toContain(
+      "The mainnet canary env template is not a launch approval",
     );
     expect(workspace.readmeText).toContain(
       "saved local public-alpha proof records the source commit",
@@ -144,6 +158,12 @@ describe("Split402 product evidence workspace", () => {
     expect(workspace.nextCommands).toContain(
       "corepack pnpm product:status --brief --workspace split402-launch-evidence",
     );
+    expect(workspace.nextCommands).toContain(
+      "Review split402-launch-evidence/mainnet-canary.env only after product:status is go.",
+    );
+    expect(workspace.nextCommands).toContain(
+      "corepack pnpm product:mainnet-canary --brief --workspace split402-launch-evidence",
+    );
   });
 
   it("plans every scaffold file written by the product evidence initializer", () => {
@@ -155,6 +175,7 @@ describe("Split402 product evidence workspace", () => {
       .toEqual([
         join("evidence/launch", "README.md"),
         join("evidence/launch", "github-settings-review.txt"),
+        join("evidence/launch", "mainnet-canary.env"),
         join("evidence/launch", "phase6-custody-evidence.txt"),
         join("evidence/launch", "phase6-evidence.env"),
         join("evidence/launch", "phase7-staging-proof.txt"),

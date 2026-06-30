@@ -36,6 +36,9 @@ corepack pnpm product:mainnet-canary --brief --workspace split402-launch-evidenc
 
 The command is fail-closed. It does not broadcast transactions. It reports
 whether the current evidence and canary controls are sufficient to proceed.
+When `--workspace` is provided, the command auto-loads
+`split402-launch-evidence/mainnet-canary.env`; shell environment variables
+override values from that file.
 
 Required environment:
 
@@ -54,7 +57,7 @@ SPLIT402_MAINNET_CANARY_REVIEW_DECISION=approved
 ```
 
 On Windows PowerShell, set values with `$env:NAME='value'` before running the
-command.
+command. Keep filled canary env files local or private.
 
 ## Execution
 

@@ -51,6 +51,10 @@ console.log(
         workspace.directory,
         workspace.githubSettingsReviewFileName,
       ),
+      mainnetCanaryEnvFile: join(
+        workspace.directory,
+        workspace.mainnetCanaryEnvFileName,
+      ),
       phase6EvidenceFile: join(
         workspace.directory,
         workspace.phase6EvidenceFileName,

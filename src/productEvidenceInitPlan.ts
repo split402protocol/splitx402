@@ -80,6 +80,10 @@ export function createProductEvidenceInitWrites(
       contents: workspace.githubSettingsReviewText,
     },
     {
+      path: join(workspace.directory, workspace.mainnetCanaryEnvFileName),
+      contents: workspace.mainnetCanaryEnvText,
+    },
+    {
       path: join(workspace.directory, workspace.phase6EvidenceFileName),
       contents: workspace.phase6EvidenceText,
     },

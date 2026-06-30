@@ -429,7 +429,9 @@ guarded preflight for the first tiny mainnet canary. It does not broadcast
 transactions. It remains `no-go` until `product:status` is `go`, the canary is
 explicitly acknowledged as referral accounting rather than atomic split
 settlement, and a one-merchant/one-route/one-wallet dry-run and rollback plan
-are attached.
+are attached. With `--workspace`, it auto-loads
+`split402-launch-evidence/mainnet-canary.env`; shell environment variables
+override local file values.
 
 Generate the Phase 6 image provenance review record after building immutable
 signer and control-plane images:
