@@ -14,6 +14,8 @@ describe("GitHub repository settings review", () => {
       reviewId: "github-settings-review-001",
       reviewDate: "2026-06-30",
       reviewers: "split402protocol",
+      reviewMethod: "github-ui-and-api",
+      evidenceSource: "attached: github-settings-review-2026-06-30.md",
       repository: "split402protocol/splitx402",
       sourceCommit: "abc1234",
       branch: "main",
@@ -38,6 +40,10 @@ describe("GitHub repository settings review", () => {
       "schema: split402.github_repository_settings_review.v1",
     );
     expect(record).toContain("repository: split402protocol/splitx402");
+    expect(record).toContain("review_method: github-ui-and-api");
+    expect(record).toContain(
+      "evidence_source: attached: github-settings-review-2026-06-30.md",
+    );
     expect(record).toContain("requires_code_owner_review: yes");
     expect(record).toContain("required_checks: Lint, Public surface check");
     expect(record).toContain("review_decision: approved");
@@ -47,6 +53,8 @@ describe("GitHub repository settings review", () => {
     const template = createGitHubRepositorySettingsReviewTemplate();
 
     expect(template).toContain("review_decision: no-go");
+    expect(template).toContain("review_method: pending");
+    expect(template).toContain("evidence_source: pending");
     expect(template).toContain("branch_protection_enabled: no");
     expect(template).toContain("Local public-alpha proof");
     expect(template).toContain(
@@ -134,6 +142,27 @@ describe("GitHub repository settings review", () => {
     });
   });
 
+  it("rejects approval when live review evidence is still placeholder text", () => {
+    const approvedWithoutEvidence = createGitHubRepositorySettingsReviewRecord({
+      ...createValidInput(),
+      reviewers: "<reviewer handles>",
+      reviewMethod: "pending",
+      evidenceSource: "pending",
+      reviewDecision: "approved",
+    });
+
+    expect(
+      verifyGitHubRepositorySettingsReviewRecord(approvedWithoutEvidence),
+    ).toEqual({
+      ok: false,
+      errors: [
+        "reviewers must be real review evidence before approval",
+        "review_method must be real review evidence before approval",
+        "evidence_source must be real review evidence before approval",
+      ],
+    });
+  });
+
   it("lists required environment variables for the CLI", () => {
     expect(githubRepositorySettingsReviewRequiredEnv()).toContain(
       "SPLIT402_GITHUB_SETTINGS_BRANCH_PROTECTION_ENABLED",
@@ -152,6 +181,8 @@ function createValidInput() {
     reviewId: "github-settings-review-001",
     reviewDate: "2026-06-30",
     reviewers: "split402protocol",
+    reviewMethod: "github-ui-and-api",
+    evidenceSource: "attached: github-settings-review-2026-06-30.md",
     repository: "split402protocol/splitx402",
     sourceCommit: "abc1234",
     branch: "main",

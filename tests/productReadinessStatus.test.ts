@@ -382,6 +382,8 @@ function createApprovedGitHubSettingsReviewText(): string {
 review_id: github-settings-review-001
 review_date: 2026-06-30
 reviewers: split402protocol
+review_method: github-ui-and-api
+evidence_source: attached: github-settings-review-2026-06-30.md
 repository: split402protocol/splitx402
 source_commit: fd88024000000000000000000000000000000000
 branch: main

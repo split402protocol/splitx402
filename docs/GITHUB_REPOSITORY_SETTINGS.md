@@ -91,6 +91,16 @@ After verifying the live GitHub UI, generate a review record with:
 corepack pnpm product:github-settings-review
 ```
 
+The generated record must include the review method and evidence source:
+
+- `SPLIT402_GITHUB_SETTINGS_REVIEW_METHOD`, for example
+  `github-ui-and-api`;
+- `SPLIT402_GITHUB_SETTINGS_EVIDENCE_SOURCE`, for example
+  `attached: github-settings-review-YYYY-MM-DD.md`.
+
+Do not set `SPLIT402_GITHUB_SETTINGS_REVIEW_DECISION=approved` while reviewers,
+review method, or evidence source still contain placeholders.
+
 Keep the generated record with private launch evidence if it contains reviewer
 names, screenshots, or operational context that should not be public. The
 default local launch-evidence path is
