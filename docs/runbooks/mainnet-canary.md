@@ -51,13 +51,22 @@ SPLIT402_MAINNET_CANARY_MERCHANT_ID=<allowlisted merchant id>
 SPLIT402_MAINNET_CANARY_CAMPAIGN_ID=<allowlisted campaign id>
 SPLIT402_MAINNET_CANARY_ROUTE_ID=<allowlisted route id>
 SPLIT402_MAINNET_CANARY_WALLET=<allowlisted buyer/payer wallet>
-SPLIT402_MAINNET_CANARY_DRY_RUN_EVIDENCE=attached: <dry-run evidence>
-SPLIT402_MAINNET_CANARY_ROLLBACK_PLAN=attached: <rollback plan>
+SPLIT402_MAINNET_CANARY_DRY_RUN_EVIDENCE=attached: mainnet-canary-dry-run.txt
+SPLIT402_MAINNET_CANARY_ROLLBACK_PLAN=attached: mainnet-canary-rollback-plan.txt
 SPLIT402_MAINNET_CANARY_REVIEW_DECISION=approved
 ```
 
 On Windows PowerShell, set values with `$env:NAME='value'` before running the
 command. Keep filled canary env files local or private.
+
+`product:evidence:init --missing` creates private scaffold files for the canary
+dry-run and rollback plan. `product:mainnet-canary` resolves `attached:` paths
+relative to `--workspace` and verifies the attached files before it can report
+ready. The dry-run artifact must show passed receipt verification,
+economic-policy verification, chain verification, payout dry-run, and signer
+byte verification. The rollback artifact must include a stop-loss amount,
+rollback owner, rollback steps, reconciliation owner, reviewer, and
+`stop_conditions_reviewed: yes`.
 
 ## Execution
 

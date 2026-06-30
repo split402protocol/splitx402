@@ -11,8 +11,16 @@ export interface Split402MainnetCanaryInput {
   routeId?: string;
   canaryWallet?: string;
   dryRunEvidence?: string;
+  dryRunEvidenceVerification?: Split402MainnetCanaryEvidenceVerification;
   rollbackPlan?: string;
+  rollbackPlanVerification?: Split402MainnetCanaryEvidenceVerification;
   reviewDecision?: string;
+}
+
+export interface Split402MainnetCanaryEvidenceVerification {
+  ok: boolean;
+  errors: string[];
+  path?: string;
 }
 
 export interface Split402MainnetCanaryReport {
@@ -54,8 +62,8 @@ const REQUIRED_ENV_SUMMARY = [
   "SPLIT402_MAINNET_CANARY_CAMPAIGN_ID=<allowlisted campaign id>",
   "SPLIT402_MAINNET_CANARY_ROUTE_ID=<allowlisted route id>",
   "SPLIT402_MAINNET_CANARY_WALLET=<allowlisted buyer/payer wallet>",
-  "SPLIT402_MAINNET_CANARY_DRY_RUN_EVIDENCE=attached: <dry-run evidence>",
-  "SPLIT402_MAINNET_CANARY_ROLLBACK_PLAN=attached: <rollback plan>",
+  "SPLIT402_MAINNET_CANARY_DRY_RUN_EVIDENCE=attached: mainnet-canary-dry-run.txt",
+  "SPLIT402_MAINNET_CANARY_ROLLBACK_PLAN=attached: mainnet-canary-rollback-plan.txt",
   "SPLIT402_MAINNET_CANARY_REVIEW_DECISION=approved",
 ] as const;
 
@@ -67,8 +75,11 @@ export function createSplit402MainnetCanaryReport(
     createMainnetScopeCheck(input.network),
     createAmountCapCheck(input.maxGrossAmountAtomic),
     createAllowlistCheck(input),
-    createDryRunEvidenceCheck(input.dryRunEvidence),
-    createRollbackPlanCheck(input.rollbackPlan),
+    createDryRunEvidenceCheck(
+      input.dryRunEvidence,
+      input.dryRunEvidenceVerification,
+    ),
+    createRollbackPlanCheck(input.rollbackPlan, input.rollbackPlanVerification),
     createOperatorConfirmationCheck(input.operatorConfirmation),
     createNonAtomicAcknowledgementCheck(input.nonAtomicAcknowledgement),
     createReviewDecisionCheck(input.reviewDecision),
@@ -208,23 +219,27 @@ function createAllowlistCheck(
 
 function createDryRunEvidenceCheck(
   dryRunEvidence: string | undefined,
+  verification: Split402MainnetCanaryEvidenceVerification | undefined,
 ): Split402MainnetCanaryCheck {
   return createAttachedEvidenceCheck({
     id: "dry_run_evidence",
     label: "Dry-run evidence exists before mainnet broadcast",
     envName: "SPLIT402_MAINNET_CANARY_DRY_RUN_EVIDENCE",
     value: dryRunEvidence,
+    verification,
   });
 }
 
 function createRollbackPlanCheck(
   rollbackPlan: string | undefined,
+  verification: Split402MainnetCanaryEvidenceVerification | undefined,
 ): Split402MainnetCanaryCheck {
   return createAttachedEvidenceCheck({
     id: "rollback_plan",
     label: "Rollback and stop-loss plan is attached",
     envName: "SPLIT402_MAINNET_CANARY_ROLLBACK_PLAN",
     value: rollbackPlan,
+    verification,
   });
 }
 
@@ -233,19 +248,30 @@ function createAttachedEvidenceCheck(input: {
   label: string;
   envName: string;
   value: string | undefined;
+  verification?: Split402MainnetCanaryEvidenceVerification;
 }): Split402MainnetCanaryCheck {
   const ok =
     isFilled(input.value) &&
+    /^attached:\s*\S+/iu.test(input.value.trim()) &&
     input.value.trim().toLowerCase() !== "pending" &&
-    !/[<>]/u.test(input.value);
+    !/[<>]/u.test(input.value) &&
+    input.verification?.ok !== false;
   return {
     id: input.id,
     label: input.label,
     ok,
     severity: "required",
     details: ok
-      ? [`${input.envName} is filled`]
-      : [`Set ${input.envName}=attached: <evidence path or review record>.`],
+      ? [
+          input.verification?.path === undefined
+            ? `${input.envName} is filled`
+            : `${input.envName} verified ${input.verification.path}`,
+        ]
+      : input.verification?.ok === false && input.verification.errors.length > 0
+        ? input.verification.errors.map(
+            (error) => `${input.envName}: ${error}`,
+          )
+        : [`Set ${input.envName}=attached: <evidence path or review record>.`],
   };
 }
 

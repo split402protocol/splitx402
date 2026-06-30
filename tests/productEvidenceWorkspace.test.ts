@@ -23,6 +23,12 @@ describe("Split402 product evidence workspace", () => {
       "github-settings-review.txt",
     );
     expect(workspace.mainnetCanaryEnvFileName).toBe("mainnet-canary.env");
+    expect(workspace.mainnetCanaryDryRunFileName).toBe(
+      "mainnet-canary-dry-run.txt",
+    );
+    expect(workspace.mainnetCanaryRollbackPlanFileName).toBe(
+      "mainnet-canary-rollback-plan.txt",
+    );
     expect(workspace.phase6EvidenceFileName).toBe("phase6-custody-evidence.txt");
     expect(workspace.phase6EnvFileName).toBe("phase6-evidence.env");
     expect(workspace.phase7ProofFileName).toBe("phase7-staging-proof.txt");
@@ -82,6 +88,24 @@ describe("Split402 product evidence workspace", () => {
     expect(workspace.mainnetCanaryEnvText).toContain(
       "SPLIT402_MAINNET_CANARY_REVIEW_DECISION=no-go",
     );
+    expect(workspace.mainnetCanaryEnvText).toContain(
+      "SPLIT402_MAINNET_CANARY_DRY_RUN_EVIDENCE=attached: mainnet-canary-dry-run.txt",
+    );
+    expect(workspace.mainnetCanaryEnvText).toContain(
+      "SPLIT402_MAINNET_CANARY_ROLLBACK_PLAN=attached: mainnet-canary-rollback-plan.txt",
+    );
+    expect(workspace.mainnetCanaryDryRunText).toContain(
+      "schema: split402.mainnet_canary_dry_run.v1",
+    );
+    expect(workspace.mainnetCanaryDryRunText).toContain(
+      "source_commit: 096f190",
+    );
+    expect(workspace.mainnetCanaryRollbackPlanText).toContain(
+      "schema: split402.mainnet_canary_rollback_plan.v1",
+    );
+    expect(workspace.mainnetCanaryRollbackPlanText).toContain(
+      "review_date: 2026-06-29",
+    );
   });
 
   it("documents the no-go launch posture and next commands", () => {
@@ -94,6 +118,10 @@ describe("Split402 product evidence workspace", () => {
     expect(workspace.readmeText).toContain("local-public-alpha-proof.json");
     expect(workspace.readmeText).toContain("github-settings-review.txt");
     expect(workspace.readmeText).toContain("mainnet-canary.env");
+    expect(workspace.readmeText).toContain("mainnet-canary-dry-run.txt");
+    expect(workspace.readmeText).toContain(
+      "mainnet-canary-rollback-plan.txt",
+    );
     expect(workspace.readmeText).toContain(
       "Live GitHub settings and public/private license review record",
     );
@@ -162,6 +190,9 @@ describe("Split402 product evidence workspace", () => {
       "Review split402-launch-evidence/mainnet-canary.env only after product:status is go.",
     );
     expect(workspace.nextCommands).toContain(
+      "Fill split402-launch-evidence/mainnet-canary-dry-run.txt and split402-launch-evidence/mainnet-canary-rollback-plan.txt with private reviewed canary evidence.",
+    );
+    expect(workspace.nextCommands).toContain(
       "corepack pnpm product:mainnet-canary --brief --workspace split402-launch-evidence",
     );
   });
@@ -176,6 +207,8 @@ describe("Split402 product evidence workspace", () => {
         join("evidence/launch", "README.md"),
         join("evidence/launch", "github-settings-review.txt"),
         join("evidence/launch", "mainnet-canary.env"),
+        join("evidence/launch", "mainnet-canary-dry-run.txt"),
+        join("evidence/launch", "mainnet-canary-rollback-plan.txt"),
         join("evidence/launch", "phase6-custody-evidence.txt"),
         join("evidence/launch", "phase6-evidence.env"),
         join("evidence/launch", "phase7-staging-proof.txt"),
