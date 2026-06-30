@@ -384,6 +384,9 @@ Phase 6 custody env file and Phase 7 hosted env file so operators can see which
 values are missing or configured without printing tokens, private keys, or
 custody values. It reads the local env files with dotenv-style parsing, so quoted
 values are handled the same way as the evidence collectors.
+When required preflight inputs are ready, the next action reminds operators to
+run the GitHub settings/public-private license review and keep that record with
+launch evidence before collection.
 `product:launch-checklist --brief` prints the exact remaining public/private
 license review, local validation, hosted proof, custody evidence, and combined
 status commands; pass `--workspace split402-launch-evidence` or the Phase 6 and
