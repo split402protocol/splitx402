@@ -1,4 +1,7 @@
 import type { Split402ProductReadinessReport } from "./productReadinessStatus.js";
+import {
+  verifyGitHubRepositorySettingsReviewRecord,
+} from "./githubRepositorySettingsReview.js";
 
 export interface Split402LaunchChecklist {
   schema: "split402.launch_checklist.v1";
@@ -19,6 +22,11 @@ export interface Split402LaunchChecklist {
   nextCommand: string;
 }
 
+export interface Split402LaunchChecklistInput {
+  githubSettingsReviewPath?: string;
+  githubSettingsReviewText?: string;
+}
+
 export interface Split402LaunchChecklistSection {
   title: string;
   status: "ready" | "blocked" | "not_checked";
@@ -32,10 +40,11 @@ const LAUNCH_PREFLIGHT_COMMAND =
 
 export function createSplit402LaunchChecklist(
   report: Split402ProductReadinessReport,
+  input: Split402LaunchChecklistInput = {},
 ): Split402LaunchChecklist {
   const sections = [
     createWorkspaceSection(report),
-    createPublicPrivateLicenseSection(report),
+    createPublicPrivateLicenseSection(input),
     createLocalValidationSection(report),
     createPhase7Section(report),
     createPhase6Section(report),
@@ -121,19 +130,13 @@ function createChecklistNextCommand(
 }
 
 function createPublicPrivateLicenseSection(
-  report: Split402ProductReadinessReport,
+  input: Split402LaunchChecklistInput,
 ): Split402LaunchChecklistSection {
-  const commandEvidenceStatus = report.phase7.commandEvidenceStatus.status;
-  const status =
-    report.localProof.ready || commandEvidenceStatus === "valid"
-      ? "ready"
-      : report.localProof.checked || commandEvidenceStatus === "invalid"
-        ? "blocked"
-        : "not_checked";
+  const reviewStatus = createGitHubSettingsReviewChecklistStatus(input);
 
   return {
     title: "Review public/private and license boundary",
-    status,
+    status: reviewStatus.status,
     externalEvidenceRequired: false,
     commands: [
       "corepack pnpm product:github-settings-review --template",
@@ -146,8 +149,51 @@ function createPublicPrivateLicenseSection(
       "Keep hosted operations, provider strategy, custody evidence, private URLs, live transaction bytes, and partner-identifying details private unless intentionally sanitized.",
       "Do not reintroduce MIT in README, package metadata, GitHub About text, release notes, or package manifests.",
       "The GitHub settings review records the human review; it does not prove live branch protection by itself.",
+      ...reviewStatus.notes,
     ],
   };
+}
+
+function createGitHubSettingsReviewChecklistStatus(
+  input: Split402LaunchChecklistInput,
+): Pick<Split402LaunchChecklistSection, "status" | "notes"> {
+  const reviewText = input.githubSettingsReviewText;
+  const reviewPath =
+    input.githubSettingsReviewPath ??
+    "split402-launch-evidence/github-settings-review.txt";
+  if (reviewText === undefined || reviewText.trim().length === 0) {
+    return {
+      status: "not_checked",
+      notes: [`Review ${reviewPath} before launch approval.`],
+    };
+  }
+
+  const verification = verifyGitHubRepositorySettingsReviewRecord(reviewText);
+  if (!verification.ok) {
+    return {
+      status: "blocked",
+      notes: verification.errors.map((error) => `Fix ${reviewPath}: ${error}.`),
+    };
+  }
+
+  if (parseRecordField(reviewText, "review_decision") !== "approved") {
+    return {
+      status: "blocked",
+      notes: [
+        `Set ${reviewPath} review_decision to approved only after the live public/private/license review is complete.`,
+      ],
+    };
+  }
+
+  return {
+    status: "ready",
+    notes: [`${reviewPath} is approved and well formed.`],
+  };
+}
+
+function parseRecordField(text: string, field: string): string | undefined {
+  const expression = new RegExp(`^${field}:\\s*(.*)$`, "mu");
+  return expression.exec(text)?.[1]?.trim();
 }
 
 function createLocalValidationSection(

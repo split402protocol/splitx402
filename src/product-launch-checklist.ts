@@ -8,14 +8,23 @@ import {
   formatSplit402LaunchChecklistBrief,
 } from "./productLaunchChecklist.js";
 
-const { brief, help, report: readinessReport } = readArgs();
+const {
+  brief,
+  githubSettingsReviewPath,
+  githubSettingsReviewText,
+  help,
+  report: readinessReport,
+} = readArgs();
 
 if (help) {
   console.log(PRODUCT_LAUNCH_CHECKLIST_USAGE);
   process.exit(0);
 }
 
-const checklist = createSplit402LaunchChecklist(readinessReport);
+const checklist = createSplit402LaunchChecklist(readinessReport, {
+  githubSettingsReviewPath,
+  githubSettingsReviewText,
+});
 
 console.log(
   brief
