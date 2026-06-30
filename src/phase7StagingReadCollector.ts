@@ -53,6 +53,13 @@ interface PendingReadArtifactWrite {
   capture: Phase7ReadArtifactCapture;
 }
 
+const WEBHOOK_STATUSES = new Set([
+  "pending",
+  "processing",
+  "delivered",
+  "dead_letter",
+]);
+
 export async function collectPhase7ReadArtifacts(
   input: Phase7StagingReadCollectorInput,
 ): Promise<Phase7ReadCollectorReport> {
@@ -111,10 +118,11 @@ function createReadArtifactSpecs(
   const referrerWallet = encodeURIComponent(
     assertNonEmpty(input.referrerWallet, "referrerWallet"),
   );
+  const webhookStatus = normalizeWebhookStatus(input.webhookStatus);
   const webhookQuery =
-    input.webhookStatus === undefined || input.webhookStatus.trim().length === 0
+    webhookStatus === undefined
       ? ""
-      : `?status=${encodeURIComponent(input.webhookStatus.trim())}`;
+      : `?status=${encodeURIComponent(webhookStatus)}`;
   return [
     {
       field: "agent_discovery_evidence",
@@ -182,6 +190,19 @@ function assertNonEmpty(value: string, label: string): string {
     throw new Error(`${label} is required`);
   }
   return trimmed;
+}
+
+function normalizeWebhookStatus(value: string | undefined): string | undefined {
+  if (value === undefined || value.trim().length === 0) {
+    return undefined;
+  }
+  const normalized = value.trim();
+  if (!WEBHOOK_STATUSES.has(normalized)) {
+    throw new Error(
+      "webhookStatus must be pending, processing, delivered, or dead_letter",
+    );
+  }
+  return normalized;
 }
 
 function assertUsefulReadArtifact(
