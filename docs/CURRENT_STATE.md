@@ -146,4 +146,6 @@ one-campaign, one-route, one-wallet mainnet canary controls, amount cap,
 non-atomic-settlement acknowledgement, dry-run evidence, rollback plan, and
 human canary approval without broadcasting transactions. With `--workspace`, it
 auto-loads `split402-launch-evidence/mainnet-canary.env`, while shell
-environment variables override local file values.
+environment variables override local file values. The dry-run and rollback
+checks now resolve `attached:` paths from the private launch evidence workspace
+and validate required artifact fields before the canary gate can pass.

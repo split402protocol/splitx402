@@ -9,6 +9,10 @@ import {
 } from "./phase7StagingEvidenceWorkspace.js";
 import { createGitHubRepositorySettingsReviewRecord } from "./githubRepositorySettingsReview.js";
 import {
+  createMainnetCanaryDryRunEvidenceTemplate,
+  createMainnetCanaryRollbackPlanTemplate,
+} from "./mainnetCanaryEvidence.js";
+import {
   MAINNET_CANARY_CONFIRMATION,
   MAINNET_CANARY_MAX_GROSS_AMOUNT_ATOMIC,
   MAINNET_CANARY_NETWORK,
@@ -28,6 +32,8 @@ export interface Split402ProductEvidenceWorkspace {
   githubSettingsReviewFileName: "github-settings-review.txt";
   localProofFileName: "local-public-alpha-proof.json";
   mainnetCanaryEnvFileName: "mainnet-canary.env";
+  mainnetCanaryDryRunFileName: "mainnet-canary-dry-run.txt";
+  mainnetCanaryRollbackPlanFileName: "mainnet-canary-rollback-plan.txt";
   phase6EvidenceFileName: "phase6-custody-evidence.txt";
   phase6EnvFileName: "phase6-evidence.env";
   phase7ProofFileName: "phase7-staging-proof.txt";
@@ -38,6 +44,8 @@ export interface Split402ProductEvidenceWorkspace {
   phase7ProofText: string;
   githubSettingsReviewText: string;
   mainnetCanaryEnvText: string;
+  mainnetCanaryDryRunText: string;
+  mainnetCanaryRollbackPlanText: string;
   readmeText: string;
   nextCommands: string[];
 }
@@ -58,6 +66,9 @@ export function createSplit402ProductEvidenceWorkspace(
   const localProofFileName = "local-public-alpha-proof.json" as const;
   const githubSettingsReviewFileName = "github-settings-review.txt" as const;
   const mainnetCanaryEnvFileName = "mainnet-canary.env" as const;
+  const mainnetCanaryDryRunFileName = "mainnet-canary-dry-run.txt" as const;
+  const mainnetCanaryRollbackPlanFileName =
+    "mainnet-canary-rollback-plan.txt" as const;
   const phase6EvidenceFileName = "phase6-custody-evidence.txt" as const;
   const phase6EnvFileName = "phase6-evidence.env" as const;
   const phase7ProofFileName = "phase7-staging-proof.txt" as const;
@@ -73,6 +84,8 @@ export function createSplit402ProductEvidenceWorkspace(
     githubSettingsReviewFileName,
     localProofFileName,
     mainnetCanaryEnvFileName,
+    mainnetCanaryDryRunFileName,
+    mainnetCanaryRollbackPlanFileName,
     phase6EvidenceFileName,
     phase6EnvFileName,
     phase7ProofFileName,
@@ -85,6 +98,8 @@ export function createSplit402ProductEvidenceWorkspace(
     githubSettingsReviewFileName,
     localProofFileName,
     mainnetCanaryEnvFileName,
+    mainnetCanaryDryRunFileName,
+    mainnetCanaryRollbackPlanFileName,
     phase6EvidenceFileName,
     phase6EnvFileName,
     phase7ProofFileName,
@@ -98,11 +113,21 @@ export function createSplit402ProductEvidenceWorkspace(
     phase7ProofText,
     githubSettingsReviewText: createGithubSettingsReviewText(input),
     mainnetCanaryEnvText: createMainnetCanaryEnvText(),
+    mainnetCanaryDryRunText: createMainnetCanaryDryRunEvidenceTemplate({
+      sourceCommit: input.sourceCommit,
+      reviewDate: input.reviewDate,
+    }),
+    mainnetCanaryRollbackPlanText: createMainnetCanaryRollbackPlanTemplate({
+      sourceCommit: input.sourceCommit,
+      reviewDate: input.reviewDate,
+    }),
     readmeText: createReadmeText({
       directory,
       githubSettingsReviewFileName,
       localProofFileName,
       mainnetCanaryEnvFileName,
+      mainnetCanaryDryRunFileName,
+      mainnetCanaryRollbackPlanFileName,
       phase6EvidenceFileName,
       phase6EnvFileName,
       phase7ProofFileName,
@@ -126,8 +151,8 @@ function createMainnetCanaryEnvText(): string {
     "SPLIT402_MAINNET_CANARY_CAMPAIGN_ID=",
     "SPLIT402_MAINNET_CANARY_ROUTE_ID=",
     "SPLIT402_MAINNET_CANARY_WALLET=",
-    "SPLIT402_MAINNET_CANARY_DRY_RUN_EVIDENCE=",
-    "SPLIT402_MAINNET_CANARY_ROLLBACK_PLAN=",
+    "SPLIT402_MAINNET_CANARY_DRY_RUN_EVIDENCE=attached: mainnet-canary-dry-run.txt",
+    "SPLIT402_MAINNET_CANARY_ROLLBACK_PLAN=attached: mainnet-canary-rollback-plan.txt",
     "SPLIT402_MAINNET_CANARY_REVIEW_DECISION=no-go",
     "",
   ].join("\n");
@@ -201,6 +226,8 @@ function createNextCommands(input: {
   githubSettingsReviewFileName: string;
   localProofFileName: string;
   mainnetCanaryEnvFileName: string;
+  mainnetCanaryDryRunFileName: string;
+  mainnetCanaryRollbackPlanFileName: string;
   phase6EvidenceFileName: string;
   phase6EnvFileName: string;
   phase7ProofFileName: string;
@@ -236,6 +263,7 @@ function createNextCommands(input: {
     `corepack pnpm phase6:evidence:status --brief ${input.directory}/${input.phase6EvidenceFileName}`,
     `corepack pnpm product:status --brief --workspace ${input.directory}`,
     `Review ${input.directory}/${input.mainnetCanaryEnvFileName} only after product:status is go.`,
+    `Fill ${input.directory}/${input.mainnetCanaryDryRunFileName} and ${input.directory}/${input.mainnetCanaryRollbackPlanFileName} with private reviewed canary evidence.`,
     `corepack pnpm product:mainnet-canary --brief --workspace ${input.directory}`,
   ];
 }
@@ -245,6 +273,8 @@ function createReadmeText(input: {
   githubSettingsReviewFileName: string;
   localProofFileName: string;
   mainnetCanaryEnvFileName: string;
+  mainnetCanaryDryRunFileName: string;
+  mainnetCanaryRollbackPlanFileName: string;
   phase6EvidenceFileName: string;
   phase6EnvFileName: string;
   phase7ProofFileName: string;
@@ -267,6 +297,8 @@ function createReadmeText(input: {
     `| \`${input.localProofFileName}\` | Saved local public-alpha protocol/router/MCP proof artifact. |`,
     `| \`${input.githubSettingsReviewFileName}\` | Live GitHub settings and public/private license review record. |`,
     `| \`${input.mainnetCanaryEnvFileName}\` | Local fail-closed mainnet canary preflight environment template. |`,
+    `| \`${input.mainnetCanaryDryRunFileName}\` | Private mainnet canary dry-run evidence template. |`,
+    `| \`${input.mainnetCanaryRollbackPlanFileName}\` | Private mainnet canary rollback and stop-loss plan template. |`,
     `| \`${input.phase6EvidenceFileName}\` | Phase 6 custody evidence bundle scaffold. |`,
     `| \`${input.phase6EnvFileName}\` | Local Phase 6 custody evidence assembly environment template. |`,
     `| \`${input.phase7ProofFileName}\` | Phase 7 staging proof record after assembly. |`,

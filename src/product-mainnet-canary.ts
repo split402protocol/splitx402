@@ -1,4 +1,5 @@
 import { createMainnetCanaryEnv } from "./mainnetCanaryEnv.js";
+import { verifyMainnetCanaryEvidenceAttachment } from "./mainnetCanaryEvidence.js";
 import {
   createSplit402MainnetCanaryReport,
   formatSplit402MainnetCanaryBrief,
@@ -25,7 +26,17 @@ const report = createSplit402MainnetCanaryReport({
   routeId: env.SPLIT402_MAINNET_CANARY_ROUTE_ID,
   canaryWallet: env.SPLIT402_MAINNET_CANARY_WALLET,
   dryRunEvidence: env.SPLIT402_MAINNET_CANARY_DRY_RUN_EVIDENCE,
+  dryRunEvidenceVerification: verifyMainnetCanaryEvidenceAttachment({
+    kind: "dry_run",
+    value: env.SPLIT402_MAINNET_CANARY_DRY_RUN_EVIDENCE,
+    workspaceDirectory,
+  }),
   rollbackPlan: env.SPLIT402_MAINNET_CANARY_ROLLBACK_PLAN,
+  rollbackPlanVerification: verifyMainnetCanaryEvidenceAttachment({
+    kind: "rollback_plan",
+    value: env.SPLIT402_MAINNET_CANARY_ROLLBACK_PLAN,
+    workspaceDirectory,
+  }),
   reviewDecision: env.SPLIT402_MAINNET_CANARY_REVIEW_DECISION,
 });
 

@@ -84,6 +84,17 @@ export function createProductEvidenceInitWrites(
       contents: workspace.mainnetCanaryEnvText,
     },
     {
+      path: join(workspace.directory, workspace.mainnetCanaryDryRunFileName),
+      contents: workspace.mainnetCanaryDryRunText,
+    },
+    {
+      path: join(
+        workspace.directory,
+        workspace.mainnetCanaryRollbackPlanFileName,
+      ),
+      contents: workspace.mainnetCanaryRollbackPlanText,
+    },
+    {
       path: join(workspace.directory, workspace.phase6EvidenceFileName),
       contents: workspace.phase6EvidenceText,
     },

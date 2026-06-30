@@ -55,6 +55,14 @@ console.log(
         workspace.directory,
         workspace.mainnetCanaryEnvFileName,
       ),
+      mainnetCanaryDryRunFile: join(
+        workspace.directory,
+        workspace.mainnetCanaryDryRunFileName,
+      ),
+      mainnetCanaryRollbackPlanFile: join(
+        workspace.directory,
+        workspace.mainnetCanaryRollbackPlanFileName,
+      ),
       phase6EvidenceFile: join(
         workspace.directory,
         workspace.phase6EvidenceFileName,
