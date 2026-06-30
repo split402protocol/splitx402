@@ -161,7 +161,7 @@ describe("Split402 launch preflight", () => {
       "Fill Phase 7 MCP live execution env values in split402-launch-evidence/phase7-staging.env: SPLIT402_MCP_CONTROL_PLANE_URL, SPLIT402_MCP_CONTROL_PLANE_TOKEN, SPLIT402_MCP_CAPABILITY=solana.wallet-risk, SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1, SPLIT402_MCP_SVM_PRIVATE_KEY or SVM_PRIVATE_KEY.",
     );
     expect(report.nextActions).not.toContain(
-      "Run corepack pnpm product:github-settings-review --template, verify the live GitHub About/profile/branch-protection/release settings, then run corepack pnpm product:github-settings-review and keep the output with launch evidence.",
+      "Run corepack pnpm product:github-settings-review --template > split402-launch-evidence/github-settings-review.txt, verify the live GitHub About/profile/branch-protection/release settings, then run corepack pnpm product:github-settings-review and keep the output at split402-launch-evidence/github-settings-review.txt.",
     );
     expect(report.nextActions).not.toContain(
       "Set SPLIT402_PHASE6_ASSEMBLE_IMAGE_PROVENANCE_RECORD=split402-launch-evidence/phase6-image-provenance.txt",
@@ -205,7 +205,7 @@ describe("Split402 launch preflight", () => {
 
     expect(report.readyToCollectEvidence).toBe(true);
     expect(report.nextActions).toContain(
-      "Run corepack pnpm product:github-settings-review --template, verify the live GitHub About/profile/branch-protection/release settings, then run corepack pnpm product:github-settings-review and keep the output with launch evidence.",
+      "Run corepack pnpm product:github-settings-review --template > split402-launch-evidence/github-settings-review.txt, verify the live GitHub About/profile/branch-protection/release settings, then run corepack pnpm product:github-settings-review and keep the output at split402-launch-evidence/github-settings-review.txt.",
     );
     expect(report.checks.filter((check) => check.severity === "required"))
       .toEqual(
@@ -844,6 +844,10 @@ function createWorkspaceFileMap(
 ): Map<string, string> {
   return new Map([
     [join(workspace.directory, workspace.readmeFileName), workspace.readmeText],
+    [
+      join(workspace.directory, workspace.githubSettingsReviewFileName),
+      workspace.githubSettingsReviewText,
+    ],
     [
       join(workspace.directory, workspace.phase6EvidenceFileName),
       workspace.phase6EvidenceText,

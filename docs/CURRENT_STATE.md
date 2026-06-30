@@ -121,7 +121,8 @@ wallet values, or review notes. It uses dotenv-style parsing so quoted local env
 values are interpreted consistently with the evidence collectors. When required
 preflight inputs are ready, the next action reminds operators to
 run the GitHub settings/public-private license review and keep that record with
-launch evidence before collection. Run
+launch evidence before collection. The intended local artifact path is
+`split402-launch-evidence/github-settings-review.txt`. Run
 `corepack pnpm product:launch-checklist --brief` for the exact remaining
 public/private license review, local validation, hosted proof, custody evidence,
 and combined status commands; pass `--workspace split402-launch-evidence` or

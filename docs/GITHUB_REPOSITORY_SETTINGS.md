@@ -76,7 +76,7 @@ support statement.
 Run this before launch-facing updates:
 
 ```bash
-corepack pnpm product:github-settings-review --template
+corepack pnpm product:github-settings-review --template > split402-launch-evidence/github-settings-review.txt
 corepack pnpm product:public-surface-check --brief
 corepack pnpm product:local-proof --brief
 ```
@@ -92,4 +92,6 @@ corepack pnpm product:github-settings-review
 ```
 
 Keep the generated record with private launch evidence if it contains reviewer
-names, screenshots, or operational context that should not be public.
+names, screenshots, or operational context that should not be public. The
+default local launch-evidence path is
+`split402-launch-evidence/github-settings-review.txt`.

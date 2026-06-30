@@ -157,9 +157,6 @@ const PRE_COLLECTION_APPROVAL_ENV_KEYS = [
   },
 ] as const;
 
-const PUBLIC_PRIVATE_LICENSE_REVIEW_ACTION =
-  "Run corepack pnpm product:github-settings-review --template, verify the live GitHub About/profile/branch-protection/release settings, then run corepack pnpm product:github-settings-review and keep the output with launch evidence.";
-
 export function createSplit402LaunchPreflightReport(
   input: Split402LaunchPreflightInput,
 ): Split402LaunchPreflightReport {
@@ -168,6 +165,7 @@ export function createSplit402LaunchPreflightReport(
   });
   const requiredFiles = [
     join(workspace.directory, workspace.readmeFileName),
+    join(workspace.directory, workspace.githubSettingsReviewFileName),
     join(workspace.directory, workspace.phase6EvidenceFileName),
     join(workspace.directory, workspace.phase6EnvFileName),
     join(workspace.directory, workspace.phase7ProofFileName),
@@ -425,7 +423,10 @@ export function createSplit402LaunchPreflightReport(
       ok: true,
       severity: "advisory",
       details: [
-        PUBLIC_PRIVATE_LICENSE_REVIEW_ACTION,
+        createPublicPrivateLicenseReviewAction({
+          directory: workspace.directory,
+          fileName: workspace.githubSettingsReviewFileName,
+        }),
         "Keep the public repository as the Apache-2.0 protocol foundation.",
         "Keep hosted operations, provider strategy, custody evidence, private URLs, live transaction bytes, and partner-identifying details private unless intentionally sanitized.",
         "Do not reintroduce MIT in README, package metadata, GitHub About text, release notes, or package manifests.",
@@ -507,6 +508,13 @@ function createNextActions(checks: readonly Split402LaunchPreflightCheck[]): str
     .filter((check) => check.id === "public_private_license_review")
     .flatMap((check) => check.details)
     .filter((detail) => detail.startsWith("Run "));
+}
+
+function createPublicPrivateLicenseReviewAction(input: {
+  directory: string;
+  fileName: string;
+}): string {
+  return `Run corepack pnpm product:github-settings-review --template > ${input.directory}/${input.fileName}, verify the live GitHub About/profile/branch-protection/release settings, then run corepack pnpm product:github-settings-review and keep the output at ${input.directory}/${input.fileName}.`;
 }
 
 function createCheckNextActions(check: Split402LaunchPreflightCheck): string[] {
