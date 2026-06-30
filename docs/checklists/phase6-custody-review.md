@@ -51,8 +51,8 @@ for example
 Use `phase6:evidence:assemble` after generated evidence record files exist and
 the required environment values are set. The validator fails while any required
 field is empty, placeholder-like, uses a mutable image tag instead of a
-`sha256:` digest, or leaves `approval_decision` as anything other than
-`approved`.
+`sha256:` digest, uses an invalid `review_date` calendar date, or leaves
+`approval_decision` as anything other than `approved`.
 The env template shows direct overrides for review identity, source commit,
 staging environment, funding wallet, and network; generated image-provenance
 and signer-policy records can also populate those fields when present.

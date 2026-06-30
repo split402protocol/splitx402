@@ -89,6 +89,19 @@ approval_decision: no-go
     );
   });
 
+  it("rejects malformed custody review dates", () => {
+    for (const reviewDate of ["banana", "2026-02-30"]) {
+      const result = validatePhase6CustodyEvidence(
+        VALID_EVIDENCE.replace("review_date: 2026-06-25", `review_date: ${reviewDate}`),
+      );
+
+      expect(result.approved).toBe(false);
+      expect(result.invalidFields).toContain(
+        "review_date must be a valid YYYY-MM-DD calendar date",
+      );
+    }
+  });
+
   it("rejects malformed signer policy evidence", () => {
     const result = validatePhase6CustodyEvidence(
       VALID_EVIDENCE.replace(

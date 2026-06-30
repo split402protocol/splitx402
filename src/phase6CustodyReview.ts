@@ -75,6 +75,15 @@ export function validatePhase6CustodyEvidence(
     invalidFields.push("source_commit must be a git SHA");
   }
 
+  const reviewDate = fields.get("review_date")?.trim();
+  if (
+    reviewDate !== undefined &&
+    reviewDate.length > 0 &&
+    !isIsoCalendarDate(reviewDate)
+  ) {
+    invalidFields.push("review_date must be a valid YYYY-MM-DD calendar date");
+  }
+
   const signerPolicyNetwork = fields.get("signer_policy_network")?.trim();
   const network = fields.get("network")?.trim();
   if (
@@ -186,5 +195,21 @@ function isPlaceholderValue(value: string): boolean {
     normalized.startsWith("<") ||
     normalized.includes("replace-with") ||
     normalized.includes("yyyy")
+  );
+}
+
+function isIsoCalendarDate(value: string): boolean {
+  const match = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/u.exec(value);
+  if (match === null) {
+    return false;
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
   );
 }

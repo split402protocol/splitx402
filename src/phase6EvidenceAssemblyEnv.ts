@@ -112,7 +112,7 @@ export function createPhase6EvidenceAssemblyEnvTemplate(
     "#",
     "# Direct bundle fields:",
     "# SPLIT402_PHASE6_EVIDENCE_REVIEW_ID=phase6-custody-YYYY-MM-DD",
-    "# SPLIT402_PHASE6_EVIDENCE_REVIEW_DATE=YYYY-MM-DD",
+    "# SPLIT402_PHASE6_EVIDENCE_REVIEW_DATE=YYYY-MM-DD (valid calendar date)",
     "# SPLIT402_PHASE6_EVIDENCE_REVIEWERS=Split402 security, operations, protocol",
     "# SPLIT402_PHASE6_EVIDENCE_SOURCE_COMMIT=<git-sha>",
     "# SPLIT402_PHASE6_EVIDENCE_STAGING_ENVIRONMENT=hosted-devnet-public-alpha",
