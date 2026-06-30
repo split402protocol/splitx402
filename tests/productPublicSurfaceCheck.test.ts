@@ -28,6 +28,9 @@ describe("Split402 public surface check", () => {
     expect(formatSplit402PublicSurfaceCheckBrief(report)).toContain(
       "GitHub About description: Agent payment routing and verifiable referral accounting for x402 APIs.",
     );
+    expect(formatSplit402PublicSurfaceCheckBrief(report)).toContain(
+      "Package publication: workspace packages stay private until intentional release artifacts are approved.",
+    );
   });
 
   it("fails when launch-facing files drift back to MIT", () => {
@@ -70,6 +73,51 @@ describe("Split402 public surface check", () => {
       details: [
         'Set package.json description to "Agent payment routing and verifiable referral accounting for x402 APIs.".',
       ],
+    });
+  });
+
+  it("fails when a workspace package becomes publishable before release approval", () => {
+    const files = createPublicSurfaceFiles({
+      "packages/router/package.json": JSON.stringify({
+        name: "@split402/router",
+        private: false,
+      }),
+    });
+    const report = createSplit402PublicSurfaceCheckReport({
+      exists: (path) => files.has(path),
+      readText: (path) => files.get(path) ?? "",
+    });
+
+    expect(report.ok).toBe(false);
+    expect(
+      report.checks.find(
+        (check) => check.id === "workspace_package_publication_boundary",
+      ),
+    ).toMatchObject({
+      ok: false,
+      details: [
+        "packages/router/package.json must keep private: true until that package has an intentional release decision.",
+      ],
+    });
+  });
+
+  it("fails when a workspace package manifest is missing from the public tree", () => {
+    const files = createPublicSurfaceFiles();
+    files.delete("apps/payout-signer/package.json");
+
+    const report = createSplit402PublicSurfaceCheckReport({
+      exists: (path) => files.has(path),
+      readText: (path) => files.get(path) ?? "",
+    });
+
+    expect(report.ok).toBe(false);
+    expect(
+      report.checks.find(
+        (check) => check.id === "workspace_package_publication_boundary",
+      ),
+    ).toMatchObject({
+      ok: false,
+      details: ["Missing apps/payout-signer/package.json."],
     });
   });
 
@@ -142,6 +190,7 @@ function createPublicSurfaceFiles(
       "README.md": [
         "![License](https://img.shields.io/badge/license-Apache--2.0-blue)",
         "[Public and private boundary](docs/PUBLIC_PRIVATE_BOUNDARY.md)",
+        "[Pre-launch public/private review checklist](docs/checklists/prelaunch-public-private-review.md)",
         "[Public/private and license decision](docs/decisions/0009-public-private-boundary-and-apache-license.md)",
         "This public repository is licensed under [Apache-2.0](LICENSE).",
       ].join("\n"),
@@ -170,12 +219,69 @@ function createPublicSurfaceFiles(
         "This repository is licensed under Apache-2.0.",
         "Apache-2.0 is the launch-facing license for this public repository.",
       ].join("\n"),
+      "docs/checklists/prelaunch-public-private-review.md": [
+        "# Pre-Launch Public/Private Review",
+        "Keep the public repository as the Apache-2.0 protocol foundation.",
+        "Keep every workspace package marked \"private\": true.",
+      ].join("\n"),
       "docs/decisions/0009-public-private-boundary-and-apache-license.md": [
         "Status: accepted",
         "The public repository is licensed under Apache-2.0.",
         "Apache-2.0 is the launch-facing license.",
         "The following belong in private Split402 infrastructure.",
       ].join("\n"),
+      "apps/dashboard/package.json": JSON.stringify({
+        name: "@split402/dashboard",
+        private: true,
+      }),
+      "apps/demo-agent/package.json": JSON.stringify({
+        name: "@split402/demo-agent",
+        private: true,
+      }),
+      "apps/demo-merchant/package.json": JSON.stringify({
+        name: "@split402/demo-merchant",
+        private: true,
+      }),
+      "apps/mcp-demo/package.json": JSON.stringify({
+        name: "@split402/mcp-demo",
+        private: true,
+      }),
+      "apps/payout-signer/package.json": JSON.stringify({
+        name: "@split402/payout-signer",
+        private: true,
+      }),
+      "packages/agent-sdk/package.json": JSON.stringify({
+        name: "@split402/agent-sdk",
+        private: true,
+      }),
+      "packages/control-plane/package.json": JSON.stringify({
+        name: "@split402/control-plane",
+        private: true,
+      }),
+      "packages/express/package.json": JSON.stringify({
+        name: "@split402/express",
+        private: true,
+      }),
+      "packages/merchant-sdk/package.json": JSON.stringify({
+        name: "@split402/merchant-sdk",
+        private: true,
+      }),
+      "packages/protocol/package.json": JSON.stringify({
+        name: "@split402/protocol",
+        private: true,
+      }),
+      "packages/router/package.json": JSON.stringify({
+        name: "@split402/router",
+        private: true,
+      }),
+      "packages/test-vectors/package.json": JSON.stringify({
+        name: "@split402/test-vectors",
+        private: true,
+      }),
+      "packages/x402-extension/package.json": JSON.stringify({
+        name: "@split402/x402-extension",
+        private: true,
+      }),
       ...overrides,
     }),
   );

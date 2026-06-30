@@ -29,10 +29,26 @@ const REQUIRED_FILES = [
   "SECURITY.md",
   "docs/GITHUB_PUBLIC_PROFILE.md",
   "docs/PUBLIC_PRIVATE_BOUNDARY.md",
+  "docs/checklists/prelaunch-public-private-review.md",
   "docs/decisions/0009-public-private-boundary-and-apache-license.md",
 ] as const;
 
 const MIT_FREE_PUBLIC_FILES = ["LICENSE", "README.md", "package.json"] as const;
+const WORKSPACE_PACKAGE_MANIFESTS = [
+  "apps/dashboard/package.json",
+  "apps/demo-agent/package.json",
+  "apps/demo-merchant/package.json",
+  "apps/mcp-demo/package.json",
+  "apps/payout-signer/package.json",
+  "packages/agent-sdk/package.json",
+  "packages/control-plane/package.json",
+  "packages/express/package.json",
+  "packages/merchant-sdk/package.json",
+  "packages/protocol/package.json",
+  "packages/router/package.json",
+  "packages/test-vectors/package.json",
+  "packages/x402-extension/package.json",
+] as const;
 const GITHUB_PROFILE_FILE = "docs/GITHUB_PUBLIC_PROFILE.md";
 const EXPECTED_GITHUB_DESCRIPTION =
   "Agent payment routing and verifiable referral accounting for x402 APIs.";
@@ -66,6 +82,7 @@ export function createSplit402PublicSurfaceCheckReport(
           : missingRequiredFiles.map((path) => `Missing ${path}.`),
     },
     createPackageLicenseCheck(exists, readText),
+    createWorkspacePackagePrivacyCheck(exists, readText),
     createApacheLicenseFileCheck(exists, readText),
     createReadmeBoundaryCheck(exists, readText),
     createGitHubProfileContractCheck(exists, readText),
@@ -97,6 +114,7 @@ export function formatSplit402PublicSurfaceCheckBrief(
     "Launch posture:",
     "- Public repository: Apache-2.0 protocol foundation.",
     `- GitHub About description: ${EXPECTED_GITHUB_DESCRIPTION}`,
+    "- Package publication: workspace packages stay private until intentional release artifacts are approved.",
     "- Private infrastructure: hosted operations, production custody, provider strategy, private evidence, and commercial deployment details.",
   ].join("\n");
 }
@@ -159,6 +177,44 @@ function createPackageLicenseCheck(
   }
 }
 
+function createWorkspacePackagePrivacyCheck(
+  exists: (path: string) => boolean,
+  readText: (path: string) => string,
+): Split402PublicSurfaceCheck {
+  const blockers = WORKSPACE_PACKAGE_MANIFESTS.flatMap((path) => {
+    const packageJson = readIfExists(path, exists, readText);
+    if (packageJson === undefined) {
+      return [`Missing ${path}.`];
+    }
+
+    try {
+      const parsed = JSON.parse(packageJson) as {
+        name?: unknown;
+        private?: unknown;
+      };
+      return parsed.private === true
+        ? []
+        : [
+            `${path} must keep private: true until that package has an intentional release decision.`,
+          ];
+    } catch {
+      return [`${path} is not valid JSON.`];
+    }
+  });
+
+  return {
+    id: "workspace_package_publication_boundary",
+    label: "Workspace packages stay private before intentional release",
+    ok: blockers.length === 0,
+    details:
+      blockers.length === 0
+        ? [
+            "All workspace app and package manifests keep private: true until publishable artifacts are explicitly approved.",
+          ]
+        : blockers,
+  };
+}
+
 function createApacheLicenseFileCheck(
   exists: (path: string) => boolean,
   readText: (path: string) => string,
@@ -193,6 +249,13 @@ function createReadmeBoundaryCheck(
     ...(readme?.includes("docs/PUBLIC_PRIVATE_BOUNDARY.md") === true
       ? []
       : ["README.md must link to docs/PUBLIC_PRIVATE_BOUNDARY.md."]),
+    ...(readme?.includes(
+      "docs/checklists/prelaunch-public-private-review.md",
+    ) === true
+      ? []
+      : [
+          "README.md must link to docs/checklists/prelaunch-public-private-review.md.",
+        ]),
     ...(readme?.includes(
       "docs/decisions/0009-public-private-boundary-and-apache-license.md",
     ) === true

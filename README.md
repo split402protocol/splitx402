@@ -711,6 +711,7 @@ assembled and approved.
 - [GitHub public profile](docs/GITHUB_PUBLIC_PROFILE.md)
 - [Public and private boundary](docs/PUBLIC_PRIVATE_BOUNDARY.md)
 - [Architecture alignment note](docs/SPLIT402_ARCHITECTURE.md)
+- [Pre-launch public/private review checklist](docs/checklists/prelaunch-public-private-review.md)
 - [Phase 6 custody review checklist](docs/checklists/phase6-custody-review.md)
 - [Phase 6 custody evidence template](docs/templates/phase6-custody-evidence.txt)
 - [Phase 6 image provenance template](docs/templates/phase6-image-provenance.txt)
