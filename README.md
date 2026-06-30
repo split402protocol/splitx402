@@ -359,6 +359,7 @@ corepack pnpm product:status
 corepack pnpm product:status --brief
 corepack pnpm product:status --brief --workspace split402-launch-evidence
 corepack pnpm product:status <phase6-custody-evidence.txt> <phase7-staging-proof.txt>
+corepack pnpm product:mainnet-canary --brief --workspace split402-launch-evidence
 ```
 
 `product:evidence:init` creates a local evidence workspace for the remaining
@@ -423,6 +424,12 @@ exact evidence-env setup commands, and why the launch decision remains `no-go`
 until every machine-checkable launch gate is satisfied. When the concise status
 hides extra actions, it prints the exact
 Phase 6 and Phase 7 status commands to run for the full blocker list.
+`product:mainnet-canary --brief --workspace split402-launch-evidence` is the
+guarded preflight for the first tiny mainnet canary. It does not broadcast
+transactions. It remains `no-go` until `product:status` is `go`, the canary is
+explicitly acknowledged as referral accounting rather than atomic split
+settlement, and a one-merchant/one-route/one-wallet dry-run and rollback plan
+are attached.
 
 Generate the Phase 6 image provenance review record after building immutable
 signer and control-plane images:
@@ -750,6 +757,7 @@ assembled and approved.
 - [Payout signer deployment runbook](docs/runbooks/payout-signer-deployment.md)
 - [Payout signer key rotation runbook](docs/runbooks/payout-signer-key-rotation.md)
 - [Payout signer observability runbook](docs/runbooks/payout-signer-observability.md)
+- [Mainnet canary runbook](docs/runbooks/mainnet-canary.md)
 - [Phase 7 hosted staging runbook](docs/runbooks/phase7-hosted-staging.md)
 - [MVP build plan](docs/BUILD_PLAN.md)
 - [Roadmap](docs/ROADMAP.md)

@@ -74,6 +74,11 @@ flowchart LR
 - Phase 6 still needs completed staging deployment evidence and all pending
   custody gates in `docs/checklists/phase6-custody-review.md` before any mainnet
   payout custody.
+- Mainnet canary execution is not approved. The repository now includes
+  `corepack pnpm product:mainnet-canary --brief --workspace split402-launch-evidence`
+  and [Mainnet canary runbook](runbooks/mainnet-canary.md) as fail-closed
+  operator guardrails for the first tiny allowlisted mainnet test after all
+  launch gates pass.
 
 ## Current Direction
 
@@ -134,3 +139,9 @@ Phase 7 hosted proof gate, Phase 6 production custody gate, launch-gate
 percentages, evidence-env setup commands, and next actions. If the concise
 combined status hides additional actions, it names the Phase 6 and Phase 7
 status commands that show the full blocker lists.
+Run
+`corepack pnpm product:mainnet-canary --brief --workspace split402-launch-evidence`
+only after those gates are ready. It checks the explicit one-merchant,
+one-campaign, one-route, one-wallet mainnet canary controls, amount cap,
+non-atomic-settlement acknowledgement, dry-run evidence, rollback plan, and
+human canary approval without broadcasting transactions.
