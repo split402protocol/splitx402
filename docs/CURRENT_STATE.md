@@ -119,10 +119,11 @@ prints redacted Phase 6 custody and Phase 7 hosted env summaries so operators
 can see missing/configured values without exposing tokens, private keys, funding
 wallet values, or review notes. It uses dotenv-style parsing so quoted local env
 values are interpreted consistently with the evidence collectors. Run
-`corepack pnpm product:launch-checklist --brief` for the exact remaining local
-validation, hosted proof, custody evidence, and combined status commands; pass
-`--workspace split402-launch-evidence` or the Phase 6 and Phase 7 evidence files
-to show checked, blocked, or ready section statuses from real files. Then run
+`corepack pnpm product:launch-checklist --brief` for the exact remaining
+public/private license review, local validation, hosted proof, custody evidence,
+and combined status commands; pass `--workspace split402-launch-evidence` or
+the Phase 6 and Phase 7 evidence files to show checked, blocked, or ready
+section statuses from real files. Then run
 `corepack pnpm product:status --brief --workspace split402-launch-evidence`
 for a simple operator view of the Phase 7 hosted proof gate, Phase 6
 production custody gate, launch-gate percentages, evidence-env setup commands,

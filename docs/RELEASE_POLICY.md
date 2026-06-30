@@ -24,6 +24,7 @@ A release candidate must have:
 - current protocol test vectors;
 - signed-object and schema changes documented in `docs/decisions/` when
   applicable;
+- public/private and license review completed from the launch checklist;
 - no private operations, secrets, live transaction bytes, private URLs, partner
   details, or custody evidence in the public tree;
 - explicit package/container artifacts selected for release;
@@ -57,13 +58,17 @@ Before publishing any public artifact:
 
 ```bash
 corepack pnpm lint
+corepack pnpm product:github-settings-review --template
+corepack pnpm product:github-settings-review
 corepack pnpm product:public-surface-check --brief
+corepack pnpm repo:guard
 corepack pnpm typecheck
 corepack pnpm test
 corepack pnpm build
 corepack pnpm vectors:check
 corepack pnpm audit --audit-level high
 corepack pnpm product:local-proof --brief
+corepack pnpm product:launch-checklist --brief --workspace split402-launch-evidence
 corepack pnpm product:status --brief --workspace split402-launch-evidence
 ```
 

@@ -32,46 +32,59 @@ describe("Split402 launch checklist", () => {
     });
     expect(checklist.sections.map((section) => section.title)).toEqual([
       "Create launch evidence workspace",
+      "Review public/private and license boundary",
       "Run local repository validation",
       "Collect Phase 7 hosted public-alpha proof",
       "Collect Phase 6 production custody evidence",
       "Check combined launch readiness",
     ]);
-    expect(checklist.sections[2]?.externalEvidenceRequired).toBe(true);
+    expect(checklist.sections[3]?.externalEvidenceRequired).toBe(true);
     expect(checklist.sections[0]?.commands).toContain(
       "corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence",
     );
     expect(checklist.sections[1]?.commands).toContain(
-      "corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json",
+      "corepack pnpm product:github-settings-review --template",
+    );
+    expect(checklist.sections[1]?.commands).toContain(
+      "corepack pnpm product:github-settings-review",
+    );
+    expect(checklist.sections[1]?.notes).toContain(
+      "Do not reintroduce MIT in README, package metadata, GitHub About text, release notes, or package manifests.",
     );
     expect(checklist.sections[1]?.commands).toContain(
       "corepack pnpm product:public-surface-check --brief",
     );
     expect(checklist.sections[2]?.commands).toContain(
-      "SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 corepack pnpm phase7:staging:collect-mcp-gateway --evidence-env-file split402-launch-evidence/phase7-staging.env",
-    );
-    expect(checklist.sections[2]?.commands[0]).toBe(
-      "corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence",
-    );
-    expect(checklist.sections[2]?.commands[1]).toBe(
-      "Fill split402-launch-evidence/phase7-staging.env with hosted staging values reported by launch preflight.",
+      "corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json",
     );
     expect(checklist.sections[2]?.commands).toContain(
-      "corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log",
+      "corepack pnpm product:public-surface-check --brief",
+    );
+    expect(checklist.sections[3]?.commands).toContain(
+      "SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 corepack pnpm phase7:staging:collect-mcp-gateway --evidence-env-file split402-launch-evidence/phase7-staging.env",
     );
     expect(checklist.sections[3]?.commands[0]).toBe(
       "corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence",
     );
-    expect(checklist.sections[3]?.commands).toContain(
-      "Review generated split402-launch-evidence/phase6-evidence.env before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template split402-launch-evidence split402-launch-evidence/phase6-evidence.env",
+    expect(checklist.sections[3]?.commands[1]).toBe(
+      "Fill split402-launch-evidence/phase7-staging.env with hosted staging values reported by launch preflight.",
     );
     expect(checklist.sections[3]?.commands).toContain(
-      "Generate Phase 6 custody records at the paths listed in split402-launch-evidence/phase6-evidence.env.",
+      "corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log",
     );
-    expect(checklist.sections[3]?.commands).toContain(
-      "corepack pnpm phase6:evidence:status --brief split402-launch-evidence/phase6-custody-evidence.txt",
+    expect(checklist.sections[4]?.commands[0]).toBe(
+      "corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence",
     );
     expect(checklist.sections[4]?.commands).toContain(
+      "Review generated split402-launch-evidence/phase6-evidence.env before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template split402-launch-evidence split402-launch-evidence/phase6-evidence.env",
+    );
+    expect(checklist.sections[4]?.commands).toContain(
+      "Generate Phase 6 custody records at the paths listed in split402-launch-evidence/phase6-evidence.env.",
+    );
+    expect(checklist.sections[4]?.commands).toContain(
+      "corepack pnpm phase6:evidence:status --brief split402-launch-evidence/phase6-custody-evidence.txt",
+    );
+    expect(checklist.sections[5]?.commands).toContain(
       "corepack pnpm product:status --brief --workspace split402-launch-evidence",
     );
     expect(checklist.nextCommand).toBe(
@@ -98,6 +111,12 @@ describe("Split402 launch checklist", () => {
     );
     expect(formatSplit402LaunchChecklistBrief(checklist)).toContain(
       "corepack pnpm product:evidence:init --force",
+    );
+    expect(formatSplit402LaunchChecklistBrief(checklist)).toContain(
+      "Review public/private and license boundary",
+    );
+    expect(formatSplit402LaunchChecklistBrief(checklist)).toContain(
+      "corepack pnpm product:github-settings-review --template",
     );
     expect(formatSplit402LaunchChecklistBrief(checklist)).toContain(
       "local-public-alpha-proof.json",
@@ -141,12 +160,13 @@ approval_notes: checked evidence is intentionally incomplete
     expect(checklist.sections.map((section) => section.status)).toEqual([
       "ready",
       "not_checked",
+      "not_checked",
       "blocked",
       "blocked",
       "blocked",
     ]);
     expect(checklist.nextCommand).toBe(
-      "corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json",
+      "corepack pnpm product:github-settings-review --template",
     );
     expect(formatSplit402LaunchChecklistBrief(checklist)).toContain(
       "Collect Phase 7 hosted public-alpha proof [blocked]",
@@ -184,6 +204,7 @@ approval_decision: no-go
     expect(checklist.sections.map((section) => section.status)).toEqual([
       "ready",
       "ready",
+      "ready",
       "blocked",
       "blocked",
       "blocked",
@@ -209,6 +230,11 @@ approval_decision: no-go
     );
 
     expect(checklist.sections[1]).toMatchObject({
+      title: "Review public/private and license boundary",
+      status: "ready",
+      externalEvidenceRequired: false,
+    });
+    expect(checklist.sections[2]).toMatchObject({
       title: "Run local repository validation",
       status: "ready",
       externalEvidenceRequired: false,
@@ -237,7 +263,7 @@ approval_decision: no-go
       }),
     );
 
-    expect(checklist.sections[1]).toMatchObject({
+    expect(checklist.sections[2]).toMatchObject({
       title: "Run local repository validation",
       status: "ready",
       externalEvidenceRequired: false,
@@ -261,6 +287,11 @@ approval_decision: no-go
     );
 
     expect(checklist.sections[1]).toMatchObject({
+      title: "Review public/private and license boundary",
+      status: "blocked",
+      externalEvidenceRequired: false,
+    });
+    expect(checklist.sections[2]).toMatchObject({
       title: "Run local repository validation",
       status: "blocked",
       externalEvidenceRequired: false,
