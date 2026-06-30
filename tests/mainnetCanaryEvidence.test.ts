@@ -128,6 +128,51 @@ describe("mainnet canary evidence attachments", () => {
     expect(result.ok).toBe(false);
     expect(result.errors).toContain("max_gross_amount_atomic must be <= 100000");
   });
+
+  it("rejects malformed review dates and source commits", () => {
+    const result = verifyMainnetCanaryEvidenceAttachment({
+      kind: "dry_run",
+      value: "attached: dry-run.txt",
+      exists: () => true,
+      readText: () =>
+        createPassingDryRunEvidence()
+          .replace("review_date: 2026-06-30", "review_date: 2026-02-30")
+          .replace("source_commit: abc1234", "source_commit: not-a-sha"),
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContain(
+      "review_date must be a valid YYYY-MM-DD calendar date",
+    );
+    expect(result.errors).toContain("source_commit must be a git SHA");
+  });
+
+  it("rejects evidence that does not match the approved canary scope", () => {
+    const result = verifyMainnetCanaryEvidenceAttachment({
+      expectedScope: {
+        merchantId: "mrc_expected",
+        campaignId: "cmp_expected",
+        routeId: "rte_expected",
+        payerWallet: "payer_expected",
+        maxGrossAmountAtomic: "50000",
+      },
+      kind: "dry_run",
+      value: "attached: dry-run.txt",
+      exists: () => true,
+      readText: () => createPassingDryRunEvidence(),
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        "merchant_id must match approved canary scope",
+        "campaign_id must match approved canary scope",
+        "route_id must match approved canary scope",
+        "payer_wallet must match approved canary scope",
+        "max_gross_amount_atomic must match approved canary scope",
+      ]),
+    );
+  });
 });
 
 function createPassingDryRunEvidence(): string {
