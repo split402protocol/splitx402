@@ -887,6 +887,84 @@ describe("MCP demo gateway", () => {
     });
   });
 
+  it("rejects non-positive router execution maxAttempts before execution", async () => {
+    const context = createMcpGatewayContext(
+      createMcpDemoBundle({
+        generatedAt: "2026-06-26T00:00:00.000Z"
+      })
+    );
+
+    const response = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "execute-bad-max-attempts",
+        method: "tools/call",
+        params: {
+          name: "split402.execute",
+          arguments: {
+            capability: "solana.wallet-risk",
+            input: {
+              wallet: "wallet-123"
+            },
+            budget: {
+              maxAmountAtomic: "10000"
+            },
+            maxAttempts: 0
+          }
+        }
+      }),
+      context
+    );
+
+    expect(response).toEqual({
+      jsonrpc: "2.0",
+      id: "execute-bad-max-attempts",
+      error: {
+        code: -32602,
+        message: "maxAttempts must be a positive integer"
+      }
+    });
+  });
+
+  it("rejects fractional router execution maxAttempts before execution", async () => {
+    const context = createMcpGatewayContext(
+      createMcpDemoBundle({
+        generatedAt: "2026-06-26T00:00:00.000Z"
+      })
+    );
+
+    const response = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "execute-fractional-max-attempts",
+        method: "tools/call",
+        params: {
+          name: "split402.execute",
+          arguments: {
+            capability: "solana.wallet-risk",
+            input: {
+              wallet: "wallet-123"
+            },
+            budget: {
+              maxAmountAtomic: "10000"
+            },
+            maxAttempts: 1.5
+          }
+        }
+      }),
+      context
+    );
+
+    expect(response).toEqual({
+      jsonrpc: "2.0",
+      id: "execute-fractional-max-attempts",
+      error: {
+        code: -32602,
+        message: "maxAttempts must be a positive integer"
+      }
+    });
+  });
+
   it("passes referral claims from split402.execute into the router", async () => {
     const context = createMcpGatewayContext(
       createMcpDemoBundle({
