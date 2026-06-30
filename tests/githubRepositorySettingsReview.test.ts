@@ -24,7 +24,7 @@ describe("GitHub repository settings review", () => {
       requiresPullRequest: "yes",
       requiresCodeOwnerReview: "yes",
       requiresStatusChecks: "yes",
-      requiredChecks: "Lint, Public surface check, Local public-alpha proof",
+      requiredChecks: REQUIRED_CHECKS,
       blocksForcePushes: "yes",
       blocksDeletion: "yes",
       blankIssuesDisabled: "yes",
@@ -94,6 +94,44 @@ describe("GitHub repository settings review", () => {
       ok: false,
       errors: ["review_date must be YYYY-MM-DD"],
     });
+    expect(
+      verifyGitHubRepositorySettingsReviewRecord(
+        validRecord.replace(`required_checks: ${REQUIRED_CHECKS}`, "required_checks: Lint"),
+      ),
+    ).toEqual({
+      ok: false,
+      errors: [
+        "required_checks must include Public surface check",
+        "required_checks must include Typecheck",
+        "required_checks must include Test",
+        "required_checks must include Build",
+        "required_checks must include Check vectors",
+        "required_checks must include Audit",
+        "required_checks must include Local public-alpha proof",
+        "required_checks must include PostgreSQL integration tests",
+        "required_checks must include CodeQL",
+        "required_checks must include Secret scan",
+      ],
+    });
+  });
+
+  it("rejects approval while required GitHub settings are still no", () => {
+    const approvedButUnprotected = createGitHubRepositorySettingsReviewRecord({
+      ...createValidInput(),
+      branchProtectionEnabled: "no",
+      blocksForcePushes: "no",
+      reviewDecision: "approved",
+    });
+
+    expect(
+      verifyGitHubRepositorySettingsReviewRecord(approvedButUnprotected),
+    ).toEqual({
+      ok: false,
+      errors: [
+        "branch_protection_enabled must be yes before approval",
+        "blocks_force_pushes must be yes before approval",
+      ],
+    });
   });
 
   it("lists required environment variables for the CLI", () => {
@@ -105,6 +143,9 @@ describe("GitHub repository settings review", () => {
     );
   });
 });
+
+const REQUIRED_CHECKS =
+  "Lint, Public surface check, Typecheck, Test, Build, Check vectors, Audit, Local public-alpha proof, PostgreSQL integration tests, CodeQL, Secret scan";
 
 function createValidInput() {
   return {
@@ -121,7 +162,7 @@ function createValidInput() {
     requiresPullRequest: "yes",
     requiresCodeOwnerReview: "yes",
     requiresStatusChecks: "yes",
-    requiredChecks: "Lint",
+    requiredChecks: REQUIRED_CHECKS,
     blocksForcePushes: "yes",
     blocksDeletion: "yes",
     blankIssuesDisabled: "yes",
