@@ -102,6 +102,26 @@ approval_decision: no-go
     }
   });
 
+  it("rejects custody artifact fields that are not attached references", () => {
+    const result = validatePhase6CustodyEvidence(
+      VALID_EVIDENCE.replace(
+        "network_policy_record: attached: network-policy-001.yaml",
+        "network_policy_record: network-policy-001.yaml",
+      ).replace(
+        "smoke_check_output: attached: smoke-check-001.log",
+        "smoke_check_output: attached: pending",
+      ),
+    );
+
+    expect(result.approved).toBe(false);
+    expect(result.invalidFields).toEqual(
+      expect.arrayContaining([
+        "network_policy_record must use attached: <path>",
+        "smoke_check_output must use attached: <path>",
+      ]),
+    );
+  });
+
   it("rejects malformed signer policy evidence", () => {
     const result = validatePhase6CustodyEvidence(
       VALID_EVIDENCE.replace(

@@ -53,6 +53,9 @@ the required environment values are set. The validator fails while any required
 field is empty, placeholder-like, uses a mutable image tag instead of a
 `sha256:` digest, uses an invalid `review_date` calendar date, or leaves
 `approval_decision` as anything other than `approved`.
+Artifact evidence fields such as drill records, signer-policy records, network
+policy records, signer smoke output, and dependency audit output must use
+`attached: <path>` and must not point at placeholder values.
 The env template shows direct overrides for review identity, source commit,
 staging environment, funding wallet, and network; generated image-provenance
 and signer-policy records can also populate those fields when present.
