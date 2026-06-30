@@ -772,6 +772,11 @@ function readBudget(
   if (typeof maxAmountAtomic !== "string") {
     return maxAmountAtomic;
   }
+  if (!isNonNegativeAtomicAmount(maxAmountAtomic)) {
+    return {
+      message: "budget.maxAmountAtomic must be a non-negative atomic amount string"
+    };
+  }
   return { network, asset, maxAmountAtomic };
 }
 
@@ -849,6 +854,14 @@ function readOptionalBudgetFilter(
   if (maxAmountAtomic !== undefined && typeof maxAmountAtomic !== "string") {
     return maxAmountAtomic;
   }
+  if (
+    maxAmountAtomic !== undefined &&
+    !isNonNegativeAtomicAmount(maxAmountAtomic)
+  ) {
+    return {
+      message: "budget.maxAmountAtomic must be a non-negative atomic amount string"
+    };
+  }
   return {
     ...(network === undefined ? {} : { network }),
     ...(asset === undefined ? {} : { asset }),
@@ -881,6 +894,10 @@ function readRequiredStringArgument(
     return { message: `${label} argument is required` };
   }
   return value.trim();
+}
+
+function isNonNegativeAtomicAmount(value: string): boolean {
+  return /^(0|[1-9][0-9]*)$/u.test(value);
 }
 
 function readGatewayContext(

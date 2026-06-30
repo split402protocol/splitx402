@@ -126,10 +126,13 @@ Example execution request:
 
 When `network` or `asset` are omitted from `budget`, the gateway defaults them
 from the best provider that already matches the supplied budget filters and
-still enforces `maxAmountAtomic`. When a supplied budget excludes every provider,
-execution fails before any route or payment attempt is made. `referralClaim` is
-optional; when present, the gateway validates the Split402 claim schema before
-forwarding it into the router execution.
+still enforces `maxAmountAtomic`. `maxAmountAtomic` must be a non-negative
+atomic amount string without decimal points or leading zeroes. Malformed budget
+values return a JSON-RPC `-32602` parameter error before search, routing, or
+payment execution. When a supplied budget excludes every provider, execution
+fails before any route or payment attempt is made. `referralClaim` is optional;
+when present, the gateway validates the Split402 claim schema before forwarding
+it into the router execution.
 
 ### Control-Plane Discovery Mode
 
