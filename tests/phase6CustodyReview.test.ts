@@ -122,6 +122,20 @@ approval_decision: no-go
     );
   });
 
+  it("rejects custody artifact attachments that point at URLs", () => {
+    const result = validatePhase6CustodyEvidence(
+      VALID_EVIDENCE.replace(
+        "key_custody_record: attached: key-custody-review-001.md",
+        "key_custody_record: attached: https://private.example/key-custody-review",
+      ),
+    );
+
+    expect(result.approved).toBe(false);
+    expect(result.invalidFields).toContain(
+      "key_custody_record attached artifact must be a local path",
+    );
+  });
+
   it("rejects malformed signer policy evidence", () => {
     const result = validatePhase6CustodyEvidence(
       VALID_EVIDENCE.replace(

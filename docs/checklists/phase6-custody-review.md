@@ -55,7 +55,8 @@ field is empty, placeholder-like, uses a mutable image tag instead of a
 `approval_decision` as anything other than `approved`.
 Artifact evidence fields such as drill records, signer-policy records, network
 policy records, signer smoke output, and dependency audit output must use
-`attached: <path>` and must not point at placeholder values.
+`attached: <path>` with local evidence artifact paths. They must not point at
+placeholder values or URL-style remote evidence.
 The env template shows direct overrides for review identity, source commit,
 staging environment, funding wallet, and network; generated image-provenance
 and signer-policy records can also populate those fields when present.
