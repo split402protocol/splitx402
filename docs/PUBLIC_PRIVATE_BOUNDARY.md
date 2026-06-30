@@ -94,3 +94,8 @@ evidence, it belongs in private infrastructure.
 `corepack pnpm repo:guard` enforces the most important parts of this rule by
 rejecting tracked launch-evidence workspaces, raw environment files, and common
 private key or credential artifact extensions.
+
+Use
+[`docs/checklists/prelaunch-public-private-review.md`](checklists/prelaunch-public-private-review.md)
+as the human review checklist before publishing packages, announcing a launch,
+or moving from public-alpha proof to hosted production.
