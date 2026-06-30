@@ -35,6 +35,7 @@ export function createSplit402LaunchChecklist(
 ): Split402LaunchChecklist {
   const sections = [
     createWorkspaceSection(report),
+    createPublicPrivateLicenseSection(report),
     createLocalValidationSection(report),
     createPhase7Section(report),
     createPhase6Section(report),
@@ -117,6 +118,36 @@ function createChecklistNextCommand(
     return nextCommand;
   }
   return report.nextActions[0] ?? "corepack pnpm product:status --brief";
+}
+
+function createPublicPrivateLicenseSection(
+  report: Split402ProductReadinessReport,
+): Split402LaunchChecklistSection {
+  const commandEvidenceStatus = report.phase7.commandEvidenceStatus.status;
+  const status =
+    report.localProof.ready || commandEvidenceStatus === "valid"
+      ? "ready"
+      : report.localProof.checked || commandEvidenceStatus === "invalid"
+        ? "blocked"
+        : "not_checked";
+
+  return {
+    title: "Review public/private and license boundary",
+    status,
+    externalEvidenceRequired: false,
+    commands: [
+      "corepack pnpm product:github-settings-review --template",
+      "corepack pnpm product:github-settings-review",
+      "corepack pnpm product:public-surface-check --brief",
+      "corepack pnpm repo:guard",
+    ],
+    notes: [
+      "Keep the public repository as the Apache-2.0 protocol foundation.",
+      "Keep hosted operations, provider strategy, custody evidence, private URLs, live transaction bytes, and partner-identifying details private unless intentionally sanitized.",
+      "Do not reintroduce MIT in README, package metadata, GitHub About text, release notes, or package manifests.",
+      "The GitHub settings review records the human review; it does not prove live branch protection by itself.",
+    ],
+  };
 }
 
 function createLocalValidationSection(

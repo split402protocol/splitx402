@@ -384,10 +384,11 @@ Phase 6 custody env file and Phase 7 hosted env file so operators can see which
 values are missing or configured without printing tokens, private keys, or
 custody values. It reads the local env files with dotenv-style parsing, so quoted
 values are handled the same way as the evidence collectors.
-`product:launch-checklist --brief` prints the exact remaining local
-validation, hosted proof, custody evidence, and combined status commands; pass
-`--workspace split402-launch-evidence` or the Phase 6 and Phase 7 evidence paths
-to show checked, blocked, or ready section statuses from real files.
+`product:launch-checklist --brief` prints the exact remaining public/private
+license review, local validation, hosted proof, custody evidence, and combined
+status commands; pass `--workspace split402-launch-evidence` or the Phase 6 and
+Phase 7 evidence paths to show checked, blocked, or ready section statuses from
+real files.
 `product:local-proof --brief` proves the local public-alpha repository hygiene,
 public/private license surface, protocol vectors, router alpha tests, and
 runnable MCP gateway smoke path before hosted evidence collection. Pass
