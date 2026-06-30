@@ -176,6 +176,31 @@ describe("Phase 7 MCP gateway evidence collector", () => {
       "SPLIT402_MCP_SVM_PRIVATE_KEY or SVM_PRIVATE_KEY is required for live MCP gateway execution",
     );
   });
+
+  it("rejects malformed MCP max budget before discovery or execution", async () => {
+    const bundle = createMcpDemoBundle({
+      merchantOrigin: "https://merchant.example",
+      generatedAt: "2026-06-26T00:00:00.000Z",
+    });
+    const calls: string[] = [];
+
+    await expect(
+      collectPhase7McpGatewayEvidence({
+        outputDir: "evidence",
+        env: {
+          SPLIT402_MCP_CONTROL_PLANE_URL: "https://control.example",
+          SPLIT402_MCP_CONTROL_PLANE_TOKEN: "control-token",
+          SPLIT402_MCP_CAPABILITY: "solana.wallet-risk",
+          SPLIT402_MCP_MAX_AMOUNT_ATOMIC: "01",
+        },
+        fetch: gatewayFetch(calls, bundle),
+        writeArtifact: () => undefined,
+      }),
+    ).rejects.toThrow(
+      "SPLIT402_MCP_MAX_AMOUNT_ATOMIC must be a non-negative atomic amount string",
+    );
+    expect(calls).toEqual([]);
+  });
 });
 
 function gatewayFetch(
