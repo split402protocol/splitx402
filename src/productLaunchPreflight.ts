@@ -157,6 +157,9 @@ const PRE_COLLECTION_APPROVAL_ENV_KEYS = [
   },
 ] as const;
 
+const PUBLIC_PRIVATE_LICENSE_REVIEW_ACTION =
+  "Run corepack pnpm product:github-settings-review --template, verify the live GitHub About/profile/branch-protection/release settings, then run corepack pnpm product:github-settings-review and keep the output with launch evidence.";
+
 export function createSplit402LaunchPreflightReport(
   input: Split402LaunchPreflightInput,
 ): Split402LaunchPreflightReport {
@@ -417,6 +420,18 @@ export function createSplit402LaunchPreflightReport(
       }),
     },
     {
+      id: "public_private_license_review",
+      label: "Public/private and license review is queued",
+      ok: true,
+      severity: "advisory",
+      details: [
+        PUBLIC_PRIVATE_LICENSE_REVIEW_ACTION,
+        "Keep the public repository as the Apache-2.0 protocol foundation.",
+        "Keep hosted operations, provider strategy, custody evidence, private URLs, live transaction bytes, and partner-identifying details private unless intentionally sanitized.",
+        "Do not reintroduce MIT in README, package metadata, GitHub About text, release notes, or package manifests.",
+      ],
+    },
+    {
       id: "mainnet_not_ready",
       label: "Mainnet approval remains outside local preflight",
       ok: true,
@@ -474,7 +489,7 @@ function createNextActions(checks: readonly Split402LaunchPreflightCheck[]): str
     );
   }
 
-  return checks
+  const requiredActions = checks
     .filter((check) => check.severity === "required" && !check.ok)
     .flatMap((check) => createCheckNextActions(check))
     .filter(
@@ -484,6 +499,14 @@ function createNextActions(checks: readonly Split402LaunchPreflightCheck[]): str
         detail.startsWith("Set ") ||
         detail.startsWith("Regenerate "),
     );
+  if (requiredActions.length > 0) {
+    return requiredActions;
+  }
+
+  return checks
+    .filter((check) => check.id === "public_private_license_review")
+    .flatMap((check) => check.details)
+    .filter((detail) => detail.startsWith("Run "));
 }
 
 function createCheckNextActions(check: Split402LaunchPreflightCheck): string[] {
