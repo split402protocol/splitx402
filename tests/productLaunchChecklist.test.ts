@@ -24,6 +24,8 @@ describe("Split402 launch checklist", () => {
         directory: "split402-launch-evidence",
         localProofFile:
           "split402-launch-evidence/local-public-alpha-proof.json",
+        mainnetCanaryEnvFile:
+          "split402-launch-evidence/mainnet-canary.env",
         phase6EvidenceFile:
           "split402-launch-evidence/phase6-custody-evidence.txt",
         phase6EnvFile: "split402-launch-evidence/phase6-evidence.env",
@@ -37,6 +39,7 @@ describe("Split402 launch checklist", () => {
       "Collect Phase 7 hosted public-alpha proof",
       "Collect Phase 6 production custody evidence",
       "Check combined launch readiness",
+      "Prepare guarded mainnet canary",
     ]);
     expect(checklist.sections[3]?.externalEvidenceRequired).toBe(true);
     expect(checklist.sections[0]?.commands).toContain(
@@ -87,6 +90,9 @@ describe("Split402 launch checklist", () => {
     expect(checklist.sections[5]?.commands).toContain(
       "corepack pnpm product:status --brief --workspace split402-launch-evidence",
     );
+    expect(checklist.sections[6]?.commands).toContain(
+      "corepack pnpm product:mainnet-canary --brief --workspace split402-launch-evidence",
+    );
     expect(checklist.nextCommand).toBe(
       "corepack pnpm product:evidence:init",
     );
@@ -123,6 +129,9 @@ describe("Split402 launch checklist", () => {
     );
     expect(formatSplit402LaunchChecklistBrief(checklist)).toContain(
       "The combined status remains no-go until every machine-checkable launch gate passes.",
+    );
+    expect(formatSplit402LaunchChecklistBrief(checklist)).toContain(
+      "Prepare guarded mainnet canary",
     );
   });
 
@@ -161,6 +170,7 @@ approval_notes: checked evidence is intentionally incomplete
       "ready",
       "not_checked",
       "not_checked",
+      "blocked",
       "blocked",
       "blocked",
       "blocked",
@@ -205,6 +215,7 @@ approval_decision: no-go
       "ready",
       "not_checked",
       "ready",
+      "blocked",
       "blocked",
       "blocked",
       "blocked",
@@ -360,6 +371,79 @@ review_decision: approved
     });
     expect(checklist.sections[1]?.notes).toContain(
       "Set split402-launch-evidence/github-settings-review.txt review_decision to approved only after the live public/private/license review is complete.",
+    );
+  });
+
+  it("surfaces mainnet canary only after launch gates are ready", () => {
+    const checklist = createSplit402LaunchChecklist(
+      {
+        ...createSplit402ProductReadinessReport(),
+        launchDecision: "go",
+        readyForPublicBoundary: true,
+        readyForPublicAlphaDemo: true,
+        readyForProductionCustody: true,
+        localProof: {
+          checked: true,
+          ready: true,
+          status: "passed",
+          blockers: [],
+        },
+        readiness: {
+          totalLaunchGates: 3,
+          checkedLaunchGates: 3,
+          readyLaunchGates: 3,
+          checkedLaunchGatePercent: 100,
+          readyLaunchGatePercent: 100,
+          gates: [
+            {
+              gate: "public_boundary_review",
+              label: "GitHub public/private and license review",
+              checked: true,
+              ready: true,
+            },
+            {
+              gate: "phase7_public_alpha_demo",
+              label: "Phase 7 hosted public-alpha proof",
+              checked: true,
+              ready: true,
+            },
+            {
+              gate: "phase6_production_custody",
+              label: "Phase 6 production custody evidence",
+              checked: true,
+              ready: true,
+            },
+          ],
+        },
+        phase6: {
+          ...createSplit402ProductReadinessReport().phase6,
+          evidenceBundleChecked: true,
+          readyForCustody: true,
+        },
+        phase7: {
+          ...createSplit402ProductReadinessReport().phase7,
+          proofChecked: true,
+          readyForPublicAlphaDemo: true,
+        },
+      },
+      {
+        githubSettingsReviewPath:
+          "split402-launch-evidence/github-settings-review.txt",
+        githubSettingsReviewText: createApprovedGitHubSettingsReview(),
+      },
+    );
+
+    expect(checklist.sections[5]).toMatchObject({
+      title: "Check combined launch readiness",
+      status: "ready",
+    });
+    expect(checklist.sections[6]).toMatchObject({
+      title: "Prepare guarded mainnet canary",
+      status: "not_checked",
+      externalEvidenceRequired: true,
+    });
+    expect(checklist.nextCommand).toBe(
+      "Review split402-launch-evidence/mainnet-canary.env only after product:status is go.",
     );
   });
 });
