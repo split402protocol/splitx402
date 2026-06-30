@@ -2093,6 +2093,7 @@ function validateCommandEvidence(text: string, blockers: string[]): void {
     }
   }
   validateGitStatusCommandOutput(text, blockers);
+  validateLaunchPreflightCommandOutput(text, blockers);
 }
 
 interface CommandEvidenceBlock {
@@ -2120,6 +2121,29 @@ function validateGitStatusCommandOutput(text: string, blockers: string[]): void 
     blockers.push(
       "commands_run git status output must show a clean source worktree",
     );
+  }
+}
+
+function validateLaunchPreflightCommandOutput(
+  text: string,
+  blockers: string[],
+): void {
+  const launchPreflightBlock = extractCommandEvidenceBlocks(text).find((block) =>
+    block.command.includes("corepack pnpm product:launch-preflight"),
+  );
+  if (launchPreflightBlock === undefined) {
+    return;
+  }
+
+  const outputLines = launchPreflightBlock.outputLines
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  if (outputLines.length === 0) {
+    blockers.push("commands_run launch preflight output is missing");
+    return;
+  }
+  if (!outputLines.some((line) => line === "Split402 launch preflight: ready")) {
+    blockers.push("commands_run launch preflight output must be ready");
   }
 }
 
