@@ -2877,6 +2877,7 @@ function createValidCommandsLog(): string {
     "$ git status --short --branch",
     "## main...origin/main",
     "$ corepack pnpm phase7:staging:init",
+    "$ corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence",
     "$ SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",
     "$ corepack pnpm phase7:staging-proof phase7-staging-proof.txt",
     "$ corepack pnpm phase7:hosted:preflight",
