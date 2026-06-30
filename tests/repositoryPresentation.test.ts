@@ -318,6 +318,7 @@ describe("repository presentation", () => {
   it("documents the combined product readiness status command", () => {
     const readme = readFileSync("README.md", "utf8");
     const currentState = readFileSync("docs/CURRENT_STATE.md", "utf8");
+    const releasePolicy = readFileSync("docs/RELEASE_POLICY.md", "utf8");
 
     expect(readme).toContain("corepack pnpm product:evidence:init");
     expect(readme).toContain("corepack pnpm product:evidence:init --help");
@@ -358,6 +359,9 @@ describe("repository presentation", () => {
       "corepack pnpm product:status --brief --workspace split402-launch-evidence",
     );
     expect(readme).toContain(
+      "corepack pnpm product:mainnet-canary --brief --workspace split402-launch-evidence",
+    );
+    expect(readme).toContain(
       "corepack pnpm phase7:staging-proof --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-proof.txt",
     );
     expect(readme).toContain(
@@ -389,11 +393,18 @@ describe("repository presentation", () => {
     expect(currentState).toContain("checked, blocked, or ready");
     expect(currentState).toContain("refuses to overwrite existing scaffold");
     expect(currentState).toContain("corepack pnpm product:status");
+    expect(currentState).toContain("corepack pnpm product:mainnet-canary");
     expect(currentState).toContain("full blocker lists");
     expect(currentState).toContain("saved proof");
     expect(currentState).toContain("records the source");
     expect(currentState).toContain("fails unless the source worktree is clean");
     expect(currentState).toContain("source worktree has");
+    expect(releasePolicy).toContain(
+      "corepack pnpm product:mainnet-canary --brief --workspace split402-launch-evidence",
+    );
+    expect(releasePolicy).toContain(
+      "does not approve production mainnet launch",
+    );
   });
 });
 
