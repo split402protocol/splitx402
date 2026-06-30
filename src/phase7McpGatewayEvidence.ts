@@ -89,6 +89,11 @@ export async function collectPhase7McpGatewayEvidence(
   const wallet = readOptionalEnv(env.SPLIT402_MCP_WALLET) ?? "phase7-demo-wallet";
   const maxAmountAtomic =
     readOptionalEnv(env.SPLIT402_MCP_MAX_AMOUNT_ATOMIC) ?? "50000";
+  if (!isNonNegativeAtomicAmount(maxAmountAtomic)) {
+    throw new Error(
+      "SPLIT402_MCP_MAX_AMOUNT_ATOMIC must be a non-negative atomic amount string",
+    );
+  }
   const context = await createMcpGatewayContextFromEnv({
     env,
     ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
@@ -893,9 +898,13 @@ function readExecutionMode(
 }
 
 function readAtomicAmount(value: string): bigint | undefined {
-  return /^(0|[1-9][0-9]*)$/u.test(value) ? BigInt(value) : undefined;
+  return isNonNegativeAtomicAmount(value) ? BigInt(value) : undefined;
 }
 
 function readPositiveAtomicAmount(value: string): bigint | undefined {
   return /^[1-9][0-9]*$/u.test(value) ? BigInt(value) : undefined;
+}
+
+function isNonNegativeAtomicAmount(value: string): boolean {
+  return /^(0|[1-9][0-9]*)$/u.test(value);
 }

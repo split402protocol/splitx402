@@ -146,6 +146,9 @@ wallet, commission bps, protocol-fee bps, commission amount, and protocol-fee
 amount for the executed router call. Demo-mode MCP collection remains no-go;
 proof-ready MCP evidence must come from `router-live-agent-sdk` execution
 against hosted route discovery.
+`SPLIT402_MCP_MAX_AMOUNT_ATOMIC` must be a non-negative atomic amount string
+without decimals or leading zeroes; the collector stops before route discovery
+or execution if that budget is malformed.
 The final status check verifies that local `attached:` artifacts still match the
 recorded local manifest sizes and SHA-256 hashes, and that the hosted preflight
 checks passed against the same source commit, control-plane URL, and dashboard
