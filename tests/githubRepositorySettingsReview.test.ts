@@ -100,7 +100,15 @@ describe("GitHub repository settings review", () => {
       ),
     ).toEqual({
       ok: false,
-      errors: ["review_date must be YYYY-MM-DD"],
+      errors: ["review_date must be a valid YYYY-MM-DD calendar date"],
+    });
+    expect(
+      verifyGitHubRepositorySettingsReviewRecord(
+        validRecord.replace("review_date: 2026-06-30", "review_date: 2026-02-30"),
+      ),
+    ).toEqual({
+      ok: false,
+      errors: ["review_date must be a valid YYYY-MM-DD calendar date"],
     });
     expect(
       verifyGitHubRepositorySettingsReviewRecord(

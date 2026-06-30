@@ -210,8 +210,8 @@ export function verifyGitHubRepositorySettingsReviewRecord(
   }
 
   const reviewDate = fields.get("review_date");
-  if (reviewDate !== undefined && !/^\d{4}-\d{2}-\d{2}$/u.test(reviewDate)) {
-    errors.push("review_date must be YYYY-MM-DD");
+  if (reviewDate !== undefined && !isIsoCalendarDate(reviewDate)) {
+    errors.push("review_date must be a valid YYYY-MM-DD calendar date");
   }
 
   const branch = fields.get("branch");
@@ -362,4 +362,20 @@ function parseRecordFields(text: string): Map<string, string> {
     fields.set(match[1], match[2].trim());
   }
   return fields;
+}
+
+function isIsoCalendarDate(value: string): boolean {
+  const match = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/u.exec(value);
+  if (match === null) {
+    return false;
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
 }
