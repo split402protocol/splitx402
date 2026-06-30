@@ -230,6 +230,7 @@ The validator requires:
   source commit/status commands, the Phase 7 staging collection/status commands,
   and the validation commands:
   `git rev-parse HEAD`, `git status --short --branch`,
+  `corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence`,
   `corepack pnpm lint`, `corepack pnpm product:public-surface-check --brief`,
   `corepack pnpm typecheck`, `corepack pnpm test`,
   `corepack pnpm build`, `corepack pnpm vectors:check`, and

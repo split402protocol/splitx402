@@ -2,6 +2,7 @@ export const PHASE7_REQUIRED_COMMAND_EVIDENCE = [
   "git rev-parse HEAD",
   "git status --short --branch",
   "corepack pnpm phase7:staging:init",
+  "corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence",
   "corepack pnpm phase7:staging:seed",
   "corepack pnpm phase7:staging-proof",
   "corepack pnpm phase7:hosted:preflight",
