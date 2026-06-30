@@ -1,0 +1,32 @@
+# Split402 public-alpha review ownership.
+#
+# Keep protocol, payment, custody, release, CI, and public GitHub presentation
+# changes reviewable before merge. Replace this account handle with narrower
+# organization teams once Split402 has a team-based GitHub org.
+
+* @split402protocol
+
+/packages/protocol/ @split402protocol
+/packages/x402-extension/ @split402protocol
+/packages/agent-sdk/ @split402protocol
+/packages/merchant-sdk/ @split402protocol
+/packages/router/ @split402protocol
+/packages/control-plane/ @split402protocol
+/packages/express/ @split402protocol
+/apps/payout-signer/ @split402protocol
+/apps/mcp-demo/ @split402protocol
+/apps/dashboard/ @split402protocol
+
+/docs/decisions/ @split402protocol
+/docs/checklists/ @split402protocol
+/docs/runbooks/ @split402protocol
+/docs/templates/ @split402protocol
+/docs/RELEASE_POLICY.md @split402protocol
+/docs/PUBLIC_PRIVATE_BOUNDARY.md @split402protocol
+/SECURITY.md @split402protocol
+/SUPPORT.md @split402protocol
+/LICENSE @split402protocol
+/NOTICE @split402protocol
+
+/.github/ @split402protocol
+/deploy/ @split402protocol

@@ -21,6 +21,8 @@ invariants.
 - Do not publish packages, images, hosted endpoints, or release tags as
   supported artifacts until the release policy in `docs/RELEASE_POLICY.md` is
   satisfied.
+- `.github/CODEOWNERS` routes protocol, payment, custody, release, CI, and
+  public-presentation changes to Split402 review.
 - `corepack pnpm repo:guard` rejects tracked launch evidence, raw environment
   files, and common private key or credential artifacts.
 
