@@ -136,6 +136,16 @@ const PHASE7_REFRESH_ALLOWED_NON_EMPTY_FIELDS = new Set([
   "commands_run",
 ]);
 
+const GITHUB_SETTINGS_REFRESH_ALLOWED_NON_EMPTY_FIELDS = new Set([
+  "schema",
+  "review_id",
+  "review_date",
+  "repository",
+  "source_commit",
+  "branch",
+  "required_checks",
+]);
+
 export function createProductEvidenceSourceRefreshWrites(input: {
   workspace: Split402ProductEvidenceWorkspace;
   readText: (path: string) => string;
@@ -148,7 +158,27 @@ export function createProductEvidenceSourceRefreshWrites(input: {
     input.workspace.directory,
     input.workspace.phase7ProofFileName,
   );
+  const githubSettingsReviewPath = join(
+    input.workspace.directory,
+    input.workspace.githubSettingsReviewFileName,
+  );
   return [
+    {
+      path: githubSettingsReviewPath,
+      contents: refreshSourceCommitField({
+        allowedNonEmptyFields: GITHUB_SETTINGS_REFRESH_ALLOWED_NON_EMPTY_FIELDS,
+        nextText: input.workspace.githubSettingsReviewText,
+        path: githubSettingsReviewPath,
+        previousText: input.readText(githubSettingsReviewPath),
+        scaffoldPlaceholderValues: new Set([
+          "<reviewer handles>",
+          "no",
+          "no-go",
+          "scaffold only; replace with live GitHub UI/API evidence before approval",
+          "template only; replace with live GitHub UI/API evidence before approval",
+        ]),
+      }),
+    },
     {
       path: phase6Path,
       contents: refreshSourceCommitField({
@@ -175,9 +205,11 @@ function refreshSourceCommitField(input: {
   nextText: string;
   path: string;
   previousText: string;
+  scaffoldPlaceholderValues?: ReadonlySet<string>;
 }): string {
   const nonRefreshableFields = findNonRefreshableFields({
     allowedNonEmptyFields: input.allowedNonEmptyFields,
+    scaffoldPlaceholderValues: input.scaffoldPlaceholderValues,
     text: input.previousText,
   });
   if (nonRefreshableFields.length > 0) {
@@ -200,12 +232,15 @@ function refreshSourceCommitField(input: {
 
 function findNonRefreshableFields(input: {
   allowedNonEmptyFields: ReadonlySet<string>;
+  scaffoldPlaceholderValues?: ReadonlySet<string>;
   text: string;
 }): string[] {
   return parseRecordFields(input.text)
     .filter(
       (entry) =>
-        entry.value.length > 0 && !input.allowedNonEmptyFields.has(entry.field),
+        entry.value.length > 0 &&
+        !input.allowedNonEmptyFields.has(entry.field) &&
+        input.scaffoldPlaceholderValues?.has(entry.value) !== true,
     )
     .map((entry) => entry.field);
 }
