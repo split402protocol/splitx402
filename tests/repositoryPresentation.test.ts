@@ -77,6 +77,10 @@ describe("repository presentation", () => {
   it("keeps required GitHub validation and security automation configured", () => {
     const ciWorkflow = readFileSync(".github/workflows/ci.yml", "utf8");
     const codeowners = readFileSync(".github/CODEOWNERS", "utf8");
+    const repositorySettings = readFileSync(
+      "docs/GITHUB_REPOSITORY_SETTINGS.md",
+      "utf8",
+    );
     const codeqlWorkflow = readFileSync(
       ".github/workflows/codeql.yml",
       "utf8",
@@ -106,6 +110,18 @@ describe("repository presentation", () => {
     expect(codeowners).toContain("/apps/payout-signer/ @split402protocol");
     expect(codeowners).toContain("/docs/RELEASE_POLICY.md @split402protocol");
     expect(codeowners).toContain("/.github/ @split402protocol");
+
+    expect(repositorySettings).toContain("require pull request before merging");
+    expect(repositorySettings).toContain("require review from Code Owners");
+    expect(repositorySettings).toContain(
+      "require status checks to pass before merge",
+    );
+    expect(repositorySettings).toContain("Local public-alpha proof");
+    expect(repositorySettings).toContain("PostgreSQL integration tests");
+    expect(repositorySettings).toContain("GitHub Security Advisories");
+    expect(repositorySettings).toContain(
+      "not live branch protection settings",
+    );
 
     expect(codeqlWorkflow).toContain("github/codeql-action/init@v3");
     expect(codeqlWorkflow).toContain("javascript-typescript");
@@ -164,6 +180,14 @@ describe("repository presentation", () => {
     expect(readme).toContain("actions/workflows/ci.yml/badge.svg");
     expect(readme).toContain("actions/workflows/codeql.yml/badge.svg");
     expect(readme).toContain("actions/workflows/secret-scan.yml/badge.svg");
+    expect(readme).toContain("docs/GITHUB_REPOSITORY_SETTINGS.md");
+  });
+
+  it("keeps the GitHub profile linked to repository settings", () => {
+    const profile = readFileSync("docs/GITHUB_PUBLIC_PROFILE.md", "utf8");
+
+    expect(profile).toContain("docs/GITHUB_REPOSITORY_SETTINGS.md");
+    expect(profile).toContain("Branch protection, CODEOWNERS review");
   });
 
   it("keeps README lifecycle and API docs aligned with payout hardening", () => {
