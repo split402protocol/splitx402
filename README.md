@@ -710,6 +710,7 @@ assembled and approved.
 - [Current state](docs/CURRENT_STATE.md)
 - [GitHub public profile](docs/GITHUB_PUBLIC_PROFILE.md)
 - [Public and private boundary](docs/PUBLIC_PRIVATE_BOUNDARY.md)
+- [Release policy](docs/RELEASE_POLICY.md)
 - [Architecture alignment note](docs/SPLIT402_ARCHITECTURE.md)
 - [Pre-launch public/private review checklist](docs/checklists/prelaunch-public-private-review.md)
 - [Phase 6 custody review checklist](docs/checklists/phase6-custody-review.md)
@@ -746,6 +747,7 @@ assembled and approved.
 - [Architecture baseline decision](docs/decisions/0003-adopt-split402-architecture-baseline.md)
 - [Public/private and license decision](docs/decisions/0009-public-private-boundary-and-apache-license.md)
 - [Security policy](SECURITY.md)
+- [Support policy](SUPPORT.md)
 
 ## License
 

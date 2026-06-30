@@ -27,8 +27,10 @@ const REQUIRED_FILES = [
   "LICENSE",
   "README.md",
   "SECURITY.md",
+  "SUPPORT.md",
   "docs/GITHUB_PUBLIC_PROFILE.md",
   "docs/PUBLIC_PRIVATE_BOUNDARY.md",
+  "docs/RELEASE_POLICY.md",
   "docs/checklists/prelaunch-public-private-review.md",
   "docs/decisions/0009-public-private-boundary-and-apache-license.md",
 ] as const;
@@ -86,6 +88,8 @@ export function createSplit402PublicSurfaceCheckReport(
     createApacheLicenseFileCheck(exists, readText),
     createReadmeBoundaryCheck(exists, readText),
     createGitHubProfileContractCheck(exists, readText),
+    createSupportPolicyCheck(exists, readText),
+    createReleasePolicyCheck(exists, readText),
     createBoundaryPolicyCheck(exists, readText),
     createDecisionRecordCheck(exists, readText),
     createNoMitLaunchClaimCheck(exists, readText),
@@ -249,6 +253,12 @@ function createReadmeBoundaryCheck(
     ...(readme?.includes("docs/PUBLIC_PRIVATE_BOUNDARY.md") === true
       ? []
       : ["README.md must link to docs/PUBLIC_PRIVATE_BOUNDARY.md."]),
+    ...(readme?.includes("docs/RELEASE_POLICY.md") === true
+      ? []
+      : ["README.md must link to docs/RELEASE_POLICY.md."]),
+    ...(readme?.includes("SUPPORT.md") === true
+      ? []
+      : ["README.md must link to SUPPORT.md."]),
     ...(readme?.includes(
       "docs/checklists/prelaunch-public-private-review.md",
     ) === true
@@ -269,6 +279,84 @@ function createReadmeBoundaryCheck(
     details:
       blockers.length === 0
         ? ["README presents Apache-2.0 and the public/private boundary."]
+        : blockers,
+  };
+}
+
+function createSupportPolicyCheck(
+  exists: (path: string) => boolean,
+  readText: (path: string) => string,
+): Split402PublicSurfaceCheck {
+  const support = readIfExists("SUPPORT.md", exists, readText);
+  const blockers = [
+    ...(support?.includes("not production ready") === true
+      ? []
+      : ["SUPPORT.md must state that Split402 is not production ready."]),
+    ...(support?.includes("not mainnet approved") === true
+      ? []
+      : ["SUPPORT.md must state that Split402 is not mainnet approved."]),
+    ...(support?.includes("No released versions are currently supported") === true
+      ? []
+      : [
+          "SUPPORT.md must state that no released versions are currently supported.",
+        ]),
+    ...(support?.includes("GitHub Security Advisories") === true
+      ? []
+      : [
+          "SUPPORT.md must direct vulnerability reports to GitHub Security Advisories.",
+        ]),
+    ...(support?.includes("docs/RELEASE_POLICY.md") === true
+      ? []
+      : ["SUPPORT.md must link to docs/RELEASE_POLICY.md."]),
+  ];
+
+  return {
+    id: "support_policy_boundary",
+    label: "Support policy preserves public-alpha support boundaries",
+    ok: blockers.length === 0,
+    details:
+      blockers.length === 0
+        ? [
+            "SUPPORT.md keeps support limited to public-alpha development and private security reporting.",
+          ]
+        : blockers,
+  };
+}
+
+function createReleasePolicyCheck(
+  exists: (path: string) => boolean,
+  readText: (path: string) => string,
+): Split402PublicSurfaceCheck {
+  const releasePolicy = readIfExists("docs/RELEASE_POLICY.md", exists, readText);
+  const blockers = [
+    ...(releasePolicy?.includes("no supported public release yet") === true
+      ? []
+      : [
+          "docs/RELEASE_POLICY.md must state there is no supported public release yet.",
+        ]),
+    ...(releasePolicy?.includes("private\": true") === true
+      ? []
+      : ["docs/RELEASE_POLICY.md must keep workspace packages private until release approval."]),
+    ...(releasePolicy?.includes("product:local-proof --brief") === true
+      ? []
+      : ["docs/RELEASE_POLICY.md must require product:local-proof before publishing."]),
+    ...(releasePolicy?.includes(
+      "product:status --brief --workspace split402-launch-evidence",
+    ) === true
+      ? []
+      : ["docs/RELEASE_POLICY.md must require product:status before publishing."]),
+    ...(releasePolicy?.includes("not approve public launch") === true
+      ? []
+      : ["docs/RELEASE_POLICY.md must state that local proof does not approve launch."]),
+  ];
+
+  return {
+    id: "release_policy_boundary",
+    label: "Release policy prevents premature publication claims",
+    ok: blockers.length === 0,
+    details:
+      blockers.length === 0
+        ? ["Release policy keeps packages, hosted demos, production custody, and mainnet behind explicit evidence gates."]
         : blockers,
   };
 }

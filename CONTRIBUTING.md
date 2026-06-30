@@ -18,6 +18,9 @@ invariants.
   unless a sanitized artifact is intentionally approved for release.
 - Contributions to this public repository are submitted under Apache-2.0 unless
   an explicit written agreement says otherwise.
+- Do not publish packages, images, hosted endpoints, or release tags as
+  supported artifacts until the release policy in `docs/RELEASE_POLICY.md` is
+  satisfied.
 - `corepack pnpm repo:guard` rejects tracked launch evidence, raw environment
   files, and common private key or credential artifacts.
 
