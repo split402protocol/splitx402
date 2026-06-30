@@ -58,7 +58,7 @@ Before publishing any public artifact:
 
 ```bash
 corepack pnpm lint
-corepack pnpm product:github-settings-review --template
+corepack pnpm product:github-settings-review --template > split402-launch-evidence/github-settings-review.txt
 corepack pnpm product:github-settings-review
 corepack pnpm product:public-surface-check --brief
 corepack pnpm repo:guard

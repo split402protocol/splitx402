@@ -47,6 +47,10 @@ console.log(
     {
       schema: "split402.product_evidence_init.v1",
       evidenceDirectory: workspace.directory,
+      githubSettingsReviewFile: join(
+        workspace.directory,
+        workspace.githubSettingsReviewFileName,
+      ),
       phase6EvidenceFile: join(
         workspace.directory,
         workspace.phase6EvidenceFileName,

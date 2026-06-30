@@ -76,6 +76,10 @@ export function createProductEvidenceInitWrites(
       contents: workspace.readmeText,
     },
     {
+      path: join(workspace.directory, workspace.githubSettingsReviewFileName),
+      contents: workspace.githubSettingsReviewText,
+    },
+    {
       path: join(workspace.directory, workspace.phase6EvidenceFileName),
       contents: workspace.phase6EvidenceText,
     },

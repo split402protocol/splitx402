@@ -19,6 +19,9 @@ describe("Split402 product evidence workspace", () => {
     });
 
     expect(workspace.directory).toBe("evidence/launch");
+    expect(workspace.githubSettingsReviewFileName).toBe(
+      "github-settings-review.txt",
+    );
     expect(workspace.phase6EvidenceFileName).toBe("phase6-custody-evidence.txt");
     expect(workspace.phase6EnvFileName).toBe("phase6-evidence.env");
     expect(workspace.phase7ProofFileName).toBe("phase7-staging-proof.txt");
@@ -57,6 +60,18 @@ describe("Split402 product evidence workspace", () => {
     expect(workspace.phase7.envText).toContain(
       "SPLIT402_PHASE7_EVIDENCE_DIR=evidence/launch/phase7-staging-evidence",
     );
+    expect(workspace.githubSettingsReviewText).toContain(
+      "schema: split402.github_repository_settings_review.v1",
+    );
+    expect(workspace.githubSettingsReviewText).toContain(
+      "review_date: 2026-06-29",
+    );
+    expect(workspace.githubSettingsReviewText).toContain(
+      "source_commit: 096f190",
+    );
+    expect(workspace.githubSettingsReviewText).toContain(
+      "review_decision: no-go",
+    );
   });
 
   it("documents the no-go launch posture and next commands", () => {
@@ -67,6 +82,10 @@ describe("Split402 product evidence workspace", () => {
     );
     expect(workspace.readmeText).toContain("Launch gates ready: 0/2 (0%)");
     expect(workspace.readmeText).toContain("local-public-alpha-proof.json");
+    expect(workspace.readmeText).toContain("github-settings-review.txt");
+    expect(workspace.readmeText).toContain(
+      "Live GitHub settings and public/private license review record",
+    );
     expect(workspace.readmeText).toContain("Mainnet ready: no");
     expect(workspace.readmeText).toContain(
       "The product remains `no-go` until the Phase 7 hosted proof and Phase 6",
@@ -92,11 +111,12 @@ describe("Split402 product evidence workspace", () => {
       "quoted values are handled consistently",
     );
     expect(workspace.readmeText).toContain(
-      "corepack pnpm product:github-settings-review --template",
+      "corepack pnpm product:github-settings-review --template > split402-launch-evidence/github-settings-review.txt",
     );
-    expect(workspace.nextCommands.slice(0, 4)).toEqual([
+    expect(workspace.nextCommands.slice(0, 5)).toEqual([
       "corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json",
-      "corepack pnpm product:github-settings-review --template",
+      "corepack pnpm product:github-settings-review --template > split402-launch-evidence/github-settings-review.txt",
+      "Review split402-launch-evidence/github-settings-review.txt, verify live GitHub settings, then regenerate it with corepack pnpm product:github-settings-review.",
       "corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence",
       "Fill split402-launch-evidence/phase7-staging.env with hosted staging values reported by launch preflight.",
     ]);
@@ -134,6 +154,7 @@ describe("Split402 product evidence workspace", () => {
     expect(createProductEvidenceInitWrites(workspace).map((write) => write.path))
       .toEqual([
         join("evidence/launch", "README.md"),
+        join("evidence/launch", "github-settings-review.txt"),
         join("evidence/launch", "phase6-custody-evidence.txt"),
         join("evidence/launch", "phase6-evidence.env"),
         join("evidence/launch", "phase7-staging-proof.txt"),

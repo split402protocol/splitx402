@@ -7,6 +7,7 @@ import {
   createPhase7StagingEvidenceWorkspace,
   type Phase7StagingEvidenceWorkspace,
 } from "./phase7StagingEvidenceWorkspace.js";
+import { createGitHubRepositorySettingsReviewRecord } from "./githubRepositorySettingsReview.js";
 import { assemblePhase7StagingProof } from "./phase7StagingProofAssembly.js";
 
 export interface Split402ProductEvidenceWorkspaceInput {
@@ -18,6 +19,7 @@ export interface Split402ProductEvidenceWorkspaceInput {
 export interface Split402ProductEvidenceWorkspace {
   directory: string;
   readmeFileName: "README.md";
+  githubSettingsReviewFileName: "github-settings-review.txt";
   localProofFileName: "local-public-alpha-proof.json";
   phase6EvidenceFileName: "phase6-custody-evidence.txt";
   phase6EnvFileName: "phase6-evidence.env";
@@ -27,6 +29,7 @@ export interface Split402ProductEvidenceWorkspace {
   phase6EvidenceText: string;
   phase6EnvText: string;
   phase7ProofText: string;
+  githubSettingsReviewText: string;
   readmeText: string;
   nextCommands: string[];
 }
@@ -45,6 +48,7 @@ export function createSplit402ProductEvidenceWorkspace(
   };
   const phase6EvidenceText = createPhase6CustodyEvidenceBundle(phase6Values);
   const localProofFileName = "local-public-alpha-proof.json" as const;
+  const githubSettingsReviewFileName = "github-settings-review.txt" as const;
   const phase6EvidenceFileName = "phase6-custody-evidence.txt" as const;
   const phase6EnvFileName = "phase6-evidence.env" as const;
   const phase7ProofFileName = "phase7-staging-proof.txt" as const;
@@ -57,6 +61,7 @@ export function createSplit402ProductEvidenceWorkspace(
   });
   const nextCommands = createNextCommands({
     directory,
+    githubSettingsReviewFileName,
     localProofFileName,
     phase6EvidenceFileName,
     phase6EnvFileName,
@@ -67,6 +72,7 @@ export function createSplit402ProductEvidenceWorkspace(
   return {
     directory,
     readmeFileName: "README.md",
+    githubSettingsReviewFileName,
     localProofFileName,
     phase6EvidenceFileName,
     phase6EnvFileName,
@@ -79,8 +85,10 @@ export function createSplit402ProductEvidenceWorkspace(
       directory,
     }),
     phase7ProofText,
+    githubSettingsReviewText: createGithubSettingsReviewText(input),
     readmeText: createReadmeText({
       directory,
+      githubSettingsReviewFileName,
       localProofFileName,
       phase6EvidenceFileName,
       phase6EnvFileName,
@@ -90,6 +98,36 @@ export function createSplit402ProductEvidenceWorkspace(
     }),
     nextCommands,
   };
+}
+
+function createGithubSettingsReviewText(
+  input: Split402ProductEvidenceWorkspaceInput,
+): string {
+  return createGitHubRepositorySettingsReviewRecord({
+    reviewId: "github-settings-review-001",
+    reviewDate: input.reviewDate ?? "YYYY-MM-DD",
+    reviewers: "<reviewer handles>",
+    repository: "split402protocol/splitx402",
+    sourceCommit: input.sourceCommit ?? "0000000",
+    branch: "main",
+    aboutDescriptionMatches: "no",
+    topicsMatch: "no",
+    homepagePolicyMatches: "no",
+    branchProtectionEnabled: "no",
+    requiresPullRequest: "no",
+    requiresCodeOwnerReview: "no",
+    requiresStatusChecks: "no",
+    requiredChecks:
+      "Lint, Public surface check, Typecheck, Test, Build, Check vectors, Audit, Local public-alpha proof, PostgreSQL integration tests, CodeQL, Secret scan",
+    blocksForcePushes: "no",
+    blocksDeletion: "no",
+    blankIssuesDisabled: "no",
+    securityAdvisoriesEnabled: "no",
+    packagesAndReleasesUnpublished: "no",
+    reviewDecision: "no-go",
+    reviewNotes:
+      "scaffold only; replace with live GitHub UI/API evidence before approval",
+  });
 }
 
 function createPhase7ProofText(input: {
@@ -127,6 +165,7 @@ function relativePhase7EvidenceDirectory(
 
 function createNextCommands(input: {
   directory: string;
+  githubSettingsReviewFileName: string;
   localProofFileName: string;
   phase6EvidenceFileName: string;
   phase6EnvFileName: string;
@@ -139,7 +178,8 @@ function createNextCommands(input: {
   const launchPreflightCommand = `corepack pnpm product:launch-preflight --brief --workspace ${input.directory}`;
   return [
     `corepack pnpm product:local-proof --brief --output ${input.directory}/${input.localProofFileName}`,
-    "corepack pnpm product:github-settings-review --template",
+    `corepack pnpm product:github-settings-review --template > ${input.directory}/${input.githubSettingsReviewFileName}`,
+    `Review ${input.directory}/${input.githubSettingsReviewFileName}, verify live GitHub settings, then regenerate it with corepack pnpm product:github-settings-review.`,
     launchPreflightCommand,
     `Fill ${phase7EnvFile} with hosted staging values reported by launch preflight.`,
     `Review generated ${phase6EnvFile} before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template ${input.directory} ${phase6EnvFile}`,
@@ -166,6 +206,7 @@ function createNextCommands(input: {
 
 function createReadmeText(input: {
   directory: string;
+  githubSettingsReviewFileName: string;
   localProofFileName: string;
   phase6EvidenceFileName: string;
   phase6EnvFileName: string;
@@ -187,6 +228,7 @@ function createReadmeText(input: {
     "| Path | Purpose |",
     "| --- | --- |",
     `| \`${input.localProofFileName}\` | Saved local public-alpha protocol/router/MCP proof artifact. |`,
+    `| \`${input.githubSettingsReviewFileName}\` | Live GitHub settings and public/private license review record. |`,
     `| \`${input.phase6EvidenceFileName}\` | Phase 6 custody evidence bundle scaffold. |`,
     `| \`${input.phase6EnvFileName}\` | Local Phase 6 custody evidence assembly environment template. |`,
     `| \`${input.phase7ProofFileName}\` | Phase 7 staging proof record after assembly. |`,

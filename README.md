@@ -344,7 +344,7 @@ corepack pnpm product:evidence:init --force
 corepack pnpm product:local-proof --help
 corepack pnpm product:local-proof --brief
 corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json
-corepack pnpm product:github-settings-review --template
+corepack pnpm product:github-settings-review --template > split402-launch-evidence/github-settings-review.txt
 corepack pnpm product:github-settings-review
 corepack pnpm product:public-surface-check --brief
 corepack pnpm product:launch-preflight --help
@@ -405,6 +405,9 @@ match the current checkout or if the source worktree has uncommitted changes.
 `product:github-settings-review --template` prints a fillable review record for
 the live GitHub repository settings in
 [`docs/GITHUB_REPOSITORY_SETTINGS.md`](docs/GITHUB_REPOSITORY_SETTINGS.md).
+The launch evidence workspace includes
+`split402-launch-evidence/github-settings-review.txt` as the intended saved
+review artifact.
 After verifying branch protection, Code Owners review, required checks, issue
 intake, and release posture in the GitHub UI/API, run
 `product:github-settings-review` with the required `SPLIT402_GITHUB_SETTINGS_*`
