@@ -18,9 +18,18 @@ export interface MainnetCanaryEvidenceVerificationResult {
 export interface VerifyMainnetCanaryEvidenceAttachmentInput {
   kind: MainnetCanaryEvidenceKind;
   value?: string;
+  expectedScope?: MainnetCanaryEvidenceExpectedScope;
   workspaceDirectory?: string;
   exists?: (path: string) => boolean;
   readText?: (path: string) => string;
+}
+
+export interface MainnetCanaryEvidenceExpectedScope {
+  merchantId?: string;
+  campaignId?: string;
+  routeId?: string;
+  payerWallet?: string;
+  maxGrossAmountAtomic?: string;
 }
 
 const DRY_RUN_SCHEMA = "split402.mainnet_canary_dry_run.v1";
@@ -136,6 +145,7 @@ export function verifyMainnetCanaryEvidenceAttachment(
 
   const readText = input.readText ?? ((candidatePath) => readFileSync(candidatePath, "utf8"));
   return verifyEvidenceText({
+    expectedScope: input.expectedScope,
     kind: input.kind,
     path,
     text: readText(path),
@@ -143,6 +153,7 @@ export function verifyMainnetCanaryEvidenceAttachment(
 }
 
 function verifyEvidenceText(input: {
+  expectedScope?: MainnetCanaryEvidenceExpectedScope;
   kind: MainnetCanaryEvidenceKind;
   path: string;
   text: string;
@@ -163,7 +174,10 @@ function verifyEvidenceText(input: {
     "non_atomic_acknowledgement",
     MAINNET_CANARY_NON_ATOMIC_ACKNOWLEDGEMENT,
   );
+  validateReviewDate(errors, fields.get("review_date"));
+  validateSourceCommit(errors, fields.get("source_commit"));
   validateAmountCap(errors, fields.get("max_gross_amount_atomic"));
+  validateExpectedScope(errors, fields, input.expectedScope);
 
   if (input.kind === "dry_run") {
     for (const field of DRY_RUN_PASS_FIELDS) {
@@ -252,6 +266,56 @@ function validateAmountCap(errors: string[], value: string | undefined): void {
       `max_gross_amount_atomic must be <= ${MAINNET_CANARY_MAX_GROSS_AMOUNT_ATOMIC}`,
     );
   }
+}
+
+function validateExpectedScope(
+  errors: string[],
+  fields: ReadonlyMap<string, string>,
+  expectedScope: MainnetCanaryEvidenceExpectedScope | undefined,
+): void {
+  if (expectedScope === undefined) {
+    return;
+  }
+  const comparisons = [
+    ["merchant_id", expectedScope.merchantId],
+    ["campaign_id", expectedScope.campaignId],
+    ["route_id", expectedScope.routeId],
+    ["payer_wallet", expectedScope.payerWallet],
+    ["max_gross_amount_atomic", expectedScope.maxGrossAmountAtomic],
+  ] as const;
+  for (const [field, expected] of comparisons) {
+    if (expected !== undefined && fields.get(field) !== expected) {
+      errors.push(`${field} must match approved canary scope`);
+    }
+  }
+}
+
+function validateReviewDate(errors: string[], value: string | undefined): void {
+  if (value === undefined || !isIsoCalendarDate(value)) {
+    errors.push("review_date must be a valid YYYY-MM-DD calendar date");
+  }
+}
+
+function validateSourceCommit(errors: string[], value: string | undefined): void {
+  if (value === undefined || !/^[a-f0-9]{7,40}$/u.test(value)) {
+    errors.push("source_commit must be a git SHA");
+  }
+}
+
+function isIsoCalendarDate(value: string): boolean {
+  const match = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/u.exec(value);
+  if (match === null) {
+    return false;
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
 }
 
 function isPlaceholder(value: string): boolean {

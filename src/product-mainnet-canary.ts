@@ -15,6 +15,13 @@ if (help) {
 }
 
 const env = createMainnetCanaryEnv({ workspaceDirectory });
+const expectedScope = {
+  merchantId: env.SPLIT402_MAINNET_CANARY_MERCHANT_ID,
+  campaignId: env.SPLIT402_MAINNET_CANARY_CAMPAIGN_ID,
+  routeId: env.SPLIT402_MAINNET_CANARY_ROUTE_ID,
+  payerWallet: env.SPLIT402_MAINNET_CANARY_WALLET,
+  maxGrossAmountAtomic: env.SPLIT402_MAINNET_CANARY_MAX_GROSS_AMOUNT_ATOMIC,
+};
 const report = createSplit402MainnetCanaryReport({
   productReadiness,
   operatorConfirmation: env.SPLIT402_MAINNET_CANARY_CONFIRM,
@@ -27,12 +34,14 @@ const report = createSplit402MainnetCanaryReport({
   canaryWallet: env.SPLIT402_MAINNET_CANARY_WALLET,
   dryRunEvidence: env.SPLIT402_MAINNET_CANARY_DRY_RUN_EVIDENCE,
   dryRunEvidenceVerification: verifyMainnetCanaryEvidenceAttachment({
+    expectedScope,
     kind: "dry_run",
     value: env.SPLIT402_MAINNET_CANARY_DRY_RUN_EVIDENCE,
     workspaceDirectory,
   }),
   rollbackPlan: env.SPLIT402_MAINNET_CANARY_ROLLBACK_PLAN,
   rollbackPlanVerification: verifyMainnetCanaryEvidenceAttachment({
+    expectedScope,
     kind: "rollback_plan",
     value: env.SPLIT402_MAINNET_CANARY_ROLLBACK_PLAN,
     workspaceDirectory,
