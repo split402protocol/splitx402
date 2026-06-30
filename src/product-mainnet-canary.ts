@@ -1,8 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-
-import dotenv from "dotenv";
-
+import { createMainnetCanaryEnv } from "./mainnetCanaryEnv.js";
 import {
   createSplit402MainnetCanaryReport,
   formatSplit402MainnetCanaryBrief,
@@ -17,7 +13,7 @@ if (help) {
   process.exit(0);
 }
 
-const env = createMainnetCanaryEnv(workspaceDirectory);
+const env = createMainnetCanaryEnv({ workspaceDirectory });
 const report = createSplit402MainnetCanaryReport({
   productReadiness,
   operatorConfirmation: env.SPLIT402_MAINNET_CANARY_CONFIRM,
@@ -51,24 +47,4 @@ function readArgs() {
     console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
-}
-
-function createMainnetCanaryEnv(
-  workspaceDirectory: string | undefined,
-): NodeJS.ProcessEnv {
-  const workspaceEnv =
-    workspaceDirectory === undefined
-      ? {}
-      : readOptionalEnvFile(join(workspaceDirectory, "mainnet-canary.env"));
-  return {
-    ...workspaceEnv,
-    ...process.env,
-  };
-}
-
-function readOptionalEnvFile(path: string): Record<string, string> {
-  if (!existsSync(path)) {
-    return {};
-  }
-  return dotenv.parse(readFileSync(path, "utf8"));
 }
