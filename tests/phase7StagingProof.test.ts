@@ -989,6 +989,58 @@ funding_balance_evidence: funding.json
     );
   });
 
+  it("blocks staged proof status when launch preflight output is missing", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/commands.log",
+      encode(
+        createValidCommandsLog().replace(
+          "Split402 launch preflight: ready\n",
+          "",
+        ),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.commandEvidenceStatus.blockers).toContain(
+      "commands_run launch preflight output is missing",
+    );
+  });
+
+  it("blocks staged proof status when launch preflight is not ready", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/commands.log",
+      encode(
+        createValidCommandsLog().replace(
+          "Split402 launch preflight: ready",
+          "Split402 launch preflight: not ready",
+        ),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.commandEvidenceStatus.blockers).toContain(
+      "commands_run launch preflight output must be ready",
+    );
+  });
+
   it("accepts combined launch evidence workspace init as Phase 7 workspace evidence", () => {
     const proofText = createManifestProof();
     const artifacts = createManifestArtifacts(proofText);
@@ -2878,6 +2930,7 @@ function createValidCommandsLog(): string {
     "## main...origin/main",
     "$ corepack pnpm phase7:staging:init",
     "$ corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence",
+    "Split402 launch preflight: ready",
     "$ SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",
     "$ corepack pnpm phase7:staging-proof phase7-staging-proof.txt",
     "$ corepack pnpm phase7:hosted:preflight",
