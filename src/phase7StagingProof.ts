@@ -262,8 +262,17 @@ function isHttpUrl(value: string): boolean {
 
 function isAttachedArtifactReference(value: string): boolean {
   const attachedPrefix = "attached:";
+  const artifactPath = value.startsWith(attachedPrefix)
+    ? value.slice(attachedPrefix.length).trim()
+    : "";
   return (
     value.startsWith(attachedPrefix) &&
-    value.slice(attachedPrefix.length).trim().length > 0
+    artifactPath.length > 0 &&
+    !isPlaceholder(artifactPath) &&
+    !isUrlLikeArtifactPath(artifactPath)
   );
+}
+
+function isUrlLikeArtifactPath(value: string): boolean {
+  return /^[a-z][a-z0-9+.-]*:\/\//iu.test(value.trim());
 }
