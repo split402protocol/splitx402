@@ -43,6 +43,7 @@
     "product:local-proof": "tsx src/product-local-proof.ts",
     "product:launch-checklist": "tsx src/product-launch-checklist.ts",
     "product:launch-preflight": "tsx src/product-launch-preflight.ts",
+    "product:mainnet-canary": "tsx src/product-mainnet-canary.ts",
     "product:status": "tsx src/product-status.ts",
     "phase7:staging-proof": "tsx src/phase7-staging-proof.ts",
     "phase7:staging:init": "tsx src/phase7-staging-init.ts",
