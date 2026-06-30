@@ -171,7 +171,8 @@ and `corepack pnpm product:public-surface-check --brief`, so env readiness and
 the Apache-2.0/public-private launch boundary are verified in the same proof.
 Its `git status --short --branch` output must show only the branch/status header
 and no changed-file rows, and its launch-preflight output must show
-`Split402 launch preflight: ready`.
+`Split402 launch preflight: ready`. The public-surface output must show
+`Split402 public surface check: passed`.
 The funding-balance artifact is checked separately, requiring every asset to
 show a resolved `covered` or `deficit` state instead of unresolved funding.
 The top-level `product:status` command combines this Phase 7 result with the

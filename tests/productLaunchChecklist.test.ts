@@ -291,6 +291,7 @@ function createValidCommandsLog(): string {
     "$ corepack pnpm phase7:staging:status phase7-staging-proof.txt",
     "$ corepack pnpm lint",
     "$ corepack pnpm product:public-surface-check --brief",
+    "Split402 public surface check: passed",
     "$ corepack pnpm typecheck",
     "$ corepack pnpm test",
     "$ corepack pnpm build",
