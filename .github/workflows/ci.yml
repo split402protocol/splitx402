@@ -28,6 +28,9 @@ jobs:
       - name: Lint
         run: corepack pnpm lint
 
+      - name: Public surface check
+        run: corepack pnpm product:public-surface-check --brief
+
       - name: Typecheck
         run: corepack pnpm typecheck
 

@@ -63,6 +63,9 @@ describe("repository presentation", () => {
     expect(pullRequestTemplate).toContain("Commands run:");
     expect(pullRequestTemplate).toContain("## Protocol / Security Notes");
     expect(pullRequestTemplate).toContain("## Docs Updated");
+    expect(pullRequestTemplate).toContain(
+      "corepack pnpm product:public-surface-check --brief",
+    );
   });
 
   it("keeps required GitHub validation and security automation configured", () => {
@@ -78,6 +81,9 @@ describe("repository presentation", () => {
     const dependabotConfig = readFileSync(".github/dependabot.yml", "utf8");
 
     expect(ciWorkflow).toContain("corepack pnpm lint");
+    expect(ciWorkflow).toContain(
+      "corepack pnpm product:public-surface-check --brief",
+    );
     expect(ciWorkflow).toContain("corepack pnpm typecheck");
     expect(ciWorkflow).toContain("corepack pnpm test");
     expect(ciWorkflow).toContain("corepack pnpm build");
