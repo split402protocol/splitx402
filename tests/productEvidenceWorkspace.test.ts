@@ -245,6 +245,9 @@ describe("Split402 product evidence workspace", () => {
     const writes = createProductEvidenceSourceRefreshWrites({
       workspace: next,
       readText: (path) => {
+        if (path.endsWith(previous.githubSettingsReviewFileName)) {
+          return previous.githubSettingsReviewText;
+        }
         if (path.endsWith(previous.phase6EvidenceFileName)) {
           return previous.phase6EvidenceText;
         }
@@ -256,13 +259,16 @@ describe("Split402 product evidence workspace", () => {
     });
 
     expect(writes.map((write) => write.path)).toEqual([
+      join("split402-launch-evidence", "github-settings-review.txt"),
       join("split402-launch-evidence", "phase6-custody-evidence.txt"),
       join("split402-launch-evidence", "phase7-staging-proof.txt"),
     ]);
     expect(writes[0]?.contents).toContain("source_commit: def5678");
     expect(writes[1]?.contents).toContain("source_commit: def5678");
+    expect(writes[2]?.contents).toContain("source_commit: def5678");
     expect(writes[0]?.contents).not.toContain("source_commit: abc1234");
     expect(writes[1]?.contents).not.toContain("source_commit: abc1234");
+    expect(writes[2]?.contents).not.toContain("source_commit: abc1234");
   });
 
   it("refuses to refresh source commits after evidence values are filled", () => {
@@ -277,6 +283,9 @@ describe("Split402 product evidence workspace", () => {
       createProductEvidenceSourceRefreshWrites({
         workspace: next,
         readText: (path) => {
+          if (path.endsWith(previous.githubSettingsReviewFileName)) {
+            return previous.githubSettingsReviewText;
+          }
           if (path.endsWith(previous.phase6EvidenceFileName)) {
             return previous.phase6EvidenceText.replace(
               "funding_wallet:",
@@ -292,6 +301,39 @@ describe("Split402 product evidence workspace", () => {
     ).toThrowErrorMatchingInlineSnapshot(`
       [Error: Refusing to refresh source_commit in split402-launch-evidence/phase6-custody-evidence.txt because it already contains non-scaffold evidence fields.
       Non-refreshable fields: funding_wallet
+      Recollect evidence from the current checkout instead of rewriting source_commit.]
+    `);
+  });
+
+  it("refuses to refresh source commits after GitHub settings review is filled", () => {
+    const previous = createSplit402ProductEvidenceWorkspace({
+      sourceCommit: "abc1234",
+    });
+    const next = createSplit402ProductEvidenceWorkspace({
+      sourceCommit: "def5678",
+    });
+
+    expect(() =>
+      createProductEvidenceSourceRefreshWrites({
+        workspace: next,
+        readText: (path) => {
+          if (path.endsWith(previous.githubSettingsReviewFileName)) {
+            return previous.githubSettingsReviewText
+              .replace("reviewers: <reviewer handles>", "reviewers: Split402 operators")
+              .replace("about_description_matches: no", "about_description_matches: yes");
+          }
+          if (path.endsWith(previous.phase6EvidenceFileName)) {
+            return previous.phase6EvidenceText;
+          }
+          if (path.endsWith(previous.phase7ProofFileName)) {
+            return previous.phase7ProofText;
+          }
+          throw new Error(`unexpected read ${path}`);
+        },
+      }),
+    ).toThrowErrorMatchingInlineSnapshot(`
+      [Error: Refusing to refresh source_commit in split402-launch-evidence/github-settings-review.txt because it already contains non-scaffold evidence fields.
+      Non-refreshable fields: reviewers, about_description_matches
       Recollect evidence from the current checkout instead of rewriting source_commit.]
     `);
   });

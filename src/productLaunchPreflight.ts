@@ -174,6 +174,13 @@ export function createSplit402LaunchPreflightReport(
   ];
   const missingRequiredFiles = requiredFiles.filter((path) => !input.exists(path));
   const existingRequiredFiles = requiredFiles.filter((path) => input.exists(path));
+  const githubSettingsReviewPath = join(
+    workspace.directory,
+    workspace.githubSettingsReviewFileName,
+  );
+  const githubSettingsReviewText = input.exists(githubSettingsReviewPath)
+    ? input.readText(githubSettingsReviewPath)
+    : "";
   const phase6EvidencePath = join(
     workspace.directory,
     workspace.phase6EvidenceFileName,
@@ -187,6 +194,8 @@ export function createSplit402LaunchPreflightReport(
     : "";
   const sourceCommitBlockers = createSourceCommitBlockers({
     currentSourceCommit: input.currentSourceCommit,
+    githubSettingsReviewPath,
+    githubSettingsReviewText,
     phase6EvidencePath,
     phase6EvidenceText,
     phase7ProofPath,
@@ -592,6 +601,8 @@ function parseEnvText(text: string): Map<string, string> {
 
 function createSourceCommitBlockers(input: {
   currentSourceCommit?: string;
+  githubSettingsReviewPath: string;
+  githubSettingsReviewText: string;
   phase6EvidencePath: string;
   phase6EvidenceText: string;
   phase7ProofPath: string;
@@ -607,8 +618,17 @@ function createSourceCommitBlockers(input: {
     "source_commit",
   );
   const phase7SourceCommit = parseRecordField(input.phase7ProofText, "source_commit");
+  const githubSettingsReviewSourceCommit = parseRecordField(
+    input.githubSettingsReviewText,
+    "source_commit",
+  );
   const blockers: string[] = [];
   for (const item of [
+    {
+      label: "GitHub settings review",
+      path: input.githubSettingsReviewPath,
+      sourceCommit: githubSettingsReviewSourceCommit,
+    },
     {
       label: "Phase 6 custody evidence",
       path: input.phase6EvidencePath,
