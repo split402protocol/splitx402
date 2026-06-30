@@ -250,6 +250,7 @@ function createPublicSurfaceFiles(
         "GitHub Security Advisories",
         "Workspace packages stay `\"private\": true`",
         "local checks prove the tracked repository surface, not live branch protection settings",
+        "product:github-settings-review",
       ].join("\n"),
       "docs/PUBLIC_PRIVATE_BOUNDARY.md": [
         "## Public Repository",

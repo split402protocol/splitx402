@@ -38,6 +38,7 @@
     "phase6:signer-smoke": "tsx src/phase6-signer-smoke.ts",
     "phase6:signer-policy": "tsx src/phase6-signer-policy.ts",
     "product:evidence:init": "tsx src/product-evidence-init.ts",
+    "product:github-settings-review": "tsx src/product-github-settings-review.ts",
     "product:public-surface-check": "tsx src/product-public-surface-check.ts",
     "product:local-proof": "tsx src/product-local-proof.ts",
     "product:launch-checklist": "tsx src/product-launch-checklist.ts",

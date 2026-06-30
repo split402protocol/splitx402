@@ -310,6 +310,7 @@ function createGitHubRepositorySettingsCheck(
     "GitHub Security Advisories",
     'Workspace packages stay `"private": true`',
     "local checks prove the tracked repository surface, not live branch protection settings",
+    "product:github-settings-review",
   ];
   const missingPhrases = requiredPhrases.filter(
     (phrase) => settings?.includes(phrase) !== true,
