@@ -75,8 +75,13 @@ export function validatePhase6CustodyEvidence(
 
   for (const field of PHASE6_ATTACHMENT_FIELDS) {
     const value = fields.get(field)?.trim();
-    if (value !== undefined && value.length > 0 && !isAttachedArtifact(value)) {
-      invalidFields.push(`${field} must use attached: <path>`);
+    if (value !== undefined && value.length > 0) {
+      const artifactPath = readAttachedArtifactPath(value);
+      if (artifactPath === undefined) {
+        invalidFields.push(`${field} must use attached: <path>`);
+      } else if (isUrlLikeArtifactPath(artifactPath)) {
+        invalidFields.push(`${field} attached artifact must be a local path`);
+      }
     }
   }
 
@@ -219,13 +224,19 @@ function isPlaceholderValue(value: string): boolean {
   );
 }
 
-function isAttachedArtifact(value: string): boolean {
+function readAttachedArtifactPath(value: string): string | undefined {
   const prefix = "attached:";
   if (!value.trim().toLowerCase().startsWith(prefix)) {
-    return false;
+    return undefined;
   }
   const artifactPath = value.trim().slice(prefix.length).trim();
-  return artifactPath.length > 0 && !isPlaceholderValue(artifactPath);
+  return artifactPath.length > 0 && !isPlaceholderValue(artifactPath)
+    ? artifactPath
+    : undefined;
+}
+
+function isUrlLikeArtifactPath(value: string): boolean {
+  return /^[a-z][a-z0-9+.-]*:\/\//iu.test(value.trim());
 }
 
 function isIsoCalendarDate(value: string): boolean {
