@@ -28,6 +28,7 @@ const REQUIRED_FILES = [
   "README.md",
   "SECURITY.md",
   "SUPPORT.md",
+  ".github/CODEOWNERS",
   "docs/GITHUB_PUBLIC_PROFILE.md",
   "docs/PUBLIC_PRIVATE_BOUNDARY.md",
   "docs/RELEASE_POLICY.md",
@@ -88,6 +89,7 @@ export function createSplit402PublicSurfaceCheckReport(
     createApacheLicenseFileCheck(exists, readText),
     createReadmeBoundaryCheck(exists, readText),
     createGitHubProfileContractCheck(exists, readText),
+    createCodeownersCheck(exists, readText),
     createSupportPolicyCheck(exists, readText),
     createReleasePolicyCheck(exists, readText),
     createBoundaryPolicyCheck(exists, readText),
@@ -280,6 +282,43 @@ function createReadmeBoundaryCheck(
       blockers.length === 0
         ? ["README presents Apache-2.0 and the public/private boundary."]
         : blockers,
+  };
+}
+
+function createCodeownersCheck(
+  exists: (path: string) => boolean,
+  readText: (path: string) => string,
+): Split402PublicSurfaceCheck {
+  const codeowners = readIfExists(".github/CODEOWNERS", exists, readText);
+  const requiredLines = [
+    "* @split402protocol",
+    "/packages/protocol/ @split402protocol",
+    "/packages/x402-extension/ @split402protocol",
+    "/packages/control-plane/ @split402protocol",
+    "/packages/router/ @split402protocol",
+    "/apps/payout-signer/ @split402protocol",
+    "/docs/decisions/ @split402protocol",
+    "/docs/RELEASE_POLICY.md @split402protocol",
+    "/docs/PUBLIC_PRIVATE_BOUNDARY.md @split402protocol",
+    "/SECURITY.md @split402protocol",
+    "/SUPPORT.md @split402protocol",
+    "/.github/ @split402protocol",
+    "/deploy/ @split402protocol",
+  ];
+  const missingLines = requiredLines.filter(
+    (line) => codeowners?.includes(line) !== true,
+  );
+
+  return {
+    id: "codeowners_review_boundary",
+    label: "Sensitive public repository paths have CODEOWNERS review routing",
+    ok: missingLines.length === 0,
+    details:
+      missingLines.length === 0
+        ? [
+            "CODEOWNERS routes protocol, payment, custody, release, CI, and public-presentation changes to Split402 review.",
+          ]
+        : missingLines.map((line) => `.github/CODEOWNERS must include ${line}.`),
   };
 }
 

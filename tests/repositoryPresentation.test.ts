@@ -76,6 +76,7 @@ describe("repository presentation", () => {
 
   it("keeps required GitHub validation and security automation configured", () => {
     const ciWorkflow = readFileSync(".github/workflows/ci.yml", "utf8");
+    const codeowners = readFileSync(".github/CODEOWNERS", "utf8");
     const codeqlWorkflow = readFileSync(
       ".github/workflows/codeql.yml",
       "utf8",
@@ -98,6 +99,13 @@ describe("repository presentation", () => {
     expect(ciWorkflow).toContain("corepack pnpm product:local-proof --brief");
     expect(ciWorkflow).toContain("corepack pnpm test:postgres");
     expect(ciWorkflow).toContain("postgres:16");
+
+    expect(codeowners).toContain("* @split402protocol");
+    expect(codeowners).toContain("/packages/protocol/ @split402protocol");
+    expect(codeowners).toContain("/packages/control-plane/ @split402protocol");
+    expect(codeowners).toContain("/apps/payout-signer/ @split402protocol");
+    expect(codeowners).toContain("/docs/RELEASE_POLICY.md @split402protocol");
+    expect(codeowners).toContain("/.github/ @split402protocol");
 
     expect(codeqlWorkflow).toContain("github/codeql-action/init@v3");
     expect(codeqlWorkflow).toContain("javascript-typescript");
