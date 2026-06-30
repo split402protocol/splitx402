@@ -130,6 +130,17 @@ describe("Split402 launch preflight", () => {
       .toMatchObject({ ok: true });
     expect(
       report.checks.find(
+        (check) => check.id === "mainnet_canary_private_evidence_scaffold",
+      ),
+    ).toMatchObject({
+      ok: true,
+      severity: "advisory",
+      details: [
+        "Mainnet canary env references the private dry-run and rollback evidence templates.",
+      ],
+    });
+    expect(
+      report.checks.find(
         (check) => check.id === "phase7_attachment_env_mappings",
       ),
     ).toMatchObject({ ok: true });
@@ -168,6 +179,45 @@ describe("Split402 launch preflight", () => {
     );
     expect(report.checks.find((check) => check.id === "phase7_hosted_env_values"))
       .toMatchObject({ ok: false });
+  });
+
+  it("surfaces stale mainnet canary env wiring as advisory preflight guidance", () => {
+    const workspace = createSplit402ProductEvidenceWorkspace();
+    const files = createWorkspaceFileMap(
+      workspace.phase7.envText,
+      undefined,
+      workspace,
+    );
+    files.set(
+      join(workspace.directory, workspace.mainnetCanaryEnvFileName),
+      workspace.mainnetCanaryEnvText
+        .replace(
+          "SPLIT402_MAINNET_CANARY_DRY_RUN_EVIDENCE=attached: mainnet-canary-dry-run.txt",
+          "SPLIT402_MAINNET_CANARY_DRY_RUN_EVIDENCE=",
+        )
+        .replace(
+          "SPLIT402_MAINNET_CANARY_ROLLBACK_PLAN=attached: mainnet-canary-rollback-plan.txt",
+          "SPLIT402_MAINNET_CANARY_ROLLBACK_PLAN=",
+        ),
+    );
+
+    const report = createSplit402LaunchPreflightReport({
+      exists: (path) => files.has(path),
+      readText: (path) => files.get(path) ?? "",
+    });
+
+    expect(
+      report.checks.find(
+        (check) => check.id === "mainnet_canary_private_evidence_scaffold",
+      ),
+    ).toMatchObject({
+      ok: false,
+      severity: "advisory",
+      details: [
+        "Set SPLIT402_MAINNET_CANARY_DRY_RUN_EVIDENCE=attached: mainnet-canary-dry-run.txt in split402-launch-evidence/mainnet-canary.env.",
+        "Set SPLIT402_MAINNET_CANARY_ROLLBACK_PLAN=attached: mainnet-canary-rollback-plan.txt in split402-launch-evidence/mainnet-canary.env.",
+      ],
+    });
   });
 
   it("passes when scaffold and required Phase 6 and hosted Phase 7 env values are filled", () => {
@@ -959,6 +1009,18 @@ function createWorkspaceFileMap(
     [
       join(workspace.directory, workspace.githubSettingsReviewFileName),
       workspace.githubSettingsReviewText,
+    ],
+    [
+      join(workspace.directory, workspace.mainnetCanaryEnvFileName),
+      workspace.mainnetCanaryEnvText,
+    ],
+    [
+      join(workspace.directory, workspace.mainnetCanaryDryRunFileName),
+      workspace.mainnetCanaryDryRunText,
+    ],
+    [
+      join(workspace.directory, workspace.mainnetCanaryRollbackPlanFileName),
+      workspace.mainnetCanaryRollbackPlanText,
     ],
     [
       join(workspace.directory, workspace.phase6EvidenceFileName),

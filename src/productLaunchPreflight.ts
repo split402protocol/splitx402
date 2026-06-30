@@ -167,6 +167,9 @@ export function createSplit402LaunchPreflightReport(
   const requiredFiles = [
     join(workspace.directory, workspace.readmeFileName),
     join(workspace.directory, workspace.githubSettingsReviewFileName),
+    join(workspace.directory, workspace.mainnetCanaryEnvFileName),
+    join(workspace.directory, workspace.mainnetCanaryDryRunFileName),
+    join(workspace.directory, workspace.mainnetCanaryRollbackPlanFileName),
     join(workspace.directory, workspace.phase6EvidenceFileName),
     join(workspace.directory, workspace.phase6EnvFileName),
     join(workspace.directory, workspace.phase7ProofFileName),
@@ -215,6 +218,25 @@ export function createSplit402LaunchPreflightReport(
     ? input.readText(phase6EnvPath)
     : "";
   const phase6Env = parseEnvText(phase6EnvText);
+  const mainnetCanaryEnvPath = join(
+    workspace.directory,
+    workspace.mainnetCanaryEnvFileName,
+  );
+  const mainnetCanaryEnvText = input.exists(mainnetCanaryEnvPath)
+    ? input.readText(mainnetCanaryEnvPath)
+    : "";
+  const mainnetCanaryEnv = parseEnvText(mainnetCanaryEnvText);
+  const mainnetCanaryScaffoldDetails = createMainnetCanaryScaffoldDetails({
+    dryRunPath: join(workspace.directory, workspace.mainnetCanaryDryRunFileName),
+    env: mainnetCanaryEnv,
+    envPath: mainnetCanaryEnvPath,
+    exists: input.exists,
+    rollbackPlanPath: join(
+      workspace.directory,
+      workspace.mainnetCanaryRollbackPlanFileName,
+    ),
+    workspace,
+  });
   const missingPhase6DirectKeys = REQUIRED_PHASE6_DIRECT_ENV_KEYS.filter(
     (key) => !hasConfiguredEnvValue(phase6Env, key),
   );
@@ -456,6 +478,18 @@ export function createSplit402LaunchPreflightReport(
         "Keep hosted operations, provider strategy, custody evidence, private URLs, live transaction bytes, and partner-identifying details private unless intentionally sanitized.",
         "Do not reintroduce MIT in README, package metadata, GitHub About text, release notes, or package manifests.",
       ],
+    },
+    {
+      id: "mainnet_canary_private_evidence_scaffold",
+      label: "Mainnet canary private evidence scaffold is wired",
+      ok: mainnetCanaryScaffoldDetails.length === 0,
+      severity: "advisory",
+      details:
+        mainnetCanaryScaffoldDetails.length === 0
+          ? [
+              "Mainnet canary env references the private dry-run and rollback evidence templates.",
+            ]
+          : mainnetCanaryScaffoldDetails,
     },
     {
       id: "mainnet_not_ready",
@@ -822,6 +856,43 @@ function createPhase6RedactedEnvSummary(input: {
       "SPLIT402_PHASE6_EVIDENCE_APPROVAL_DECISION",
     )}`,
   ];
+}
+
+function createMainnetCanaryScaffoldDetails(input: {
+  dryRunPath: string;
+  env: ReadonlyMap<string, string>;
+  envPath: string;
+  exists: (path: string) => boolean;
+  rollbackPlanPath: string;
+  workspace: ReturnType<typeof createSplit402ProductEvidenceWorkspace>;
+}): string[] {
+  const details: string[] = [];
+  const dryRunValue = input.env.get("SPLIT402_MAINNET_CANARY_DRY_RUN_EVIDENCE");
+  const rollbackValue = input.env.get("SPLIT402_MAINNET_CANARY_ROLLBACK_PLAN");
+  const expectedDryRunValue = `attached: ${input.workspace.mainnetCanaryDryRunFileName}`;
+  const expectedRollbackValue = `attached: ${input.workspace.mainnetCanaryRollbackPlanFileName}`;
+
+  if (dryRunValue !== expectedDryRunValue) {
+    details.push(
+      `Set SPLIT402_MAINNET_CANARY_DRY_RUN_EVIDENCE=${expectedDryRunValue} in ${toDisplayPath(input.envPath)}.`,
+    );
+  }
+  if (rollbackValue !== expectedRollbackValue) {
+    details.push(
+      `Set SPLIT402_MAINNET_CANARY_ROLLBACK_PLAN=${expectedRollbackValue} in ${toDisplayPath(input.envPath)}.`,
+    );
+  }
+  if (!input.exists(input.dryRunPath)) {
+    details.push(
+      `Run corepack pnpm product:evidence:init --missing to create ${toDisplayPath(input.dryRunPath)}.`,
+    );
+  }
+  if (!input.exists(input.rollbackPlanPath)) {
+    details.push(
+      `Run corepack pnpm product:evidence:init --missing to create ${toDisplayPath(input.rollbackPlanPath)}.`,
+    );
+  }
+  return details;
 }
 
 function describePhase6EnvValue(

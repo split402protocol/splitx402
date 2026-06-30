@@ -123,7 +123,10 @@ environment values are ready before collection starts. The preflight output also
 prints redacted Phase 6 custody and Phase 7 hosted env summaries so operators
 can see missing/configured values without exposing tokens, private keys, funding
 wallet values, or review notes. It uses dotenv-style parsing so quoted local env
-values are interpreted consistently with the evidence collectors. When required
+values are interpreted consistently with the evidence collectors. It also
+surfaces whether `mainnet-canary.env` points at the private dry-run and rollback
+artifact templates, while keeping mainnet approval outside local preflight.
+When required
 preflight inputs are ready, the next action reminds operators to
 run the GitHub settings/public-private license review and keep that record with
 launch evidence before collection. The intended local artifact path is
