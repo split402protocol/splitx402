@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/split402protocol/splitx402/security/advisories/new
+    about: Report private keys, replay, settlement, auth, payout, or custody issues privately.
+  - name: Read the public/private boundary
+    url: https://github.com/split402protocol/splitx402/blob/main/docs/PUBLIC_PRIVATE_BOUNDARY.md
+    about: Check what belongs in public issues before posting operational details.

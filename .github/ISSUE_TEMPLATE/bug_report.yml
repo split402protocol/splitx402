@@ -1,0 +1,64 @@
+name: Bug report
+description: Report a reproducible Split402 public-alpha issue.
+title: "[bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Split402. Do not include private keys, bearer tokens, private URLs, live transaction bytes, partner details, or custody evidence. Report suspected vulnerabilities through GitHub Security Advisories instead of a public issue.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - protocol
+        - x402 extension
+        - agent SDK
+        - merchant SDK
+        - router
+        - MCP demo gateway
+        - control plane
+        - dashboard
+        - payout engine
+        - docs
+        - CI or repository hygiene
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, and what did you expect instead?
+      placeholder: A concise description of the behavior and expected result.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: List exact commands, API calls, or steps using redacted non-secret values.
+      placeholder: |
+        1. Run ...
+        2. Send ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Paste relevant logs, test output, receipt IDs, or commit SHAs. Redact secrets and private infrastructure.
+      render: text
+    validations:
+      required: false
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Public safety check
+      options:
+        - label: I did not include private keys, tokens, private URLs, live transaction bytes, partner details, or custody evidence.
+          required: true
+        - label: This is not a suspected security vulnerability that should be reported privately.
+          required: true

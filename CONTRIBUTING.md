@@ -50,3 +50,13 @@ Each pull request should include:
 - the decision or issue it supports;
 - validation performed;
 - any protocol, security, or migration concerns.
+
+## Issues
+
+Use the structured GitHub issue forms for public bug reports, integration
+questions, and roadmap phase tasks. Do not open public issues for suspected
+vulnerabilities, private keys, replay or settlement bypasses, payout
+duplication, auth/session weaknesses, private URLs, provider credentials, live
+transaction bytes, partner details, or custody evidence.
+
+Use GitHub Security Advisories for private vulnerability reports.
