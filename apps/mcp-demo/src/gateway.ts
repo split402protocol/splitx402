@@ -408,6 +408,13 @@ async function handleRouterExecuteTool(
   if (referralClaim !== undefined && "message" in referralClaim) {
     return createErrorResponse(id, -32602, referralClaim.message);
   }
+  const maxAttempts = readOptionalPositiveIntegerArgument(
+    record.maxAttempts,
+    "maxAttempts"
+  );
+  if (typeof maxAttempts === "object") {
+    return createErrorResponse(id, -32602, maxAttempts.message);
+  }
 
   try {
     const result = await context.router.execute({
@@ -415,9 +422,7 @@ async function handleRouterExecuteTool(
       input: record.input ?? {},
       budget,
       ...(referralClaim === undefined ? {} : { referralClaim }),
-      ...(typeof record.maxAttempts === "number"
-        ? { maxAttempts: record.maxAttempts }
-        : {})
+      ...(maxAttempts === undefined ? {} : { maxAttempts })
     });
     context.receipts.set(result.receipt.receiptId, result.receipt);
     return createRouterExecuteResponse(id, result, context.executionMode);
@@ -894,6 +899,19 @@ function readRequiredStringArgument(
     return { message: `${label} argument is required` };
   }
   return value.trim();
+}
+
+function readOptionalPositiveIntegerArgument(
+  value: unknown,
+  label: string,
+): number | undefined | { message: string } {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
+    return { message: `${label} must be a positive integer` };
+  }
+  return value;
 }
 
 function isNonNegativeAtomicAmount(value: string): boolean {

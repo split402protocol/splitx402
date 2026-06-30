@@ -132,7 +132,9 @@ values return a JSON-RPC `-32602` parameter error before search, routing, or
 payment execution. When a supplied budget excludes every provider, execution
 fails before any route or payment attempt is made. `referralClaim` is optional;
 when present, the gateway validates the Split402 claim schema before forwarding
-it into the router execution.
+it into the router execution. `maxAttempts` is optional and must be a positive
+integer; malformed retry counts are rejected before provider selection or
+payment execution.
 
 ### Control-Plane Discovery Mode
 
