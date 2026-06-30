@@ -428,6 +428,17 @@ function createReleasePolicyCheck(
     ) === true
       ? []
       : ["docs/RELEASE_POLICY.md must require product:status before publishing."]),
+    ...(releasePolicy?.includes(
+      "product:mainnet-canary --brief --workspace split402-launch-evidence",
+    ) === true
+      ? []
+      : ["docs/RELEASE_POLICY.md must require product:mainnet-canary before mainnet canary use."]),
+    ...(releasePolicy?.includes("readyForProductionMainnet") === true &&
+    releasePolicy.includes("does not approve production mainnet launch")
+      ? []
+      : [
+          "docs/RELEASE_POLICY.md must keep mainnet canary separate from production mainnet launch approval.",
+        ]),
     ...(releasePolicy?.includes("not approve public launch") === true
       ? []
       : ["docs/RELEASE_POLICY.md must state that local proof does not approve launch."]),
@@ -439,7 +450,7 @@ function createReleasePolicyCheck(
     ok: blockers.length === 0,
     details:
       blockers.length === 0
-        ? ["Release policy keeps packages, hosted demos, production custody, and mainnet behind explicit evidence gates."]
+        ? ["Release policy keeps packages, hosted demos, production custody, mainnet canaries, and production mainnet behind explicit evidence gates."]
         : blockers,
   };
 }

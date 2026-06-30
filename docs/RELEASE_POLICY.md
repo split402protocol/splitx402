@@ -43,7 +43,7 @@ Before a hosted public-alpha demo is announced:
 
 ## Production Or Mainnet Requirements
 
-Before production custody or mainnet use:
+Before production custody or production mainnet use:
 
 - Phase 6 custody evidence must pass with reviewed signer policy, private
   networking, key custody, smoke tests, incident drills, rollback drills,
@@ -51,6 +51,18 @@ Before production custody or mainnet use:
 - Phase 7 hosted proof must be approved;
 - release notes must keep the non-atomic MVP trust boundary clear;
 - counsel should review license, commercial terms, and support obligations.
+
+Before the first tiny mainnet canary:
+
+- `corepack pnpm product:status --brief --workspace split402-launch-evidence`
+  must report `go`;
+- `corepack pnpm product:mainnet-canary --brief --workspace split402-launch-evidence`
+  must report ready for the exact one-merchant, one-campaign, one-route,
+  one-wallet canary;
+- the canary must keep `readyForProductionMainnet` false and must not be
+  described as production launch approval;
+- dry-run evidence, rollback plan, and the non-atomic settlement acknowledgement
+  must be reviewed before any mainnet transaction is broadcast.
 
 ## Publishing Checklist
 
@@ -70,8 +82,11 @@ corepack pnpm audit --audit-level high
 corepack pnpm product:local-proof --brief
 corepack pnpm product:launch-checklist --brief --workspace split402-launch-evidence
 corepack pnpm product:status --brief --workspace split402-launch-evidence
+corepack pnpm product:mainnet-canary --brief --workspace split402-launch-evidence
 ```
 
 `product:status` must stay `no-go` until real hosted and custody evidence is
 provided. A passing local proof is necessary, but it does not approve public launch,
-production custody, or mainnet use.
+production custody, or mainnet use. `product:mainnet-canary` must stay `no-go`
+until the launch gates are ready and the exact tiny canary is approved; even
+then it does not approve production mainnet launch.

@@ -265,7 +265,10 @@ function createPublicSurfaceFiles(
         "Keep every workspace package marked \"private\": true.",
         "corepack pnpm product:local-proof --brief",
         "corepack pnpm product:status --brief --workspace split402-launch-evidence",
+        "corepack pnpm product:mainnet-canary --brief --workspace split402-launch-evidence",
         "A passing local proof does not approve public launch.",
+        "readyForProductionMainnet remains false.",
+        "product:mainnet-canary does not approve production mainnet launch.",
       ].join("\n"),
       "docs/checklists/prelaunch-public-private-review.md": [
         "# Pre-Launch Public/Private Review",
