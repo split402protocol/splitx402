@@ -7,6 +7,7 @@
 List exact commands run and mark the relevant checks.
 
 - [ ] `corepack pnpm lint`
+- [ ] `corepack pnpm product:public-surface-check --brief`
 - [ ] `corepack pnpm typecheck`
 - [ ] `corepack pnpm test`
 - [ ] `corepack pnpm build`
