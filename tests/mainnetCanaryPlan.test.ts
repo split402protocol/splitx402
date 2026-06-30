@@ -97,6 +97,32 @@ describe("Split402 mainnet canary plan", () => {
       });
   });
 
+  it("rejects placeholder dry-run evidence", () => {
+    const report = createSplit402MainnetCanaryReport({
+      productReadiness: createProductReadinessReport({
+        launchDecision: "go",
+        readyLaunchGates: 3,
+      }),
+      operatorConfirmation: MAINNET_CANARY_CONFIRMATION,
+      nonAtomicAcknowledgement: MAINNET_CANARY_NON_ATOMIC_ACKNOWLEDGEMENT,
+      network: "solana:mainnet",
+      maxGrossAmountAtomic: "100000",
+      merchantId: "mrc_123",
+      campaignId: "cmp_123",
+      routeId: "rte_123",
+      canaryWallet: "payer-wallet",
+      dryRunEvidence: "attached: <dry-run evidence>",
+      rollbackPlan: "attached: mainnet-canary-rollback.txt",
+      reviewDecision: "approved",
+    });
+
+    expect(report.readyForMainnetCanary).toBe(false);
+    expect(report.checks.find((check) => check.id === "dry_run_evidence"))
+      .toMatchObject({
+        ok: false,
+      });
+  });
+
   it("requires acknowledgement that mainnet canary is not atomic splitting", () => {
     const report = createSplit402MainnetCanaryReport({
       productReadiness: createProductReadinessReport({

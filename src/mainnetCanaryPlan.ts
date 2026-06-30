@@ -234,7 +234,10 @@ function createAttachedEvidenceCheck(input: {
   envName: string;
   value: string | undefined;
 }): Split402MainnetCanaryCheck {
-  const ok = isFilled(input.value) && input.value.trim().toLowerCase() !== "pending";
+  const ok =
+    isFilled(input.value) &&
+    input.value.trim().toLowerCase() !== "pending" &&
+    !/[<>]/u.test(input.value);
   return {
     id: input.id,
     label: input.label,
