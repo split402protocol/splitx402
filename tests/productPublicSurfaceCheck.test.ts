@@ -190,11 +190,19 @@ function createPublicSurfaceFiles(
       "README.md": [
         "![License](https://img.shields.io/badge/license-Apache--2.0-blue)",
         "[Public and private boundary](docs/PUBLIC_PRIVATE_BOUNDARY.md)",
+        "[Release policy](docs/RELEASE_POLICY.md)",
         "[Pre-launch public/private review checklist](docs/checklists/prelaunch-public-private-review.md)",
         "[Public/private and license decision](docs/decisions/0009-public-private-boundary-and-apache-license.md)",
         "This public repository is licensed under [Apache-2.0](LICENSE).",
+        "[Support policy](SUPPORT.md)",
       ].join("\n"),
       "SECURITY.md": "Report vulnerabilities privately.\n",
+      "SUPPORT.md": [
+        "Split402 is not production ready and not mainnet approved.",
+        "No released versions are currently supported.",
+        "Use GitHub Security Advisories.",
+        "[`docs/RELEASE_POLICY.md`](docs/RELEASE_POLICY.md)",
+      ].join("\n"),
       "docs/GITHUB_PUBLIC_PROFILE.md": [
         "Description: Agent payment routing and verifiable referral accounting for x402 APIs.",
         "Homepage: unset until a hosted public docs or demo URL is live and proof-gated.",
@@ -218,6 +226,13 @@ function createPublicSurfaceFiles(
         "## License Policy",
         "This repository is licensed under Apache-2.0.",
         "Apache-2.0 is the launch-facing license for this public repository.",
+      ].join("\n"),
+      "docs/RELEASE_POLICY.md": [
+        "Split402 has no supported public release yet.",
+        "Keep every workspace package marked \"private\": true.",
+        "corepack pnpm product:local-proof --brief",
+        "corepack pnpm product:status --brief --workspace split402-launch-evidence",
+        "A passing local proof does not approve public launch.",
       ].join("\n"),
       "docs/checklists/prelaunch-public-private-review.md": [
         "# Pre-Launch Public/Private Review",
