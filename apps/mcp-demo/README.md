@@ -209,6 +209,22 @@ The command writes `offer-to-sign.json`, `campaign-terms.hash.txt`, and
 key outside this helper, set the base64url signature on the offer, then run the
 artifact validator below.
 
+After a paid x402 request settles, prepare receipt signing inputs without
+private keys:
+
+```bash
+corepack pnpm demo:prepare-external-x402-receipt -- \
+  --offer-file offer.json \
+  --unsigned-receipt-file unsigned-receipt.json \
+  --output-dir prepared-receipt
+```
+
+This binds the receipt back to the signed offer, recomputes
+`commissionAmountAtomic`, `protocolFeeAtomic`, and `referrerCreditAtomic`, then
+writes `receipt-to-sign.json` and `receipt-signing-bytes.hex`. Sign those bytes
+outside this helper, set the base64url signature on the receipt, then run the
+artifact validator below.
+
 For CLI automation, the same verification key can be supplied with
 `SPLIT402_EXTERNAL_X402_MERCHANT_PUBLIC_KEY`. Use only the public verification
 key here; private signing keys and payment payloads must stay out of public logs
