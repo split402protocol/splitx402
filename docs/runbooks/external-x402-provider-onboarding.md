@@ -54,6 +54,17 @@ This writes `offer-to-sign.json`, `campaign-terms.hash.txt`, and
 key outside this tool, set the base64url signature on the offer, then run the
 artifact validator below.
 
+After signing externally, attach the signature back to the public artifact:
+
+```bash
+corepack pnpm demo:attach-external-x402-signature -- \
+  --kind offer \
+  --unsigned-file prepared-offer/offer-to-sign.json \
+  --signature <base64url-signature> \
+  --merchant-public-key <merchant-offer-receipt-public-key> \
+  --output-file offer.json
+```
+
 After a paid x402 request settles, prepare the merchant-signed receipt the same
 way:
 
@@ -69,6 +80,17 @@ This binds the receipt back to the signed offer, recomputes
 writes `receipt-to-sign.json` plus `receipt-signing-bytes.hex`. Sign those bytes
 outside this tool, set the base64url signature on the receipt, then validate the
 offer, campaign terms, and receipt together.
+
+The same attach helper works for receipts:
+
+```bash
+corepack pnpm demo:attach-external-x402-signature -- \
+  --kind receipt \
+  --unsigned-file prepared-receipt/receipt-to-sign.json \
+  --signature <base64url-signature> \
+  --merchant-public-key <merchant-offer-receipt-public-key> \
+  --output-file receipt.json
+```
 
 The same no-secret preparation helpers are available through the MCP gateway as
 `split402.prepareExternalX402Offer` and `split402.prepareExternalX402Receipt`.

@@ -7,6 +7,7 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "attach-external-x402-signature": "tsx src/attach-external-x402-signature.ts",
     "bundle": "tsx src/bundle.ts",
     "discover-external-x402": "tsx src/discover-external-x402.ts",
     "prepare-external-x402-offer": "tsx src/prepare-external-x402-offer.ts",
