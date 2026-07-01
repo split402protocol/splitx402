@@ -33,7 +33,7 @@ export const PHASE6_CUSTODY_REQUIRED_FIELDS = [
 export type Phase6CustodyRequiredField =
   (typeof PHASE6_CUSTODY_REQUIRED_FIELDS)[number];
 
-const PHASE6_ATTACHMENT_FIELDS: readonly Phase6CustodyRequiredField[] = [
+export const PHASE6_CUSTODY_ATTACHMENT_FIELDS: readonly Phase6CustodyRequiredField[] = [
   "signer_image_dependency_audit_output",
   "network_policy_record",
   "signer_policy_record",
@@ -73,10 +73,10 @@ export function validatePhase6CustodyEvidence(
     }
   }
 
-  for (const field of PHASE6_ATTACHMENT_FIELDS) {
+  for (const field of PHASE6_CUSTODY_ATTACHMENT_FIELDS) {
     const value = fields.get(field)?.trim();
     if (value !== undefined && value.length > 0) {
-      const artifactPath = readAttachedArtifactPath(value);
+      const artifactPath = readPhase6AttachedArtifactPath(value);
       if (artifactPath === undefined) {
         invalidFields.push(`${field} must use attached: <path>`);
       } else if (isUrlLikeArtifactPath(artifactPath)) {
@@ -228,7 +228,7 @@ function isPlaceholderValue(value: string): boolean {
   );
 }
 
-function readAttachedArtifactPath(value: string): string | undefined {
+export function readPhase6AttachedArtifactPath(value: string): string | undefined {
   const prefix = "attached:";
   if (!value.trim().toLowerCase().startsWith(prefix)) {
     return undefined;

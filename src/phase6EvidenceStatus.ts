@@ -1,6 +1,8 @@
 import {
+  PHASE6_CUSTODY_ATTACHMENT_FIELDS,
   type Phase6CustodyRequiredField,
   type Phase6CustodyReviewValidation,
+  readPhase6AttachedArtifactPath,
   validatePhase6CustodyEvidence,
 } from "./phase6CustodyReview.js";
 
@@ -89,6 +91,7 @@ export interface Phase6EvidenceStatusReport {
   schema: "split402.phase6_evidence_status.v1";
   readyForCustody: boolean;
   evidenceBundleChecked: boolean;
+  attachmentStatus: Phase6AttachmentStatus;
   sourceCommitStatus: Phase6SourceCommitStatus;
   commands: typeof PHASE6_EVIDENCE_COMMANDS;
   validation?: Phase6CustodyReviewValidation;
@@ -96,13 +99,23 @@ export interface Phase6EvidenceStatusReport {
 }
 
 export interface Phase6EvidenceStatusOptions {
+  artifactBaseDir?: string;
+  artifactExists?: (path: string) => boolean;
   currentSourceCommit?: string;
+  resolveArtifactPath?: (artifactPath: string, baseDir: string) => string;
 }
 
 export interface Phase6SourceCommitStatus {
   status: "not_checked" | "not_applicable" | "valid" | "invalid";
   evidenceSourceCommit?: string;
   currentSourceCommit?: string;
+  blockers: string[];
+}
+
+export interface Phase6AttachmentStatus {
+  status: "not_checked" | "valid" | "invalid";
+  checkedArtifacts: string[];
+  missingArtifacts: string[];
   blockers: string[];
 }
 
@@ -204,16 +217,24 @@ export function createPhase6EvidenceStatusReport(
       : validatePhase6CustodyEvidence(evidenceText);
   const sourceCommitStatus = createSourceCommitStatus(evidenceText, options);
   const sourceCommitBlockers = sourceCommitStatus.blockers;
+  const attachmentStatus = createAttachmentStatus(evidenceText, options);
 
   return {
     schema: "split402.phase6_evidence_status.v1",
     readyForCustody:
-      (validation?.approved ?? false) && sourceCommitBlockers.length === 0,
+      (validation?.approved ?? false) &&
+      sourceCommitBlockers.length === 0 &&
+      attachmentStatus.status !== "invalid",
     evidenceBundleChecked: validation !== undefined,
+    attachmentStatus,
     sourceCommitStatus,
     commands: PHASE6_EVIDENCE_COMMANDS,
     validation,
-    nextActions: createNextActions(validation, sourceCommitBlockers),
+    nextActions: createNextActions(
+      validation,
+      sourceCommitBlockers,
+      attachmentStatus.blockers,
+    ),
   };
 }
 
@@ -232,11 +253,13 @@ export function formatPhase6EvidenceStatusBrief(
   const validation = report.validation;
   const missingCount = validation?.missingFields.length ?? 0;
   const invalidCount = validation?.invalidFields.length ?? 0;
+  const attachmentStatus = report.attachmentStatus.status;
   const nextActions = report.nextActions.map((action) => `- ${action}`);
 
   return [
     `Phase 6 custody evidence: ${status}`,
     `Source commit: ${sourceCommit}`,
+    `Attached artifacts: ${attachmentStatus}`,
     `Missing fields: ${missingCount}`,
     `Invalid fields: ${invalidCount}`,
     "Launch posture: production custody remains no-go until evidence is approved.",
@@ -249,6 +272,7 @@ export function formatPhase6EvidenceStatusBrief(
 function createNextActions(
   validation: Phase6CustodyReviewValidation | undefined,
   sourceCommitBlockers: readonly string[] = [],
+  attachmentBlockers: readonly string[] = [],
 ): string[] {
   if (validation === undefined) {
     return [
@@ -261,9 +285,9 @@ function createNextActions(
   }
 
   if (validation.approved) {
-    return sourceCommitBlockers.length === 0
+    return sourceCommitBlockers.length === 0 && attachmentBlockers.length === 0
       ? ["Evidence bundle passes machine checks; proceed to human go/no-go review."]
-      : [LAUNCH_PREFLIGHT_ACTION, ...sourceCommitBlockers];
+      : [LAUNCH_PREFLIGHT_ACTION, ...sourceCommitBlockers, ...attachmentBlockers];
   }
 
   const actions: string[] = [LAUNCH_PREFLIGHT_ACTION];
@@ -278,12 +302,66 @@ function createNextActions(
   }
   actions.push(...createOperatorInvalidFieldActions(validation.invalidFields));
   actions.push(...sourceCommitBlockers);
+  actions.push(...attachmentBlockers);
   if (actions.length > 0) {
     actions.push(
       "Reassemble with corepack pnpm phase6:evidence:assemble --evidence-env-file split402-launch-evidence/phase6-evidence.env split402-launch-evidence/phase6-custody-evidence.txt, then rerun corepack pnpm phase6:evidence:status --brief split402-launch-evidence/phase6-custody-evidence.txt.",
     );
   }
   return actions;
+}
+
+function createAttachmentStatus(
+  evidenceText: string | undefined,
+  options: Phase6EvidenceStatusOptions,
+): Phase6AttachmentStatus {
+  if (
+    evidenceText === undefined ||
+    options.artifactBaseDir === undefined ||
+    options.artifactExists === undefined
+  ) {
+    return {
+      status: "not_checked",
+      checkedArtifacts: [],
+      missingArtifacts: [],
+      blockers: [],
+    };
+  }
+
+  const fields = parseRecordFields(evidenceText);
+  const checkedArtifacts: string[] = [];
+  const missingArtifacts: string[] = [];
+  const resolveArtifactPath =
+    options.resolveArtifactPath ??
+    ((artifactPath: string, baseDir: string) => `${baseDir}/${artifactPath}`);
+
+  for (const field of PHASE6_CUSTODY_ATTACHMENT_FIELDS) {
+    const value = fields.get(field);
+    if (value === undefined || value.trim().length === 0) {
+      continue;
+    }
+    const artifactPath = readPhase6AttachedArtifactPath(value);
+    if (artifactPath === undefined) {
+      continue;
+    }
+    const resolvedArtifactPath = resolveArtifactPath(
+      artifactPath,
+      options.artifactBaseDir,
+    );
+    checkedArtifacts.push(resolvedArtifactPath);
+    if (!options.artifactExists(resolvedArtifactPath)) {
+      missingArtifacts.push(resolvedArtifactPath);
+    }
+  }
+
+  return {
+    status: missingArtifacts.length === 0 ? "valid" : "invalid",
+    checkedArtifacts,
+    missingArtifacts,
+    blockers: missingArtifacts.map(
+      (path) => `Phase 6 attached artifact is missing: ${path}`,
+    ),
+  };
 }
 
 function createMissingFieldActions(
@@ -368,6 +446,17 @@ function readRecordField(text: string, fieldName: string): string | undefined {
     }
   }
   return undefined;
+}
+
+function parseRecordFields(text: string): Map<string, string> {
+  const fields = new Map<string, string>();
+  for (const line of text.split(/\r?\n/u)) {
+    const match = /^([a-z][a-z0-9_]*):\s*(.*)$/u.exec(line);
+    if (match?.[1] !== undefined && match[2] !== undefined) {
+      fields.set(match[1], match[2].trim());
+    }
+  }
+  return fields;
 }
 
 function gitShasMatch(left: string, right: string): boolean {
