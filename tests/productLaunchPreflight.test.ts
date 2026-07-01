@@ -678,9 +678,10 @@ describe("Split402 launch preflight", () => {
     );
     files.set(
       join(workspace.directory, workspace.githubSettingsReviewFileName),
-      workspace.githubSettingsReviewText
-        .replace("review_decision: no-go", "review_decision: approved")
-        .replace("branch_protection_enabled: no", "branch_protection_enabled: no"),
+      workspace.githubSettingsReviewText.replace(
+        "review_decision: no-go",
+        "review_decision: approved",
+      ),
     );
 
     const report = createSplit402LaunchPreflightReport({
