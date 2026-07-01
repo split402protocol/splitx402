@@ -857,7 +857,7 @@ function writeProviderReadme(
     "corepack pnpm demo:validate-external-x402-artifacts -- \\",
     "  --route-metadata-file route-metadata.json \\",
     "  --merchant-public-key <merchant-offer-receipt-public-key> \\",
-    "  --offer-file offer.json \\",
+    "  --payment-required-extension-file payment-required-extension.json \\",
     ...(hasOfferTemplate
       ? ["  --campaign-terms-file campaign-terms.json"]
       : ["  --receipt-file receipt.json"]),

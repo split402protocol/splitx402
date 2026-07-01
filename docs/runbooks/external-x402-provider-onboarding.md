@@ -172,7 +172,7 @@ paid staging:
 corepack pnpm demo:validate-external-x402-artifacts -- \
   --route-metadata-file route-metadata.json \
   --merchant-public-key <merchant-offer-receipt-public-key> \
-  --offer-file offer.json \
+  --payment-required-extension-file payment-required-extension.json \
   --campaign-terms-file campaign-terms.json \
   --receipt-file receipt.json
 ```
@@ -186,6 +186,11 @@ metadata binding, campaign terms hash binding, offer/receipt consistency, and
 receipt arithmetic. It never needs private keys, bearer tokens, raw payment
 payloads, facilitator secrets, or private settlement evidence.
 
+The validator accepts either `--offer-file offer.json` or
+`--payment-required-extension-file payment-required-extension.json`. If both are
+provided, the embedded `extensions.split402.info` object must match the offer
+exactly.
+
 The route metadata can still be supplied manually with `--merchant-origin`,
 `--operation-id`, `--network`, `--asset`, `--pay-to-wallet`, and
 `--required-amount-atomic`. If both manual flags and `route-metadata.json` are
@@ -193,8 +198,8 @@ provided, mismatches are rejected.
 
 The same check is exposed to MCP clients as
 `split402.validateExternalX402Artifacts`. Pass the same route metadata,
-`merchantPublicKey`, `offer`, optional `campaignTerms`, and optional `receipt`
-as JSON tool arguments.
+`merchantPublicKey`, `paymentRequiredExtension` or `offer`, optional
+`campaignTerms`, and optional `receipt` as JSON tool arguments.
 
 Readiness meanings:
 

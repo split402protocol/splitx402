@@ -923,7 +923,10 @@ describe("external x402 artifact validation", () => {
 
   it("runs artifact validation from JSON files", async () => {
     const directory = mkdtempSync(join(tmpdir(), "split402-x402-validate-"));
-    const offerPath = join(directory, "offer.json");
+    const paymentRequiredExtensionPath = join(
+      directory,
+      "payment-required-extension.json"
+    );
     const receiptPath = join(directory, "receipt.json");
     const campaignTermsPath = join(directory, "campaign-terms.json");
     const routeMetadataPath = join(directory, "route-metadata.json");
@@ -932,7 +935,17 @@ describe("external x402 artifact validation", () => {
     const logs: string[] = [];
     const originalLog = console.log;
     try {
-      writeFileSync(offerPath, JSON.stringify(signed.offer), "utf8");
+      writeFileSync(
+        paymentRequiredExtensionPath,
+        JSON.stringify({
+          extensions: {
+            split402: {
+              info: signed.offer
+            }
+          }
+        }),
+        "utf8"
+      );
       writeFileSync(receiptPath, JSON.stringify(receipt), "utf8");
       writeFileSync(
         campaignTermsPath,
@@ -961,8 +974,8 @@ describe("external x402 artifact validation", () => {
           routeMetadataPath,
           "--merchant-public-key",
           signed.merchantPublicKey,
-          "--offer-file",
-          offerPath,
+          "--payment-required-extension-file",
+          paymentRequiredExtensionPath,
           "--campaign-terms-file",
           campaignTermsPath,
           "--receipt-file",
@@ -978,6 +991,38 @@ describe("external x402 artifact validation", () => {
       checks: {
         campaignTermsHash: true
       }
+    });
+  });
+
+  it("rejects conflicting offer and payment-required extension artifacts", () => {
+    const signed = createExternalSplit402Offer();
+
+    expect(
+      validateExternalX402Artifacts({
+        merchantOrigin: "https://x402.example",
+        operationId: "get.price.coin",
+        network: EXTERNAL_X402_NETWORK,
+        asset: EXTERNAL_X402_ASSET,
+        payToWallet: EXTERNAL_X402_PAY_TO_WALLET,
+        requiredAmountAtomic: EXTERNAL_X402_AMOUNT_ATOMIC,
+        merchantPublicKey: signed.merchantPublicKey,
+        offer: signed.offer,
+        paymentRequiredExtension: {
+          extensions: {
+            split402: {
+              info: {
+                ...signed.offer,
+                requiredAmountAtomic: "10000"
+              }
+            }
+          }
+        }
+      })
+    ).toMatchObject({
+      ok: false,
+      errors: expect.arrayContaining([
+        "offer conflicts with paymentRequiredExtension.extensions.split402.info"
+      ])
     });
   });
 
@@ -1130,11 +1175,11 @@ describe("MCP demo gateway", () => {
         "asset",
         "payToWallet",
         "requiredAmountAtomic",
-        "merchantPublicKey",
-        "offer"
+        "merchantPublicKey"
       ],
       properties: {
         offer: { type: "object" },
+        paymentRequiredExtension: { type: "object" },
         receipt: { type: "object" }
       }
     });
@@ -1477,7 +1522,13 @@ describe("MCP demo gateway", () => {
             payToWallet: EXTERNAL_X402_PAY_TO_WALLET,
             requiredAmountAtomic: EXTERNAL_X402_AMOUNT_ATOMIC,
             merchantPublicKey: signed.merchantPublicKey,
-            offer: signed.offer,
+            paymentRequiredExtension: {
+              extensions: {
+                split402: {
+                  info: signed.offer
+                }
+              }
+            },
             campaignTerms: signed.campaignTerms,
             receipt
           }
