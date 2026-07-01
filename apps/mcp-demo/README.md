@@ -139,7 +139,8 @@ Example external x402 onboarding request:
       "merchantOrigin": "https://x402.example",
       "capability": "crypto.price",
       "matchPath": "/price",
-      "providerIdPrefix": "example-provider"
+      "providerIdPrefix": "example-provider",
+      "merchantPublicKey": "<merchant-offer-receipt-public-key>"
     }
   }
 }
@@ -165,13 +166,19 @@ corepack pnpm demo:discover-external-x402 \
   https://x402.example \
   --capability crypto.price \
   --match-path /price \
-  --provider-id-prefix example-provider
+  --provider-id-prefix example-provider \
+  --merchant-public-key <merchant-offer-receipt-public-key>
 ```
 
 The command emits a JSON report with candidate routes, networks, assets,
 amounts, pay-to wallets, readiness, blockers, required Split402 fields, and
 next actions. It performs metadata-only discovery and unpaid 402 probes; it does
 not execute paid calls.
+
+For CLI automation, the same verification key can be supplied with
+`SPLIT402_EXTERNAL_X402_MERCHANT_PUBLIC_KEY`. Use only the public verification
+key here; private signing keys and payment payloads must stay out of public logs
+and issue comments.
 
 When `network` or `asset` are omitted from `budget`, the gateway defaults them
 from the best provider that already matches the supplied budget filters and

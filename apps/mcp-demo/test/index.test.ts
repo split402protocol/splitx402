@@ -3,7 +3,15 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 import { describe, expect, it } from "vitest";
-import { createSampleProtocolArtifacts, hashProtocolObject } from "@split402/protocol";
+import {
+  buildOfferSigningBytes,
+  createSampleProtocolArtifacts,
+  deriveEd25519PublicKey,
+  hashProtocolObject,
+  hexToBytes,
+  signEd25519Message,
+  type Split402OfferV1
+} from "@split402/protocol";
 import { encodePaymentRequiredHeader } from "@x402/core/http";
 import type { PaymentRequired } from "@x402/core/types";
 import {
@@ -24,6 +32,7 @@ import {
 } from "../src/gateway.js";
 import {
   discoverExternalX402Onboarding,
+  parseDiscoverExternalX402Args,
   writeExternalX402OnboardingOutput
 } from "../src/discover-external-x402.js";
 import { runMcpGatewaySmoke } from "../src/gateway-smoke.js";
@@ -125,6 +134,28 @@ describe("createMcpDemoBundle", () => {
 });
 
 describe("external x402 onboarding CLI", () => {
+  it("parses merchant public keys from CLI flags and environment", () => {
+    expect(
+      parseDiscoverExternalX402Args([
+        "https://x402.example",
+        "--merchant-public-key",
+        "merchant-public-key"
+      ])
+    ).toMatchObject({
+      merchantOrigin: "https://x402.example",
+      merchantPublicKey: "merchant-public-key"
+    });
+    expect(
+      parseDiscoverExternalX402Args([], {
+        SPLIT402_EXTERNAL_X402_ORIGIN: "https://x402.example",
+        SPLIT402_EXTERNAL_X402_MERCHANT_PUBLIC_KEY: "env-merchant-public-key"
+      })
+    ).toMatchObject({
+      merchantOrigin: "https://x402.example",
+      merchantPublicKey: "env-merchant-public-key"
+    });
+  });
+
   it("renders external x402 onboarding reports without router-ready claims", async () => {
     await expect(
       discoverExternalX402Onboarding({
@@ -165,6 +196,44 @@ describe("external x402 onboarding CLI", () => {
             "For Base/EVM x402 routes, run a low-value hosted staging proof before any production or mainnet claim."
           ]),
           routerReady: false
+        })
+      ]
+    });
+  });
+
+  it("marks signed external x402 candidates router-ready when the merchant key verifies", async () => {
+    const signed = createExternalSplit402Offer();
+
+    await expect(
+      discoverExternalX402Onboarding({
+        merchantOrigin: "https://x402.example",
+        capability: "crypto.price",
+        matchPath: "/price",
+        providerIdPrefix: "issue-131",
+        merchantPublicKey: signed.merchantPublicKey,
+        fetch: mcpExternalX402Fetch({ split402Offer: signed.offer }),
+        generatedAt: "2026-07-01T00:00:00.000Z"
+      })
+    ).resolves.toMatchObject({
+      candidateCount: 1,
+      routerReadyCount: 1,
+      candidates: [
+        expect.objectContaining({
+          providerId: "issue-131:get.price.coin",
+          path: "/price/btc",
+          network: "eip155:8453",
+          asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          payToWallet: "0x68614873C5d624c07DCAA3aFF5243DD5027c3910",
+          amountAtomic: "20000",
+          readiness: "router_ready",
+          blockers: [],
+          requiredSplit402Fields: [],
+          nextActions: expect.arrayContaining([
+            "Register or refresh a staging Split402 route for this provider candidate.",
+            "Run one low-value paid request and verify the returned merchant-signed Split402 receipt.",
+            "For Base/EVM x402 routes, run a low-value hosted staging proof before any production or mainnet claim."
+          ]),
+          routerReady: true
         })
       ]
     });
@@ -250,7 +319,8 @@ describe("MCP demo gateway", () => {
       properties: {
         merchantOrigin: { type: "string" },
         capability: { type: "string" },
-        matchPath: { type: "string" }
+        matchPath: { type: "string" },
+        merchantPublicKey: { type: "string" }
       }
     });
   });
@@ -468,6 +538,67 @@ describe("MCP demo gateway", () => {
                 "For Base/EVM x402 routes, run a low-value hosted staging proof before any production or mainnet claim."
               ]),
               routerReady: false
+            })
+          ]
+        },
+        isError: false
+      }
+    });
+  });
+
+  it("marks signed external x402 candidates router-ready through MCP tools/call", async () => {
+    const signed = createExternalSplit402Offer();
+    const context = createMcpGatewayContext(
+      createMcpDemoBundle({
+        generatedAt: "2026-06-26T00:00:00.000Z"
+      }),
+      undefined,
+      "router-demo-mock",
+      mcpExternalX402Fetch({ split402Offer: signed.offer })
+    );
+
+    const response = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "external-discovery-ready",
+        method: "tools/call",
+        params: {
+          name: "split402.discoverExternalX402",
+          arguments: {
+            merchantOrigin: "https://x402.example",
+            capability: "crypto.price",
+            matchPath: "/price",
+            providerIdPrefix: "issue-131",
+            merchantPublicKey: signed.merchantPublicKey
+          }
+        }
+      }),
+      context
+    );
+
+    expect(response).toMatchObject({
+      jsonrpc: "2.0",
+      id: "external-discovery-ready",
+      result: {
+        structuredContent: {
+          status: "discovered",
+          merchantOrigin: "https://x402.example",
+          candidateCount: 1,
+          routerReadyCount: 1,
+          candidates: [
+            expect.objectContaining({
+              providerId: "issue-131:get.price.coin",
+              capability: "crypto.price",
+              path: "/price/btc",
+              method: "GET",
+              network: "eip155:8453",
+              asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+              payToWallet: "0x68614873C5d624c07DCAA3aFF5243DD5027c3910",
+              amountAtomic: "20000",
+              readiness: "router_ready",
+              blockers: [],
+              requiredSplit402Fields: [],
+              routerReady: true
             })
           ]
         },
@@ -1337,7 +1468,18 @@ function mcpControlPlaneFetch(
   };
 }
 
-function mcpExternalX402Fetch(): Split402ExternalX402DiscoveryFetch {
+const EXTERNAL_X402_NETWORK = "eip155:8453";
+const EXTERNAL_X402_ASSET = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+const EXTERNAL_X402_AMOUNT_ATOMIC = "20000";
+const EXTERNAL_X402_PAY_TO_WALLET =
+  "0x68614873C5d624c07DCAA3aFF5243DD5027c3910";
+const EXTERNAL_MERCHANT_SEED = hexToBytes(
+  "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf"
+);
+
+function mcpExternalX402Fetch(options: {
+  split402Offer?: Split402OfferV1;
+} = {}): Split402ExternalX402DiscoveryFetch {
   return async (url) => {
     const parsed = new URL(url);
     if (parsed.pathname === "/.well-known/x402") {
@@ -1393,7 +1535,7 @@ function mcpExternalX402Fetch(): Split402ExternalX402DiscoveryFetch {
         status: 402,
         headers: {
           "Payment-Required": encodePaymentRequiredHeader(
-            externalX402PaymentRequired()
+            externalX402PaymentRequired(options.split402Offer)
           )
         }
       });
@@ -1402,7 +1544,66 @@ function mcpExternalX402Fetch(): Split402ExternalX402DiscoveryFetch {
   };
 }
 
-function externalX402PaymentRequired(): PaymentRequired {
+function createExternalSplit402Offer(): {
+  offer: Split402OfferV1;
+  merchantPublicKey: string;
+} {
+  const merchantPublicKey = deriveEd25519PublicKey(EXTERNAL_MERCHANT_SEED);
+  const campaignTerms = {
+    protocolVersion: "0.1",
+    campaignId: "cmp_10000000000000000000000000000001",
+    campaignVersion: 1,
+    merchantId: "mrc_10000000000000000000000000000001",
+    resourceOrigin: "https://x402.example",
+    operationIds: ["get.price.coin"],
+    network: EXTERNAL_X402_NETWORK,
+    asset: EXTERNAL_X402_ASSET,
+    requiredAmountAtomic: EXTERNAL_X402_AMOUNT_ATOMIC,
+    payToWallet: EXTERNAL_X402_PAY_TO_WALLET,
+    commissionBps: 2000,
+    protocolFeeBpsOfCommission: 1000,
+    commissionBase: "required_amount",
+    settlementMode: "accrual"
+  };
+  const unsignedOffer = {
+    protocolVersion: "0.1",
+    campaignId: campaignTerms.campaignId,
+    campaignVersion: campaignTerms.campaignVersion,
+    campaignTermsHash: hashProtocolObject(campaignTerms),
+    merchantId: campaignTerms.merchantId,
+    resourceOrigin: campaignTerms.resourceOrigin,
+    operationId: "get.price.coin",
+    network: campaignTerms.network,
+    asset: campaignTerms.asset,
+    requiredAmountAtomic: campaignTerms.requiredAmountAtomic,
+    payToWallet: campaignTerms.payToWallet,
+    commissionBps: campaignTerms.commissionBps,
+    protocolFeeBpsOfCommission: campaignTerms.protocolFeeBpsOfCommission,
+    commissionBase: "required_amount",
+    settlementMode: "accrual",
+    attributionRequired: true,
+    allowSelfReferral: false,
+    offerNonce: "ofn_10000000000000000000000000000001",
+    issuedAt: "2026-07-01T00:00:00.000Z",
+    validUntil: "2026-07-02T00:00:00.000Z",
+    kid: "kid_external_1"
+  } satisfies Omit<Split402OfferV1, "signature">;
+  const signature = signEd25519Message(
+    buildOfferSigningBytes(unsignedOffer),
+    EXTERNAL_MERCHANT_SEED
+  ).signature;
+  return {
+    merchantPublicKey,
+    offer: {
+      ...unsignedOffer,
+      signature
+    }
+  };
+}
+
+function externalX402PaymentRequired(
+  split402Offer?: Split402OfferV1
+): PaymentRequired {
   return {
     x402Version: 2,
     error: "Payment required",
@@ -1414,10 +1615,10 @@ function externalX402PaymentRequired(): PaymentRequired {
     accepts: [
       {
         scheme: "exact",
-        network: "eip155:8453",
-        asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-        amount: "20000",
-        payTo: "0x68614873C5d624c07DCAA3aFF5243DD5027c3910",
+        network: EXTERNAL_X402_NETWORK,
+        asset: EXTERNAL_X402_ASSET,
+        amount: EXTERNAL_X402_AMOUNT_ATOMIC,
+        payTo: EXTERNAL_X402_PAY_TO_WALLET,
         maxTimeoutSeconds: 300,
         extra: {}
       }
@@ -1430,7 +1631,14 @@ function externalX402PaymentRequired(): PaymentRequired {
             method: "GET"
           }
         }
-      }
+      },
+      ...(split402Offer === undefined
+        ? {}
+        : {
+            split402: {
+              info: split402Offer
+            }
+          })
     }
   };
 }

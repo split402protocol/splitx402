@@ -12,12 +12,19 @@ Run this first. It does not pay for a route.
 corepack pnpm demo:discover-external-x402 https://x402.example \
   --capability crypto.price \
   --match-path /price \
-  --provider-id-prefix partner
+  --provider-id-prefix partner \
+  --merchant-public-key <merchant-offer-receipt-public-key>
 ```
 
 The report lists candidate route paths, HTTP methods, network, asset,
 amountAtomic, pay-to wallet, readiness, blockers, required Split402 offer
 fields, and provider next actions.
+
+You can also provide the verification key with
+`SPLIT402_EXTERNAL_X402_MERCHANT_PUBLIC_KEY`. This is a public key only. Do not
+put merchant private keys, bearer tokens, raw payment payloads, facilitator
+secrets, or private settlement evidence into CLI args, environment captures, or
+public issue comments.
 
 If `extensions.split402.info` is present but malformed, discovery reports
 `invalid Split402 offer extension` and includes `split402OfferErrors` with the
@@ -45,7 +52,8 @@ The same check is available through the MCP gateway tool
   "merchantOrigin": "https://x402.example",
   "capability": "crypto.price",
   "matchPath": "/price",
-  "providerIdPrefix": "partner"
+  "providerIdPrefix": "partner",
+  "merchantPublicKey": "<merchant-offer-receipt-public-key>"
 }
 ```
 

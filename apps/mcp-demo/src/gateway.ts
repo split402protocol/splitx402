@@ -402,6 +402,13 @@ async function handleExternalX402DiscoveryTool(
   if (providerIdPrefix !== undefined && typeof providerIdPrefix !== "string") {
     return createErrorResponse(id, -32602, providerIdPrefix.message);
   }
+  const merchantPublicKey =
+    record.merchantPublicKey === undefined
+      ? undefined
+      : readRequiredStringArgument(record.merchantPublicKey, "merchantPublicKey");
+  if (merchantPublicKey !== undefined && typeof merchantPublicKey !== "string") {
+    return createErrorResponse(id, -32602, merchantPublicKey.message);
+  }
   const matchPath =
     record.matchPath === undefined
       ? undefined
@@ -424,6 +431,7 @@ async function handleExternalX402DiscoveryTool(
         ? {}
         : { fetch: context.externalDiscoveryFetch }),
       ...(providerIdPrefix === undefined ? {} : { providerIdPrefix }),
+      ...(merchantPublicKey === undefined ? {} : { merchantPublicKey }),
       ...(capability === undefined
         ? {}
         : {
@@ -690,6 +698,7 @@ function routerToolCards() {
           capability: { type: "string" },
           matchPath: { type: "string" },
           providerIdPrefix: { type: "string" },
+          merchantPublicKey: { type: "string" },
           includeFreeRoutes: { type: "boolean" }
         },
         required: ["merchantOrigin"],
