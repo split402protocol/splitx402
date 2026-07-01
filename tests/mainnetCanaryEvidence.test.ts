@@ -70,6 +70,33 @@ describe("mainnet canary evidence attachments", () => {
     });
   });
 
+  it("rejects attachment references outside the launch evidence workspace", () => {
+    const rejectedValues = [
+      "attached: https://evidence.example/dry-run.txt",
+      "attached: /tmp/dry-run.txt",
+      "attached: C:\\temp\\dry-run.txt",
+      "attached: ../dry-run.txt",
+      "attached: nested/../../dry-run.txt",
+    ];
+
+    for (const value of rejectedValues) {
+      expect(
+        verifyMainnetCanaryEvidenceAttachment({
+          kind: "dry_run",
+          value,
+          exists: () => {
+            throw new Error("unexpected file existence check");
+          },
+        }),
+      ).toMatchObject({
+        ok: false,
+        errors: [
+          "evidence must use `attached: <path>` and must not contain a placeholder",
+        ],
+      });
+    }
+  });
+
   it("rejects scaffold dry-run artifacts until every required result is passed", () => {
     const result = verifyMainnetCanaryEvidenceAttachment({
       kind: "dry_run",
