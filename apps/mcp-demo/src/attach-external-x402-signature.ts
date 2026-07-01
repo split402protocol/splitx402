@@ -35,6 +35,7 @@ interface AttachExternalX402SignatureCliInput {
   signature?: string;
   merchantPublicKey?: string;
   outputFile?: string;
+  offerExtensionOutputFile?: string;
 }
 
 export function attachExternalX402Signature(
@@ -113,6 +114,8 @@ export function parseAttachExternalX402SignatureArgs(
       input.merchantPublicKey = value;
     } else if (arg === "--output-file") {
       input.outputFile = value;
+    } else if (arg === "--offer-extension-output-file") {
+      input.offerExtensionOutputFile = value;
     } else {
       throw new Error(`unknown argument: ${arg}`);
     }
@@ -140,6 +143,17 @@ export async function runAttachExternalX402SignatureCli(
   if (parsed.outputFile !== undefined && result.artifact !== undefined) {
     writeJsonOutput(parsed.outputFile, result.artifact);
   }
+  if (parsed.offerExtensionOutputFile !== undefined) {
+    if (result.kind !== "offer") {
+      throw new Error("--offer-extension-output-file is only valid for offers");
+    }
+    if (result.artifact !== undefined) {
+      writeJsonOutput(
+        parsed.offerExtensionOutputFile,
+        createOfferPaymentRequiredExtension(result.artifact as Split402OfferV1)
+      );
+    }
+  }
   console.log(JSON.stringify(result, null, 2));
   return result.ok ? 0 : 2;
 }
@@ -150,12 +164,15 @@ export const ATTACH_EXTERNAL_X402_SIGNATURE_USAGE = `Usage:
     --unsigned-file offer-to-sign.json \\
     --signature <base64url-signature> \\
     [--merchant-public-key <merchant-offer-receipt-public-key>] \\
-    [--output-file offer.json]
+    [--output-file offer.json] \\
+    [--offer-extension-output-file payment-required-extension.json]
 
 This no-secret helper attaches an externally produced base64url signature to an
 unsigned Split402 offer or receipt. When a merchant public key is supplied, it
-also verifies the signed artifact. It never needs merchant private keys, bearer
-tokens, raw payment payloads, or facilitator secrets.`;
+also verifies the signed artifact. For offers, it can also write the
+extensions.split402.info wrapper to merge into the unpaid x402 402 response. It
+never needs merchant private keys, bearer tokens, raw payment payloads, or
+facilitator secrets.`;
 
 function readKind(value: string): ExternalX402SignatureArtifactKind {
   if (value === "offer" || value === "receipt") {
@@ -168,6 +185,18 @@ function writeJsonOutput(path: string, value: unknown): void {
   const resolvedPath = resolveOutputPath(path);
   mkdirSync(dirname(resolvedPath), { recursive: true });
   writeFileSync(resolvedPath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+export function createOfferPaymentRequiredExtension(offer: Split402OfferV1): {
+  extensions: { split402: { info: Split402OfferV1 } };
+} {
+  return {
+    extensions: {
+      split402: {
+        info: offer
+      }
+    }
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

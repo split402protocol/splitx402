@@ -13,6 +13,7 @@ import {
   serializeAtomicAmount,
   signEd25519Message,
   type ReferralClaimV1,
+  type Split402OfferV1,
   type Split402ReceiptV1
 } from "@split402/protocol";
 import {
@@ -31,7 +32,10 @@ import {
   createMcpDemoBundle,
   type McpDemoBundle
 } from "./index.js";
-import { attachExternalX402Signature } from "./attach-external-x402-signature.js";
+import {
+  attachExternalX402Signature,
+  createOfferPaymentRequiredExtension
+} from "./attach-external-x402-signature.js";
 import { publicCandidateView as publicExternalX402CandidateView } from "./discover-external-x402.js";
 import { prepareExternalX402Offer } from "./prepare-external-x402-offer.js";
 import { prepareExternalX402Receipt } from "./prepare-external-x402-receipt.js";
@@ -396,9 +400,17 @@ function handleExternalX402SignatureAttachmentTool(
   if ("message" in input) {
     return createErrorResponse(id, -32602, input.message);
   }
+  const attachment = attachExternalX402Signature(input);
   return createToolResultResponse(id, {
     status: "signature_attached",
-    ...attachExternalX402Signature(input)
+    ...attachment,
+    ...(attachment.kind === "offer" && attachment.artifact !== undefined
+      ? {
+          paymentRequiredExtension: createOfferPaymentRequiredExtension(
+            attachment.artifact as Split402OfferV1
+          )
+        }
+      : {})
   });
 }
 

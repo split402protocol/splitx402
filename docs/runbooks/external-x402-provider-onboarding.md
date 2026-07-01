@@ -70,8 +70,13 @@ corepack pnpm demo:attach-external-x402-signature -- \
   --unsigned-file prepared-offer/offer-to-sign.json \
   --signature <base64url-signature> \
   --merchant-public-key <merchant-offer-receipt-public-key> \
-  --output-file offer.json
+  --output-file offer.json \
+  --offer-extension-output-file payment-required-extension.json
 ```
+
+The `payment-required-extension.json` output is the exact
+`extensions.split402.info` wrapper to merge into the unpaid x402 `402 Payment
+Required` response.
 
 After a paid x402 request settles, prepare the merchant-signed receipt the same
 way:
@@ -103,8 +108,9 @@ corepack pnpm demo:attach-external-x402-signature -- \
 The same no-secret preparation helpers are available through the MCP gateway as
 `split402.prepareExternalX402Offer` and `split402.prepareExternalX402Receipt`.
 The signature attachment helper is available as
-`split402.attachExternalX402Signature`. Pass the same public JSON objects
-directly as tool arguments.
+`split402.attachExternalX402Signature`; when called with `kind: "offer"`, it
+returns `paymentRequiredExtension` for the unpaid x402 402 response. Pass the
+same public JSON objects directly as tool arguments.
 
 When x402 payment metadata is complete but Split402 metadata is missing or not
 yet trusted, candidate output also includes `split402OfferTemplate`. This is a
