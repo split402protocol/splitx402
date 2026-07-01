@@ -339,7 +339,8 @@ function createGitHubRepositorySettingsCheck(
     "Keep blank issues disabled",
     "GitHub Security Advisories",
     'Workspace packages stay `"private": true`',
-    "local checks prove the tracked repository surface, not live branch protection settings",
+    "The local checks prove the tracked repository surface.",
+    "product:github-settings-review --from-github",
     "product:github-settings-review",
   ];
   const missingPhrases = requiredPhrases.filter(

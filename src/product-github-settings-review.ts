@@ -3,14 +3,17 @@ import { execFileSync } from "node:child_process";
 import { writeCliTextOutput } from "./cliOutput.js";
 import {
   createGitHubRepositorySettingsReviewRecord,
+  createGitHubRepositorySettingsReviewRecordFromLiveGitHub,
   createGitHubRepositorySettingsReviewTemplate,
   githubRepositorySettingsReviewOptionalEnv,
   githubRepositorySettingsReviewRequiredEnv,
+  type LiveGitHubBranchProtection,
+  type LiveGitHubRepositoryMetadata,
 } from "./githubRepositorySettingsReview.js";
 
 const env = process.env;
 const USAGE =
-  "Usage: corepack pnpm product:github-settings-review [--template] [--output path]";
+  "Usage: corepack pnpm product:github-settings-review [--template|--from-github] [--output path]";
 let args: ParsedArgs;
 try {
   args = parseArgs(process.argv.slice(2));
@@ -25,6 +28,7 @@ if (args.help) {
       USAGE,
       "",
       "Generates a Split402 GitHub repository settings review record from environment variables.",
+      "Use --from-github to generate a no-go record from live GitHub API settings through gh.",
       "Use --output to write a UTF-8 evidence file without shell redirection.",
     ].join("\n"),
   );
@@ -40,6 +44,28 @@ if (args.template) {
 }
 
 try {
+  if (args.fromGithub) {
+    writeCliTextOutput({
+      text: createGitHubRepositorySettingsReviewRecordFromLiveGitHub({
+        reviewId: readRequiredEnv("SPLIT402_GITHUB_SETTINGS_REVIEW_ID"),
+        reviewDate: env.SPLIT402_GITHUB_SETTINGS_REVIEW_DATE ?? isoDate(),
+        reviewers: readRequiredEnv("SPLIT402_GITHUB_SETTINGS_REVIEWERS"),
+        evidenceSource: readRequiredEnv(
+          "SPLIT402_GITHUB_SETTINGS_EVIDENCE_SOURCE",
+        ),
+        repositoryMetadata: readLiveRepositoryMetadata(),
+        branchProtection: readLiveBranchProtection(),
+        releaseCount: readLiveReleaseCount(),
+        packageCount: readLivePackageCount(),
+        sourceCommit:
+          env.SPLIT402_GITHUB_SETTINGS_SOURCE_COMMIT ?? readCurrentGitCommit(),
+        reviewNotes: env.SPLIT402_GITHUB_SETTINGS_REVIEW_NOTES,
+      }),
+      outputPath: args.outputPath,
+    });
+    process.exit(0);
+  }
+
   writeCliTextOutput({
     text: createGitHubRepositorySettingsReviewRecord({
       reviewId: readRequiredEnv("SPLIT402_GITHUB_SETTINGS_REVIEW_ID"),
@@ -114,6 +140,7 @@ try {
 }
 
 interface ParsedArgs {
+  fromGithub: boolean;
   help: boolean;
   outputPath?: string;
   template: boolean;
@@ -121,6 +148,7 @@ interface ParsedArgs {
 
 function parseArgs(argv: string[]): ParsedArgs {
   const parsed: ParsedArgs = {
+    fromGithub: false,
     help: false,
     template: false,
   };
@@ -133,6 +161,10 @@ function parseArgs(argv: string[]): ParsedArgs {
     }
     if (arg === "--template") {
       parsed.template = true;
+      continue;
+    }
+    if (arg === "--from-github") {
+      parsed.fromGithub = true;
       continue;
     }
     if (arg === "--output") {
@@ -155,6 +187,10 @@ function parseArgs(argv: string[]): ParsedArgs {
     throw new Error(`${USAGE}\nUnknown option: ${arg}`);
   }
 
+  if (parsed.fromGithub && parsed.template) {
+    throw new Error(`${USAGE}\nChoose either --template or --from-github.`);
+  }
+
   return parsed;
 }
 
@@ -174,4 +210,75 @@ function readCurrentGitCommit(): string {
 
 function isoDate(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function readLiveRepositoryMetadata(): LiveGitHubRepositoryMetadata {
+  return JSON.parse(
+    execFileSync(
+      "gh",
+      [
+        "repo",
+        "view",
+        "split402protocol/splitx402",
+        "--json",
+        [
+          "nameWithOwner",
+          "description",
+          "homepageUrl",
+          "repositoryTopics",
+          "licenseInfo",
+          "isBlankIssuesEnabled",
+          "hasIssuesEnabled",
+        ].join(","),
+      ],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] },
+    ),
+  ) as LiveGitHubRepositoryMetadata;
+}
+
+function readLiveBranchProtection(): LiveGitHubBranchProtection | undefined {
+  try {
+    return JSON.parse(
+      execFileSync(
+        "gh",
+        ["api", "repos/split402protocol/splitx402/branches/main/protection"],
+        { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+      ),
+    ) as LiveGitHubBranchProtection;
+  } catch {
+    return undefined;
+  }
+}
+
+function readLiveReleaseCount(): number | undefined {
+  return readLiveArrayCount(["api", "repos/split402protocol/splitx402/releases"]);
+}
+
+function readLivePackageCount(): number | undefined {
+  const npmPackages = readLiveArrayCount([
+    "api",
+    "orgs/split402protocol/packages?package_type=npm",
+  ]);
+  const containerPackages = readLiveArrayCount([
+    "api",
+    "orgs/split402protocol/packages?package_type=container",
+  ]);
+  if (npmPackages === undefined || containerPackages === undefined) {
+    return undefined;
+  }
+  return npmPackages + containerPackages;
+}
+
+function readLiveArrayCount(args: string[]): number | undefined {
+  try {
+    const parsed = JSON.parse(
+      execFileSync("gh", [...args, "--paginate"], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      }),
+    ) as unknown;
+    return Array.isArray(parsed) ? parsed.length : undefined;
+  } catch {
+    return undefined;
+  }
 }

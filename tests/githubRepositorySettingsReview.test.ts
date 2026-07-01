@@ -8,6 +8,7 @@ import { writeCliTextOutput } from "../src/cliOutput.js";
 import {
   assertYesNo,
   createGitHubRepositorySettingsReviewRecord,
+  createGitHubRepositorySettingsReviewRecordFromLiveGitHub,
   createGitHubRepositorySettingsReviewTemplate,
   githubRepositorySettingsReviewRequiredEnv,
   verifyGitHubRepositorySettingsReviewRecord,
@@ -203,6 +204,69 @@ describe("GitHub repository settings review", () => {
     } finally {
       rmSync(directory, { force: true, recursive: true });
     }
+  });
+
+  it("creates a no-go review from live GitHub API metadata", () => {
+    const record = createGitHubRepositorySettingsReviewRecordFromLiveGitHub({
+      reviewId: "github-settings-review-001",
+      reviewDate: "2026-06-30",
+      reviewers: "split402protocol",
+      evidenceSource: "attached: github-api-review.json",
+      sourceCommit: "abc1234",
+      releaseCount: 0,
+      repositoryMetadata: {
+        nameWithOwner: "split402protocol/splitx402",
+        description:
+          "Agent payment routing and verifiable referral accounting for x402 APIs.",
+        homepageUrl: "",
+        isBlankIssuesEnabled: true,
+        repositoryTopics: [
+          { name: "payments" },
+          { name: "protocol" },
+          { name: "typescript" },
+          { name: "x402" },
+          { name: "agents" },
+          { name: "mcp" },
+          { name: "solana" },
+          { name: "usdc" },
+        ],
+      },
+      branchProtection: {
+        required_pull_request_reviews: {
+          require_code_owner_reviews: true,
+          required_approving_review_count: 1,
+        },
+        required_status_checks: {
+          contexts: ["test", "postgres-integration", "Gitleaks"],
+          checks: [{ context: "Analyze JavaScript and TypeScript" }],
+        },
+        allow_force_pushes: { enabled: false },
+        allow_deletions: { enabled: false },
+      },
+    });
+
+    expect(record).toContain("review_method: github-api");
+    expect(record).toContain("about_description_matches: yes");
+    expect(record).toContain("topics_match: yes");
+    expect(record).toContain("blank_issues_disabled: no");
+    expect(record).toContain("packages_and_releases_unpublished: no");
+    expect(record).toContain("review_decision: no-go");
+    expect(verifyGitHubRepositorySettingsReviewRecord(record)).toEqual({
+      ok: false,
+      errors: [
+        "required_checks must include Lint",
+        "required_checks must include Public surface check",
+        "required_checks must include Typecheck",
+        "required_checks must include Test",
+        "required_checks must include Build",
+        "required_checks must include Check vectors",
+        "required_checks must include Audit",
+        "required_checks must include Local public-alpha proof",
+        "required_checks must include PostgreSQL integration tests",
+        "required_checks must include CodeQL",
+        "required_checks must include Secret scan",
+      ],
+    });
   });
 });
 
