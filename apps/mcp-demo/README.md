@@ -153,8 +153,10 @@ not overstate them as referral-ready providers. Candidate responses include
 malformed `extensions.split402.info`, the response includes
 `split402OfferErrors` so the provider can fix exact fields before paid staging.
 Base/EVM x402 routes can become router-ready after a signed Split402 offer and
-matching merchant-signed receipt, but they still require low-value hosted
-staging proof before any production or mainnet claim.
+matching merchant-signed receipt; discovery also requires the merchant public
+key to verify the offer signature before marking a candidate router-ready. They
+still require low-value hosted staging proof before any production or mainnet
+claim.
 
 The same onboarding check can be run without an MCP client:
 

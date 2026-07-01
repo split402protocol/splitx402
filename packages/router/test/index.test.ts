@@ -875,6 +875,52 @@ describe("Split402ExternalX402DiscoveryClient", () => {
     ]);
   });
 
+  it("blocks router use when Split402 offer signatures cannot be verified", async () => {
+    const { offer } = createSignedEvmOffer();
+    const missingKeyDiscovery = new Split402ExternalX402DiscoveryClient({
+      merchantOrigin: "https://x402.example",
+      fetch: externalX402Fetch({
+        paymentRequired: externalPaymentRequired({ split402Offer: offer })
+      }),
+      providerIdPrefix: "missing-key",
+      capabilityMapper: () => "crypto.price"
+    });
+
+    await expect(
+      missingKeyDiscovery.discoverCandidates({ capability: "crypto.price" })
+    ).resolves.toEqual([
+      expect.objectContaining({
+        providerId: "missing-key:get.price.coin",
+        readiness: "requires_split402_campaign",
+        blockers: ["missing merchant public key for Split402 offer verification"],
+        split402OfferErrors: [
+          "merchantPublicKey: required to verify Split402 offer signature"
+        ]
+      })
+    ]);
+
+    const wrongKeyDiscovery = new Split402ExternalX402DiscoveryClient({
+      merchantOrigin: "https://x402.example",
+      fetch: externalX402Fetch({
+        paymentRequired: externalPaymentRequired({ split402Offer: offer })
+      }),
+      providerIdPrefix: "wrong-key",
+      merchantPublicKey,
+      capabilityMapper: () => "crypto.price"
+    });
+
+    await expect(
+      wrongKeyDiscovery.discoverCandidates({ capability: "crypto.price" })
+    ).resolves.toEqual([
+      expect.objectContaining({
+        providerId: "wrong-key:get.price.coin",
+        readiness: "requires_split402_campaign",
+        blockers: ["invalid Split402 offer signature"],
+        split402OfferErrors: ["invalid offer signature"]
+      })
+    ]);
+  });
+
   it("creates router-ready providers when external x402 routes include Split402 offers", async () => {
     const discovery = new Split402ExternalX402DiscoveryClient({
       merchantOrigin: receipt.merchantOrigin,

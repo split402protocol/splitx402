@@ -252,6 +252,20 @@ export function createExternalX402CandidateNextActions(
                 "Use split402OfferErrors to align network, asset, payToWallet, requiredAmountAtomic, and resourceOrigin.",
                 "Rerun demo:discover-external-x402; only router_ready candidates should enter paid staging tests."
               ]
+            : candidate.blockers.includes(
+                  "missing merchant public key for Split402 offer verification"
+                )
+              ? [
+                  "Configure the merchant public key used to verify Split402 offer and receipt signatures.",
+                  "Publish or share the active offer_receipt key id and public key through the Split402 onboarding channel.",
+                  "Rerun demo:discover-external-x402 after the verifier has the merchant public key."
+                ]
+              : candidate.blockers.includes("invalid Split402 offer signature")
+                ? [
+                    "Re-sign extensions.split402.info with the active merchant offer_receipt key.",
+                    "Confirm the configured merchant public key matches the offer kid and signing key.",
+                    "Rerun demo:discover-external-x402; only signature-verified candidates should enter paid staging tests."
+                  ]
         : [
             "Add extensions.split402.info to the unpaid 402 Payment Required response.",
             "Bind the Split402 offer to the campaign, operation, amount, commission, protocol fee, and merchant signing key.",

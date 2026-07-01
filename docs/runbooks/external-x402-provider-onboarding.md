@@ -31,6 +31,12 @@ signed offer must match the x402 exact payment metadata for `network`, `asset`,
 `payToWallet`, and `requiredAmountAtomic`; `resourceOrigin` must match the
 external merchant origin being discovered.
 
+If the offer parses and matches x402 metadata, discovery still requires a
+merchant verification public key before it can mark the candidate `router_ready`.
+The offer must verify against the active merchant `offer_receipt` key. Missing
+or mismatched keys are reported as signature blockers and must be fixed before
+paid staging.
+
 The same check is available through the MCP gateway tool
 `split402.discoverExternalX402`:
 
@@ -58,6 +64,8 @@ Common blockers:
 | `missing Split402 offer extension` | Add `extensions.split402.info` to the unpaid 402 response. |
 | `invalid Split402 offer extension` | The extension exists, but one or more signed offer fields failed validation. Check `split402OfferErrors`. |
 | `Split402 offer does not match x402 payment metadata` | The signed offer parses, but its payment fields disagree with the x402 `accepts` metadata. Check `split402OfferErrors`. |
+| `missing merchant public key for Split402 offer verification` | The offer cannot be trusted until the merchant verification key is configured. |
+| `invalid Split402 offer signature` | The offer did not verify against the configured merchant public key. |
 | `missing complete x402 exact payment metadata` | The x402 `accepts` metadata is missing `network`, `asset`, `amount`, or `payTo`. |
 
 Base/EVM x402 candidates can become router-ready when the unpaid response
@@ -119,6 +127,10 @@ include a Split402 offer extension:
 The provider must also return a merchant-signed Split402 receipt after a paid
 request settles. Without that receipt, the router must fail closed and no
 referral accrual should be created.
+
+For external providers, Split402 onboarding must also know the merchant public
+key that verifies both the signed offer and the later receipt. A syntactically
+valid offer is not router-ready until this signature verification passes.
 
 ## Public-Alpha Boundary
 
