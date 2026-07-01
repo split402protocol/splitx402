@@ -10,6 +10,7 @@
     "bundle": "tsx src/bundle.ts",
     "discover-external-x402": "tsx src/discover-external-x402.ts",
     "prepare-external-x402-offer": "tsx src/prepare-external-x402-offer.ts",
+    "prepare-external-x402-receipt": "tsx src/prepare-external-x402-receipt.ts",
     "validate-external-x402-artifacts": "tsx src/validate-external-x402-artifacts.ts",
     "gateway": "tsx src/gateway.ts",
     "gateway:smoke": "tsx src/gateway-smoke.ts",

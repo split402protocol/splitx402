@@ -48,6 +48,11 @@ import {
   prepareExternalX402Offer,
   runPrepareExternalX402OfferCli
 } from "../src/prepare-external-x402-offer.js";
+import {
+  parsePrepareExternalX402ReceiptArgs,
+  prepareExternalX402Receipt,
+  runPrepareExternalX402ReceiptCli
+} from "../src/prepare-external-x402-receipt.js";
 import { runMcpGatewaySmoke } from "../src/gateway-smoke.js";
 import { createMcpDemoBundle } from "../src/index.js";
 import { writeMcpDemoBundleOutput } from "../src/bundle.js";
@@ -480,6 +485,107 @@ describe("external x402 artifact validation", () => {
       /^[0-9a-f]+\n$/u
     );
     expect(parsePrepareExternalX402OfferArgs(["--help"])).toEqual({
+      help: true
+    });
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  it("prepares external receipts for no-secret provider signing", () => {
+    const signed = createExternalSplit402Offer();
+    const receipt = createExternalSplit402Receipt(signed.offer);
+    const unsignedReceipt = createUnsignedExternalReceipt(receipt);
+
+    expect(
+      prepareExternalX402Receipt({
+        offer: signed.offer,
+        unsignedReceipt: {
+          ...unsignedReceipt,
+          commissionAmountAtomic: "0",
+          protocolFeeAtomic: "0",
+          referrerCreditAtomic: "0"
+        }
+      })
+    ).toMatchObject({
+      ok: true,
+      errors: [],
+      receiptToSign: {
+        campaignTermsHash: signed.offer.campaignTermsHash,
+        commissionAmountAtomic: "4000",
+        protocolFeeAtomic: "400",
+        referrerCreditAtomic: "3600",
+        operationId: "get.price.coin"
+      },
+      receiptSigningBytesHex: expect.any(String)
+    });
+  });
+
+  it("rejects external receipt preparation when a signature is already present", () => {
+    const signed = createExternalSplit402Offer();
+    const receipt = createExternalSplit402Receipt(signed.offer);
+
+    expect(
+      prepareExternalX402Receipt({
+        offer: signed.offer,
+        unsignedReceipt: receipt
+      })
+    ).toMatchObject({
+      ok: false,
+      errors: expect.arrayContaining([
+        "unsignedReceipt must not include signature"
+      ])
+    });
+  });
+
+  it("runs external receipt preparation from JSON files", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "split402-x402-receipt-"));
+    const offerPath = join(directory, "offer.json");
+    const unsignedReceiptPath = join(directory, "unsigned-receipt.json");
+    const outputDir = join(directory, "prepared-receipt");
+    const signed = createExternalSplit402Offer();
+    const receipt = createExternalSplit402Receipt(signed.offer);
+    const unsignedReceipt = createUnsignedExternalReceipt(receipt);
+    const logs: string[] = [];
+    const originalLog = console.log;
+    try {
+      writeFileSync(offerPath, JSON.stringify(signed.offer), "utf8");
+      writeFileSync(
+        unsignedReceiptPath,
+        JSON.stringify(unsignedReceipt),
+        "utf8"
+      );
+      console.log = (value?: unknown) => {
+        logs.push(String(value));
+      };
+
+      await expect(
+        runPrepareExternalX402ReceiptCli([
+          "--offer-file",
+          offerPath,
+          "--unsigned-receipt-file",
+          unsignedReceiptPath,
+          "--output-dir",
+          outputDir
+        ])
+      ).resolves.toBe(0);
+    } finally {
+      console.log = originalLog;
+    }
+
+    expect(JSON.parse(logs.join("\n"))).toMatchObject({
+      ok: true,
+      receiptToSign: {
+        campaignTermsHash: signed.offer.campaignTermsHash
+      }
+    });
+    expect(
+      JSON.parse(readFileSync(join(outputDir, "receipt-to-sign.json"), "utf8"))
+    ).toMatchObject({
+      campaignTermsHash: signed.offer.campaignTermsHash
+    });
+    expect(
+      readFileSync(join(outputDir, "receipt-signing-bytes.hex"), "utf8")
+    ).toMatch(/^[0-9a-f]+\n$/u);
+    expect(parsePrepareExternalX402ReceiptArgs(["--help"])).toEqual({
       help: true
     });
     rmSync(directory, { recursive: true, force: true });
@@ -2135,6 +2241,14 @@ function createUnsignedExternalOffer(
   const copy: Partial<Split402OfferV1> = { ...offer };
   delete copy.signature;
   return copy as Omit<Split402OfferV1, "signature">;
+}
+
+function createUnsignedExternalReceipt(
+  receipt: Split402ReceiptV1
+): Omit<Split402ReceiptV1, "signature"> {
+  const copy: Partial<Split402ReceiptV1> = { ...receipt };
+  delete copy.signature;
+  return copy as Omit<Split402ReceiptV1, "signature">;
 }
 
 function createExternalSplit402Receipt(

@@ -715,6 +715,21 @@ function writeProviderReadme(
           "```"
         ]
       : []),
+    ...(candidate.split402ReceiptTemplate === undefined
+      ? []
+      : [
+          "",
+          "## Prepare Receipt Signing Inputs",
+          "",
+          "After a paid request settles, finalize the unsigned receipt and compute exact receipt signing bytes:",
+          "",
+          "```bash",
+          "corepack pnpm demo:prepare-external-x402-receipt -- \\",
+          "  --offer-file offer.json \\",
+          "  --unsigned-receipt-file unsigned-receipt.json \\",
+          "  --output-dir prepared-receipt",
+          "```"
+        ]),
     "",
     "## Validation",
     "",

@@ -54,6 +54,22 @@ This writes `offer-to-sign.json`, `campaign-terms.hash.txt`, and
 key outside this tool, set the base64url signature on the offer, then run the
 artifact validator below.
 
+After a paid x402 request settles, prepare the merchant-signed receipt the same
+way:
+
+```bash
+corepack pnpm demo:prepare-external-x402-receipt -- \
+  --offer-file offer.json \
+  --unsigned-receipt-file unsigned-receipt.json \
+  --output-dir prepared-receipt
+```
+
+This binds the receipt back to the signed offer, recomputes
+`commissionAmountAtomic`, `protocolFeeAtomic`, and `referrerCreditAtomic`, and
+writes `receipt-to-sign.json` plus `receipt-signing-bytes.hex`. Sign those bytes
+outside this tool, set the base64url signature on the receipt, then validate the
+offer, campaign terms, and receipt together.
+
 When x402 payment metadata is complete but Split402 metadata is missing or not
 yet trusted, candidate output also includes `split402OfferTemplate`. This is a
 non-secret scaffold built from the detected x402 route fields. It shows the
