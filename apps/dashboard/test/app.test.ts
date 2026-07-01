@@ -44,6 +44,20 @@ describe("Split402 dashboard app", () => {
     expect(response.text).not.toContain("availableAtomic");
   });
 
+  it("rate limits dashboard requests when configured", async () => {
+    const { app } = createDashboardApp({
+      config: {
+        controlPlaneUrl: "https://control.example",
+        port: 4027,
+        rateLimitWindowMs: 60_000,
+        rateLimitMaxRequests: 1
+      }
+    });
+
+    await request(app).get("/health").expect(200);
+    await request(app).get("/health").expect(429);
+  });
+
   it("proxies merchant dashboard reads to the configured control plane", async () => {
     const calls: Array<{ url: string; authorization?: string }> = [];
     const { app } = createDashboardApp({

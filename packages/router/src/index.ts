@@ -1497,7 +1497,7 @@ function validateOfferMatchesProvider(
   provider: Split402CapabilityProvider
 ): string[] {
   const errors: string[] = [];
-  if (offer.resourceOrigin.replace(/\/+$/u, "") !== provider.merchantOrigin.replace(/\/+$/u, "")) {
+  if (trimTrailingSlashes(offer.resourceOrigin) !== trimTrailingSlashes(provider.merchantOrigin)) {
     errors.push("offer resourceOrigin does not match provider merchantOrigin");
   }
   if (offer.operationId !== provider.operationId) {
@@ -1519,6 +1519,14 @@ function validateOfferMatchesProvider(
     errors.push("offer requiredAmountAtomic does not match provider amountAtomic");
   }
   return errors;
+}
+
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return value.slice(0, end);
 }
 
 function validateReceiptMatchesProvider(
