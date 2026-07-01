@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   createProductEvidenceInitWrites,
-  createProductEvidenceSourceRefreshWrites,
+  createProductEvidenceSourceRefreshPlan,
   findExistingProductEvidenceInitWrites,
   parseProductEvidenceInitArgs,
 } from "../src/productEvidenceInitPlan.js";
@@ -302,8 +302,9 @@ describe("Split402 product evidence workspace", () => {
       sourceCommit: "def5678",
     });
 
-    const writes = createProductEvidenceSourceRefreshWrites({
+    const plan = createProductEvidenceSourceRefreshPlan({
       workspace: next,
+      exists: () => true,
       readText: (path) => {
         if (path.endsWith(previous.githubSettingsReviewFileName)) {
           return previous.githubSettingsReviewText;
@@ -318,17 +319,18 @@ describe("Split402 product evidence workspace", () => {
       },
     });
 
-    expect(writes.map((write) => write.path)).toEqual([
+    expect(plan.skipped).toEqual([]);
+    expect(plan.writes.map((write) => write.path)).toEqual([
       join("split402-launch-evidence", "github-settings-review.txt"),
       join("split402-launch-evidence", "phase6-custody-evidence.txt"),
       join("split402-launch-evidence", "phase7-staging-proof.txt"),
     ]);
-    expect(writes[0]?.contents).toContain("source_commit: def5678");
-    expect(writes[1]?.contents).toContain("source_commit: def5678");
-    expect(writes[2]?.contents).toContain("source_commit: def5678");
-    expect(writes[0]?.contents).not.toContain("source_commit: abc1234");
-    expect(writes[1]?.contents).not.toContain("source_commit: abc1234");
-    expect(writes[2]?.contents).not.toContain("source_commit: abc1234");
+    expect(plan.writes[0]?.contents).toContain("source_commit: def5678");
+    expect(plan.writes[1]?.contents).toContain("source_commit: def5678");
+    expect(plan.writes[2]?.contents).toContain("source_commit: def5678");
+    expect(plan.writes[0]?.contents).not.toContain("source_commit: abc1234");
+    expect(plan.writes[1]?.contents).not.toContain("source_commit: abc1234");
+    expect(plan.writes[2]?.contents).not.toContain("source_commit: abc1234");
   });
 
   it("adds missing GitHub review evidence fields during scaffold source refresh", () => {
@@ -342,8 +344,9 @@ describe("Split402 product evidence workspace", () => {
     const previousGithubReview = previous.githubSettingsReviewText
       .replace("review_method: pending\n", "")
       .replace("evidence_source: pending\n", "");
-    const writes = createProductEvidenceSourceRefreshWrites({
+    const plan = createProductEvidenceSourceRefreshPlan({
       workspace: next,
+      exists: () => true,
       readText: (path) => {
         if (path.endsWith(previous.githubSettingsReviewFileName)) {
           return previousGithubReview;
@@ -358,12 +361,13 @@ describe("Split402 product evidence workspace", () => {
       },
     });
 
-    expect(writes[0]?.contents).toContain("source_commit: def5678");
-    expect(writes[0]?.contents).toContain("review_method: pending");
-    expect(writes[0]?.contents).toContain("evidence_source: pending");
+    expect(plan.skipped).toEqual([]);
+    expect(plan.writes[0]?.contents).toContain("source_commit: def5678");
+    expect(plan.writes[0]?.contents).toContain("review_method: pending");
+    expect(plan.writes[0]?.contents).toContain("evidence_source: pending");
   });
 
-  it("refuses to refresh source commits after evidence values are filled", () => {
+  it("skips filled evidence files and still refreshes remaining scaffolds", () => {
     const previous = createSplit402ProductEvidenceWorkspace({
       sourceCommit: "abc1234",
     });
@@ -371,33 +375,43 @@ describe("Split402 product evidence workspace", () => {
       sourceCommit: "def5678",
     });
 
-    expect(() =>
-      createProductEvidenceSourceRefreshWrites({
-        workspace: next,
-        readText: (path) => {
-          if (path.endsWith(previous.githubSettingsReviewFileName)) {
-            return previous.githubSettingsReviewText;
-          }
-          if (path.endsWith(previous.phase6EvidenceFileName)) {
-            return previous.phase6EvidenceText.replace(
-              "funding_wallet:",
-              "funding_wallet: merchant-funded-wallet",
-            );
-          }
-          if (path.endsWith(previous.phase7ProofFileName)) {
-            return previous.phase7ProofText;
-          }
-          throw new Error(`unexpected read ${path}`);
-        },
-      }),
-    ).toThrowErrorMatchingInlineSnapshot(`
-      [Error: Refusing to refresh source_commit in split402-launch-evidence/phase6-custody-evidence.txt because it already contains non-scaffold evidence fields.
-      Non-refreshable fields: funding_wallet
-      Recollect evidence from the current checkout instead of rewriting source_commit.]
-    `);
+    const plan = createProductEvidenceSourceRefreshPlan({
+      workspace: next,
+      exists: () => true,
+      readText: (path) => {
+        if (path.endsWith(previous.githubSettingsReviewFileName)) {
+          return previous.githubSettingsReviewText;
+        }
+        if (path.endsWith(previous.phase6EvidenceFileName)) {
+          return previous.phase6EvidenceText.replace(
+            "funding_wallet:",
+            "funding_wallet: merchant-funded-wallet",
+          );
+        }
+        if (path.endsWith(previous.phase7ProofFileName)) {
+          return previous.phase7ProofText;
+        }
+        throw new Error(`unexpected read ${path}`);
+      },
+    });
+
+    expect(plan.skipped).toEqual([
+      {
+        path: "split402-launch-evidence/phase6-custody-evidence.txt",
+        nonRefreshableFields: ["funding_wallet"],
+        nextAction:
+          "Contains non-scaffold evidence fields; recollect it with corepack pnpm phase6:evidence:assemble --evidence-env-file split402-launch-evidence/phase6-evidence.env split402-launch-evidence/phase6-custody-evidence.txt instead of rewriting source_commit.",
+      },
+    ]);
+    expect(plan.writes.map((write) => write.path)).toEqual([
+      join("split402-launch-evidence", "github-settings-review.txt"),
+      join("split402-launch-evidence", "phase7-staging-proof.txt"),
+    ]);
+    expect(plan.writes[0]?.contents).toContain("source_commit: def5678");
+    expect(plan.writes[1]?.contents).toContain("source_commit: def5678");
   });
 
-  it("refuses to refresh source commits after GitHub settings review is filled", () => {
+  it("skips a filled GitHub settings review and still refreshes phase scaffolds", () => {
     const previous = createSplit402ProductEvidenceWorkspace({
       sourceCommit: "abc1234",
     });
@@ -405,28 +419,76 @@ describe("Split402 product evidence workspace", () => {
       sourceCommit: "def5678",
     });
 
-    expect(() =>
-      createProductEvidenceSourceRefreshWrites({
-        workspace: next,
-        readText: (path) => {
-          if (path.endsWith(previous.githubSettingsReviewFileName)) {
-            return previous.githubSettingsReviewText
-              .replace("reviewers: <reviewer handles>", "reviewers: Split402 operators")
-              .replace("about_description_matches: no", "about_description_matches: yes");
-          }
-          if (path.endsWith(previous.phase6EvidenceFileName)) {
-            return previous.phase6EvidenceText;
-          }
-          if (path.endsWith(previous.phase7ProofFileName)) {
-            return previous.phase7ProofText;
-          }
-          throw new Error(`unexpected read ${path}`);
-        },
-      }),
-    ).toThrowErrorMatchingInlineSnapshot(`
-      [Error: Refusing to refresh source_commit in split402-launch-evidence/github-settings-review.txt because it already contains non-scaffold evidence fields.
-      Non-refreshable fields: reviewers, about_description_matches
-      Recollect evidence from the current checkout instead of rewriting source_commit.]
-    `);
+    const plan = createProductEvidenceSourceRefreshPlan({
+      workspace: next,
+      exists: () => true,
+      readText: (path) => {
+        if (path.endsWith(previous.githubSettingsReviewFileName)) {
+          return previous.githubSettingsReviewText
+            .replace("reviewers: <reviewer handles>", "reviewers: Split402 operators")
+            .replace("about_description_matches: no", "about_description_matches: yes");
+        }
+        if (path.endsWith(previous.phase6EvidenceFileName)) {
+          return previous.phase6EvidenceText;
+        }
+        if (path.endsWith(previous.phase7ProofFileName)) {
+          return previous.phase7ProofText;
+        }
+        throw new Error(`unexpected read ${path}`);
+      },
+    });
+
+    expect(plan.skipped).toEqual([
+      {
+        path: "split402-launch-evidence/github-settings-review.txt",
+        nonRefreshableFields: ["reviewers", "about_description_matches"],
+        nextAction:
+          "Contains non-scaffold evidence fields; recollect it with corepack pnpm product:github-settings-review from the current checkout instead of rewriting source_commit.",
+      },
+    ]);
+    expect(plan.writes.map((write) => write.path)).toEqual([
+      join("split402-launch-evidence", "phase6-custody-evidence.txt"),
+      join("split402-launch-evidence", "phase7-staging-proof.txt"),
+    ]);
+    expect(plan.writes[0]?.contents).toContain("source_commit: def5678");
+    expect(plan.writes[1]?.contents).toContain("source_commit: def5678");
+  });
+
+  it("skips missing evidence files with missing-scaffold guidance", () => {
+    const previous = createSplit402ProductEvidenceWorkspace({
+      sourceCommit: "abc1234",
+    });
+    const next = createSplit402ProductEvidenceWorkspace({
+      sourceCommit: "def5678",
+    });
+
+    const plan = createProductEvidenceSourceRefreshPlan({
+      workspace: next,
+      exists: (path) => !path.endsWith(previous.githubSettingsReviewFileName),
+      readText: (path) => {
+        if (path.endsWith(previous.phase6EvidenceFileName)) {
+          return previous.phase6EvidenceText;
+        }
+        if (path.endsWith(previous.phase7ProofFileName)) {
+          return previous.phase7ProofText;
+        }
+        throw new Error(`unexpected read ${path}`);
+      },
+    });
+
+    expect(plan.skipped).toEqual([
+      {
+        path: "split402-launch-evidence/github-settings-review.txt",
+        nonRefreshableFields: [],
+        nextAction:
+          "Missing scaffold file; create absent scaffold files first with corepack pnpm product:evidence:init --missing split402-launch-evidence.",
+      },
+    ]);
+    expect(plan.writes.map((write) => write.path)).toEqual([
+      join("split402-launch-evidence", "phase6-custody-evidence.txt"),
+      join("split402-launch-evidence", "phase7-staging-proof.txt"),
+    ]);
+    expect(plan.writes[0]?.contents).toContain("source_commit: def5678");
+    expect(plan.writes[1]?.contents).toContain("source_commit: def5678");
   });
 });

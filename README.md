@@ -369,6 +369,10 @@ for attachment paths. It refuses to overwrite existing scaffold files; use
 `--refresh-source` to update only stale scaffold `source_commit` values before
 evidence collection, and rerun with `--force` only when intentionally replacing
 local scaffold content.
+`--refresh-source` never rewrites `source_commit` under filled or missing
+evidence files: it refreshes the remaining scaffold-only files and reports each
+skipped file in `skippedEvidenceFiles` with the exact recollect or `--missing`
+command to run instead.
 `product:launch-preflight --brief --workspace split402-launch-evidence` checks
 whether the local launch workspace, scaffold `source_commit` values, Phase 6
 custody evidence env paths, and required Phase 7 hosted proof identity,
