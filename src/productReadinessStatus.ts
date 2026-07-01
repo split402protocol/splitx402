@@ -266,8 +266,8 @@ function createProductNextActions(
   if (!githubSettingsReview.ready) {
     leadActions.push(
       githubSettingsReview.checked
-        ? "Fix GitHub public/private/license review blockers, then regenerate split402-launch-evidence/github-settings-review.txt with corepack pnpm product:github-settings-review --output split402-launch-evidence/github-settings-review.txt."
-        : "Run corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt, verify live GitHub settings, then regenerate it with corepack pnpm product:github-settings-review --output split402-launch-evidence/github-settings-review.txt.",
+        ? "Fix GitHub public/private/license review blockers, then regenerate split402-launch-evidence/github-settings-review.txt with corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt."
+        : "Run corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt, then generate the live API review with corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt.",
     );
     if (githubSettingsReview.checked) {
       leadActions.push(...githubSettingsReview.blockers);
@@ -432,7 +432,7 @@ function createGitHubSettingsReviewStatus(input: {
       ready: false,
       status: "not_checked",
       blockers: [
-        "Run product:github-settings-review --output split402-launch-evidence/github-settings-review.txt.",
+        "Run product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt.",
       ],
     };
   }

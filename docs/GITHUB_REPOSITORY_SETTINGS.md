@@ -77,24 +77,27 @@ Run this before launch-facing updates:
 
 ```bash
 corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt
+corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt
 corepack pnpm product:public-surface-check --brief
 corepack pnpm product:local-proof --brief
 ```
 
 Then confirm the GitHub UI still matches this file.
 
-The local checks prove the tracked repository surface, not live branch protection settings.
+The local checks prove the tracked repository surface. The `--from-github`
+review captures live GitHub API state for repository metadata, branch
+protection, required checks, issue intake, releases, and readable package
+visibility, but it still leaves `review_decision: no-go` until a human reviewer
+confirms UI-only settings such as security advisories and attached evidence.
 
-After verifying the live GitHub UI, generate a review record with:
+After fixing live GitHub blockers, regenerate the API review record with:
 
 ```bash
-corepack pnpm product:github-settings-review --output split402-launch-evidence/github-settings-review.txt
+corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt
 ```
 
-The generated record must include the review method and evidence source:
+The generated record must include the evidence source:
 
-- `SPLIT402_GITHUB_SETTINGS_REVIEW_METHOD`, for example
-  `github-ui-and-api`;
 - `SPLIT402_GITHUB_SETTINGS_EVIDENCE_SOURCE`, for example
   `attached: github-settings-review-YYYY-MM-DD.md`.
 

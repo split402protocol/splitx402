@@ -282,8 +282,9 @@ function createPublicSurfaceFiles(
         "Keep blank issues disabled",
         "GitHub Security Advisories",
         "Workspace packages stay `\"private\": true`",
-        "local checks prove the tracked repository surface, not live branch protection settings",
+        "The local checks prove the tracked repository surface.",
         "product:github-settings-review",
+        "product:github-settings-review --from-github",
       ].join("\n"),
       "docs/PUBLIC_PRIVATE_BOUNDARY.md": [
         "## Public Repository",

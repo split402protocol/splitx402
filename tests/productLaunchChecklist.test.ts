@@ -49,7 +49,7 @@ describe("Split402 launch checklist", () => {
       "corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt",
     );
     expect(checklist.sections[1]?.commands).toContain(
-      "corepack pnpm product:github-settings-review --output split402-launch-evidence/github-settings-review.txt",
+      "corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt",
     );
     expect(checklist.sections[1]?.notes).toContain(
       "Do not reintroduce MIT in README, package metadata, GitHub About text, release notes, or package manifests.",

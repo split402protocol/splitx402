@@ -345,7 +345,7 @@ corepack pnpm product:local-proof --help
 corepack pnpm product:local-proof --brief
 corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json
 corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt
-corepack pnpm product:github-settings-review --output split402-launch-evidence/github-settings-review.txt
+corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt
 corepack pnpm product:public-surface-check --brief
 corepack pnpm product:launch-preflight --help
 corepack pnpm product:launch-preflight --brief
@@ -412,11 +412,14 @@ writes a fillable UTF-8 review record for the live GitHub repository settings in
 The launch evidence workspace includes
 `split402-launch-evidence/github-settings-review.txt` as the intended saved
 review artifact.
-After verifying branch protection, Code Owners review, required checks, issue
-intake, and release posture in the GitHub UI/API, run
-`product:github-settings-review --output split402-launch-evidence/github-settings-review.txt`
-with the required `SPLIT402_GITHUB_SETTINGS_*` environment values. This command
-records the review; it does not itself prove live GitHub branch protection.
+Run
+`product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt`
+to generate a no-go review record from the live GitHub API. It checks the About
+description, topics, homepage posture, branch protection, pull-request/codeowner
+review, required checks, force-push/deletion blocks, blank issue intake,
+releases, and package visibility where the GitHub token can read it. Human
+review must still confirm security advisories and any UI-only evidence before
+changing the record to approved.
 Use `--output` instead of shell redirection so Windows PowerShell does not write
 the evidence file in an incompatible encoding. An approved review must include
 real `SPLIT402_GITHUB_SETTINGS_REVIEW_METHOD` and

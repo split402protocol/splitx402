@@ -119,9 +119,8 @@ describe("repository presentation", () => {
     expect(repositorySettings).toContain("Local public-alpha proof");
     expect(repositorySettings).toContain("PostgreSQL integration tests");
     expect(repositorySettings).toContain("GitHub Security Advisories");
-    expect(repositorySettings).toContain(
-      "not live branch protection settings",
-    );
+    expect(repositorySettings).toContain("product:github-settings-review --from-github");
+    expect(repositorySettings).toContain("review captures live GitHub API state");
 
     expect(codeqlWorkflow).toContain("github/codeql-action/init@v3");
     expect(codeqlWorkflow).toContain("javascript-typescript");

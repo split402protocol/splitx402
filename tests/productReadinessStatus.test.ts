@@ -39,7 +39,7 @@ describe("Split402 product readiness status", () => {
       "Run corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json.",
     );
     expect(report.nextActions).toContain(
-      "Run corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt, verify live GitHub settings, then regenerate it with corepack pnpm product:github-settings-review --output split402-launch-evidence/github-settings-review.txt.",
+      "Run corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt, then generate the live API review with corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt.",
     );
     expect(report.nextActions).toContain(
       "Fill the generated Phase 7 and Phase 6 env files with hosted staging and custody evidence values.",
@@ -311,7 +311,7 @@ approval_decision: no-go
     expect(report.readyForPublicBoundary).toBe(false);
     expect(report.launchDecision).toBe("no-go");
     expect(report.nextActions).toContain(
-      "Run corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt, verify live GitHub settings, then regenerate it with corepack pnpm product:github-settings-review --output split402-launch-evidence/github-settings-review.txt.",
+      "Run corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt, then generate the live API review with corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt.",
     );
   });
 
