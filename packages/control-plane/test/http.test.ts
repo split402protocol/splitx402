@@ -490,6 +490,188 @@ describe("control-plane HTTP API", () => {
     ).toHaveLength(1);
   });
 
+  it("blocks releasing allocations when signed transactions may already be broadcast", async () => {
+    const { app, store, receipt, batch, transaction } =
+      await createMaybeBroadcastPayoutBatchFixture();
+
+    const response = await request(app)
+      .post(`/v1/payout-batches/${batch.id}/release-allocations`)
+      .send({ reason: "broadcast timed out", now: "2026-06-24T00:07:00Z" })
+      .expect(409);
+
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        error: "payout_batch_release_blocked",
+        hazards: [
+          expect.objectContaining({
+            transactionId: transaction.id,
+            status: "signed",
+            expectedSignature: "expected_sig_0"
+          })
+        ]
+      })
+    );
+    expect(store.getByReceiptId(receipt.receiptId)?.accrual?.status).toBe(
+      "allocated"
+    );
+    expect(store.getPayoutBatch(batch.id)?.status).toBe("planned");
+  });
+
+  it("releases allocations after the chain proves the signed transaction expired", async () => {
+    const monitor = new FakePayoutFinalityMonitor([
+      {
+        transactionId: "ignored-by-fake",
+        status: "expired",
+        signature: "expected_sig_0",
+        rpcUrl: "https://rpc.example",
+        error: "payout transaction blockhash expired"
+      }
+    ]);
+    const { app, store, receipt, batch, transaction } =
+      await createMaybeBroadcastPayoutBatchFixture({
+        payoutFinalityMonitor: monitor
+      });
+
+    const response = await request(app)
+      .post(`/v1/payout-batches/${batch.id}/release-allocations`)
+      .send({ reason: "broadcast timed out", now: "2026-06-24T00:07:00Z" })
+      .expect(200);
+
+    expect(response.body.batch).toEqual(
+      expect.objectContaining({
+        id: batch.id,
+        status: "cancelled",
+        failureCode: "allocations_released",
+        failureMessage: "broadcast timed out"
+      })
+    );
+    expect(monitor.transactions).toEqual([transaction.id]);
+    expect(store.getByReceiptId(receipt.receiptId)?.accrual?.status).toBe(
+      "available"
+    );
+    expect(store.listPayoutTransactions(batch.id)[0]?.status).toBe("signed");
+  });
+
+  it("blocks release and persists finality when the chain shows the signature landed", async () => {
+    const monitor = new FakePayoutFinalityMonitor([
+      {
+        transactionId: "ignored-by-fake",
+        status: "confirmed",
+        signature: "expected_sig_0",
+        rpcUrl: "https://rpc.example"
+      }
+    ]);
+    const { app, store, receipt, batch, transaction } =
+      await createMaybeBroadcastPayoutBatchFixture({
+        payoutFinalityMonitor: monitor
+      });
+
+    const response = await request(app)
+      .post(`/v1/payout-batches/${batch.id}/release-allocations`)
+      .send({ reason: "broadcast timed out", now: "2026-06-24T00:07:00Z" })
+      .expect(409);
+
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        error: "payout_batch_release_blocked",
+        hazards: [
+          expect.objectContaining({
+            transactionId: transaction.id,
+            chainStatus: "confirmed"
+          })
+        ]
+      })
+    );
+    expect(store.listPayoutTransactions(batch.id)[0]?.status).toBe("confirmed");
+    expect(store.getPayoutBatch(batch.id)?.status).toBe("confirmed");
+    expect(store.getByReceiptId(receipt.receiptId)?.accrual?.status).toBe(
+      "allocated"
+    );
+  });
+
+  it("blocks release when the chain cannot prove the signed transaction outcome", async () => {
+    const monitor = new FakePayoutFinalityMonitor([
+      {
+        transactionId: "ignored-by-fake",
+        status: "retry",
+        signature: "expected_sig_0",
+        rpcUrl: "https://rpc.example",
+        error: "Solana RPC request failed: timeout",
+        retryAt: "2026-06-24T00:07:30.000Z"
+      }
+    ]);
+    const { app, store, receipt, batch, transaction } =
+      await createMaybeBroadcastPayoutBatchFixture({
+        payoutFinalityMonitor: monitor
+      });
+
+    const response = await request(app)
+      .post(`/v1/payout-batches/${batch.id}/release-allocations`)
+      .send({ reason: "broadcast timed out", now: "2026-06-24T00:07:00Z" })
+      .expect(409);
+
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        error: "payout_batch_release_blocked",
+        hazards: [
+          expect.objectContaining({
+            transactionId: transaction.id,
+            chainStatus: "retry"
+          })
+        ]
+      })
+    );
+    expect(store.listPayoutTransactions(batch.id)[0]?.status).toBe("signed");
+    expect(store.getByReceiptId(receipt.receiptId)?.accrual?.status).toBe(
+      "allocated"
+    );
+  });
+
+  it("rejects an operator override without a reason", async () => {
+    const { app, store, receipt, batch } =
+      await createMaybeBroadcastPayoutBatchFixture();
+
+    await request(app)
+      .post(`/v1/payout-batches/${batch.id}/release-allocations`)
+      .send({
+        reason: "broadcast timed out",
+        now: "2026-06-24T00:07:00Z",
+        override: {}
+      })
+      .expect(400);
+
+    expect(store.getByReceiptId(receipt.receiptId)?.accrual?.status).toBe(
+      "allocated"
+    );
+  });
+
+  it("releases allocations with an explicit operator override and records the reason", async () => {
+    const { app, store, receipt, batch } =
+      await createMaybeBroadcastPayoutBatchFixture();
+
+    const response = await request(app)
+      .post(`/v1/payout-batches/${batch.id}/release-allocations`)
+      .send({
+        reason: "broadcast timed out",
+        now: "2026-06-24T00:07:00Z",
+        override: { reason: "operator verified no transfer landed on explorer" }
+      })
+      .expect(200);
+
+    expect(response.body.batch).toEqual(
+      expect.objectContaining({
+        id: batch.id,
+        status: "cancelled",
+        failureCode: "allocations_released",
+        failureMessage:
+          "broadcast timed out (operator override: operator verified no transfer landed on explorer)"
+      })
+    );
+    expect(store.getByReceiptId(receipt.receiptId)?.accrual?.status).toBe(
+      "available"
+    );
+  });
+
   it("lists payout batches that need reconciliation", async () => {
     const { app, store, receipt, merchantRegistry } = createTestApp({
       withMerchantRegistry: true,
@@ -1940,6 +2122,78 @@ function createTestApp(
     store,
     receipt: bundle.artifacts.receipt
   };
+}
+
+async function createMaybeBroadcastPayoutBatchFixture(
+  options: {
+    payoutFinalityMonitor?: PayoutFinalityMonitor;
+  } = {}
+) {
+  const { app, store, receipt, merchantRegistry } = createTestApp({
+    withMerchantRegistry: true,
+    withPayouts: true,
+    ...(options.payoutFinalityMonitor === undefined
+      ? {}
+      : { payoutFinalityMonitor: options.payoutFinalityMonitor })
+  });
+  if (merchantRegistry === undefined) {
+    throw new Error("expected merchant registry");
+  }
+  await request(app)
+    .post("/v1/merchants")
+    .send({
+      id: receipt.merchantId,
+      slug: "release-guard-merchant",
+      displayName: "Release Guard Merchant",
+      ownerWallet: receipt.payerWallet
+    })
+    .expect(201);
+  await request(app).post("/v1/receipts").send({ receipt }).expect(201);
+  const snapshot = store.getByReceiptId(receipt.receiptId);
+  if (snapshot?.accrual === undefined) {
+    throw new Error("expected receipt accrual");
+  }
+  store.save({
+    ...snapshot,
+    receipt: {
+      ...snapshot.receipt,
+      verificationState: "signature_verified"
+    },
+    accrual: {
+      ...snapshot.accrual,
+      status: "available",
+      availableAt: "2026-06-24T00:04:00.000Z"
+    }
+  });
+  const availableAccrual = store.getByReceiptId(receipt.receiptId)?.accrual;
+  if (availableAccrual === undefined) {
+    throw new Error("expected available accrual");
+  }
+  const batch = store.createPayoutBatch({
+    merchantId: receipt.merchantId,
+    payoutWalletId: "mpw_ffffffffffffffffffffffffffffffff",
+    network: receipt.network,
+    asset: receipt.asset,
+    accruals: [availableAccrual],
+    now: "2026-06-24T00:05:00Z"
+  });
+  const [transaction] = store.saveSignedPayoutTransactions({
+    payoutBatchId: batch.id,
+    now: "2026-06-24T00:06:00Z",
+    transactions: [
+      {
+        sequence: 0,
+        recentBlockhash: "blockhash_0",
+        lastValidBlockHeight: 150,
+        signedTransactionBase64: "AQID",
+        expectedSignature: "expected_sig_0"
+      }
+    ]
+  });
+  if (transaction === undefined) {
+    throw new Error("expected payout transaction");
+  }
+  return { app, store, receipt, batch, transaction };
 }
 
 class FakeWebhookEventManagementStore implements WebhookEventManagementStore {

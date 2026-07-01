@@ -116,6 +116,11 @@ GET  /v1/referrers/:referrerWallet/routes
 - allocation release for draft, planned, signing, failed, and cancelled payout
   batches, returning allocated accruals to `available` while blocking submitted,
   confirmed, finalized, and outcome-unknown batches;
+- fail-closed release guard for maybe-broadcast signed payout transactions:
+  releasing a batch whose transactions carry an expected signature requires a
+  chain finality check proving the signature did not land and the blockhash
+  expired at finalized commitment, or an explicit operator override with a
+  recorded reason;
 - unknown-outcome reconciliation queue for merchant/operator review before retry;
 - payout reconciliation action endpoint that rechecks chain finality and persists
   observed transaction outcomes before any retry decision;
@@ -132,7 +137,8 @@ GET  /v1/referrers/:referrerWallet/routes
   optional HMAC request authentication;
 - signed-byte payout transaction persistence before broadcast;
 - Solana RPC broadcast submission boundary for persisted signed bytes;
-- Solana RPC finality monitoring with retry and outcome-unknown classification;
+- Solana RPC finality monitoring with retry, blockhash-expiry, and
+  outcome-unknown classification;
 - payout batch and item status rollup from transaction finality;
 - idempotent payout-batch ledger closure for finalized payouts;
 - payout submitted, confirmed, finalized, failed, and outcome-unknown internal

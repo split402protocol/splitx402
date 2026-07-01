@@ -130,6 +130,7 @@ import type {
 } from "./payouts.js";
 import {
   PayoutBatchConflictError,
+  assertPayoutBatchAllocationsReleasable,
   attachPayoutTransactionItemMappings,
   createMerchantObligationSummary,
   createPayoutFinalizationLedgerTransaction,
@@ -319,6 +320,12 @@ interface PayoutTransactionRow extends QueryResultRow {
   finalized_at: Date | string | null;
   error_json: unknown;
   created_at: Date | string;
+}
+
+interface PayoutTransactionReleaseGuardRow extends QueryResultRow {
+  id: string;
+  status: string;
+  expected_signature: string | null;
 }
 
 interface PayoutTransactionItemRow extends QueryResultRow {
@@ -612,10 +619,32 @@ export class PostgresReceiptIngestionStore
       if (batch === undefined) {
         return undefined;
       }
+      // Compute first so non-releasable batch statuses keep conflict
+      // precedence over the broadcast-hazard guard.
       const released = releasePayoutBatchAllocationsForBatch({
         batch,
         reason: input.reason,
-        ...(input.now === undefined ? {} : { now: input.now })
+        ...(input.now === undefined ? {} : { now: input.now }),
+        ...(input.override === undefined ? {} : { override: input.override })
+      });
+      const guardRows = await client.query<PayoutTransactionReleaseGuardRow>(
+        `select id, status, expected_signature
+           from payout_transactions
+          where payout_batch_id = $1`,
+        [batch.id]
+      );
+      assertPayoutBatchAllocationsReleasable({
+        transactions: guardRows.rows.map((row) => ({
+          id: row.id,
+          status: readPayoutTransactionStatus(row.status),
+          ...(row.expected_signature === null
+            ? {}
+            : { expectedSignature: row.expected_signature })
+        })),
+        ...(input.chainChecks === undefined
+          ? {}
+          : { chainChecks: input.chainChecks }),
+        ...(input.override === undefined ? {} : { override: input.override })
       });
       await markPayoutBatchAllocationsReleased(client, released);
       return released;
