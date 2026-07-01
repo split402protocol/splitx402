@@ -8,10 +8,7 @@ import {
 describe("Split402 public surface check", () => {
   it("passes when launch-facing license and boundary files are aligned", () => {
     const files = createPublicSurfaceFiles();
-    const report = createSplit402PublicSurfaceCheckReport({
-      exists: (path) => files.has(path),
-      readText: (path) => files.get(path) ?? "",
-    });
+    const report = createReport(files);
 
     expect(report).toMatchObject({
       schema: "split402.public_surface_check.v1",
@@ -37,10 +34,7 @@ describe("Split402 public surface check", () => {
     const files = createPublicSurfaceFiles({
       "README.md": "Split402\n\nLicensed under MIT.\n",
     });
-    const report = createSplit402PublicSurfaceCheckReport({
-      exists: (path) => files.has(path),
-      readText: (path) => files.get(path) ?? "",
-    });
+    const report = createReport(files);
 
     expect(report.ok).toBe(false);
     expect(
@@ -60,10 +54,7 @@ describe("Split402 public surface check", () => {
         private: true,
       }),
     });
-    const report = createSplit402PublicSurfaceCheckReport({
-      exists: (path) => files.has(path),
-      readText: (path) => files.get(path) ?? "",
-    });
+    const report = createReport(files);
 
     expect(report.ok).toBe(false);
     expect(
@@ -83,10 +74,7 @@ describe("Split402 public surface check", () => {
         private: false,
       }),
     });
-    const report = createSplit402PublicSurfaceCheckReport({
-      exists: (path) => files.has(path),
-      readText: (path) => files.get(path) ?? "",
-    });
+    const report = createReport(files);
 
     expect(report.ok).toBe(false);
     expect(
@@ -104,11 +92,9 @@ describe("Split402 public surface check", () => {
   it("fails when a workspace package manifest is missing from the public tree", () => {
     const files = createPublicSurfaceFiles();
     files.delete("apps/payout-signer/package.json");
+    files.set("apps/payout-signer/README.md", "Payout signer app docs.\n");
 
-    const report = createSplit402PublicSurfaceCheckReport({
-      exists: (path) => files.has(path),
-      readText: (path) => files.get(path) ?? "",
-    });
+    const report = createReport(files);
 
     expect(report.ok).toBe(false);
     expect(
@@ -121,14 +107,34 @@ describe("Split402 public surface check", () => {
     });
   });
 
+  it("discovers new pnpm workspace packages before release approval", () => {
+    const files = createPublicSurfaceFiles({
+      "packages/new-provider/package.json": JSON.stringify({
+        name: "@split402/new-provider",
+        private: false,
+      }),
+    });
+
+    const report = createReport(files);
+
+    expect(report.ok).toBe(false);
+    expect(
+      report.checks.find(
+        (check) => check.id === "workspace_package_publication_boundary",
+      ),
+    ).toMatchObject({
+      ok: false,
+      details: expect.arrayContaining([
+        "packages/new-provider/package.json must keep private: true until that package has an intentional release decision.",
+      ]),
+    });
+  });
+
   it("fails when the public/private boundary disappears", () => {
     const files = createPublicSurfaceFiles();
     files.delete("docs/PUBLIC_PRIVATE_BOUNDARY.md");
 
-    const report = createSplit402PublicSurfaceCheckReport({
-      exists: (path) => files.has(path),
-      readText: (path) => files.get(path) ?? "",
-    });
+    const report = createReport(files);
 
     expect(report.ok).toBe(false);
     expect(
@@ -149,10 +155,7 @@ describe("Split402 public surface check", () => {
       ].join("\n"),
     });
 
-    const report = createSplit402PublicSurfaceCheckReport({
-      exists: (path) => files.has(path),
-      readText: (path) => files.get(path) ?? "",
-    });
+    const report = createReport(files);
 
     expect(report.ok).toBe(false);
     expect(
@@ -182,10 +185,7 @@ describe("Split402 public surface check", () => {
       ].join("\n"),
     });
 
-    const report = createSplit402PublicSurfaceCheckReport({
-      exists: (path) => files.has(path),
-      readText: (path) => files.get(path) ?? "",
-    });
+    const report = createReport(files);
 
     expect(report.ok).toBe(false);
     expect(
@@ -217,6 +217,7 @@ function createPublicSurfaceFiles(
         license: "Apache-2.0",
         private: true,
       }),
+      "pnpm-workspace.yaml": ['packages:', '  - "packages/*"', '  - "apps/*"'].join("\n"),
       LICENSE: "Apache License\nVersion 2.0, January 2004\n",
       "README.md": [
         "![License](https://img.shields.io/badge/license-Apache--2.0-blue)",
@@ -380,4 +381,27 @@ function createPublicSurfaceFiles(
       ...overrides,
     }),
   );
+}
+
+function createReport(files: Map<string, string>) {
+  return createSplit402PublicSurfaceCheckReport({
+    exists: (path) => files.has(path) || path === "apps" || path === "packages",
+    listDirectory: (path) => listVirtualDirectory(files, path),
+    readText: (path) => files.get(path) ?? "",
+  });
+}
+
+function listVirtualDirectory(files: ReadonlyMap<string, string>, path: string): string[] {
+  const prefix = `${path}/`;
+  const entries = new Set<string>();
+  for (const filePath of files.keys()) {
+    if (!filePath.startsWith(prefix)) {
+      continue;
+    }
+    const [entry] = filePath.slice(prefix.length).split("/");
+    if (entry !== undefined && entry.length > 0) {
+      entries.add(entry);
+    }
+  }
+  return [...entries].sort((left, right) => left.localeCompare(right));
 }
