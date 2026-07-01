@@ -810,6 +810,35 @@ describe("Split402ExternalX402DiscoveryClient", () => {
     ]);
   });
 
+  it("reports invalid Split402 offer extensions separately from missing extensions", async () => {
+    const discovery = new Split402ExternalX402DiscoveryClient({
+      merchantOrigin: "https://x402.example",
+      fetch: externalX402Fetch({
+        paymentRequired: externalPaymentRequired({
+          split402Info: {
+            ...sample.artifacts.offer,
+            asset: "not-a-payment-identifier"
+          }
+        })
+      }),
+      providerIdPrefix: "invalid-offer",
+      capabilityMapper: () => "crypto.price"
+    });
+
+    await expect(
+      discovery.discoverCandidates({ capability: "crypto.price" })
+    ).resolves.toEqual([
+      expect.objectContaining({
+        providerId: "invalid-offer:get.price.coin",
+        readiness: "requires_split402_campaign",
+        blockers: ["invalid Split402 offer extension"],
+        split402OfferErrors: expect.arrayContaining([
+          expect.stringContaining("asset:")
+        ])
+      })
+    ]);
+  });
+
   it("creates router-ready providers when external x402 routes include Split402 offers", async () => {
     const discovery = new Split402ExternalX402DiscoveryClient({
       merchantOrigin: receipt.merchantOrigin,
@@ -1091,11 +1120,14 @@ function externalX402Fetch(options: {
 function externalPaymentRequired(options: {
   includeSplit402?: boolean;
   split402Offer?: Split402OfferV1;
+  split402Info?: unknown;
 }): PaymentRequired {
   const offer =
     options.split402Offer ??
     (options.includeSplit402 === true ? sample.artifacts.offer : undefined);
-  if (offer !== undefined) {
+  const split402Info = options.split402Info ?? offer;
+  if (split402Info !== undefined) {
+    const paymentOffer = offer ?? sample.artifacts.offer;
     return {
       x402Version: 2,
       error: "Payment required",
@@ -1105,19 +1137,19 @@ function externalPaymentRequired(options: {
         mimeType: "application/json"
       },
       accepts: [
-        {
-          scheme: "exact",
-          network: offer.network as `${string}:${string}`,
-          asset: offer.asset,
-          amount: offer.requiredAmountAtomic,
-          payTo: offer.payToWallet,
+          {
+            scheme: "exact",
+            network: paymentOffer.network as `${string}:${string}`,
+            asset: paymentOffer.asset,
+            amount: paymentOffer.requiredAmountAtomic,
+            payTo: paymentOffer.payToWallet,
           maxTimeoutSeconds: 300,
           extra: {}
         }
       ],
       extensions: {
         split402: {
-          info: offer
+          info: split402Info
         }
       }
     };

@@ -32,6 +32,7 @@ export interface ExternalX402OnboardingCandidateView {
   amountAtomic?: string;
   readiness: string;
   blockers: string[];
+  split402OfferErrors?: string[];
   requiredSplit402Fields: string[];
   nextActions: string[];
   source: {
@@ -236,6 +237,13 @@ export function createExternalX402CandidateNextActions(
             "Ensure the unpaid route returns a parseable 402 Payment Required response.",
             "Rerun demo:discover-external-x402 before attempting a paid request."
           ]
+        : candidate.blockers.includes("invalid Split402 offer extension")
+          ? [
+              "Fix extensions.split402.info so it parses as a Split402OfferV1.",
+              "Use split402OfferErrors to correct missing or malformed offer fields.",
+              "Ensure the signed offer binds the campaign, operation, amount, commission, protocol fee, and merchant signing key.",
+              "Rerun demo:discover-external-x402; only router_ready candidates should enter paid staging tests."
+            ]
         : [
             "Add extensions.split402.info to the unpaid 402 Payment Required response.",
             "Bind the Split402 offer to the campaign, operation, amount, commission, protocol fee, and merchant signing key.",
@@ -276,6 +284,9 @@ export function publicCandidateView(
       : { amountAtomic: candidate.amountAtomic }),
     readiness: candidate.readiness,
     blockers: candidate.blockers,
+    ...(candidate.split402OfferErrors === undefined
+      ? {}
+      : { split402OfferErrors: candidate.split402OfferErrors }),
     requiredSplit402Fields:
       candidate.readiness === "requires_split402_campaign"
         ? [...SPLIT402_OFFER_EXTENSION_REQUIRED_FIELDS]

@@ -19,6 +19,12 @@ The report lists candidate route paths, HTTP methods, network, asset,
 amountAtomic, pay-to wallet, readiness, blockers, required Split402 offer
 fields, and provider next actions.
 
+If `extensions.split402.info` is present but malformed, discovery reports
+`invalid Split402 offer extension` and includes `split402OfferErrors` with the
+field paths that failed schema validation. That is different from
+`missing Split402 offer extension`, which means no Split402 offer was found in
+the unpaid `402 Payment Required` response.
+
 The same check is available through the MCP gateway tool
 `split402.discoverExternalX402`:
 
@@ -38,6 +44,14 @@ Readiness meanings:
 | `router_ready` | The route includes enough Split402 metadata to become a receipt-verified router provider. |
 | `requires_split402_campaign` | The route is a real x402 candidate but lacks a Split402 offer extension. |
 | `incomplete_payment_metadata` | The route did not expose complete x402 exact payment metadata. |
+
+Common blockers:
+
+| Blocker | Meaning |
+| --- | --- |
+| `missing Split402 offer extension` | Add `extensions.split402.info` to the unpaid 402 response. |
+| `invalid Split402 offer extension` | The extension exists, but one or more signed offer fields failed validation. Check `split402OfferErrors`. |
+| `missing complete x402 exact payment metadata` | The x402 `accepts` metadata is missing `network`, `asset`, `amount`, or `payTo`. |
 
 Base/EVM x402 candidates can become router-ready when the unpaid response
 includes a valid signed Split402 offer and the paid response returns a
