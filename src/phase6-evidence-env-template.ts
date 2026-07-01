@@ -25,7 +25,10 @@ function main(): void {
   }
 
   writeCliTextOutput({
-    text: createPhase6EvidenceAssemblyEnvTemplate({ directory }),
+    text: createPhase6EvidenceAssemblyEnvTemplate({
+      activateRecordPathMappings: true,
+      directory,
+    }),
     outputPath,
   });
 }
