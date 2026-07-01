@@ -49,6 +49,7 @@ export async function runMcpGatewaySmoke(): Promise<McpGatewaySmokeReport> {
   const tools = readToolNames(listed);
   assertTool(tools, "split402.searchCapabilities");
   assertTool(tools, "split402.execute");
+  assertTool(tools, "split402.discoverExternalX402");
   assertTool(tools, "split402.getReceipt");
 
   const searched = await callGateway(context, {

@@ -18,8 +18,11 @@ import {
 import {
   Split402Router,
   Split402ControlPlaneDiscoveryClient,
+  Split402ExternalX402DiscoveryClient,
   type Split402CapabilityProvider,
   type Split402DiscoveryFetch,
+  type Split402ExternalX402DiscoveryFetch,
+  type Split402ExternalX402ProviderCandidate,
   type Split402RouterExecuteResult,
   type Split402RouterExecutor
 } from "@split402/router";
@@ -70,12 +73,13 @@ export interface McpGatewayContext {
   router: Split402Router;
   receipts: Map<string, Split402ReceiptV1>;
   executionMode: "router-demo-mock" | "router-live-agent-sdk";
+  externalDiscoveryFetch?: Split402ExternalX402DiscoveryFetch;
 }
 
 export interface McpGatewayRuntimeOptions {
   bundle?: McpDemoBundle;
   env?: NodeJS.ProcessEnv;
-  fetch?: Split402DiscoveryFetch;
+  fetch?: Split402DiscoveryFetch & Split402ExternalX402DiscoveryFetch;
   requireSigner?: boolean;
 }
 
@@ -105,12 +109,14 @@ export function createMcpGatewayContext(
   bundle: McpDemoBundle = createMcpDemoBundle(),
   router: Split402Router = createMcpDemoRouter(bundle),
   executionMode: McpGatewayContext["executionMode"] = "router-demo-mock",
+  externalDiscoveryFetch?: Split402ExternalX402DiscoveryFetch,
 ): McpGatewayContext {
   return {
     bundle,
     router,
     receipts: new Map(),
-    executionMode
+    executionMode,
+    ...(externalDiscoveryFetch === undefined ? {} : { externalDiscoveryFetch })
   };
 }
 
@@ -163,7 +169,8 @@ export async function createMcpGatewayContextFromEnv(
       providers,
       ...(signer === undefined ? {} : { signer })
     }),
-    "router-live-agent-sdk"
+    "router-live-agent-sdk",
+    options.fetch
   );
 }
 
@@ -356,10 +363,85 @@ async function handleToolCallAsync(
   if (record.name === "split402.execute") {
     return handleRouterExecuteTool(id, record.arguments, context);
   }
+  if (record.name === "split402.discoverExternalX402") {
+    return handleExternalX402DiscoveryTool(id, record.arguments, context);
+  }
   if (record.name === "split402.getReceipt") {
     return handleGetReceiptTool(id, record.arguments, context);
   }
   return handleToolCall(id, params, context.bundle);
+}
+
+async function handleExternalX402DiscoveryTool(
+  id: string | number | null,
+  args: unknown,
+  context: McpGatewayContext,
+): Promise<McpGatewayResponse> {
+  if (typeof args !== "object" || args === null) {
+    return createErrorResponse(id, -32602, "Tool arguments are required");
+  }
+  const record = args as Record<string, unknown>;
+  const merchantOrigin = readRequiredStringArgument(
+    record.merchantOrigin,
+    "merchantOrigin"
+  );
+  if (typeof merchantOrigin !== "string") {
+    return createErrorResponse(id, -32602, merchantOrigin.message);
+  }
+  const capability =
+    record.capability === undefined
+      ? undefined
+      : readRequiredStringArgument(record.capability, "capability");
+  if (capability !== undefined && typeof capability !== "string") {
+    return createErrorResponse(id, -32602, capability.message);
+  }
+  const providerIdPrefix =
+    record.providerIdPrefix === undefined
+      ? undefined
+      : readRequiredStringArgument(record.providerIdPrefix, "providerIdPrefix");
+  if (providerIdPrefix !== undefined && typeof providerIdPrefix !== "string") {
+    return createErrorResponse(id, -32602, providerIdPrefix.message);
+  }
+  const includeFreeRoutes =
+    record.includeFreeRoutes === undefined
+      ? false
+      : readOptionalBooleanArgument(record.includeFreeRoutes, "includeFreeRoutes");
+  if (typeof includeFreeRoutes === "object") {
+    return createErrorResponse(id, -32602, includeFreeRoutes.message);
+  }
+
+  try {
+    const discovery = new Split402ExternalX402DiscoveryClient({
+      merchantOrigin,
+      ...(context.externalDiscoveryFetch === undefined
+        ? {}
+        : { fetch: context.externalDiscoveryFetch }),
+      ...(providerIdPrefix === undefined ? {} : { providerIdPrefix }),
+      ...(capability === undefined
+        ? {}
+        : {
+            capabilityMapper: (route) =>
+              route.path.includes("/price")
+                ? capability
+                : `external.${route.operationId}`
+          })
+    });
+    const candidates = await discovery.discoverCandidates({
+      ...(capability === undefined ? {} : { capability }),
+      includeFreeRoutes
+    });
+    return createToolResultResponse(id, {
+      status: "discovered",
+      merchantOrigin,
+      candidateCount: candidates.length,
+      routerReadyCount: candidates.filter(
+        (candidate) => candidate.readiness === "router_ready"
+      ).length,
+      candidates: candidates.map(publicExternalX402CandidateView)
+    });
+  } catch (error) {
+    return createErrorResponse(id, -32000, errorMessage(error));
+  }
 }
 
 async function handleRouterExecuteTool(
@@ -585,6 +667,22 @@ function routerToolCards() {
       }
     },
     {
+      name: "split402.discoverExternalX402",
+      description:
+        "Inspect an external x402 API and classify whether its paid routes are ready for Split402 routing.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          merchantOrigin: { type: "string" },
+          capability: { type: "string" },
+          providerIdPrefix: { type: "string" },
+          includeFreeRoutes: { type: "boolean" }
+        },
+        required: ["merchantOrigin"],
+        additionalProperties: false
+      }
+    },
+    {
       name: "split402.getReceipt",
       description: "Return a receipt captured during this gateway session.",
       inputSchema: {
@@ -732,6 +830,35 @@ function publicProviderView(provider: Split402CapabilityProvider) {
       ? {}
       : { payoutWallet: provider.metadata.payoutWallet }),
     reliability: provider.reliability ?? null
+  };
+}
+
+function publicExternalX402CandidateView(
+  candidate: Split402ExternalX402ProviderCandidate
+) {
+  return {
+    providerId: candidate.providerId,
+    capability: candidate.capability,
+    merchantOrigin: candidate.merchantOrigin,
+    path: candidate.path,
+    method: candidate.method,
+    operationId: candidate.operationId,
+    ...(candidate.description === undefined
+      ? {}
+      : { description: candidate.description }),
+    ...(candidate.price === undefined ? {} : { price: candidate.price }),
+    ...(candidate.network === undefined ? {} : { network: candidate.network }),
+    ...(candidate.asset === undefined ? {} : { asset: candidate.asset }),
+    ...(candidate.payToWallet === undefined
+      ? {}
+      : { payToWallet: candidate.payToWallet }),
+    ...(candidate.amountAtomic === undefined
+      ? {}
+      : { amountAtomic: candidate.amountAtomic }),
+    readiness: candidate.readiness,
+    blockers: candidate.blockers,
+    source: candidate.source,
+    routerReady: candidate.provider !== undefined
   };
 }
 
@@ -910,6 +1037,16 @@ function readOptionalPositiveIntegerArgument(
   }
   if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
     return { message: `${label} must be a positive integer` };
+  }
+  return value;
+}
+
+function readOptionalBooleanArgument(
+  value: unknown,
+  label: string,
+): boolean | { message: string } {
+  if (typeof value !== "boolean") {
+    return { message: `${label} must be a boolean` };
   }
   return value;
 }
