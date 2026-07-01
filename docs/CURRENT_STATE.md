@@ -8,6 +8,9 @@ Apache-2.0. Production hosted services, commercial router operations, private
 provider registries, custody evidence from real environments, and mainnet
 deployment details belong outside this public repository unless explicitly
 sanitized for release. See [Public and private boundary](PUBLIC_PRIVATE_BOUNDARY.md).
+Customer-facing terms, risk disclosures, payout policy, fees, disputes, and
+release requirements are tracked in
+[Commercial readiness](COMMERCIAL_READINESS.md).
 
 In simple words: an agent pays a merchant through normal x402 USDC settlement and
 attaches a signed Split402 referral claim. The merchant still receives the gross
@@ -77,6 +80,9 @@ metadata.
 - Public merchant/origin approval workflows are not production admin workflows
   yet; public registration creates pending state only.
 - Mainnet production operation is not approved.
+- Customer-facing commercial terms are not approved; public-alpha disclosures in
+  [Commercial readiness](COMMERCIAL_READINESS.md) must remain true until a real
+  terms package is reviewed.
 - Phase 6 still needs completed staging deployment evidence and all pending
   custody gates in `docs/checklists/phase6-custody-review.md` before any mainnet
   payout custody.

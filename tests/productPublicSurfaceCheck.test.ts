@@ -141,6 +141,37 @@ describe("Split402 public surface check", () => {
     });
   });
 
+  it("fails when commercial readiness disclosures disappear", () => {
+    const files = createPublicSurfaceFiles({
+      "docs/COMMERCIAL_READINESS.md": [
+        "# Commercial Readiness",
+        "Split402 can launch commercially now.",
+      ].join("\n"),
+    });
+
+    const report = createSplit402PublicSurfaceCheckReport({
+      exists: (path) => files.has(path),
+      readText: (path) => files.get(path) ?? "",
+    });
+
+    expect(report.ok).toBe(false);
+    expect(
+      report.checks.find(
+        (check) => check.id === "commercial_readiness_boundary",
+      ),
+    ).toMatchObject({
+      ok: false,
+      details: expect.arrayContaining([
+        "docs/COMMERCIAL_READINESS.md must state public-alpha commercial status.",
+        "docs/COMMERCIAL_READINESS.md must disclose the non-atomic MVP boundary.",
+        "docs/COMMERCIAL_READINESS.md must disclose merchant solvency risk.",
+        "docs/COMMERCIAL_READINESS.md must define the protocol fee basis.",
+        "docs/COMMERCIAL_READINESS.md must keep custody and hosted launch behind Phase 6/7 approval.",
+        "docs/COMMERCIAL_READINESS.md must include a commercial pre-launch gate.",
+      ]),
+    });
+  });
+
   it("fails when the GitHub public profile contract drifts", () => {
     const files = createPublicSurfaceFiles({
       "docs/GITHUB_PUBLIC_PROFILE.md": [
@@ -192,6 +223,7 @@ function createPublicSurfaceFiles(
         "[Public and private boundary](docs/PUBLIC_PRIVATE_BOUNDARY.md)",
         "[GitHub repository settings](docs/GITHUB_REPOSITORY_SETTINGS.md)",
         "[Release policy](docs/RELEASE_POLICY.md)",
+        "[Commercial readiness](docs/COMMERCIAL_READINESS.md)",
         "[Pre-launch public/private review checklist](docs/checklists/prelaunch-public-private-review.md)",
         "[Public/private and license decision](docs/decisions/0009-public-private-boundary-and-apache-license.md)",
         "This public repository is licensed under [Apache-2.0](LICENSE).",
@@ -269,6 +301,18 @@ function createPublicSurfaceFiles(
         "A passing local proof does not approve public launch.",
         "readyForProductionMainnet remains false.",
         "product:mainnet-canary does not approve production mainnet launch.",
+      ].join("\n"),
+      "docs/COMMERCIAL_READINESS.md": [
+        "# Commercial Readiness",
+        "## Current Commercial Status",
+        "- Public alpha only.",
+        "The current MVP is referral attribution and commission accounting around normal x402 payments.",
+        "It is not atomic on-chain payment splitting.",
+        "A valid Split402 receipt proves a merchant-signed commission obligation, not that the merchant payout wallet is solvent.",
+        "Protocol fees are calculated from the referral commission, using `protocolFeeBpsOfCommission`.",
+        "Production custody, hosted operations, and mainnet use require Phase 6 and Phase 7 approval before any customer-facing launch claim.",
+        "## Pre-Launch Commercial Gate",
+        "Commercial launch remains blocked until all are true:",
       ].join("\n"),
       "docs/checklists/prelaunch-public-private-review.md": [
         "# Pre-Launch Public/Private Review",
