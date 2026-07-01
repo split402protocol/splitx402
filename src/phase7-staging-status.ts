@@ -40,7 +40,9 @@ const report = createPhase7StagingStatusReport(proofText, {
         artifactExists: existsSync,
         readArtifact: (artifactPath) => readFileSync(artifactPath),
         resolveArtifactPath: (artifactPath, baseDir) =>
-          isAbsolute(artifactPath) ? artifactPath : resolve(baseDir, artifactPath),
+          isAbsolute(artifactPath) || existsSync(artifactPath)
+            ? artifactPath
+            : resolve(baseDir, artifactPath),
       }),
 });
 console.log(
