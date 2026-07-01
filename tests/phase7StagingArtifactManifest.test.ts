@@ -50,7 +50,7 @@ describe("Phase 7 staging artifact manifest", () => {
     );
   });
 
-  it("hashes attached artifacts that already include the launch workspace path", () => {
+  it("hashes attached artifacts that already include the launch workspace path by default", () => {
     const manifest = createPhase7StagingArtifactManifest(
       createPhase7StagingProofRecord({
         paid_request_evidence:
@@ -69,10 +69,6 @@ describe("Phase 7 staging artifact manifest", () => {
           }
           return new TextEncoder().encode("paid proof\n");
         },
-        resolveArtifactPath: (path, baseDir) =>
-          path.startsWith("split402-launch-evidence/")
-            ? path
-            : `${baseDir}/${path}`,
       },
     );
 

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isAbsolute, normalize } from "node:path";
 
 import {
   PHASE7_EVIDENCE_FIELDS,
@@ -86,7 +87,7 @@ function createArtifactManifestEntry(
   }
   const resolvedPath =
     options.resolveArtifactPath === undefined
-      ? `${options.artifactBaseDir}/${artifactPath}`
+      ? resolveDefaultArtifactPath(artifactPath, options.artifactBaseDir)
       : options.resolveArtifactPath(artifactPath, options.artifactBaseDir);
   const bytes = options.readArtifact(resolvedPath);
   return {
@@ -97,6 +98,22 @@ function createArtifactManifestEntry(
     sizeBytes: bytes.byteLength,
     sha256: sha256(bytes),
   };
+}
+
+function resolveDefaultArtifactPath(artifactPath: string, baseDir: string): string {
+  if (isAbsolute(artifactPath)) {
+    return artifactPath;
+  }
+  const normalizedArtifactPath = normalize(artifactPath);
+  const normalizedBaseDir = normalize(baseDir);
+  if (
+    normalizedArtifactPath === normalizedBaseDir ||
+    normalizedArtifactPath.startsWith(`${normalizedBaseDir}\\`) ||
+    normalizedArtifactPath.startsWith(`${normalizedBaseDir}/`)
+  ) {
+    return artifactPath;
+  }
+  return `${baseDir}/${artifactPath}`;
 }
 
 function readAttachedArtifactPath(reference: string): string | undefined {
