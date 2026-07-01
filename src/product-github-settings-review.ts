@@ -56,6 +56,8 @@ try {
           env.SPLIT402_GITHUB_SETTINGS_EVIDENCE_SOURCE ?? "pending",
         repositoryMetadata: readLiveRepositoryMetadata(),
         branchProtection: readLiveBranchProtection(),
+        privateVulnerabilityReportingEnabled:
+          readLivePrivateVulnerabilityReportingEnabled(),
         releaseCount: readLiveReleaseCount(),
         packageCount: readLivePackageCount(),
         sourceCommit:
@@ -279,6 +281,21 @@ function readLiveArrayCount(args: string[]): number | undefined {
       }),
     ) as unknown;
     return Array.isArray(parsed) ? parsed.length : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function readLivePrivateVulnerabilityReportingEnabled(): boolean | undefined {
+  try {
+    const parsed = JSON.parse(
+      execFileSync(
+        "gh",
+        ["api", "repos/split402protocol/splitx402/private-vulnerability-reporting"],
+        { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+      ),
+    ) as { enabled?: boolean };
+    return parsed.enabled;
   } catch {
     return undefined;
   }

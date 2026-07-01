@@ -214,6 +214,7 @@ describe("GitHub repository settings review", () => {
       evidenceSource: "attached: github-api-review.json",
       sourceCommit: "abc1234",
       releaseCount: 0,
+      privateVulnerabilityReportingEnabled: true,
       repositoryMetadata: {
         nameWithOwner: "split402protocol/splitx402",
         description:
@@ -249,6 +250,7 @@ describe("GitHub repository settings review", () => {
     expect(record).toContain("about_description_matches: yes");
     expect(record).toContain("topics_match: yes");
     expect(record).toContain("blank_issues_disabled: no");
+    expect(record).toContain("security_advisories_enabled: yes");
     expect(record).toContain("packages_and_releases_unpublished: no");
     expect(record).toContain("review_decision: no-go");
     expect(verifyGitHubRepositorySettingsReviewRecord(record)).toEqual({
@@ -277,6 +279,7 @@ describe("GitHub repository settings review", () => {
       sourceCommit: "abc1234",
       releaseCount: 0,
       packageCount: 0,
+      privateVulnerabilityReportingEnabled: true,
       repositoryMetadata: {
         nameWithOwner: "split402protocol/splitx402",
         description:
