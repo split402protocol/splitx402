@@ -65,6 +65,14 @@ for fail-closed receipt verification by default. `GET` and `POST` providers are
 supported; unsupported methods, blank payment metadata, and malformed atomic
 prices are discarded before provider records are returned.
 
+For external x402 APIs that have not yet registered Split402 campaign metadata,
+`Split402ExternalX402DiscoveryClient` can import `/.well-known/x402`, merge
+OpenAPI `x-payment-info`, probe unpaid routes for the authoritative
+`Payment-Required` header, and return onboarding candidates. Candidates are
+marked `requires_split402_campaign` until the x402 response includes a Split402
+offer extension; only `router_ready` candidates produce receipt-verified router
+providers.
+
 ## Current Behavior
 
 - filters providers by capability, network, asset, and maximum amount;
@@ -73,6 +81,8 @@ prices are discarded before provider records are returned.
 - ignores provider records with malformed atomic prices during search and
   execution ranking;
 - discovers active control-plane routes into provider records;
+- discovers external x402 provider candidates for onboarding without treating
+  plain x402 payment requirements as Split402 referral routes;
 - supports x402 `GET` and `POST` provider methods; object-shaped router input is
   passed as query parameters for `GET` providers and as JSON body for `POST`
   providers;

@@ -3,11 +3,15 @@ import {
   type Split402EvmSchemeOptions,
   type Split402EvmSigner
 } from "@split402/agent-sdk";
+import { decodePaymentRequiredHeader } from "@x402/core/http";
+import type { PaymentRequired } from "@x402/core/types";
 import {
   hashProtocolObject,
+  Split402OfferV1Schema,
   Split402ReceiptV1Schema,
   verifySplit402Receipt,
   type ReferralClaimV1,
+  type Split402OfferV1,
   type Split402ReceiptV1
 } from "@split402/protocol";
 import type { KeyPairSigner } from "@solana/kit";
@@ -97,6 +101,9 @@ export type Split402DiscoveryFetch = (
 
 export interface Split402DiscoveryFetchResponse {
   status: number;
+  headers?: {
+    get?(name: string): string | null;
+  } | Record<string, string>;
   text(): Promise<string>;
 }
 
@@ -114,6 +121,73 @@ export interface Split402ControlPlaneDiscoveryInput {
   resourceOrigin?: string;
   operationId?: string;
   limit?: number;
+}
+
+export type Split402ExternalX402DiscoveryFetch = (
+  url: string,
+  init?: {
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string;
+  }
+) => Promise<Split402DiscoveryFetchResponse>;
+
+export interface Split402ExternalX402DiscoveryOptions {
+  merchantOrigin: string;
+  fetch?: Split402ExternalX402DiscoveryFetch;
+  providerIdPrefix?: string;
+  merchantPublicKey?: string;
+  capabilityMapper?: (
+    candidate: Split402ExternalX402RouteDescriptor
+  ) => string | undefined;
+}
+
+export interface Split402ExternalX402DiscoveryInput {
+  capability?: string;
+  includeFreeRoutes?: boolean;
+}
+
+export interface Split402ExternalX402RouteDescriptor {
+  method: Split402ProviderHttpMethod;
+  path: string;
+  probePath: string;
+  operationId: string;
+  description?: string;
+  price?: string;
+  inputSchema?: unknown;
+  source: {
+    manifest: boolean;
+    openapi: boolean;
+  };
+}
+
+export interface Split402ExternalX402ProviderCandidate {
+  providerId: string;
+  capability: string;
+  merchantOrigin: string;
+  path: string;
+  method: Split402ProviderHttpMethod;
+  operationId: string;
+  description?: string;
+  price?: string;
+  network?: string;
+  asset?: string;
+  payToWallet?: string;
+  amountAtomic?: string;
+  facilitator?: string;
+  inputSchema?: unknown;
+  split402Offer?: Split402OfferV1;
+  readiness:
+    | "router_ready"
+    | "requires_split402_campaign"
+    | "incomplete_payment_metadata";
+  blockers: string[];
+  source: {
+    manifest: boolean;
+    openapi: boolean;
+    paymentRequiredHeader: boolean;
+  };
+  provider?: Split402CapabilityProvider;
 }
 
 export interface Split402BazaarResourceDiscoveryRecord {
@@ -640,6 +714,205 @@ export class Split402ControlPlaneDiscoveryClient {
   }
 }
 
+export class Split402ExternalX402DiscoveryClient {
+  private readonly merchantOrigin: string;
+  private readonly fetchJson: Split402ExternalX402DiscoveryFetch;
+  private readonly providerIdPrefix: string;
+  private readonly merchantPublicKey?: string;
+  private readonly capabilityMapper: (
+    candidate: Split402ExternalX402RouteDescriptor
+  ) => string | undefined;
+
+  constructor(options: Split402ExternalX402DiscoveryOptions) {
+    this.merchantOrigin = normalizeExternalMerchantOrigin(options.merchantOrigin);
+    this.fetchJson = options.fetch ?? defaultDiscoveryFetch;
+    this.providerIdPrefix =
+      options.providerIdPrefix ?? new URL(this.merchantOrigin).hostname;
+    this.capabilityMapper =
+      options.capabilityMapper ??
+      ((candidate) => `x402.${candidate.operationId}`);
+    if (options.merchantPublicKey !== undefined) {
+      this.merchantPublicKey = options.merchantPublicKey;
+    }
+  }
+
+  async discoverCandidates(
+    input: Split402ExternalX402DiscoveryInput = {}
+  ): Promise<Split402ExternalX402ProviderCandidate[]> {
+    const manifest = await this.getOptionalJson("/.well-known/x402");
+    const openapi = await this.getOptionalJson("/openapi.json");
+    const routes = collectExternalX402Routes({
+      manifest,
+      openapi,
+      includeFreeRoutes: input.includeFreeRoutes === true
+    });
+    const candidates: Split402ExternalX402ProviderCandidate[] = [];
+    for (const route of routes) {
+      const capability = this.capabilityMapper(route);
+      if (capability === undefined || capability.trim().length === 0) {
+        continue;
+      }
+      if (input.capability !== undefined && capability !== input.capability) {
+        continue;
+      }
+      candidates.push(await this.candidateFromRoute(route, capability));
+    }
+    return candidates.sort((left, right) =>
+      left.providerId.localeCompare(right.providerId)
+    );
+  }
+
+  private async candidateFromRoute(
+    route: Split402ExternalX402RouteDescriptor,
+    capability: string
+  ): Promise<Split402ExternalX402ProviderCandidate> {
+    const probe = await this.probePaymentRequired(route);
+    const paymentRequired = probe.paymentRequired;
+    const accept = selectExactPaymentRequirement(paymentRequired);
+    const split402Offer = extractSplit402OfferFromPaymentRequired(paymentRequired);
+    const network = accept?.network;
+    const asset = accept?.asset;
+    const payToWallet = accept?.payTo;
+    const amountAtomic = accept?.amount;
+    const facilitator = readOptionalString(readRecord(accept)?.facilitator);
+    const blockers: string[] = [];
+    if (
+      network === undefined ||
+      asset === undefined ||
+      payToWallet === undefined ||
+      amountAtomic === undefined ||
+      readOptionalAtomicAmount(amountAtomic) === undefined
+    ) {
+      blockers.push("missing complete x402 exact payment metadata");
+    }
+    if (split402Offer === undefined) {
+      blockers.push("missing Split402 offer extension");
+    }
+    const provider =
+      blockers.length === 0 && split402Offer !== undefined
+        ? this.providerFromSplit402Offer({
+            route,
+            capability,
+            split402Offer,
+            paymentPath: readPaymentResourcePath(paymentRequired) ?? route.probePath
+          })
+        : undefined;
+    const readiness =
+      provider !== undefined
+        ? "router_ready"
+        : blockers.some((blocker) => blocker.startsWith("missing complete"))
+          ? "incomplete_payment_metadata"
+          : "requires_split402_campaign";
+    return {
+      providerId: createExternalProviderId(this.providerIdPrefix, route),
+      capability,
+      merchantOrigin: this.merchantOrigin,
+      path: readPaymentResourcePath(paymentRequired) ?? route.probePath,
+      method: route.method,
+      operationId: route.operationId,
+      ...(route.description === undefined ? {} : { description: route.description }),
+      ...(route.price === undefined ? {} : { price: route.price }),
+      ...(network === undefined ? {} : { network }),
+      ...(asset === undefined ? {} : { asset }),
+      ...(payToWallet === undefined ? {} : { payToWallet }),
+      ...(amountAtomic === undefined ? {} : { amountAtomic }),
+      ...(facilitator === undefined ? {} : { facilitator }),
+      ...(route.inputSchema === undefined ? {} : { inputSchema: route.inputSchema }),
+      ...(split402Offer === undefined ? {} : { split402Offer }),
+      readiness,
+      blockers,
+      source: {
+        manifest: route.source.manifest,
+        openapi: route.source.openapi,
+        paymentRequiredHeader: probe.paymentRequiredHeader
+      },
+      ...(provider === undefined ? {} : { provider })
+    };
+  }
+
+  private providerFromSplit402Offer(input: {
+    route: Split402ExternalX402RouteDescriptor;
+    capability: string;
+    split402Offer: Split402OfferV1;
+    paymentPath: string;
+  }): Split402CapabilityProvider {
+    return {
+      providerId: createExternalProviderId(this.providerIdPrefix, input.route),
+      capability: input.capability,
+      merchantOrigin: this.merchantOrigin,
+      path: input.paymentPath,
+      method: input.route.method,
+      operationId: input.split402Offer.operationId,
+      campaignId: input.split402Offer.campaignId,
+      ...(this.merchantPublicKey === undefined
+        ? {}
+        : { merchantPublicKey: this.merchantPublicKey }),
+      network: input.split402Offer.network,
+      asset: input.split402Offer.asset,
+      payToWallet: input.split402Offer.payToWallet,
+      amountAtomic: input.split402Offer.requiredAmountAtomic,
+      metadata: {
+        ...(input.route.inputSchema === undefined
+          ? {}
+          : { inputSchema: input.route.inputSchema })
+      }
+    };
+  }
+
+  private async probePaymentRequired(
+    route: Split402ExternalX402RouteDescriptor
+  ): Promise<{
+    paymentRequired?: PaymentRequired;
+    paymentRequiredHeader: boolean;
+  }> {
+    const response = await this.fetchJson(
+      new URL(route.probePath, this.merchantOrigin).toString(),
+      {
+        method: route.method,
+        headers: {
+          accept: "application/json",
+          ...(route.method === "POST" ? { "content-type": "application/json" } : {})
+        },
+        ...(route.method === "POST" ? { body: "{}" } : {})
+      }
+    );
+    const paymentRequiredHeader = readResponseHeader(
+      response,
+      "payment-required"
+    );
+    if (paymentRequiredHeader !== undefined) {
+      return {
+        paymentRequired: decodePaymentRequiredHeader(paymentRequiredHeader),
+        paymentRequiredHeader: true
+      };
+    }
+    const text = await response.text();
+    const paymentRequired = parsePaymentRequiredBody(text);
+    return {
+      ...(paymentRequired === undefined ? {} : { paymentRequired }),
+      paymentRequiredHeader: false
+    };
+  }
+
+  private async getOptionalJson(path: string): Promise<unknown> {
+    const response = await this.fetchJson(new URL(path, this.merchantOrigin).toString(), {
+      headers: { accept: "application/json" }
+    });
+    if (response.status < 200 || response.status >= 300) {
+      return undefined;
+    }
+    const text = await response.text();
+    if (text.trim().length === 0) {
+      return undefined;
+    }
+    try {
+      return JSON.parse(text) as unknown;
+    } catch {
+      return undefined;
+    }
+  }
+}
+
 export class Split402AgentSdkExecutor implements Split402RouterExecutor {
   async execute(input: {
     provider: Split402CapabilityProvider;
@@ -705,6 +978,384 @@ export class Split402AgentSdkExecutor implements Split402RouterExecutor {
         : { referralClaim: input.referralClaim })
     });
   }
+}
+
+function collectExternalX402Routes(input: {
+  manifest: unknown;
+  openapi: unknown;
+  includeFreeRoutes: boolean;
+}): Split402ExternalX402RouteDescriptor[] {
+  const byKey = new Map<string, Split402ExternalX402RouteDescriptor>();
+  for (const route of readManifestPaidRoutes(
+    input.manifest,
+    input.includeFreeRoutes
+  )) {
+    byKey.set(routeKey(route.method, route.path), route);
+  }
+  for (const route of readOpenApiPaidRoutes(input.openapi)) {
+    const key = routeKey(route.method, route.path);
+    const existing = byKey.get(key);
+    if (existing === undefined) {
+      byKey.set(key, route);
+      continue;
+    }
+    byKey.set(key, {
+      ...existing,
+      probePath: existing.probePath ?? route.probePath,
+      operationId: route.operationId,
+      ...(existing.description === undefined && route.description !== undefined
+        ? { description: route.description }
+        : {}),
+      ...(existing.inputSchema === undefined && route.inputSchema !== undefined
+        ? { inputSchema: route.inputSchema }
+        : {}),
+      source: {
+        manifest: existing.source.manifest || route.source.manifest,
+        openapi: existing.source.openapi || route.source.openapi
+      }
+    });
+  }
+  return [...byKey.values()];
+}
+
+function readManifestPaidRoutes(
+  value: unknown,
+  includeFreeRoutes: boolean
+): Split402ExternalX402RouteDescriptor[] {
+  const manifest = readRecord(value);
+  const paidRoutes = Array.isArray(manifest?.paid_routes)
+    ? manifest.paid_routes
+    : [];
+  return paidRoutes
+    .map(readRecord)
+    .flatMap((route) => {
+      const method = parseProviderHttpMethod(readOptionalString(route?.method));
+      const path = normalizeOpenApiPath(readOptionalString(route?.path));
+      const price = readOptionalString(route?.price);
+      const description = readOptionalString(route?.description);
+      if (
+        method === undefined ||
+        path === undefined ||
+        (price?.toLowerCase() === "free" && !includeFreeRoutes)
+      ) {
+        return [];
+      }
+      return [
+        {
+          method,
+          path,
+          probePath: readExampleCurlPath(route?.example_unpaid_curl) ?? path,
+          operationId: operationIdFromPath(method, path),
+          ...(description === undefined ? {} : { description }),
+          ...(price === undefined ? {} : { price }),
+          source: {
+            manifest: true,
+            openapi: false
+          }
+        } satisfies Split402ExternalX402RouteDescriptor
+      ];
+    });
+}
+
+function readOpenApiPaidRoutes(
+  value: unknown
+): Split402ExternalX402RouteDescriptor[] {
+  const openapi = readRecord(value);
+  const paths = readRecord(openapi?.paths);
+  if (paths === undefined) {
+    return [];
+  }
+  const routes: Split402ExternalX402RouteDescriptor[] = [];
+  for (const [path, pathItemValue] of Object.entries(paths)) {
+    const normalizedPath = normalizeOpenApiPath(path);
+    const pathItem = readRecord(pathItemValue);
+    if (normalizedPath === undefined || pathItem === undefined) {
+      continue;
+    }
+    for (const methodName of ["get", "post"] as const) {
+      const method = parseProviderHttpMethod(methodName);
+      const operation = readRecord(pathItem[methodName]);
+      if (method === undefined || operation === undefined) {
+        continue;
+      }
+      if (readRecord(operation["x-payment-info"]) === undefined) {
+        continue;
+      }
+      const price = readOpenApiPrice(operation["x-payment-info"]);
+      const description = readOptionalString(operation.description);
+      const inputSchema = readOpenApiInputSchema(operation);
+      routes.push({
+        method,
+        path: normalizedPath,
+        probePath: materializeOpenApiPath(normalizedPath, operation),
+        operationId:
+          readOptionalString(operation.operationId) ??
+          operationIdFromPath(method, normalizedPath),
+        ...(description === undefined ? {} : { description }),
+        ...(price === undefined ? {} : { price }),
+        ...(inputSchema === undefined ? {} : { inputSchema }),
+        source: {
+          manifest: false,
+          openapi: true
+        }
+      });
+    }
+  }
+  return routes;
+}
+
+function readOpenApiPrice(value: unknown): string | undefined {
+  const paymentInfo = readRecord(value);
+  const price = readRecord(paymentInfo?.price);
+  const amount = readOptionalString(price?.amount);
+  const currency = readOptionalString(price?.currency);
+  if (amount === undefined) {
+    return undefined;
+  }
+  return currency === undefined ? amount : `${amount} ${currency}`;
+}
+
+function readOpenApiInputSchema(operation: Record<string, unknown>): unknown {
+  const requestBody = readRecord(operation.requestBody);
+  const content = readRecord(requestBody?.content);
+  const json = readRecord(content?.["application/json"]);
+  const bodySchema = json?.schema;
+  if (bodySchema !== undefined) {
+    return bodySchema;
+  }
+  const parameters = Array.isArray(operation.parameters)
+    ? operation.parameters
+    : [];
+  if (parameters.length === 0) {
+    return undefined;
+  }
+  const properties: Record<string, unknown> = {};
+  const required: string[] = [];
+  for (const parameterValue of parameters) {
+    const parameter = readRecord(parameterValue);
+    const name = readOptionalString(parameter?.name);
+    if (name === undefined) {
+      continue;
+    }
+    properties[name] = parameter?.schema ?? { type: "string" };
+    if (parameter?.required === true) {
+      required.push(name);
+    }
+  }
+  return {
+    type: "object",
+    properties,
+    ...(required.length === 0 ? {} : { required })
+  };
+}
+
+function materializeOpenApiPath(
+  path: string,
+  operation: Record<string, unknown>
+): string {
+  let materialized = path;
+  const parameters = Array.isArray(operation.parameters)
+    ? operation.parameters
+    : [];
+  for (const parameterValue of parameters) {
+    const parameter = readRecord(parameterValue);
+    if (parameter?.in !== "path") {
+      continue;
+    }
+    const name = readOptionalString(parameter.name);
+    if (name === undefined) {
+      continue;
+    }
+    const schema = readRecord(parameter.schema);
+    const enumValues = Array.isArray(schema?.enum) ? schema.enum : [];
+    const replacement =
+      readOptionalString(schema?.default) ??
+      enumValues.map(readOptionalString).find((item) => item !== undefined) ??
+      name;
+    materialized = materialized.replace(`{${name}}`, replacement);
+  }
+  return materialized;
+}
+
+function parsePaymentRequiredBody(text: string): PaymentRequired | undefined {
+  if (text.trim().length === 0) {
+    return undefined;
+  }
+  try {
+    const value = JSON.parse(text) as unknown;
+    const record = readRecord(value);
+    if (record?.x402Version !== 2) {
+      return undefined;
+    }
+    const resource = readRecord(record.resource);
+    if (resource === undefined) {
+      return undefined;
+    }
+    const resourceUrl = readOptionalString(resource?.url);
+    if (resourceUrl === undefined) {
+      return undefined;
+    }
+    const resourceDescription = readOptionalString(resource.description);
+    const resourceMimeType = readOptionalString(resource.mimeType);
+    const extensions = readRecord(record.extensions);
+    return {
+      x402Version: 2,
+      error: readOptionalString(record.error) ?? "Payment required",
+      resource: {
+        url: resourceUrl,
+        ...(resourceDescription === undefined
+          ? {}
+          : { description: resourceDescription }),
+        ...(resourceMimeType === undefined ? {} : { mimeType: resourceMimeType })
+      },
+      accepts: normalizePaymentAccepts(record.accepts),
+      ...(extensions === undefined ? {} : { extensions })
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizePaymentAccepts(value: unknown): PaymentRequired["accepts"] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map(readRecord)
+    .flatMap((accept) => {
+      const network = readOptionalString(accept?.network);
+      const amount =
+        readOptionalString(accept?.amount) ??
+        parseUsdPriceToUsdcAtomic(readOptionalString(accept?.price));
+      const asset = readOptionalString(accept?.asset);
+      const payTo =
+        readOptionalString(accept?.payTo) ?? readOptionalString(accept?.pay_to);
+      if (
+        accept?.scheme !== "exact" ||
+        network === undefined ||
+        amount === undefined ||
+        asset === undefined ||
+        payTo === undefined
+      ) {
+        return [];
+      }
+      return [
+        {
+          scheme: "exact",
+          network: network as `${string}:${string}`,
+          amount,
+          asset,
+          payTo,
+          maxTimeoutSeconds:
+            typeof accept.maxTimeoutSeconds === "number"
+              ? accept.maxTimeoutSeconds
+              : 300,
+          extra: readRecord(accept.extra) ?? {}
+        }
+      ] satisfies PaymentRequired["accepts"];
+    });
+}
+
+function selectExactPaymentRequirement(
+  paymentRequired: PaymentRequired | undefined
+): PaymentRequired["accepts"][number] | undefined {
+  return paymentRequired?.accepts.find((accept) => accept.scheme === "exact");
+}
+
+function extractSplit402OfferFromPaymentRequired(
+  paymentRequired: PaymentRequired | undefined
+): Split402OfferV1 | undefined {
+  const split402 = readRecord(readRecord(paymentRequired?.extensions)?.split402);
+  const parsed = Split402OfferV1Schema.safeParse(split402?.info);
+  return parsed.success ? parsed.data : undefined;
+}
+
+function readPaymentResourcePath(
+  paymentRequired: PaymentRequired | undefined
+): string | undefined {
+  const resource = readRecord(paymentRequired?.resource);
+  const url = readOptionalString(resource?.url);
+  if (url === undefined) {
+    return undefined;
+  }
+  return parseUrl(url)?.pathname;
+}
+
+function readResponseHeader(
+  response: Split402DiscoveryFetchResponse,
+  name: string
+): string | undefined {
+  const headers = readRecord(readRecord(response)?.headers);
+  if (headers === undefined) {
+    return undefined;
+  }
+  if (typeof (headers as { get?: unknown }).get === "function") {
+    const value = (headers as { get(name: string): unknown }).get(name);
+    return typeof value === "string" ? value : undefined;
+  }
+  const lowerName = name.toLowerCase();
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() === lowerName && typeof value === "string") {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function parseUsdPriceToUsdcAtomic(value: string | undefined): string | undefined {
+  const match = /^\$?([0-9]+)(?:\.([0-9]{1,6}))?$/u.exec(value ?? "");
+  if (match === null) {
+    return undefined;
+  }
+  const whole = BigInt(match[1]!);
+  const fractional = (match[2] ?? "").padEnd(6, "0");
+  return (whole * 1_000_000n + BigInt(fractional)).toString();
+}
+
+function normalizeOpenApiPath(value: string | undefined): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+}
+
+function readExampleCurlPath(value: unknown): string | undefined {
+  const command = readOptionalString(value);
+  if (command === undefined) {
+    return undefined;
+  }
+  const match = /https?:\/\/[^\s'"]+/iu.exec(command);
+  if (match === null) {
+    return undefined;
+  }
+  const url = parseUrl(match[0]);
+  return url === undefined ? undefined : `${url.pathname}${url.search}`;
+}
+
+function operationIdFromPath(
+  method: Split402ProviderHttpMethod,
+  path: string
+): string {
+  const suffix = path
+    .replace(/^\//u, "")
+    .replace(/\{([^}]+)\}/gu, "$1")
+    .split("/")
+    .filter((segment) => segment.length > 0)
+    .join(".");
+  return `${method.toLowerCase()}.${suffix.length === 0 ? "root" : suffix}`;
+}
+
+function createExternalProviderId(
+  prefix: string,
+  route: Split402ExternalX402RouteDescriptor
+): string {
+  const normalizedPrefix = prefix.replace(/[^a-z0-9_.-]+/giu, "-");
+  return `${normalizedPrefix}:${route.operationId}`;
+}
+
+function routeKey(method: Split402ProviderHttpMethod, path: string): string {
+  return `${method} ${path}`;
 }
 
 function compareProviders(
@@ -982,10 +1633,20 @@ function normalizeBaseUrl(value: string): string {
   return url.toString();
 }
 
+function normalizeExternalMerchantOrigin(value: string): string {
+  const url = new URL(value);
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Split402DiscoveryError("merchantOrigin must be an http(s) URL");
+  }
+  return url.origin;
+}
+
 async function defaultDiscoveryFetch(
   url: string,
   init?: {
+    method?: string;
     headers?: Record<string, string>;
+    body?: string;
   }
 ): Promise<Split402DiscoveryFetchResponse> {
   return fetch(url, init);
