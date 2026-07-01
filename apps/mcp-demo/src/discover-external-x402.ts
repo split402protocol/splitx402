@@ -93,6 +93,16 @@ export interface ExternalX402OfferTemplateView {
   signatureInstructions: string[];
 }
 
+export interface ExternalX402PaymentRequiredExtensionTemplateView {
+  extensions: {
+    split402: {
+      info: ExternalX402OfferTemplateView["unsignedOfferTemplate"] & {
+        signature: string;
+      };
+    };
+  };
+}
+
 export interface ExternalX402ReceiptTemplateView {
   responseRequirement: string;
   note: string;
@@ -276,6 +286,15 @@ export function writeExternalX402ProviderArtifacts(
           candidateDirectory,
           "unsigned-offer.template.json",
           candidate.split402OfferTemplate.unsignedOfferTemplate
+        )
+      );
+      files.push(
+        writeJsonArtifact(
+          candidateDirectory,
+          "payment-required-extension.template.json",
+          createPaymentRequiredExtensionTemplateView(
+            candidate.split402OfferTemplate
+          )
         )
       );
     }
@@ -708,6 +727,21 @@ function createSplit402OfferTemplateView(
   };
 }
 
+function createPaymentRequiredExtensionTemplateView(
+  offerTemplate: ExternalX402OfferTemplateView
+): ExternalX402PaymentRequiredExtensionTemplateView {
+  return {
+    extensions: {
+      split402: {
+        info: {
+          ...offerTemplate.unsignedOfferTemplate,
+          signature: "<base64url-signature>"
+        }
+      }
+    }
+  };
+}
+
 function writeJsonArtifact(
   directory: string,
   filename: string,
@@ -747,7 +781,8 @@ function writeProviderReadme(
     ...(hasOfferTemplate
       ? [
           "- `campaign-terms.template.json`: finalize campaign/merchant ids, economics, and policy fields, then compute its Split402 canonical hash.",
-          "- `unsigned-offer.template.json`: set `campaignTermsHash`, nonce, timestamps, and key id before signing into `extensions.split402.info`."
+          "- `unsigned-offer.template.json`: set `campaignTermsHash`, nonce, timestamps, and key id before signing.",
+          "- `payment-required-extension.template.json`: merge this wrapper into the unpaid x402 402 response after replacing the signature placeholder."
         ]
       : [
           "- This candidate already has a signed Split402 offer in discovery output, so no offer template is exported."
@@ -780,7 +815,10 @@ function writeProviderReadme(
           "  --signature <base64url-signature> \\",
           "  --merchant-public-key <merchant-offer-receipt-public-key> \\",
           "  --output-file offer.json",
-          "```"
+          "```",
+          "",
+          "After signing, set the signature in `payment-required-extension.template.json` and return that wrapper as `extensions.split402.info` in the unpaid x402 402 response.",
+          "The `info` object must match `offer.json` exactly."
         ]
       : []),
     ...(candidate.split402ReceiptTemplate === undefined

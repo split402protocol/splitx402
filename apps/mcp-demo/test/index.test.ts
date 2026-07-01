@@ -369,6 +369,7 @@ describe("external x402 onboarding CLI", () => {
           "route-metadata.json",
           "campaign-terms.template.json",
           "unsigned-offer.template.json",
+          "payment-required-extension.template.json",
           "receipt.template.json",
           "README.md"
         ])
@@ -401,9 +402,37 @@ describe("external x402 onboarding CLI", () => {
       };
       expect(campaignTerms.attributionRequired).toBe(true);
       expect(campaignTerms.allowSelfReferral).toBe(false);
+      const paymentRequiredExtension = JSON.parse(
+        readFileSync(
+          join(candidateDir, "payment-required-extension.template.json"),
+          "utf8"
+        )
+      ) as {
+        extensions: {
+          split402: {
+            info: {
+              operationId: string;
+              network: string;
+              asset: string;
+              requiredAmountAtomic: string;
+              signature: string;
+            };
+          };
+        };
+      };
+      expect(paymentRequiredExtension.extensions.split402.info).toMatchObject({
+        operationId: "get.price.coin",
+        network: EXTERNAL_X402_NETWORK,
+        asset: EXTERNAL_X402_ASSET,
+        requiredAmountAtomic: EXTERNAL_X402_AMOUNT_ATOMIC,
+        signature: "<base64url-signature>"
+      });
       expect(
         readFileSync(join(candidateDir, "README.md"), "utf8")
       ).toContain("--campaign-terms-file campaign-terms.json");
+      expect(
+        readFileSync(join(candidateDir, "README.md"), "utf8")
+      ).toContain("payment-required-extension.template.json");
       const handoffReadme = readFileSync(
         join(artifactsDir, "README.md"),
         "utf8"
