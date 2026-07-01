@@ -162,7 +162,7 @@ describe("external x402 onboarding CLI", () => {
           nextActions: expect.arrayContaining([
             "Add extensions.split402.info to the unpaid 402 Payment Required response.",
             "Return a merchant-signed Split402 receipt after successful x402 settlement.",
-            "For Base/EVM x402 routes, keep this as onboarding until signed Split402 offer and receipt validation for EVM asset and wallet identifiers is enabled."
+            "For Base/EVM x402 routes, run a low-value hosted staging proof before any production or mainnet claim."
           ]),
           routerReady: false
         })
@@ -465,7 +465,7 @@ describe("MCP demo gateway", () => {
               nextActions: expect.arrayContaining([
                 "Add extensions.split402.info to the unpaid 402 Payment Required response.",
                 "Return a merchant-signed Split402 receipt after successful x402 settlement.",
-                "For Base/EVM x402 routes, keep this as onboarding until signed Split402 offer and receipt validation for EVM asset and wallet identifiers is enabled."
+                "For Base/EVM x402 routes, run a low-value hosted staging proof before any production or mainnet claim."
               ]),
               routerReady: false
             })

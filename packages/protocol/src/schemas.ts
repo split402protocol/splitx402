@@ -2,6 +2,7 @@ import { z } from "zod";
 
 const sha256Regex = /^sha256:[0-9a-f]{64}$/u;
 const base58Regex = /^[1-9A-HJ-NP-Za-km-z]{32,88}$/u;
+const evmAddressRegex = /^0x[0-9a-fA-F]{40}$/u;
 const base64UrlRegex = /^[A-Za-z0-9_-]+$/u;
 const idRegex = /^[a-z]{3}_[0-9a-f]{32,}$/u;
 const decimalAmountRegex = /^(0|[1-9][0-9]*)$/u;
@@ -13,6 +14,13 @@ export const Sha256HashSchema = z
   .regex(sha256Regex) as z.ZodType<`sha256:${string}`>;
 
 export const Base58PublicKeySchema = z.string().regex(base58Regex);
+
+export const EvmAddressSchema = z.string().regex(evmAddressRegex);
+
+export const PaymentIdentifierSchema = z.union([
+  Base58PublicKeySchema,
+  EvmAddressSchema
+]);
 
 export const Base64UrlSignatureSchema = z.string().regex(base64UrlRegex);
 
@@ -62,9 +70,9 @@ export const Split402OfferV1Schema = z
     resourceOrigin: z.string().url(),
     operationId: z.string().min(1),
     network: z.string().min(1),
-    asset: Base58PublicKeySchema,
+    asset: PaymentIdentifierSchema,
     requiredAmountAtomic: AtomicAmountStringSchema,
-    payToWallet: Base58PublicKeySchema,
+    payToWallet: PaymentIdentifierSchema,
     commissionBps: z.number().int().min(0).max(10_000),
     protocolFeeBpsOfCommission: z.number().int().min(0).max(10_000),
     commissionBase: z.literal("required_amount"),
@@ -115,9 +123,9 @@ export const Split402ReceiptV1Schema = z
     payoutWallet: Base58PublicKeySchema.optional(),
     paymentId: Split402IdSchema,
     network: z.string().min(1),
-    asset: Base58PublicKeySchema,
-    payerWallet: Base58PublicKeySchema,
-    payToWallet: Base58PublicKeySchema,
+    asset: PaymentIdentifierSchema,
+    payerWallet: PaymentIdentifierSchema,
+    payToWallet: PaymentIdentifierSchema,
     requiredAmountAtomic: AtomicAmountStringSchema,
     settledAmountAtomic: AtomicAmountStringSchema.optional(),
     settlementTxSignature: z.string().min(1),

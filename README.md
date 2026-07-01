@@ -668,9 +668,9 @@ corepack pnpm demo:discover-external-x402 https://x402.example \
 
 See [External x402 Provider Onboarding](docs/runbooks/external-x402-provider-onboarding.md)
 for readiness meanings, required Split402 offer fields, provider next actions,
-and the Base/EVM caveat: discovery can classify those routes today, but they
-remain onboarding candidates until signed Split402 offer and receipt validation
-for EVM asset and wallet identifiers is enabled.
+and the Base/EVM boundary: signed offers and receipts can carry EVM asset and
+wallet identifiers for public-alpha routing, but hosted proof, custody, and
+mainnet approvals remain separate gates.
 
 Run the deterministic gateway smoke proof:
 
@@ -799,6 +799,7 @@ assembled and approved.
 - [Phase 7 staging proof template](docs/templates/phase7-staging-proof.txt)
 - [Architecture baseline decision](docs/decisions/0003-adopt-split402-architecture-baseline.md)
 - [Public/private and license decision](docs/decisions/0009-public-private-boundary-and-apache-license.md)
+- [EVM payment identifier decision](docs/decisions/0010-evm-payment-identifiers-in-signed-artifacts.md)
 - [Security policy](SECURITY.md)
 - [Support policy](SUPPORT.md)
 

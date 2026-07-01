@@ -1,5 +1,9 @@
 import {
+  buildOfferSigningBytes,
   createSampleProtocolArtifacts,
+  hexToBytes,
+  signEd25519Message,
+  type Split402OfferV1,
   type Split402ReceiptV1
 } from "@split402/protocol";
 import { encodePaymentRequiredHeader } from "@x402/core/http";
@@ -844,6 +848,44 @@ describe("Split402ExternalX402DiscoveryClient", () => {
       })
     ]);
   });
+
+  it("creates router-ready providers for Base x402 routes with EVM Split402 offers", async () => {
+    const { offer, publicKey } = createSignedEvmOffer();
+    const discovery = new Split402ExternalX402DiscoveryClient({
+      merchantOrigin: "https://x402.example",
+      fetch: externalX402Fetch({
+        paymentRequired: externalPaymentRequired({ split402Offer: offer })
+      }),
+      providerIdPrefix: "base-ready",
+      merchantPublicKey: publicKey,
+      capabilityMapper: () => "crypto.price"
+    });
+
+    await expect(
+      discovery.discoverCandidates({ capability: "crypto.price" })
+    ).resolves.toEqual([
+      expect.objectContaining({
+        providerId: "base-ready:get.price.coin",
+        readiness: "router_ready",
+        blockers: [],
+        split402Offer: offer,
+        provider: expect.objectContaining({
+          providerId: "base-ready:get.price.coin",
+          capability: "crypto.price",
+          merchantOrigin: "https://x402.example",
+          path: "/price/btc",
+          method: "GET",
+          operationId: "price.btc",
+          campaignId: offer.campaignId,
+          merchantPublicKey: publicKey,
+          network: "eip155:8453",
+          asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          payToWallet: "0x68614873C5d624c07DCAA3aFF5243DD5027c3910",
+          amountAtomic: "20000"
+        })
+      })
+    ]);
+  });
 });
 
 function provider(
@@ -1047,10 +1089,13 @@ function externalX402Fetch(options: {
 }
 
 function externalPaymentRequired(options: {
-  includeSplit402: boolean;
+  includeSplit402?: boolean;
+  split402Offer?: Split402OfferV1;
 }): PaymentRequired {
-  if (options.includeSplit402) {
-    const offer = sample.artifacts.offer;
+  const offer =
+    options.split402Offer ??
+    (options.includeSplit402 === true ? sample.artifacts.offer : undefined);
+  if (offer !== undefined) {
     return {
       x402Version: 2,
       error: "Payment required",
@@ -1108,6 +1153,32 @@ function externalPaymentRequired(options: {
           }
         }
       }
+    }
+  };
+}
+
+function createSignedEvmOffer(): { offer: Split402OfferV1; publicKey: string } {
+  const merchantSeed = hexToBytes(
+    "101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f"
+  );
+  const unsignedOffer = {
+    ...sample.artifacts.offer,
+    resourceOrigin: "https://x402.example",
+    operationId: "price.btc",
+    network: "eip155:8453",
+    asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    payToWallet: "0x68614873C5d624c07DCAA3aFF5243DD5027c3910",
+    requiredAmountAtomic: "20000"
+  };
+  const signature = signEd25519Message(
+    buildOfferSigningBytes(unsignedOffer),
+    merchantSeed
+  );
+  return {
+    publicKey: signature.publicKey,
+    offer: {
+      ...unsignedOffer,
+      signature: signature.signature
     }
   };
 }

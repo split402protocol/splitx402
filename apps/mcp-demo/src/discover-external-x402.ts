@@ -246,7 +246,7 @@ export function createExternalX402CandidateNextActions(
   if (candidate.network?.startsWith("eip155:") === true) {
     return [
       ...actions,
-      "For Base/EVM x402 routes, keep this as onboarding until signed Split402 offer and receipt validation for EVM asset and wallet identifiers is enabled."
+      "For Base/EVM x402 routes, run a low-value hosted staging proof before any production or mainnet claim."
     ];
   }
   return actions;
