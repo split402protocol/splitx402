@@ -268,6 +268,54 @@ describe("GitHub repository settings review", () => {
       ],
     });
   });
+
+  it("allows no-go live API snapshots before human review fields are filled", () => {
+    const record = createGitHubRepositorySettingsReviewRecordFromLiveGitHub({
+      reviewId: "github-settings-review-2026-06-30",
+      reviewDate: "2026-06-30",
+      reviewers: "pending",
+      evidenceSource: "pending",
+      sourceCommit: "abc1234",
+      releaseCount: 0,
+      packageCount: 0,
+      repositoryMetadata: {
+        nameWithOwner: "split402protocol/splitx402",
+        description:
+          "Agent payment routing and verifiable referral accounting for x402 APIs.",
+        homepageUrl: "",
+        isBlankIssuesEnabled: false,
+        repositoryTopics: [
+          { name: "agents" },
+          { name: "mcp" },
+          { name: "payments" },
+          { name: "protocol" },
+          { name: "solana" },
+          { name: "typescript" },
+          { name: "usdc" },
+          { name: "x402" },
+        ],
+      },
+      branchProtection: {
+        required_pull_request_reviews: {
+          require_code_owner_reviews: true,
+          required_approving_review_count: 1,
+        },
+        required_status_checks: {
+          contexts: [REQUIRED_CHECKS],
+        },
+        allow_force_pushes: { enabled: false },
+        allow_deletions: { enabled: false },
+      },
+    });
+
+    expect(record).toContain("reviewers: pending");
+    expect(record).toContain("evidence_source: pending");
+    expect(record).toContain("review_decision: no-go");
+    expect(verifyGitHubRepositorySettingsReviewRecord(record)).toEqual({
+      ok: true,
+      errors: [],
+    });
+  });
 });
 
 const REQUIRED_CHECKS =
