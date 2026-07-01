@@ -280,7 +280,7 @@ Providers can validate signed public artifacts locally before paid staging:
 corepack pnpm demo:validate-external-x402-artifacts -- \
   --route-metadata-file route-metadata.json \
   --merchant-public-key <merchant-offer-receipt-public-key> \
-  --offer-file offer.json \
+  --payment-required-extension-file payment-required-extension.json \
   --campaign-terms-file campaign-terms.json \
   --receipt-file receipt.json
 ```
@@ -292,6 +292,11 @@ signed offer and optional receipt. The command checks schema, merchant
 signature, x402 route binding, campaign terms hash binding, offer/receipt
 consistency, and receipt arithmetic using public JSON and the merchant public
 key only.
+
+The validator accepts either `--offer-file offer.json` or
+`--payment-required-extension-file payment-required-extension.json`. If both are
+supplied, the embedded `extensions.split402.info` object must match the offer
+exactly.
 
 If route metadata needs to be supplied manually instead of using
 `route-metadata.json`, pass `--merchant-origin`, `--operation-id`, `--network`,
@@ -316,7 +321,13 @@ The same public-artifact check is available through the MCP gateway as
       "payToWallet": "0x68614873C5d624c07DCAA3aFF5243DD5027c3910",
       "requiredAmountAtomic": "10000",
       "merchantPublicKey": "<merchant-offer-receipt-public-key>",
-      "offer": {},
+      "paymentRequiredExtension": {
+        "extensions": {
+          "split402": {
+            "info": {}
+          }
+        }
+      },
       "campaignTerms": {},
       "receipt": {}
     }

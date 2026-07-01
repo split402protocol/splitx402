@@ -848,6 +848,7 @@ function routerToolCards() {
           requiredAmountAtomic: { type: "string" },
           merchantPublicKey: { type: "string" },
           offer: { type: "object" },
+          paymentRequiredExtension: { type: "object" },
           campaignTerms: { type: "object" },
           receipt: { type: "object" }
         },
@@ -858,8 +859,7 @@ function routerToolCards() {
           "asset",
           "payToWallet",
           "requiredAmountAtomic",
-          "merchantPublicKey",
-          "offer"
+          "merchantPublicKey"
         ],
         additionalProperties: false
       }
@@ -1202,7 +1202,8 @@ function readExternalX402ArtifactValidationInput(
       payToWallet: string;
       requiredAmountAtomic: string;
       merchantPublicKey: string;
-      offer: unknown;
+      offer?: unknown;
+      paymentRequiredExtension?: unknown;
       campaignTerms?: unknown;
       receipt?: unknown;
     }
@@ -1254,8 +1255,23 @@ function readExternalX402ArtifactValidationInput(
   if (typeof merchantPublicKey !== "string") {
     return merchantPublicKey;
   }
-  if (typeof record.offer !== "object" || record.offer === null) {
-    return { message: "offer argument is required" };
+  const hasOffer = typeof record.offer === "object" && record.offer !== null;
+  const hasPaymentRequiredExtension =
+    typeof record.paymentRequiredExtension === "object" &&
+    record.paymentRequiredExtension !== null;
+  if (!hasOffer && !hasPaymentRequiredExtension) {
+    return { message: "offer or paymentRequiredExtension argument is required" };
+  }
+  if (record.offer !== undefined && !hasOffer) {
+    return { message: "offer must be an object when provided" };
+  }
+  if (
+    record.paymentRequiredExtension !== undefined &&
+    !hasPaymentRequiredExtension
+  ) {
+    return {
+      message: "paymentRequiredExtension must be an object when provided"
+    };
   }
   if (
     record.campaignTerms !== undefined &&
@@ -1277,7 +1293,10 @@ function readExternalX402ArtifactValidationInput(
     payToWallet,
     requiredAmountAtomic,
     merchantPublicKey,
-    offer: record.offer,
+    ...(hasOffer ? { offer: record.offer } : {}),
+    ...(hasPaymentRequiredExtension
+      ? { paymentRequiredExtension: record.paymentRequiredExtension }
+      : {}),
     ...(record.campaignTerms === undefined
       ? {}
       : { campaignTerms: record.campaignTerms }),

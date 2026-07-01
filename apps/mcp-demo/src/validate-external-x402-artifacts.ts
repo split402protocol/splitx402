@@ -20,7 +20,8 @@ export interface ValidateExternalX402ArtifactsInput {
   payToWallet: string;
   requiredAmountAtomic: string;
   merchantPublicKey: string;
-  offer: unknown;
+  offer?: unknown;
+  paymentRequiredExtension?: unknown;
   receipt?: unknown;
   campaignTerms?: unknown;
 }
@@ -49,6 +50,7 @@ interface ValidateExternalX402ArtifactsCliInput {
   routeMetadataFile?: string;
   merchantPublicKey?: string;
   offerFile?: string;
+  paymentRequiredExtensionFile?: string;
   receiptFile?: string;
   campaignTermsFile?: string;
 }
@@ -71,7 +73,9 @@ export function validateExternalX402Artifacts(
     offerSignature: false,
     offerMatchesPayment: false
   };
-  const parsedOffer = Split402OfferV1Schema.safeParse(input.offer);
+  const resolvedOffer = resolveOfferForValidation(input);
+  errors.push(...resolvedOffer.errors);
+  const parsedOffer = Split402OfferV1Schema.safeParse(resolvedOffer.offer);
   if (!parsedOffer.success) {
     errors.push(
       ...parsedOffer.error.issues.map(
@@ -154,6 +158,8 @@ export function parseValidateExternalX402ArtifactsArgs(
       input.merchantPublicKey = value;
     } else if (arg === "--offer-file") {
       input.offerFile = value;
+    } else if (arg === "--payment-required-extension-file") {
+      input.paymentRequiredExtensionFile = value;
     } else if (arg === "--receipt-file") {
       input.receiptFile = value;
     } else if (arg === "--campaign-terms-file") {
@@ -205,7 +211,16 @@ export async function runValidateExternalX402ArtifactsCli(
       parsed.merchantPublicKey,
       "--merchant-public-key"
     ),
-    offer: readJson(required(parsed.offerFile, "--offer-file")),
+    ...(parsed.offerFile === undefined
+      ? {}
+      : { offer: readJson(parsed.offerFile) }),
+    ...(parsed.paymentRequiredExtensionFile === undefined
+      ? {}
+      : {
+          paymentRequiredExtension: readJson(
+            parsed.paymentRequiredExtensionFile
+          )
+        }),
     ...(parsed.receiptFile === undefined
       ? {}
       : { receipt: readJson(parsed.receiptFile) }),
@@ -227,15 +242,77 @@ export const VALIDATE_EXTERNAL_X402_ARTIFACTS_USAGE = `Usage:
     [--pay-to-wallet <wallet-or-address>] \\
     [--required-amount-atomic <amount>] \\
     --merchant-public-key <base58-public-key> \\
-    --offer-file offer.json \\
+    [--offer-file offer.json] \\
+    [--payment-required-extension-file payment-required-extension.json] \\
     [--campaign-terms-file campaign-terms.json] \\
     [--receipt-file receipt.json]
 
 This validates public Split402 artifacts against the external x402 route
-metadata. When campaign terms are supplied, it recomputes the canonical terms
-hash and compares it to the signed offer and optional receipt. It never needs
-merchant private keys, bearer tokens, raw payment payloads, or facilitator
-secrets.`;
+metadata. Provide either a signed offer JSON or a payment-required extension
+wrapper containing extensions.split402.info. When campaign terms are supplied,
+it recomputes the canonical terms hash and compares it to the signed offer and
+optional receipt. It never needs merchant private keys, bearer tokens, raw
+payment payloads, or facilitator secrets.`;
+
+function resolveOfferForValidation(input: ValidateExternalX402ArtifactsInput): {
+  offer: unknown;
+  errors: string[];
+} {
+  if (input.paymentRequiredExtension === undefined) {
+    if (input.offer === undefined) {
+      return {
+        offer: undefined,
+        errors: ["offer or paymentRequiredExtension is required"]
+      };
+    }
+    return { offer: input.offer, errors: [] };
+  }
+  const extensionOffer = readSplit402InfoFromPaymentRequiredExtension(
+    input.paymentRequiredExtension
+  );
+  if (input.offer === undefined || extensionOffer.offer === undefined) {
+    return extensionOffer;
+  }
+  if (JSON.stringify(input.offer) !== JSON.stringify(extensionOffer.offer)) {
+    return {
+      offer: input.offer,
+      errors: [
+        "offer conflicts with paymentRequiredExtension.extensions.split402.info"
+      ]
+    };
+  }
+  return { offer: input.offer, errors: extensionOffer.errors };
+}
+
+function readSplit402InfoFromPaymentRequiredExtension(value: unknown): {
+  offer: unknown;
+  errors: string[];
+} {
+  if (typeof value !== "object" || value === null) {
+    return {
+      offer: undefined,
+      errors: ["paymentRequiredExtension must be an object"]
+    };
+  }
+  const record = value as Record<string, unknown>;
+  const extensions = readRecord(record.extensions);
+  const split402 = readRecord(extensions?.split402);
+  if (split402?.info === undefined) {
+    return {
+      offer: undefined,
+      errors: [
+        "paymentRequiredExtension.extensions.split402.info is required"
+      ]
+    };
+  }
+  return { offer: split402.info, errors: [] };
+}
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
 
 function readExternalX402RouteMetadata(
   path: string
