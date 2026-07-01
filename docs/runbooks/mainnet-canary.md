@@ -66,8 +66,9 @@ ready. The dry-run and rollback artifacts must use the same `source_commit` as
 the approved launch evidence checkout. The dry-run artifact must show passed
 receipt verification, economic-policy verification, chain verification, payout
 dry-run, and signer byte verification. The rollback artifact must include a
-stop-loss amount, rollback owner, rollback steps, reconciliation owner,
-reviewer, and `stop_conditions_reviewed: yes`.
+positive stop-loss amount at or below the approved canary amount cap, rollback
+owner, rollback steps, reconciliation owner, reviewer, and
+`stop_conditions_reviewed: yes`.
 
 ## Execution
 
