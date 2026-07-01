@@ -1935,6 +1935,50 @@ export function createPayoutRouter(
     }
   );
 
+  router.get("/v1/payout-batches/:batchId", async (req, res, next) => {
+    try {
+      if (options.payoutBatchStore === undefined) {
+        res.status(500).json({
+          error: "internal_server_error",
+          message: "payout batch store is required"
+        });
+        return;
+      }
+      if (options.payoutTransactionStore === undefined) {
+        res.status(500).json({
+          error: "internal_server_error",
+          message: "payout transaction store is required"
+        });
+        return;
+      }
+      const batchId = readRouteParam(req.params.batchId, "batchId");
+      const batch = await options.payoutBatchStore.getPayoutBatch(batchId);
+      if (batch === undefined) {
+        res.status(404).json({
+          error: "not_found",
+          message: "payout batch was not found"
+        });
+        return;
+      }
+      const session = await requireMerchantOwnerForMerchantId(
+        req,
+        res,
+        options,
+        batch.merchantId
+      );
+      if (session === undefined && isMerchantAuthRequired(options)) {
+        return;
+      }
+      const transactions =
+        await options.payoutTransactionStore.listPayoutTransactions(batch.id);
+      res.json({ batch, transactions });
+    } catch (error) {
+      if (!sendMerchantRegistryError(res, error)) {
+        next(error);
+      }
+    }
+  });
+
   router.post("/v1/payout-batches/:batchId/reconcile", async (req, res, next) => {
     try {
       if (options.payoutBatchStore === undefined) {
