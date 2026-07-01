@@ -394,7 +394,7 @@ branch_protection_enabled: yes
 requires_pull_request: yes
 requires_code_owner_review: yes
 requires_status_checks: yes
-required_checks: Lint, Public surface check, Typecheck, Test, Build, Check vectors, Audit, Local public-alpha proof, PostgreSQL integration tests, CodeQL, Secret scan
+required_checks: Lint, Public surface check, Typecheck, Test, Build, Check vectors, Audit, Local public-alpha proof, postgres-integration, CodeQL, Secret scan
 blocks_force_pushes: yes
 blocks_deletion: yes
 blank_issues_disabled: yes

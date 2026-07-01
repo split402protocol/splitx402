@@ -149,7 +149,7 @@ describe("repository presentation", () => {
       "require status checks to pass before merge",
     );
     expect(repositorySettings).toContain("Local public-alpha proof");
-    expect(repositorySettings).toContain("PostgreSQL integration tests");
+    expect(repositorySettings).toContain("postgres-integration");
     expect(repositorySettings).toContain("GitHub Security Advisories");
     expect(repositorySettings).toContain("product:github-settings-review --from-github");
     expect(repositorySettings).toContain("review captures live GitHub API state");

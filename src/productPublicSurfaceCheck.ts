@@ -333,7 +333,7 @@ function createGitHubRepositorySettingsCheck(
     "block force pushes",
     "block branch deletion",
     "Local public-alpha proof",
-    "PostgreSQL integration tests",
+    "postgres-integration",
     "CodeQL",
     "Secret scan",
     "Keep blank issues disabled",

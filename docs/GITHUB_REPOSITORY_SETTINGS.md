@@ -41,7 +41,7 @@ Required status checks:
 - `Check vectors`
 - `Audit`
 - `Local public-alpha proof`
-- `PostgreSQL integration tests`
+- `postgres-integration`
 - CodeQL
 - Secret scan
 
