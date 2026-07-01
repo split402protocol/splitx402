@@ -196,9 +196,12 @@ not execute paid calls.
 `--artifacts-dir` also writes per-candidate provider files: `manifest.json`, a
 top-level handoff `README.md`, a candidate `README.md`, `route-metadata.json`,
 `campaign-terms.template.json`, `unsigned-offer.template.json`, and
-`receipt.template.json` when the route has complete x402 payment metadata. These
-are public scaffolds for provider implementation and validation; they are not
-signed production artifacts.
+`payment-required-extension.template.json`, and `receipt.template.json` when the
+route has complete x402 payment metadata. These are public scaffolds for
+provider implementation and validation; they are not signed production
+artifacts. The payment-required extension template is the `extensions` wrapper
+to merge into the unpaid x402 `402 Payment Required` response after replacing
+the signature placeholder with the externally signed offer signature.
 
 After finalizing `campaign-terms.json` and `unsigned-offer.json`, compute the
 canonical campaign terms hash and exact offer signing bytes without handing

@@ -33,6 +33,7 @@ split402-provider-artifacts/
     route-metadata.json
     campaign-terms.template.json
     unsigned-offer.template.json
+    payment-required-extension.template.json
     receipt.template.json
 ```
 
@@ -40,6 +41,11 @@ These files are safe scaffolds, not signed production artifacts. Providers
 should finalize campaign ids, merchant ids, economics, timestamps, nonce, and
 `kid`; compute the real campaign terms hash; sign the offer; then validate the
 public artifacts before paid staging.
+
+`payment-required-extension.template.json` is the provider-facing wrapper to
+merge into the unpaid x402 `402 Payment Required` response after replacing the
+signature placeholder. Its `extensions.split402.info` object must match the
+signed `offer.json` exactly.
 
 To compute the campaign terms hash and exact offer signing bytes without
 sharing a private key with Split402 tooling:
