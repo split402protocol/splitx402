@@ -113,6 +113,38 @@ describe("mainnet canary evidence attachments", () => {
     expect(result.errors).toContain("stop_conditions_reviewed must be yes");
   });
 
+  it("rejects rollback plans with malformed or oversized stop-loss amounts", () => {
+    const malformed = verifyMainnetCanaryEvidenceAttachment({
+      kind: "rollback_plan",
+      value: "attached: rollback.txt",
+      exists: () => true,
+      readText: () =>
+        createPassingRollbackPlan().replace(
+          "stop_loss_amount_atomic: 100000",
+          "stop_loss_amount_atomic: not-a-number",
+        ),
+    });
+    const oversized = verifyMainnetCanaryEvidenceAttachment({
+      kind: "rollback_plan",
+      value: "attached: rollback.txt",
+      exists: () => true,
+      readText: () =>
+        createPassingRollbackPlan()
+          .replace("max_gross_amount_atomic: 100000", "max_gross_amount_atomic: 50000")
+          .replace("stop_loss_amount_atomic: 100000", "stop_loss_amount_atomic: 100001"),
+    });
+
+    expect(malformed.ok).toBe(false);
+    expect(malformed.errors).toContain(
+      "stop_loss_amount_atomic must be a positive atomic amount",
+    );
+    expect(oversized.ok).toBe(false);
+    expect(oversized.errors).toContain("stop_loss_amount_atomic must be <= 100000");
+    expect(oversized.errors).toContain(
+      "stop_loss_amount_atomic must be <= max_gross_amount_atomic",
+    );
+  });
+
   it("rejects artifacts that exceed the canary amount cap", () => {
     const result = verifyMainnetCanaryEvidenceAttachment({
       kind: "dry_run",

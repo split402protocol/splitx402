@@ -189,6 +189,11 @@ function verifyEvidenceText(input: {
     for (const field of ROLLBACK_REQUIRED_FIELDS) {
       requireFilledField(errors, fields, field);
     }
+    validateStopLossAmount(
+      errors,
+      fields.get("stop_loss_amount_atomic"),
+      fields.get("max_gross_amount_atomic"),
+    );
     requireExactField(errors, fields, "stop_conditions_reviewed", "yes");
   }
 
@@ -266,6 +271,33 @@ function validateAmountCap(errors: string[], value: string | undefined): void {
     errors.push(
       `max_gross_amount_atomic must be <= ${MAINNET_CANARY_MAX_GROSS_AMOUNT_ATOMIC}`,
     );
+  }
+}
+
+function validateStopLossAmount(
+  errors: string[],
+  value: string | undefined,
+  maxGrossAmountAtomic: string | undefined,
+): void {
+  if (value === undefined || !/^[1-9][0-9]*$/u.test(value)) {
+    errors.push("stop_loss_amount_atomic must be a positive atomic amount");
+    return;
+  }
+
+  const stopLossAmount = BigInt(value);
+  const canaryMaxAmount = BigInt(MAINNET_CANARY_MAX_GROSS_AMOUNT_ATOMIC);
+  if (stopLossAmount > canaryMaxAmount) {
+    errors.push(
+      `stop_loss_amount_atomic must be <= ${MAINNET_CANARY_MAX_GROSS_AMOUNT_ATOMIC}`,
+    );
+  }
+
+  if (
+    maxGrossAmountAtomic !== undefined &&
+    /^[1-9][0-9]*$/u.test(maxGrossAmountAtomic) &&
+    stopLossAmount > BigInt(maxGrossAmountAtomic)
+  ) {
+    errors.push("stop_loss_amount_atomic must be <= max_gross_amount_atomic");
   }
 }
 
