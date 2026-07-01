@@ -792,6 +792,21 @@ export class Split402ExternalX402DiscoveryClient {
     } else if (split402Offer === undefined) {
       blockers.push("invalid Split402 offer extension");
     }
+    if (split402Offer !== undefined) {
+      split402OfferResult.errors.push(
+        ...verifySplit402OfferMatchesExternalX402Payment({
+          offer: split402Offer,
+          merchantOrigin: this.merchantOrigin,
+          network,
+          asset,
+          payToWallet,
+          amountAtomic
+        })
+      );
+      if (split402OfferResult.errors.length > 0) {
+        blockers.push("Split402 offer does not match x402 payment metadata");
+      }
+    }
     const provider =
       blockers.length === 0 && split402Offer !== undefined
         ? this.providerFromSplit402Offer({
@@ -1291,6 +1306,45 @@ function parseSplit402OfferFromPaymentRequired(
       return `${path}: ${issue.message}`;
     })
   };
+}
+
+function verifySplit402OfferMatchesExternalX402Payment(input: {
+  offer: Split402OfferV1;
+  merchantOrigin: string;
+  network: string | undefined;
+  asset: string | undefined;
+  payToWallet: string | undefined;
+  amountAtomic: string | undefined;
+}): string[] {
+  const errors: string[] = [];
+  if (input.offer.resourceOrigin !== input.merchantOrigin) {
+    errors.push(
+      `resourceOrigin: expected ${input.merchantOrigin} from external merchant origin`
+    );
+  }
+  if (input.network !== undefined && input.offer.network !== input.network) {
+    errors.push(`network: expected ${input.network} from x402 exact payment metadata`);
+  }
+  if (input.asset !== undefined && input.offer.asset !== input.asset) {
+    errors.push(`asset: expected ${input.asset} from x402 exact payment metadata`);
+  }
+  if (
+    input.payToWallet !== undefined &&
+    input.offer.payToWallet !== input.payToWallet
+  ) {
+    errors.push(
+      `payToWallet: expected ${input.payToWallet} from x402 exact payment metadata`
+    );
+  }
+  if (
+    input.amountAtomic !== undefined &&
+    input.offer.requiredAmountAtomic !== input.amountAtomic
+  ) {
+    errors.push(
+      `requiredAmountAtomic: expected ${input.amountAtomic} from x402 exact payment metadata`
+    );
+  }
+  return errors;
 }
 
 function readPaymentResourcePath(
