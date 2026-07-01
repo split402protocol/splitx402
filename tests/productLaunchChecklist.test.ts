@@ -46,10 +46,10 @@ describe("Split402 launch checklist", () => {
       "corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence",
     );
     expect(checklist.sections[1]?.commands).toContain(
-      "corepack pnpm product:github-settings-review --template",
+      "corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt",
     );
     expect(checklist.sections[1]?.commands).toContain(
-      "corepack pnpm product:github-settings-review",
+      "corepack pnpm product:github-settings-review --output split402-launch-evidence/github-settings-review.txt",
     );
     expect(checklist.sections[1]?.notes).toContain(
       "Do not reintroduce MIT in README, package metadata, GitHub About text, release notes, or package manifests.",
@@ -122,7 +122,7 @@ describe("Split402 launch checklist", () => {
       "Review public/private and license boundary",
     );
     expect(formatSplit402LaunchChecklistBrief(checklist)).toContain(
-      "corepack pnpm product:github-settings-review --template",
+      "corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt",
     );
     expect(formatSplit402LaunchChecklistBrief(checklist)).toContain(
       "local-public-alpha-proof.json",
@@ -176,7 +176,7 @@ approval_notes: checked evidence is intentionally incomplete
       "blocked",
     ]);
     expect(checklist.nextCommand).toBe(
-      "corepack pnpm product:github-settings-review --template",
+      "corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt",
     );
     expect(formatSplit402LaunchChecklistBrief(checklist)).toContain(
       "Collect Phase 7 hosted public-alpha proof [blocked]",
@@ -221,7 +221,7 @@ approval_decision: no-go
       "blocked",
     ]);
     expect(checklist.nextCommand).toBe(
-      "corepack pnpm product:github-settings-review --template",
+      "corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt",
     );
   });
 

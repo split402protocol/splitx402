@@ -574,7 +574,7 @@ function createPublicPrivateLicenseReviewAction(input: {
   directory: string;
   fileName: string;
 }): string {
-  return `Run corepack pnpm product:github-settings-review --template > ${input.directory}/${input.fileName}, verify the live GitHub About/profile/branch-protection/release settings, then run corepack pnpm product:github-settings-review and keep the output at ${input.directory}/${input.fileName}.`;
+  return `Run corepack pnpm product:github-settings-review --template --output ${input.directory}/${input.fileName}, verify the live GitHub About/profile/branch-protection/release settings, then run corepack pnpm product:github-settings-review --output ${input.directory}/${input.fileName}.`;
 }
 
 function createCheckNextActions(check: Split402LaunchPreflightCheck): string[] {

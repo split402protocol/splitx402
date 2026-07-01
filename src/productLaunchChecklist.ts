@@ -142,8 +142,8 @@ function createPublicPrivateLicenseSection(
     status: reviewStatus.status,
     externalEvidenceRequired: false,
     commands: [
-      "corepack pnpm product:github-settings-review --template",
-      "corepack pnpm product:github-settings-review",
+      "corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt",
+      "corepack pnpm product:github-settings-review --output split402-launch-evidence/github-settings-review.txt",
       "corepack pnpm product:public-surface-check --brief",
       "corepack pnpm repo:guard",
     ],
