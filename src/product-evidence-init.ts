@@ -5,9 +5,11 @@ import { dirname, join } from "node:path";
 import {
   PRODUCT_EVIDENCE_INIT_USAGE,
   createProductEvidenceInitWrites,
-  createProductEvidenceSourceRefreshWrites,
+  createProductEvidenceSourceRefreshPlan,
   findExistingProductEvidenceInitWrites,
   parseProductEvidenceInitArgs,
+  type ProductEvidenceInitWrite,
+  type ProductEvidenceSourceRefreshSkip,
 } from "./productEvidenceInitPlan.js";
 import { createSplit402ProductEvidenceWorkspace } from "./productEvidenceWorkspace.js";
 
@@ -24,7 +26,7 @@ const workspace = createSplit402ProductEvidenceWorkspace({
 });
 const writes = createProductEvidenceInitWrites(workspace);
 const existingFiles = findExistingProductEvidenceInitWrites(writes, existsSync);
-const writesToCreate = createWritesToCreate();
+const { skippedEvidenceFiles, writesToCreate } = planWritesToCreate();
 
 if (!args.force && !args.missing && !args.refreshSource && existingFiles.length > 0) {
   console.error(
@@ -81,6 +83,7 @@ console.log(
             : "create",
       writtenFiles: writesToCreate.map((write) => write.path),
       skippedExistingFiles: args.missing ? existingFiles : [],
+      skippedEvidenceFiles,
       nextCommands: workspace.nextCommands,
     },
     null,
@@ -97,20 +100,33 @@ function parseArgs() {
   }
 }
 
-function createWritesToCreate() {
+function planWritesToCreate(): {
+  skippedEvidenceFiles: ProductEvidenceSourceRefreshSkip[];
+  writesToCreate: ProductEvidenceInitWrite[];
+} {
   if (args.force) {
-    return writes;
+    return { skippedEvidenceFiles: [], writesToCreate: writes };
   }
   if (args.missing) {
-    return writes.filter((write) => !existsSync(write.path));
+    return {
+      skippedEvidenceFiles: [],
+      writesToCreate: writes.filter((write) => !existsSync(write.path)),
+    };
   }
   if (args.refreshSource) {
-    return createProductEvidenceSourceRefreshWrites({
-      workspace,
-      readText: (path) => readFileSync(path, "utf8"),
-    });
+    try {
+      const plan = createProductEvidenceSourceRefreshPlan({
+        workspace,
+        exists: existsSync,
+        readText: (path) => readFileSync(path, "utf8"),
+      });
+      return { skippedEvidenceFiles: plan.skipped, writesToCreate: plan.writes };
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    }
   }
-  return writes;
+  return { skippedEvidenceFiles: [], writesToCreate: writes };
 }
 
 function readCurrentGitCommit(): string {
