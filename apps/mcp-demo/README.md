@@ -49,6 +49,8 @@ JSON-RPC. It exposes:
 - `split402.searchCapabilities` for router provider discovery with optional
   network, asset, and max-amount budget filters;
 - `split402.execute` for a router-backed demo execution result;
+- `split402.discoverExternalX402` for metadata-only onboarding checks against
+  external x402 APIs;
 - `split402.getReceipt` for receipts captured during the current gateway
   session.
 
@@ -123,6 +125,29 @@ Example execution request:
   }
 }
 ```
+
+Example external x402 onboarding request:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "external-1",
+  "method": "tools/call",
+  "params": {
+    "name": "split402.discoverExternalX402",
+    "arguments": {
+      "merchantOrigin": "https://x402.example",
+      "capability": "crypto.price",
+      "providerIdPrefix": "example-provider"
+    }
+  }
+}
+```
+
+This tool only reads public metadata and unpaid `402 Payment Required`
+responses. Plain x402 APIs are reported as `requires_split402_campaign` until
+their payment requirement includes a Split402 offer extension, so discovery does
+not overstate them as referral-ready providers.
 
 When `network` or `asset` are omitted from `budget`, the gateway defaults them
 from the best provider that already matches the supplied budget filters and

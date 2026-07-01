@@ -206,7 +206,7 @@ flowchart TB
 | `@split402/merchant-sdk` | Merchant helpers for campaign caching, service-key rotation, payment IDs, operation digests, and durable receipt outbox delivery. |
 | `@split402/demo-merchant` | Solana Devnet merchant API used to prove the x402 plus Split402 flow. |
 | `@split402/demo-agent` | Runnable buyer/agent harness for setup, preflight, offer inspection, and paid-suite proof runs. |
-| `@split402/mcp-demo` | MCP-facing paid-tool bundle and stdio gateway describing the demo tool, x402 payment requirement, Split402 campaign metadata, router-backed capability search/demo execution/receipt lookup, route-attribution proof, receipt verification, and proof commands. |
+| `@split402/mcp-demo` | MCP-facing paid-tool bundle and stdio gateway describing the demo tool, x402 payment requirement, Split402 campaign metadata, router-backed capability search/demo execution/external x402 onboarding/receipt lookup, route-attribution proof, receipt verification, and proof commands. |
 | `@split402/dashboard` | Merchant/referrer operations UI with a narrow read proxy for dashboard summaries, reliability profiles, webhook delivery, routes, balances, and payouts. |
 | `@split402/control-plane` | Receipt ingestion, auth, merchant/campaign/route registries, outbox workers, chain verification, accrual ledger, payout preview, allocation, transaction persistence, broadcast/finality boundaries, and payout ledger closure. |
 | `@split402/payout-signer` | Isolated payout signer appliance with HMAC request authentication, policy checks, Solana transaction signing, readiness/metrics endpoints, JSONL audit logging, and container deployment artifacts. |

@@ -4,11 +4,14 @@ import { tmpdir } from "node:os";
 
 import { describe, expect, it } from "vitest";
 import { createSampleProtocolArtifacts, hashProtocolObject } from "@split402/protocol";
+import { encodePaymentRequiredHeader } from "@x402/core/http";
+import type { PaymentRequired } from "@x402/core/types";
 import {
   Split402Router,
   type Split402CapabilityProvider,
   type Split402DiscoveryFetch,
   type Split402DiscoveryFetchResponse,
+  type Split402ExternalX402DiscoveryFetch,
   type Split402RouterExecutor
 } from "@split402/router";
 
@@ -139,6 +142,7 @@ describe("MCP demo gateway", () => {
       "split402.walletRiskScore",
       "split402.searchCapabilities",
       "split402.execute",
+      "split402.discoverExternalX402",
       "split402.getReceipt"
     ]);
     expect(result.tools[0]?.inputSchema?.required).toEqual(["wallet"]);
@@ -161,6 +165,13 @@ describe("MCP demo gateway", () => {
         budget: {
           required: ["maxAmountAtomic"]
         }
+      }
+    });
+    expect(result.tools[3]?.inputSchema).toMatchObject({
+      required: ["merchantOrigin"],
+      properties: {
+        merchantOrigin: { type: "string" },
+        capability: { type: "string" }
       }
     });
   });
@@ -310,6 +321,62 @@ describe("MCP demo gateway", () => {
       result: {
         structuredContent: {
           capabilities: []
+        },
+        isError: false
+      }
+    });
+  });
+
+  it("discovers external x402 onboarding candidates through MCP tools/call", async () => {
+    const context = createMcpGatewayContext(
+      createMcpDemoBundle({
+        generatedAt: "2026-06-26T00:00:00.000Z"
+      }),
+      undefined,
+      "router-demo-mock",
+      mcpExternalX402Fetch()
+    );
+
+    const response = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "external-discovery",
+        method: "tools/call",
+        params: {
+          name: "split402.discoverExternalX402",
+          arguments: {
+            merchantOrigin: "https://x402.example",
+            capability: "crypto.price",
+            providerIdPrefix: "issue-131"
+          }
+        }
+      }),
+      context
+    );
+
+    expect(response).toMatchObject({
+      jsonrpc: "2.0",
+      id: "external-discovery",
+      result: {
+        structuredContent: {
+          status: "discovered",
+          merchantOrigin: "https://x402.example",
+          candidateCount: 1,
+          routerReadyCount: 0,
+          candidates: [
+            expect.objectContaining({
+              providerId: "issue-131:get.price.coin",
+              capability: "crypto.price",
+              path: "/price/btc",
+              method: "GET",
+              network: "eip155:8453",
+              asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+              amountAtomic: "20000",
+              readiness: "requires_split402_campaign",
+              blockers: ["missing Split402 offer extension"],
+              routerReady: false
+            })
+          ]
         },
         isError: false
       }
@@ -1059,6 +1126,7 @@ describe("MCP demo gateway", () => {
         "split402.walletRiskScore",
         "split402.searchCapabilities",
         "split402.execute",
+        "split402.discoverExternalX402",
         "split402.getReceipt"
       ],
       providerId: "split402-demo-merchant",
@@ -1176,12 +1244,126 @@ function mcpControlPlaneFetch(
   };
 }
 
+function mcpExternalX402Fetch(): Split402ExternalX402DiscoveryFetch {
+  return async (url) => {
+    const parsed = new URL(url);
+    if (parsed.pathname === "/.well-known/x402") {
+      return mcpJsonResponse({
+        version: 1,
+        paid_routes: [
+          {
+            method: "GET",
+            path: "/price/{coin}",
+            price: "$0.02",
+            description: "Specific coin USD price.",
+            example_unpaid_curl: "curl -i https://x402.example/price/btc"
+          }
+        ]
+      });
+    }
+    if (parsed.pathname === "/openapi.json") {
+      return mcpJsonResponse({
+        openapi: "3.0.3",
+        paths: {
+          "/price/{coin}": {
+            get: {
+              parameters: [
+                {
+                  name: "coin",
+                  in: "path",
+                  required: true,
+                  schema: {
+                    type: "string",
+                    enum: ["btc", "eth"]
+                  }
+                }
+              ],
+              "x-payment-info": {
+                price: {
+                  mode: "fixed",
+                  currency: "USD",
+                  amount: "0.02"
+                }
+              },
+              responses: {
+                402: {
+                  description: "Payment required"
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+    if (parsed.pathname === "/price/btc") {
+      return mcpTextResponse("", {
+        status: 402,
+        headers: {
+          "Payment-Required": encodePaymentRequiredHeader(
+            externalX402PaymentRequired()
+          )
+        }
+      });
+    }
+    return mcpJsonResponse({}, 404);
+  };
+}
+
+function externalX402PaymentRequired(): PaymentRequired {
+  return {
+    x402Version: 2,
+    error: "Payment required",
+    resource: {
+      url: "https://x402.example/price/btc",
+      description: "Specific coin USD price",
+      mimeType: "application/json"
+    },
+    accepts: [
+      {
+        scheme: "exact",
+        network: "eip155:8453",
+        asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        amount: "20000",
+        payTo: "0x68614873C5d624c07DCAA3aFF5243DD5027c3910",
+        maxTimeoutSeconds: 300,
+        extra: {}
+      }
+    ],
+    extensions: {
+      bazaar: {
+        info: {
+          input: {
+            type: "http",
+            method: "GET"
+          }
+        }
+      }
+    }
+  };
+}
+
 function mcpJsonResponse(
   body: unknown,
-  status = 200
+  status = 200,
+  headers: Record<string, string> = {}
 ): Split402DiscoveryFetchResponse {
   return {
     status,
+    headers,
     text: async () => JSON.stringify(body)
+  };
+}
+
+function mcpTextResponse(
+  body: string,
+  options: {
+    status?: number;
+    headers?: Record<string, string>;
+  } = {}
+): Split402DiscoveryFetchResponse {
+  return {
+    status: options.status ?? 200,
+    headers: options.headers ?? {},
+    text: async () => body
   };
 }
