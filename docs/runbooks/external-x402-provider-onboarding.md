@@ -70,6 +70,10 @@ writes `receipt-to-sign.json` plus `receipt-signing-bytes.hex`. Sign those bytes
 outside this tool, set the base64url signature on the receipt, then validate the
 offer, campaign terms, and receipt together.
 
+The same no-secret preparation helpers are available through the MCP gateway as
+`split402.prepareExternalX402Offer` and `split402.prepareExternalX402Receipt`.
+Pass the same public JSON objects directly as tool arguments.
+
 When x402 payment metadata is complete but Split402 metadata is missing or not
 yet trusted, candidate output also includes `split402OfferTemplate`. This is a
 non-secret scaffold built from the detected x402 route fields. It shows the

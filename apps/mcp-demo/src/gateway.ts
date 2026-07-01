@@ -32,6 +32,8 @@ import {
   type McpDemoBundle
 } from "./index.js";
 import { publicCandidateView as publicExternalX402CandidateView } from "./discover-external-x402.js";
+import { prepareExternalX402Offer } from "./prepare-external-x402-offer.js";
+import { prepareExternalX402Receipt } from "./prepare-external-x402-receipt.js";
 import { validateExternalX402Artifacts } from "./validate-external-x402-artifacts.js";
 
 export interface McpGatewayRequest {
@@ -367,6 +369,12 @@ async function handleToolCallAsync(
   if (record.name === "split402.discoverExternalX402") {
     return handleExternalX402DiscoveryTool(id, record.arguments, context);
   }
+  if (record.name === "split402.prepareExternalX402Offer") {
+    return handleExternalX402OfferPreparationTool(id, record.arguments);
+  }
+  if (record.name === "split402.prepareExternalX402Receipt") {
+    return handleExternalX402ReceiptPreparationTool(id, record.arguments);
+  }
   if (record.name === "split402.validateExternalX402Artifacts") {
     return handleExternalX402ArtifactValidationTool(id, record.arguments);
   }
@@ -374,6 +382,34 @@ async function handleToolCallAsync(
     return handleGetReceiptTool(id, record.arguments, context);
   }
   return handleToolCall(id, params, context.bundle);
+}
+
+function handleExternalX402OfferPreparationTool(
+  id: string | number | null,
+  args: unknown
+): McpGatewayResponse {
+  const input = readExternalX402OfferPreparationInput(args);
+  if ("message" in input) {
+    return createErrorResponse(id, -32602, input.message);
+  }
+  return createToolResultResponse(id, {
+    status: "offer_prepared",
+    ...prepareExternalX402Offer(input)
+  });
+}
+
+function handleExternalX402ReceiptPreparationTool(
+  id: string | number | null,
+  args: unknown
+): McpGatewayResponse {
+  const input = readExternalX402ReceiptPreparationInput(args);
+  if ("message" in input) {
+    return createErrorResponse(id, -32602, input.message);
+  }
+  return createToolResultResponse(id, {
+    status: "receipt_prepared",
+    ...prepareExternalX402Receipt(input)
+  });
 }
 
 function handleExternalX402ArtifactValidationTool(
@@ -724,6 +760,34 @@ function routerToolCards() {
       }
     },
     {
+      name: "split402.prepareExternalX402Offer",
+      description:
+        "Prepare no-secret Split402 offer signing inputs from campaign terms and an unsigned offer.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          campaignTerms: { type: "object" },
+          unsignedOffer: { type: "object" }
+        },
+        required: ["campaignTerms", "unsignedOffer"],
+        additionalProperties: false
+      }
+    },
+    {
+      name: "split402.prepareExternalX402Receipt",
+      description:
+        "Prepare no-secret Split402 receipt signing inputs from a signed offer and unsigned receipt.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          offer: { type: "object" },
+          unsignedReceipt: { type: "object" }
+        },
+        required: ["offer", "unsignedReceipt"],
+        additionalProperties: false
+      }
+    },
+    {
       name: "split402.validateExternalX402Artifacts",
       description:
         "Validate public Split402 offer and optional receipt artifacts against external x402 route metadata.",
@@ -985,6 +1049,57 @@ function readCapabilitySearchInput(
   return {
     ...(capability === undefined ? {} : { capability }),
     ...(budget === undefined ? {} : { budget })
+  };
+}
+
+function readExternalX402OfferPreparationInput(
+  args: unknown
+):
+  | {
+      campaignTerms: unknown;
+      unsignedOffer: unknown;
+    }
+  | { message: string } {
+  if (typeof args !== "object" || args === null) {
+    return { message: "Tool arguments are required" };
+  }
+  const record = args as Record<string, unknown>;
+  if (typeof record.campaignTerms !== "object" || record.campaignTerms === null) {
+    return { message: "campaignTerms argument is required" };
+  }
+  if (typeof record.unsignedOffer !== "object" || record.unsignedOffer === null) {
+    return { message: "unsignedOffer argument is required" };
+  }
+  return {
+    campaignTerms: record.campaignTerms,
+    unsignedOffer: record.unsignedOffer
+  };
+}
+
+function readExternalX402ReceiptPreparationInput(
+  args: unknown
+):
+  | {
+      offer: unknown;
+      unsignedReceipt: unknown;
+    }
+  | { message: string } {
+  if (typeof args !== "object" || args === null) {
+    return { message: "Tool arguments are required" };
+  }
+  const record = args as Record<string, unknown>;
+  if (typeof record.offer !== "object" || record.offer === null) {
+    return { message: "offer argument is required" };
+  }
+  if (
+    typeof record.unsignedReceipt !== "object" ||
+    record.unsignedReceipt === null
+  ) {
+    return { message: "unsignedReceipt argument is required" };
+  }
+  return {
+    offer: record.offer,
+    unsignedReceipt: record.unsignedReceipt
   };
 }
 
