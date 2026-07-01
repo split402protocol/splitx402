@@ -427,6 +427,11 @@ checks, force-push/deletion blocks, blank issue intake, releases, and package
 visibility where the GitHub token can read it. Human review must still confirm
 security advisories and any UI-only evidence before changing the record to
 approved.
+If the GitHub token cannot read organization packages, first confirm in GitHub
+Packages that no npm or container packages are published, then rerun with
+`SPLIT402_GITHUB_SETTINGS_PACKAGES_UNPUBLISHED_CONFIRMED=yes`; this only clears
+the package-count portion of the no-go API snapshot when releases are still
+zero and does not approve the review.
 Use `--output` instead of shell redirection so Windows PowerShell does not write
 the evidence file in an incompatible encoding. An approved review must include
 real reviewer, `SPLIT402_GITHUB_SETTINGS_REVIEW_METHOD`, and

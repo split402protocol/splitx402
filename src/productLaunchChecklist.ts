@@ -152,6 +152,7 @@ function createPublicPrivateLicenseSection(
       "Keep hosted operations, provider strategy, custody evidence, private URLs, live transaction bytes, and partner-identifying details private unless intentionally sanitized.",
       "Do not reintroduce MIT in README, package metadata, GitHub About text, release notes, or package manifests.",
       "The GitHub settings review can be generated from the live GitHub API, but approval still requires human review of security advisories, issue intake, packages, releases, and screenshots/evidence.",
+      "If the GitHub package API is unreadable, confirm no packages are published in the GitHub UI, then rerun with SPLIT402_GITHUB_SETTINGS_PACKAGES_UNPUBLISHED_CONFIRMED=yes; this does not approve the review by itself.",
       ...reviewStatus.notes,
     ],
   };
