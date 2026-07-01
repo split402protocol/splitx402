@@ -189,6 +189,25 @@ For CLI automation, the same verification key can be supplied with
 key here; private signing keys and payment payloads must stay out of public logs
 and issue comments.
 
+Providers can validate signed public artifacts locally before paid staging:
+
+```bash
+corepack pnpm demo:validate-external-x402-artifacts -- \
+  --merchant-origin https://x402.example \
+  --operation-id get.price \
+  --network eip155:8453 \
+  --asset 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 \
+  --pay-to-wallet 0x68614873C5d624c07DCAA3aFF5243DD5027c3910 \
+  --required-amount-atomic 10000 \
+  --merchant-public-key <merchant-offer-receipt-public-key> \
+  --offer-file offer.json \
+  --receipt-file receipt.json
+```
+
+`--receipt-file` is optional while checking the unpaid offer. The command checks
+schema, merchant signature, x402 route binding, offer/receipt consistency, and
+receipt arithmetic using public JSON and the merchant public key only.
+
 When `network` or `asset` are omitted from `budget`, the gateway defaults them
 from the best provider that already matches the supplied budget filters and
 still enforces `maxAmountAtomic`. `maxAmountAtomic` must be a non-negative
