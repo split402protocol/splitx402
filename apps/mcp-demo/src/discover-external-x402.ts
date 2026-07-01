@@ -34,6 +34,7 @@ export interface ExternalX402OnboardingCandidateView {
   blockers: string[];
   split402OfferErrors?: string[];
   requiredSplit402Fields: string[];
+  split402OfferTemplate?: ExternalX402OfferTemplateView;
   nextActions: string[];
   source: {
     manifest: boolean;
@@ -41,6 +42,51 @@ export interface ExternalX402OnboardingCandidateView {
     paymentRequiredHeader: boolean;
   };
   routerReady: boolean;
+}
+
+export interface ExternalX402OfferTemplateView {
+  extensionPath: "extensions.split402.info";
+  note: string;
+  campaignTermsTemplate: {
+    protocolVersion: "0.1";
+    campaignId: string;
+    campaignVersion: number;
+    merchantId: string;
+    resourceOrigin: string;
+    operationIds: string[];
+    network: string;
+    asset: string;
+    requiredAmountAtomic: string;
+    payToWallet: string;
+    commissionBps: number;
+    protocolFeeBpsOfCommission: number;
+    commissionBase: "required_amount";
+    settlementMode: "accrual";
+  };
+  unsignedOfferTemplate: {
+    protocolVersion: "0.1";
+    campaignId: string;
+    campaignVersion: number;
+    campaignTermsHash: string;
+    merchantId: string;
+    resourceOrigin: string;
+    operationId: string;
+    network: string;
+    asset: string;
+    requiredAmountAtomic: string;
+    payToWallet: string;
+    commissionBps: number;
+    protocolFeeBpsOfCommission: number;
+    commissionBase: "required_amount";
+    settlementMode: "accrual";
+    attributionRequired: boolean;
+    allowSelfReferral: boolean;
+    offerNonce: string;
+    issuedAt: string;
+    validUntil: string;
+    kid: string;
+  };
+  signatureInstructions: string[];
 }
 
 export interface DiscoverExternalX402Input {
@@ -300,6 +346,10 @@ export function createExternalX402CandidateNextActions(
 export function publicCandidateView(
   candidate: Split402ExternalX402ProviderCandidate
 ): ExternalX402OnboardingCandidateView {
+  const split402OfferTemplate =
+    candidate.readiness === "router_ready"
+      ? undefined
+      : createSplit402OfferTemplateView(candidate);
   return {
     providerId: candidate.providerId,
     capability: candidate.capability,
@@ -328,9 +378,81 @@ export function publicCandidateView(
       candidate.readiness === "requires_split402_campaign"
         ? [...SPLIT402_OFFER_EXTENSION_REQUIRED_FIELDS]
         : [],
+    ...(split402OfferTemplate === undefined
+      ? {}
+      : { split402OfferTemplate }),
     nextActions: createExternalX402CandidateNextActions(candidate),
     source: candidate.source,
     routerReady: candidate.provider !== undefined
+  };
+}
+
+function createSplit402OfferTemplateView(
+  candidate: Split402ExternalX402ProviderCandidate
+): ExternalX402OfferTemplateView | undefined {
+  if (
+    candidate.network === undefined ||
+    candidate.asset === undefined ||
+    candidate.payToWallet === undefined ||
+    candidate.amountAtomic === undefined
+  ) {
+    return undefined;
+  }
+  const campaignId = "<cmp_...>";
+  const campaignVersion = 1;
+  const merchantId = "<mrc_...>";
+  const commissionBps = 2000;
+  const protocolFeeBpsOfCommission = 1000;
+  const campaignTermsTemplate = {
+    protocolVersion: "0.1",
+    campaignId,
+    campaignVersion,
+    merchantId,
+    resourceOrigin: candidate.merchantOrigin,
+    operationIds: [candidate.operationId],
+    network: candidate.network,
+    asset: candidate.asset,
+    requiredAmountAtomic: candidate.amountAtomic,
+    payToWallet: candidate.payToWallet,
+    commissionBps,
+    protocolFeeBpsOfCommission,
+    commissionBase: "required_amount",
+    settlementMode: "accrual"
+  } satisfies ExternalX402OfferTemplateView["campaignTermsTemplate"];
+  return {
+    extensionPath: "extensions.split402.info",
+    note:
+      "Fill campaign/merchant ids, economics, timestamps, nonce, kid, and campaignTermsHash from your finalized campaign terms, then sign the unsigned offer with the merchant offer_receipt key.",
+    campaignTermsTemplate,
+    unsignedOfferTemplate: {
+      protocolVersion: "0.1",
+      campaignId,
+      campaignVersion,
+      campaignTermsHash:
+        "sha256:<hash of finalized campaignTermsTemplate canonical JSON>",
+      merchantId,
+      resourceOrigin: candidate.merchantOrigin,
+      operationId: candidate.operationId,
+      network: candidate.network,
+      asset: candidate.asset,
+      requiredAmountAtomic: candidate.amountAtomic,
+      payToWallet: candidate.payToWallet,
+      commissionBps,
+      protocolFeeBpsOfCommission,
+      commissionBase: "required_amount",
+      settlementMode: "accrual",
+      attributionRequired: true,
+      allowSelfReferral: false,
+      offerNonce: "<ofn_...>",
+      issuedAt: "<RFC3339 UTC>",
+      validUntil: "<RFC3339 UTC>",
+      kid: "<merchant-offer-receipt-kid>"
+    },
+    signatureInstructions: [
+      "Compute campaignTermsHash from the finalized campaign terms object using Split402 canonical hashing.",
+      "Sign the unsigned offer with Split402 offer signing bytes and the merchant offer_receipt private key.",
+      "Set signature on extensions.split402.info and publish only the public verification key for the kid."
+    ]
   };
 }
 

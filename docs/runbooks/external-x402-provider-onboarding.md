@@ -20,6 +20,14 @@ The report lists candidate route paths, HTTP methods, network, asset,
 amountAtomic, pay-to wallet, readiness, blockers, required Split402 offer
 fields, and provider next actions.
 
+When x402 payment metadata is complete but Split402 metadata is missing or not
+yet trusted, candidate output also includes `split402OfferTemplate`. This is a
+non-secret scaffold built from the detected x402 route fields. It shows the
+`campaignTermsTemplate`, the `unsignedOfferTemplate`, and the signing steps
+needed to populate `extensions.split402.info`. Providers must replace
+placeholder ids/timestamps/economics, compute the real campaign terms hash, sign
+the offer, and publish only the public verification key for the offer `kid`.
+
 You can also provide the verification key with
 `SPLIT402_EXTERNAL_X402_MERCHANT_PUBLIC_KEY`. This is a public key only. Do not
 put merchant private keys, bearer tokens, raw payment payloads, facilitator
@@ -93,6 +101,10 @@ Base x402 exact routes. The lowest-cost price routes discovered by Split402 are:
 | `/price/btc` | `eip155:8453` | Base USDC token address | `20000` | `requires_split402_campaign` |
 
 Both routes currently block on `missing Split402 offer extension`.
+Discovery will include a `split402OfferTemplate` for each route once the x402
+payment metadata is readable. The template is safe to share because it contains
+placeholders and public route metadata only; it is not a signed offer and must
+not be treated as production evidence.
 
 ## What The Provider Must Add
 

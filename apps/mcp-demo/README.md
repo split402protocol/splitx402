@@ -153,6 +153,11 @@ not overstate them as referral-ready providers. Candidate responses include
 `requiredSplit402Fields` and `nextActions`. If an external API includes a
 malformed `extensions.split402.info`, the response includes
 `split402OfferErrors` so the provider can fix exact fields before paid staging.
+When the route has complete x402 payment metadata but is not router-ready yet,
+responses also include `split402OfferTemplate`, a non-secret scaffold for the
+provider's `extensions.split402.info` object. It includes route-derived payment
+fields plus placeholders for campaign ids, timestamps, nonce, kid, hash, and
+signature.
 Base/EVM x402 routes can become router-ready after a signed Split402 offer and
 matching merchant-signed receipt; discovery also requires the merchant public
 key to verify the offer signature before marking a candidate router-ready. They
