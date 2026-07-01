@@ -8,6 +8,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "bundle": "tsx src/bundle.ts",
+    "discover-external-x402": "tsx src/discover-external-x402.ts",
     "gateway": "tsx src/gateway.ts",
     "gateway:smoke": "tsx src/gateway-smoke.ts",
     "lint": "eslint .",
