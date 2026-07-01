@@ -441,6 +441,7 @@ export type SolanaPayoutFinalityStatus =
   | "confirmed"
   | "finalized"
   | "failed"
+  | "expired"
   | "outcome_unknown"
   | "retry";
 
@@ -1274,7 +1275,12 @@ export class SolanaRpcPayoutTransactionFinalityMonitor {
         });
       }
       const signatureStatus = readSignatureStatus(body);
-      return this.readFinalityResult(transaction, signature, rpcUrl, signatureStatus);
+      return await this.readFinalityResult(
+        transaction,
+        signature,
+        rpcUrl,
+        signatureStatus
+      );
     } catch (error) {
       return this.retryResult({
         transaction,
@@ -1285,13 +1291,17 @@ export class SolanaRpcPayoutTransactionFinalityMonitor {
     }
   }
 
-  private readFinalityResult(
+  private async readFinalityResult(
     transaction: PayoutTransactionRecord,
     signature: string,
     rpcUrl: string,
     signatureStatus: SolanaSignatureStatus | null
-  ): SolanaPayoutFinalityResult {
+  ): Promise<SolanaPayoutFinalityResult> {
     if (signatureStatus === null) {
+      const expired = await this.readExpiredResult(transaction, signature, rpcUrl);
+      if (expired !== undefined) {
+        return expired;
+      }
       if (this.isOutcomeUnknown(transaction)) {
         return {
           transactionId: transaction.id,
@@ -1345,6 +1355,52 @@ export class SolanaRpcPayoutTransactionFinalityMonitor {
       error: "payout transaction has not reached confirmed commitment",
       signatureStatus
     });
+  }
+
+  private async readExpiredResult(
+    transaction: PayoutTransactionRecord,
+    signature: string,
+    rpcUrl: string
+  ): Promise<SolanaPayoutFinalityResult | undefined> {
+    const lastValidBlockHeight = transaction.lastValidBlockHeight;
+    if (lastValidBlockHeight === undefined) {
+      return undefined;
+    }
+    // Fail closed: any RPC failure here falls back to retry/outcome-unknown
+    // handling instead of claiming the blockhash expired.
+    let blockHeight: number;
+    try {
+      const response = await this.fetch()(rpcUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: `split402-payout-block-height-${transaction.id}`,
+          method: "getBlockHeight",
+          params: [{ commitment: "finalized" }]
+        })
+      });
+      if (!response.ok) {
+        return undefined;
+      }
+      const body = await response.json();
+      if (readRpcError(body) !== undefined) {
+        return undefined;
+      }
+      blockHeight = readBlockHeightResult(body);
+    } catch {
+      return undefined;
+    }
+    if (blockHeight <= lastValidBlockHeight) {
+      return undefined;
+    }
+    return {
+      transactionId: transaction.id,
+      status: "expired",
+      signature,
+      rpcUrl,
+      error: `payout transaction blockhash expired: finalized block height ${blockHeight} passed lastValidBlockHeight ${lastValidBlockHeight} and signature was not found: ${signature}`
+    };
   }
 
   private retryResult(input: {
@@ -3198,6 +3254,16 @@ function readSendTransactionSignature(body: unknown): string {
   return readRequiredString(readRecord(body).result, "sendTransaction result");
 }
 
+function readBlockHeightResult(body: unknown): number {
+  const result = readRecord(body).result;
+  if (typeof result !== "number" || !Number.isInteger(result) || result < 0) {
+    throw new Error(
+      "Solana RPC getBlockHeight result must be a non-negative integer"
+    );
+  }
+  return result;
+}
+
 function canBroadcastPayoutTransaction(
   transaction: PayoutTransactionRecord
 ): boolean {
@@ -3211,7 +3277,11 @@ function canBroadcastPayoutTransaction(
 function assertPayoutTransactionSignatureForMonitoring(
   transaction: PayoutTransactionRecord
 ): string {
+  // "signed" is allowed so allocation-release safety checks can prove whether
+  // a maybe-broadcast transaction landed even when the submit attempt only
+  // observed an RPC timeout.
   if (
+    transaction.status !== "signed" &&
     transaction.status !== "submitted" &&
     transaction.status !== "confirmed" &&
     transaction.status !== "outcome_unknown"
