@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isAbsolute, normalize } from "node:path";
 
 import {
   PHASE7_EVIDENCE_FIELDS,
@@ -3210,8 +3211,24 @@ function resolveArtifactPath(
   options: Phase7StagingStatusOptions,
 ): string {
   return options.resolveArtifactPath === undefined
-    ? `${options.artifactBaseDir}/${artifactPath}`
+    ? resolveDefaultArtifactPath(artifactPath, options.artifactBaseDir ?? ".")
     : options.resolveArtifactPath(artifactPath, options.artifactBaseDir ?? ".");
+}
+
+function resolveDefaultArtifactPath(artifactPath: string, baseDir: string): string {
+  if (isAbsolute(artifactPath)) {
+    return artifactPath;
+  }
+  const normalizedArtifactPath = normalize(artifactPath);
+  const normalizedBaseDir = normalize(baseDir);
+  if (
+    normalizedArtifactPath === normalizedBaseDir ||
+    normalizedArtifactPath.startsWith(`${normalizedBaseDir}\\`) ||
+    normalizedArtifactPath.startsWith(`${normalizedBaseDir}/`)
+  ) {
+    return artifactPath;
+  }
+  return `${baseDir}/${artifactPath}`;
 }
 
 function readJsonArtifact(
