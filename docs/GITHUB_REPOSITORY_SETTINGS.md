@@ -80,8 +80,8 @@ support statement.
 Run this before launch-facing updates:
 
 ```bash
-corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt
 corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt
+corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt
 corepack pnpm product:public-surface-check --brief
 corepack pnpm product:local-proof --brief
 ```
