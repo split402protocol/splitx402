@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { isAbsolute, join } from "node:path";
+import { join } from "node:path";
 
 import {
   MAINNET_CANARY_MAX_GROSS_AMOUNT_ATOMIC,
@@ -214,6 +214,7 @@ function parseAttachedPath(value: string | undefined): string | undefined {
     path === undefined ||
     path.length === 0 ||
     path.toLowerCase() === "pending" ||
+    isUnsafeAttachedPath(path) ||
     /[<>]/u.test(path)
   ) {
     return undefined;
@@ -222,10 +223,20 @@ function parseAttachedPath(value: string | undefined): string | undefined {
 }
 
 function resolveEvidencePath(path: string, workspaceDirectory: string | undefined): string {
-  if (isAbsolute(path) || workspaceDirectory === undefined) {
+  if (workspaceDirectory === undefined) {
     return path;
   }
   return join(workspaceDirectory, path);
+}
+
+function isUnsafeAttachedPath(path: string): boolean {
+  const normalized = path.trim().replace(/\\/gu, "/");
+  return (
+    /^[a-z][a-z0-9+.-]*:\/\//iu.test(normalized) ||
+    normalized.startsWith("/") ||
+    /^[a-z]:\//iu.test(normalized) ||
+    normalized.split("/").some((segment) => segment === "..")
+  );
 }
 
 function parseRecordFields(text: string): Map<string, string> {
