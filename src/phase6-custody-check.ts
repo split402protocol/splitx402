@@ -20,8 +20,6 @@ if (evidencePath === undefined || evidencePath.trim().length === 0) {
       : {
           artifactBaseDir: dirname(resolve(evidencePath)),
           artifactExists: existsSync,
-          resolveArtifactPath: (artifactPath, baseDir) =>
-            resolve(baseDir, artifactPath),
         }),
     currentSourceCommit: readCurrentGitCommit(),
   });
