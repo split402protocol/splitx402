@@ -1,4 +1,8 @@
-import { Split402AgentClient } from "@split402/agent-sdk";
+import {
+  Split402AgentClient,
+  type Split402EvmSchemeOptions,
+  type Split402EvmSigner
+} from "@split402/agent-sdk";
 import {
   hashProtocolObject,
   Split402ReceiptV1Schema,
@@ -77,6 +81,9 @@ export interface Split402RouterAttempt {
 export interface Split402RouterOptions {
   providers: readonly Split402CapabilityProvider[];
   signer?: KeyPairSigner;
+  evmSigner?: Split402EvmSigner;
+  evmNetworks?: `${string}:${string}`[];
+  evmSchemeOptions?: Split402EvmSchemeOptions;
   executor?: Split402RouterExecutor;
   verifyReceipts?: boolean;
 }
@@ -151,6 +158,9 @@ export interface Split402RouterExecutor {
     body: unknown;
     referralClaim?: ReferralClaimV1;
     signer?: KeyPairSigner;
+    evmSigner?: Split402EvmSigner;
+    evmNetworks?: `${string}:${string}`[];
+    evmSchemeOptions?: Split402EvmSchemeOptions;
   }): Promise<Split402RouterExecutorResult>;
 }
 
@@ -207,6 +217,9 @@ export class Split402Router {
   private readonly providers: readonly Split402CapabilityProvider[];
   private readonly executor: Split402RouterExecutor;
   private readonly signer?: KeyPairSigner;
+  private readonly evmSigner?: Split402EvmSigner;
+  private readonly evmNetworks?: `${string}:${string}`[];
+  private readonly evmSchemeOptions?: Split402EvmSchemeOptions;
   private readonly verifyReceipts: boolean;
 
   constructor(options: Split402RouterOptions) {
@@ -215,6 +228,15 @@ export class Split402Router {
     this.verifyReceipts = options.verifyReceipts ?? true;
     if (options.signer !== undefined) {
       this.signer = options.signer;
+    }
+    if (options.evmSigner !== undefined) {
+      this.evmSigner = options.evmSigner;
+    }
+    if (options.evmNetworks !== undefined) {
+      this.evmNetworks = [...options.evmNetworks];
+    }
+    if (options.evmSchemeOptions !== undefined) {
+      this.evmSchemeOptions = options.evmSchemeOptions;
     }
   }
 
@@ -327,7 +349,14 @@ export class Split402Router {
           ...(input.referralClaim === undefined
             ? {}
             : { referralClaim: input.referralClaim }),
-          ...(this.signer === undefined ? {} : { signer: this.signer })
+          ...(this.signer === undefined ? {} : { signer: this.signer }),
+          ...(this.evmSigner === undefined ? {} : { evmSigner: this.evmSigner }),
+          ...(this.evmNetworks === undefined
+            ? {}
+            : { evmNetworks: this.evmNetworks }),
+          ...(this.evmSchemeOptions === undefined
+            ? {}
+            : { evmSchemeOptions: this.evmSchemeOptions })
         });
         const receipt = this.verifyProviderReceipt(
           provider,
@@ -617,6 +646,9 @@ export class Split402AgentSdkExecutor implements Split402RouterExecutor {
     body: unknown;
     referralClaim?: ReferralClaimV1;
     signer?: KeyPairSigner;
+    evmSigner?: Split402EvmSigner;
+    evmNetworks?: `${string}:${string}`[];
+    evmSchemeOptions?: Split402EvmSchemeOptions;
   }): Promise<Split402RouterExecutorResult> {
     const client = new Split402AgentClient({
       merchantOrigin: input.provider.merchantOrigin,
@@ -624,7 +656,14 @@ export class Split402AgentSdkExecutor implements Split402RouterExecutor {
       ...(input.provider.merchantPublicKey === undefined
         ? {}
         : { merchantPublicKey: input.provider.merchantPublicKey }),
-      ...(input.signer === undefined ? {} : { signer: input.signer })
+      ...(input.signer === undefined ? {} : { signer: input.signer }),
+      ...(input.evmSigner === undefined ? {} : { evmSigner: input.evmSigner }),
+      ...(input.evmNetworks === undefined
+        ? {}
+        : { evmNetworks: input.evmNetworks }),
+      ...(input.evmSchemeOptions === undefined
+        ? {}
+        : { evmSchemeOptions: input.evmSchemeOptions })
     });
     const getQuery = inputToQuery(input.body);
     const offer = await client.inspectOffer({

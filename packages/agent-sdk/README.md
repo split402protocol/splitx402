@@ -110,10 +110,24 @@ const price = await client.getJson({
 });
 ```
 
+For EVM x402 providers such as Base (`eip155:8453`), pass an EVM signer that
+supports `address` and `signTypedData`. The SDK registers x402 exact EVM
+schemes for the requested network; Solana/SVM providers continue to use the
+`signer` option.
+
+```ts
+const client = new Split402AgentClient({
+  merchantOrigin: "https://api.example.com",
+  network: "eip155:8453",
+  evmSigner,
+  evmNetworks: ["eip155:8453"]
+});
+```
+
 ## What It Handles
 
 - inspects a merchant's unpaid `402 Payment Required` response;
 - attaches Split402 referral claims to x402 payments;
-- pays `GET` and `POST` JSON resources with the x402 SVM `exact` client;
+- pays `GET` and `POST` JSON resources with x402 exact SVM or EVM clients;
 - extracts the Split402 settlement receipt;
 - verifies merchant-signed offers and receipts when a merchant public key is supplied.

@@ -76,6 +76,9 @@ prices are discarded before provider records are returned.
 - supports x402 `GET` and `POST` provider methods; object-shaped router input is
   passed as query parameters for `GET` providers and as JSON body for `POST`
   providers;
+- passes each selected provider's network into the agent SDK, so EVM providers
+  such as Base (`eip155:8453`) can execute when the router is configured with an
+  `evmSigner`;
 - ranks by success rate, then price, then latency, then provider id;
 - executes through `Split402AgentClient` by default;
 - returns the selected provider with each successful execution result;

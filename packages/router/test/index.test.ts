@@ -197,6 +197,55 @@ describe("Split402Router", () => {
     );
   });
 
+  it("passes EVM signer config to provider execution", async () => {
+    const evmReceipt = {
+      ...receipt,
+      network: "eip155:8453"
+    } satisfies Split402ReceiptV1;
+    const execute = vi.fn<Split402RouterExecutor["execute"]>().mockResolvedValue({
+      data: { price: "100000" },
+      receipt: evmReceipt
+    });
+    const evmSigner = {
+      address: "0x0000000000000000000000000000000000000001" as const,
+      signTypedData: vi.fn(async () => "0x01" as const)
+    };
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-base",
+          capability: "crypto.price",
+          network: evmReceipt.network,
+          amountAtomic: evmReceipt.requiredAmountAtomic
+        })
+      ],
+      evmSigner,
+      evmNetworks: ["eip155:8453"],
+      executor: { execute },
+      verifyReceipts: false
+    });
+
+    await router.execute({
+      capability: "crypto.price",
+      input: { format: "json" },
+      budget: {
+        network: evmReceipt.network,
+        asset: evmReceipt.asset,
+        maxAmountAtomic: evmReceipt.requiredAmountAtomic
+      }
+    });
+
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        evmSigner,
+        evmNetworks: ["eip155:8453"],
+        provider: expect.objectContaining({
+          network: "eip155:8453"
+        })
+      })
+    );
+  });
+
   it("rejects when every provider exceeds budget", async () => {
     const router = new Split402Router({
       providers: [provider({ providerId: "provider-expensive", amountAtomic: "50001" })],
