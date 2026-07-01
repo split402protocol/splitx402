@@ -9,6 +9,7 @@ import {
   hashProtocolObject,
   Split402OfferV1Schema,
   Split402ReceiptV1Schema,
+  verifySplit402Offer,
   verifySplit402Receipt,
   type ReferralClaimV1,
   type Split402OfferV1,
@@ -805,6 +806,21 @@ export class Split402ExternalX402DiscoveryClient {
       );
       if (split402OfferResult.errors.length > 0) {
         blockers.push("Split402 offer does not match x402 payment metadata");
+      }
+      if (this.merchantPublicKey === undefined) {
+        split402OfferResult.errors.push(
+          "merchantPublicKey: required to verify Split402 offer signature"
+        );
+        blockers.push("missing merchant public key for Split402 offer verification");
+      } else {
+        const offerVerification = verifySplit402Offer(
+          split402Offer,
+          this.merchantPublicKey
+        );
+        if (!offerVerification.ok) {
+          split402OfferResult.errors.push(...offerVerification.errors);
+          blockers.push("invalid Split402 offer signature");
+        }
       }
     }
     const provider =
