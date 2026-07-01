@@ -58,8 +58,9 @@ policy records, signer smoke output, and dependency audit output must use
 `attached: <path>` with evidence artifact paths relative to the launch evidence
 workspace. They must not point at placeholder values, URL-style remote evidence,
 absolute paths, or parent-directory traversal paths. `phase6:evidence:status`
-resolves those paths relative to the custody evidence bundle directory and
-blocks custody readiness when any referenced artifact file is missing.
+and `phase6:custody:check` resolve those paths relative to the custody evidence
+bundle directory and block custody readiness when any referenced artifact file
+is missing.
 The env template shows direct overrides for review identity, source commit,
 staging environment, funding wallet, and network; generated image-provenance
 and signer-policy records can also populate those fields when present.

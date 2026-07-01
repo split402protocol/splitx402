@@ -165,3 +165,6 @@ environment variables override local file values. The dry-run and rollback
 checks now resolve `attached:` paths from the private launch evidence workspace
 and validate required artifact fields plus `source_commit` alignment before the
 canary gate can pass.
+Phase 6 custody checks also resolve custody-bundle `attached:` artifact paths
+from the private launch evidence workspace and block readiness when referenced
+artifact files are missing.

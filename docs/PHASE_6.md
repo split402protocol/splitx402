@@ -129,6 +129,9 @@ unknown-outcome reconciliation queue and referrer payout views.
 - Added `corepack pnpm phase6:evidence:assemble` to assemble the canonical
   custody evidence bundle from generated evidence records, attachment paths, and
   explicit field overrides.
+- Hardened `corepack pnpm phase6:custody:check` so approved custody evidence is
+  still blocked when the bundle's `attached:` artifact files are missing from
+  the launch evidence workspace.
 - Added signed payout transaction records and PostgreSQL persistence for exact
   signed bytes, expected signature, sequence, attempt, blockhash metadata, and
   submitted state before broadcast.
@@ -197,7 +200,9 @@ the merchant has enough funding.
   including image provenance, emergency revocation, payout key custody, signer
   policy, rollback, incident, smoke, network, and RPC failover evidence.
 - Validate the completed custody evidence bundle with
-  `corepack pnpm phase6:custody:check <evidence-bundle.txt>`.
+  `corepack pnpm phase6:custody:check <evidence-bundle.txt>`. The check also
+  resolves every `attached:` artifact path relative to the bundle directory and
+  blocks custody readiness if any referenced artifact file is missing.
 
 ## Acceptance Checks
 
