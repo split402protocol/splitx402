@@ -750,6 +750,86 @@ describe("external x402 artifact validation", () => {
     rmSync(directory, { recursive: true, force: true });
   });
 
+  it("writes payment-required extension wrappers for signed offers", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "split402-x402-offer-ext-"));
+    const unsignedOfferPath = join(directory, "offer-to-sign.json");
+    const offerPath = join(directory, "offer.json");
+    const extensionPath = join(directory, "payment-required-extension.json");
+    const signed = createExternalSplit402Offer();
+    const unsignedOffer = createUnsignedExternalOffer(signed.offer);
+    const logs: string[] = [];
+    const originalLog = console.log;
+    try {
+      writeFileSync(unsignedOfferPath, JSON.stringify(unsignedOffer), "utf8");
+      console.log = (value?: unknown) => {
+        logs.push(String(value));
+      };
+
+      await expect(
+        runAttachExternalX402SignatureCli([
+          "--kind",
+          "offer",
+          "--unsigned-file",
+          unsignedOfferPath,
+          "--signature",
+          signed.offer.signature,
+          "--merchant-public-key",
+          signed.merchantPublicKey,
+          "--output-file",
+          offerPath,
+          "--offer-extension-output-file",
+          extensionPath
+        ])
+      ).resolves.toBe(0);
+    } finally {
+      console.log = originalLog;
+    }
+
+    expect(JSON.parse(logs.join("\n"))).toMatchObject({
+      ok: true,
+      kind: "offer",
+      signatureVerified: true
+    });
+    expect(JSON.parse(readFileSync(offerPath, "utf8"))).toEqual(signed.offer);
+    expect(JSON.parse(readFileSync(extensionPath, "utf8"))).toEqual({
+      extensions: {
+        split402: {
+          info: signed.offer
+        }
+      }
+    });
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  it("rejects payment-required extension output for receipts", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "split402-x402-receipt-ext-"));
+    const unsignedReceiptPath = join(directory, "receipt-to-sign.json");
+    const extensionPath = join(directory, "payment-required-extension.json");
+    const signed = createExternalSplit402Offer();
+    const receipt = createExternalSplit402Receipt(signed.offer);
+    const unsignedReceipt = createUnsignedExternalReceipt(receipt);
+    try {
+      writeFileSync(unsignedReceiptPath, JSON.stringify(unsignedReceipt), "utf8");
+
+      await expect(
+        runAttachExternalX402SignatureCli([
+          "--kind",
+          "receipt",
+          "--unsigned-file",
+          unsignedReceiptPath,
+          "--signature",
+          receipt.signature,
+          "--merchant-public-key",
+          signed.merchantPublicKey,
+          "--offer-extension-output-file",
+          extensionPath
+        ])
+      ).rejects.toThrow("--offer-extension-output-file is only valid for offers");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("validates signed offers and receipts against route metadata", () => {
     const signed = createExternalSplit402Offer();
     const receipt = createExternalSplit402Receipt(signed.offer);
@@ -1546,7 +1626,14 @@ describe("MCP demo gateway", () => {
           errors: [],
           kind: "offer",
           signatureVerified: true,
-          artifact: signed.offer
+          artifact: signed.offer,
+          paymentRequiredExtension: {
+            extensions: {
+              split402: {
+                info: signed.offer
+              }
+            }
+          }
         },
         isError: false
       }

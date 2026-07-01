@@ -814,10 +814,11 @@ function writeProviderReadme(
           "  --unsigned-file prepared-offer/offer-to-sign.json \\",
           "  --signature <base64url-signature> \\",
           "  --merchant-public-key <merchant-offer-receipt-public-key> \\",
-          "  --output-file offer.json",
+          "  --output-file offer.json \\",
+          "  --offer-extension-output-file payment-required-extension.json",
           "```",
           "",
-          "After signing, set the signature in `payment-required-extension.template.json` and return that wrapper as `extensions.split402.info` in the unpaid x402 402 response.",
+          "After signing, return `payment-required-extension.json` as `extensions.split402.info` in the unpaid x402 402 response.",
           "The `info` object must match `offer.json` exactly."
         ]
       : []),
