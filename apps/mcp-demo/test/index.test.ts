@@ -56,6 +56,11 @@ import {
 import { runMcpGatewaySmoke } from "../src/gateway-smoke.js";
 import { createMcpDemoBundle } from "../src/index.js";
 import { writeMcpDemoBundleOutput } from "../src/bundle.js";
+import {
+  attachExternalX402Signature,
+  parseAttachExternalX402SignatureArgs,
+  runAttachExternalX402SignatureCli
+} from "../src/attach-external-x402-signature.js";
 
 describe("createMcpDemoBundle", () => {
   it("describes the Split402 paid MCP tool and economics", () => {
@@ -586,6 +591,94 @@ describe("external x402 artifact validation", () => {
       readFileSync(join(outputDir, "receipt-signing-bytes.hex"), "utf8")
     ).toMatch(/^[0-9a-f]+\n$/u);
     expect(parsePrepareExternalX402ReceiptArgs(["--help"])).toEqual({
+      help: true
+    });
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  it("attaches and verifies external offer signatures", () => {
+    const signed = createExternalSplit402Offer();
+    const unsignedOffer = createUnsignedExternalOffer(signed.offer);
+
+    expect(
+      attachExternalX402Signature({
+        kind: "offer",
+        unsignedArtifact: unsignedOffer,
+        signature: signed.offer.signature,
+        merchantPublicKey: signed.merchantPublicKey
+      })
+    ).toMatchObject({
+      ok: true,
+      errors: [],
+      kind: "offer",
+      signatureVerified: true,
+      artifact: signed.offer
+    });
+  });
+
+  it("rejects invalid attached external signatures", () => {
+    const signed = createExternalSplit402Offer();
+    const unsignedOffer = createUnsignedExternalOffer(signed.offer);
+
+    expect(
+      attachExternalX402Signature({
+        kind: "offer",
+        unsignedArtifact: unsignedOffer,
+        signature: "invalid-signature",
+        merchantPublicKey: signed.merchantPublicKey
+      })
+    ).toMatchObject({
+      ok: false,
+      errors: expect.arrayContaining([
+        "invalid offer signature"
+      ]),
+      kind: "offer"
+    });
+  });
+
+  it("runs signature attachment from JSON files for receipts", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "split402-x402-attach-"));
+    const unsignedReceiptPath = join(directory, "receipt-to-sign.json");
+    const outputPath = join(directory, "receipt.json");
+    const signed = createExternalSplit402Offer();
+    const receipt = createExternalSplit402Receipt(signed.offer);
+    const unsignedReceipt = createUnsignedExternalReceipt(receipt);
+    const logs: string[] = [];
+    const originalLog = console.log;
+    try {
+      writeFileSync(unsignedReceiptPath, JSON.stringify(unsignedReceipt), "utf8");
+      console.log = (value?: unknown) => {
+        logs.push(String(value));
+      };
+
+      await expect(
+        runAttachExternalX402SignatureCli([
+          "--kind",
+          "receipt",
+          "--unsigned-file",
+          unsignedReceiptPath,
+          "--signature",
+          receipt.signature,
+          "--merchant-public-key",
+          signed.merchantPublicKey,
+          "--output-file",
+          outputPath
+        ])
+      ).resolves.toBe(0);
+    } finally {
+      console.log = originalLog;
+    }
+
+    expect(JSON.parse(logs.join("\n"))).toMatchObject({
+      ok: true,
+      kind: "receipt",
+      signatureVerified: true
+    });
+    expect(JSON.parse(readFileSync(outputPath, "utf8"))).toMatchObject({
+      signature: receipt.signature,
+      campaignTermsHash: signed.offer.campaignTermsHash
+    });
+    expect(parseAttachExternalX402SignatureArgs(["--help"])).toEqual({
       help: true
     });
     rmSync(directory, { recursive: true, force: true });
