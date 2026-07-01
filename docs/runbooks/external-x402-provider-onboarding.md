@@ -28,6 +28,13 @@ needed to populate `extensions.split402.info`. Providers must replace
 placeholder ids/timestamps/economics, compute the real campaign terms hash, sign
 the offer, and publish only the public verification key for the offer `kid`.
 
+Candidate output also includes `split402ReceiptTemplate` whenever complete x402
+payment metadata is readable. This shows the merchant-signed receipt shape the
+provider must return after a successful paid request. Settlement-specific fields
+such as `paymentId`, `payerWallet`, `settlementTxSignature`, `settledAt`, route
+attribution, and `requestDigest` remain placeholders until the paid call
+settles.
+
 You can also provide the verification key with
 `SPLIT402_EXTERNAL_X402_MERCHANT_PUBLIC_KEY`. This is a public key only. Do not
 put merchant private keys, bearer tokens, raw payment payloads, facilitator
@@ -105,6 +112,10 @@ Discovery will include a `split402OfferTemplate` for each route once the x402
 payment metadata is readable. The template is safe to share because it contains
 placeholders and public route metadata only; it is not a signed offer and must
 not be treated as production evidence.
+Discovery will also include a `split402ReceiptTemplate` with the expected
+commission math for the detected amount. For `/price` at `10000` atomic units
+with the default public-alpha example economics, the template shows a `2000`
+atomic commission, `200` atomic protocol fee, and `1800` atomic referrer credit.
 
 ## What The Provider Must Add
 
@@ -147,6 +158,13 @@ include a Split402 offer extension:
 The provider must also return a merchant-signed Split402 receipt after a paid
 request settles. Without that receipt, the router must fail closed and no
 referral accrual should be created.
+
+The receipt must bind to the same campaign terms, x402 payment identifiers,
+request digest, settled payer, settlement transaction, offer nonce, route
+attribution, commission arithmetic, and merchant signing key. If no referral
+route is accepted, omit all route attribution fields together and set
+`commissionAmountAtomic`, `protocolFeeAtomic`, and `referrerCreditAtomic` to
+`0`.
 
 For external providers, Split402 onboarding must also know the merchant public
 key that verifies both the signed offer and the later receipt. A syntactically

@@ -216,6 +216,27 @@ describe("external x402 onboarding CLI", () => {
               "Set signature on extensions.split402.info and publish only the public verification key for the kid."
             ])
           }),
+          split402ReceiptTemplate: expect.objectContaining({
+            responseRequirement: expect.stringContaining(
+              "after successful x402 settlement"
+            ),
+            commissionBearingReceiptTemplate: expect.objectContaining({
+              merchantOrigin: "https://x402.example",
+              operationId: "get.price.coin",
+              network: "eip155:8453",
+              asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+              payToWallet: "0x68614873C5d624c07DCAA3aFF5243DD5027c3910",
+              requiredAmountAtomic: "20000",
+              settledAmountAtomic: "20000",
+              commissionBaseAtomic: "20000",
+              commissionAmountAtomic: "4000",
+              protocolFeeAtomic: "400",
+              referrerCreditAtomic: "3600"
+            }),
+            noReferralReceiptRule: expect.stringContaining(
+              "set commissionAmountAtomic, protocolFeeAtomic, and referrerCreditAtomic to 0"
+            )
+          }),
           nextActions: expect.arrayContaining([
             "Add extensions.split402.info to the unpaid 402 Payment Required response.",
             "Return a merchant-signed Split402 receipt after successful x402 settlement.",
@@ -254,6 +275,15 @@ describe("external x402 onboarding CLI", () => {
           readiness: "router_ready",
           blockers: [],
           requiredSplit402Fields: [],
+          split402ReceiptTemplate: expect.objectContaining({
+            commissionBearingReceiptTemplate: expect.objectContaining({
+              operationId: "get.price.coin",
+              requiredAmountAtomic: "20000",
+              commissionAmountAtomic: "4000",
+              protocolFeeAtomic: "400",
+              referrerCreditAtomic: "3600"
+            })
+          }),
           nextActions: expect.arrayContaining([
             "Register or refresh a staging Split402 route for this provider candidate.",
             "Run one low-value paid request and verify the returned merchant-signed Split402 receipt.",
@@ -264,6 +294,7 @@ describe("external x402 onboarding CLI", () => {
       ]
     });
     expect(report.candidates[0]).not.toHaveProperty("split402OfferTemplate");
+    expect(report.candidates[0]).toHaveProperty("split402ReceiptTemplate");
   });
 
   it("writes external x402 onboarding reports as UTF-8 JSON", async () => {
@@ -568,6 +599,15 @@ describe("MCP demo gateway", () => {
                   requiredAmountAtomic: "20000"
                 })
               }),
+              split402ReceiptTemplate: expect.objectContaining({
+                commissionBearingReceiptTemplate: expect.objectContaining({
+                  operationId: "get.price.coin",
+                  requiredAmountAtomic: "20000",
+                  commissionAmountAtomic: "4000",
+                  protocolFeeAtomic: "400",
+                  referrerCreditAtomic: "3600"
+                })
+              }),
               nextActions: expect.arrayContaining([
                 "Add extensions.split402.info to the unpaid 402 Payment Required response.",
                 "Return a merchant-signed Split402 receipt after successful x402 settlement.",
@@ -634,6 +674,13 @@ describe("MCP demo gateway", () => {
               readiness: "router_ready",
               blockers: [],
               requiredSplit402Fields: [],
+              split402ReceiptTemplate: expect.objectContaining({
+                commissionBearingReceiptTemplate: expect.objectContaining({
+                  operationId: "get.price.coin",
+                  requiredAmountAtomic: "20000",
+                  commissionAmountAtomic: "4000"
+                })
+              }),
               routerReady: true
             })
           ]
@@ -649,6 +696,9 @@ describe("MCP demo gateway", () => {
     expect(
       structuredContent.structuredContent?.candidates?.[0]
     ).not.toHaveProperty("split402OfferTemplate");
+    expect(
+      structuredContent.structuredContent?.candidates?.[0]
+    ).toHaveProperty("split402ReceiptTemplate");
   });
 
   it("rejects malformed router capability search budgets", async () => {
