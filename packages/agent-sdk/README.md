@@ -92,10 +92,28 @@ console.log(result.data);
 console.log(result.receipt?.referrerCreditAtomic);
 ```
 
+For paid x402 resources that are modeled as `GET` routes, inspect and execute
+with the same method. Query parameters are included in the Split402 request
+digest.
+
+```ts
+await client.inspectOffer({
+  path: "/price/btc",
+  method: "GET",
+  query: { format: "json" }
+});
+
+const price = await client.getJson({
+  path: "/price/btc",
+  query: { format: "json" },
+  referralClaim
+});
+```
+
 ## What It Handles
 
 - inspects a merchant's unpaid `402 Payment Required` response;
 - attaches Split402 referral claims to x402 payments;
-- pays with the x402 SVM `exact` client;
+- pays `GET` and `POST` JSON resources with the x402 SVM `exact` client;
 - extracts the Split402 settlement receipt;
 - verifies merchant-signed offers and receipts when a merchant public key is supplied.

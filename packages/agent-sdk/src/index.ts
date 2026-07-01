@@ -58,8 +58,9 @@ export interface CreateReferralClaimInput {
 
 export interface InspectOfferInput {
   path: string;
-  method?: "POST";
+  method?: Split402HttpMethod;
   body?: unknown;
+  query?: Record<string, unknown>;
   headers?: Record<string, string>;
 }
 
@@ -83,6 +84,28 @@ export interface PostJsonInput {
   paymentIdFactory?: () => string;
 }
 
+export interface GetJsonInput {
+  path: string;
+  referralClaim?: ReferralClaimV1;
+  pathTemplate?: string;
+  pathParams?: Record<string, unknown>;
+  query?: Record<string, unknown>;
+  headers?: Record<string, string>;
+  paymentIdFactory?: () => string;
+}
+
+export interface PaidJsonRequestInput {
+  method: Split402HttpMethod;
+  path: string;
+  body?: unknown;
+  referralClaim?: ReferralClaimV1;
+  pathTemplate?: string;
+  pathParams?: Record<string, unknown>;
+  query?: Record<string, unknown>;
+  headers?: Record<string, string>;
+  paymentIdFactory?: () => string;
+}
+
 export interface PaidJsonResult<TData = unknown> {
   data: TData;
   status: number;
@@ -92,6 +115,8 @@ export interface PaidJsonResult<TData = unknown> {
     | { checked: true; ok: boolean; errors: string[] };
   settlement?: unknown;
 }
+
+export type Split402HttpMethod = "GET" | "POST";
 
 export class Split402AgentClient {
   readonly merchantOrigin: string;
@@ -121,13 +146,20 @@ export class Split402AgentClient {
   }
 
   async inspectOffer(input: InspectOfferInput): Promise<InspectOfferResult> {
-    const response = await fetch(`${this.merchantOrigin}${input.path}`, {
+    const url = new URL(input.path, this.merchantOrigin);
+    for (const [key, value] of Object.entries(input.query ?? {})) {
+      url.searchParams.set(key, String(value));
+    }
+    const headers = {
+      accept: "application/json",
+      ...input.headers
+    };
+    const response = await fetch(url.toString(), {
       method: input.method ?? "POST",
-      headers: {
-        accept: "application/json",
-        "content-type": "application/json",
-        ...input.headers
-      },
+      headers:
+        input.body === undefined
+          ? headers
+          : { ...headers, "content-type": "application/json" },
       ...(input.body === undefined ? {} : { body: JSON.stringify(input.body) })
     });
 
@@ -150,6 +182,22 @@ export class Split402AgentClient {
   }
 
   async postJson<TData = unknown>(input: PostJsonInput): Promise<PaidJsonResult<TData>> {
+    return this.requestJson<TData>({
+      ...input,
+      method: "POST"
+    });
+  }
+
+  async getJson<TData = unknown>(input: GetJsonInput): Promise<PaidJsonResult<TData>> {
+    return this.requestJson<TData>({
+      ...input,
+      method: "GET"
+    });
+  }
+
+  async requestJson<TData = unknown>(
+    input: PaidJsonRequestInput
+  ): Promise<PaidJsonResult<TData>> {
     if (this.signer === undefined) {
       throw new Error("a Solana signer is required to make a paid x402 request");
     }
@@ -159,19 +207,21 @@ export class Split402AgentClient {
         createSplit402ClientExtension(split402ExtensionOptions(input))
       );
     const paidAxios = wrapAxiosWithPayment(this.axios, client);
-    const headers = {
+    const headers: Record<string, string> = {
       Accept: "application/json",
-      "Content-Type": "application/json",
       ...input.headers
     };
-    const response: AxiosResponse<TData> = await paidAxios.post(
-      input.path,
-      input.body,
-      {
-        headers,
-        ...(input.query === undefined ? {} : { params: input.query })
-      }
-    );
+    if (input.body !== undefined) {
+      headers["Content-Type"] = "application/json";
+    }
+    const requestOptions = {
+      headers,
+      ...(input.query === undefined ? {} : { params: input.query })
+    };
+    const response: AxiosResponse<TData> =
+      input.method === "GET"
+        ? await paidAxios.get(input.path, requestOptions)
+        : await paidAxios.post(input.path, input.body, requestOptions);
     const settlementHeader = getHeader(response.headers, "payment-response");
     const settlement =
       settlementHeader === undefined
@@ -311,7 +361,7 @@ export function operationDigestForPayment(input: {
 }
 
 function split402ExtensionOptions(
-  input: PostJsonInput
+  input: PaidJsonRequestInput
 ): Parameters<typeof createSplit402ClientExtension>[0] {
   return {
     body: input.body,

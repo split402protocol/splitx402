@@ -628,6 +628,46 @@ describe("Split402ControlPlaneDiscoveryClient", () => {
     ]);
   });
 
+  it("discovers GET router providers from control-plane route metadata", async () => {
+    const discovery = new Split402ControlPlaneDiscoveryClient({
+      controlPlaneUrl: "https://control.example",
+      fetch: controlPlaneFetch([], {
+        resourceOverrides: {
+          resource: `${receipt.merchantOrigin}/price/btc`,
+          metadata: {
+            method: "GET",
+            operationId: "price.btc",
+            split402: {
+              routeId: "rte_1",
+              campaignId: receipt.campaignId,
+              referrerWallet: receipt.referrerWallet,
+              payoutWallet: receipt.payoutWallet
+            }
+          }
+        }
+      }),
+      capabilityMapper: (resource) =>
+        resource.metadata.operationId === "price.btc"
+          ? "crypto.price"
+          : undefined,
+      now: () => new Date("2026-06-24T00:03:00.000Z")
+    });
+
+    await expect(
+      discovery.discoverProviders({ capability: "crypto.price" })
+    ).resolves.toEqual([
+      expect.objectContaining({
+        providerId: "rte_1:price.btc",
+        capability: "crypto.price",
+        merchantOrigin: receipt.merchantOrigin,
+        path: "/price/btc",
+        method: "GET",
+        operationId: "price.btc",
+        campaignId: receipt.campaignId
+      })
+    ]);
+  });
+
   it("skips discovered providers without a merchant verification key by default", async () => {
     const discovery = new Split402ControlPlaneDiscoveryClient({
       controlPlaneUrl: "https://control.example",
