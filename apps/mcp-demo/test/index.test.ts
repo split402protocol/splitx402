@@ -348,6 +348,7 @@ describe("external x402 artifact validation", () => {
         requiredAmountAtomic: EXTERNAL_X402_AMOUNT_ATOMIC,
         merchantPublicKey: signed.merchantPublicKey,
         offer: signed.offer,
+        campaignTerms: signed.campaignTerms,
         receipt
       })
     ).toEqual({
@@ -357,9 +358,42 @@ describe("external x402 artifact validation", () => {
         offerSchema: true,
         offerSignature: true,
         offerMatchesPayment: true,
+        campaignTermsHash: true,
         receiptSchema: true,
         receiptSignatureAndArithmetic: true,
         receiptMatchesOfferAndPayment: true
+      }
+    });
+  });
+
+  it("rejects campaign terms that do not match the signed offer hash", () => {
+    const signed = createExternalSplit402Offer();
+
+    expect(
+      validateExternalX402Artifacts({
+        merchantOrigin: "https://x402.example",
+        operationId: "get.price.coin",
+        network: EXTERNAL_X402_NETWORK,
+        asset: EXTERNAL_X402_ASSET,
+        payToWallet: EXTERNAL_X402_PAY_TO_WALLET,
+        requiredAmountAtomic: EXTERNAL_X402_AMOUNT_ATOMIC,
+        merchantPublicKey: signed.merchantPublicKey,
+        offer: signed.offer,
+        campaignTerms: {
+          ...signed.campaignTerms,
+          requiredAmountAtomic: "10000"
+        }
+      })
+    ).toMatchObject({
+      ok: false,
+      errors: expect.arrayContaining([
+        expect.stringContaining("campaignTermsHash mismatch:")
+      ]),
+      checks: {
+        offerSchema: true,
+        offerSignature: true,
+        offerMatchesPayment: true,
+        campaignTermsHash: false
       }
     });
   });
@@ -395,6 +429,7 @@ describe("external x402 artifact validation", () => {
     const directory = mkdtempSync(join(tmpdir(), "split402-x402-validate-"));
     const offerPath = join(directory, "offer.json");
     const receiptPath = join(directory, "receipt.json");
+    const campaignTermsPath = join(directory, "campaign-terms.json");
     const signed = createExternalSplit402Offer();
     const receipt = createExternalSplit402Receipt(signed.offer);
     const logs: string[] = [];
@@ -402,6 +437,11 @@ describe("external x402 artifact validation", () => {
     try {
       writeFileSync(offerPath, JSON.stringify(signed.offer), "utf8");
       writeFileSync(receiptPath, JSON.stringify(receipt), "utf8");
+      writeFileSync(
+        campaignTermsPath,
+        JSON.stringify(signed.campaignTerms),
+        "utf8"
+      );
       console.log = (value?: unknown) => {
         logs.push(String(value));
       };
@@ -424,6 +464,8 @@ describe("external x402 artifact validation", () => {
           signed.merchantPublicKey,
           "--offer-file",
           offerPath,
+          "--campaign-terms-file",
+          campaignTermsPath,
           "--receipt-file",
           receiptPath
         ])
@@ -432,7 +474,12 @@ describe("external x402 artifact validation", () => {
       console.log = originalLog;
       rmSync(directory, { recursive: true, force: true });
     }
-    expect(JSON.parse(logs.join("\n"))).toMatchObject({ ok: true });
+    expect(JSON.parse(logs.join("\n"))).toMatchObject({
+      ok: true,
+      checks: {
+        campaignTermsHash: true
+      }
+    });
   });
 
   it("parses artifact validation help flags", () => {
@@ -855,6 +902,7 @@ describe("MCP demo gateway", () => {
             requiredAmountAtomic: EXTERNAL_X402_AMOUNT_ATOMIC,
             merchantPublicKey: signed.merchantPublicKey,
             offer: signed.offer,
+            campaignTerms: signed.campaignTerms,
             receipt
           }
         }
@@ -874,6 +922,7 @@ describe("MCP demo gateway", () => {
             offerSchema: true,
             offerSignature: true,
             offerMatchesPayment: true,
+            campaignTermsHash: true,
             receiptSchema: true,
             receiptSignatureAndArithmetic: true,
             receiptMatchesOfferAndPayment: true
@@ -1871,6 +1920,7 @@ function mcpExternalX402Fetch(options: {
 function createExternalSplit402Offer(): {
   offer: Split402OfferV1;
   merchantPublicKey: string;
+  campaignTerms: Record<string, unknown>;
 } {
   const merchantPublicKey = deriveEd25519PublicKey(EXTERNAL_MERCHANT_SEED);
   const campaignTerms = {
@@ -1918,6 +1968,7 @@ function createExternalSplit402Offer(): {
   ).signature;
   return {
     merchantPublicKey,
+    campaignTerms,
     offer: {
       ...unsignedOffer,
       signature

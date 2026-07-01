@@ -86,18 +86,23 @@ corepack pnpm demo:validate-external-x402-artifacts -- \
   --required-amount-atomic 10000 \
   --merchant-public-key <merchant-offer-receipt-public-key> \
   --offer-file offer.json \
+  --campaign-terms-file campaign-terms.json \
   --receipt-file receipt.json
 ```
 
-The receipt file is optional while validating the unpaid `402 Payment Required`
-offer response. The validator checks public JSON artifacts only: schema,
-merchant signature, x402 route metadata binding, offer/receipt consistency, and
+The campaign terms and receipt files are optional while validating the unpaid
+`402 Payment Required` offer response, but `campaign-terms.json` is recommended.
+When supplied, the validator recomputes the canonical `campaignTermsHash` and
+checks that it matches the signed offer and optional receipt. The validator
+checks public JSON artifacts only: schema, merchant signature, x402 route
+metadata binding, campaign terms hash binding, offer/receipt consistency, and
 receipt arithmetic. It never needs private keys, bearer tokens, raw payment
 payloads, facilitator secrets, or private settlement evidence.
 
 The same check is exposed to MCP clients as
 `split402.validateExternalX402Artifacts`. Pass the same route metadata,
-`merchantPublicKey`, `offer`, and optional `receipt` as JSON tool arguments.
+`merchantPublicKey`, `offer`, optional `campaignTerms`, and optional `receipt`
+as JSON tool arguments.
 
 Readiness meanings:
 

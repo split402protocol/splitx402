@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import {
+  hashProtocolObject,
   Split402OfferV1Schema,
   Split402ReceiptV1Schema,
   verifySplit402Offer,
@@ -21,6 +22,7 @@ export interface ValidateExternalX402ArtifactsInput {
   merchantPublicKey: string;
   offer: unknown;
   receipt?: unknown;
+  campaignTerms?: unknown;
 }
 
 export interface ValidateExternalX402ArtifactsResult {
@@ -30,6 +32,7 @@ export interface ValidateExternalX402ArtifactsResult {
     offerSchema: boolean;
     offerSignature: boolean;
     offerMatchesPayment: boolean;
+    campaignTermsHash?: boolean;
     receiptSchema?: boolean;
     receiptSignatureAndArithmetic?: boolean;
     receiptMatchesOfferAndPayment?: boolean;
@@ -46,6 +49,7 @@ interface ValidateExternalX402ArtifactsCliInput {
   merchantPublicKey?: string;
   offerFile?: string;
   receiptFile?: string;
+  campaignTermsFile?: string;
 }
 
 export function validateExternalX402Artifacts(
@@ -77,6 +81,16 @@ export function validateExternalX402Artifacts(
     const offerMatchErrors = validateOfferAgainstExternalPayment(offer, input);
     checks.offerMatchesPayment = offerMatchErrors.length === 0;
     errors.push(...offerMatchErrors);
+
+    if (input.campaignTerms !== undefined) {
+      const campaignTermsErrors = validateCampaignTermsHash(
+        input.campaignTerms,
+        offer,
+        input.receipt
+      );
+      checks.campaignTermsHash = campaignTermsErrors.length === 0;
+      errors.push(...campaignTermsErrors);
+    }
 
     if (input.receipt !== undefined) {
       validateReceipt(input, offer, errors, checks);
@@ -130,6 +144,8 @@ export function parseValidateExternalX402ArtifactsArgs(
       input.offerFile = value;
     } else if (arg === "--receipt-file") {
       input.receiptFile = value;
+    } else if (arg === "--campaign-terms-file") {
+      input.campaignTermsFile = value;
     } else {
       throw new Error(`unknown argument: ${arg}`);
     }
@@ -163,7 +179,10 @@ export async function runValidateExternalX402ArtifactsCli(
     offer: readJson(required(parsed.offerFile, "--offer-file")),
     ...(parsed.receiptFile === undefined
       ? {}
-      : { receipt: readJson(parsed.receiptFile) })
+      : { receipt: readJson(parsed.receiptFile) }),
+    ...(parsed.campaignTermsFile === undefined
+      ? {}
+      : { campaignTerms: readJson(parsed.campaignTermsFile) })
   });
   console.log(JSON.stringify(result, null, 2));
   return result.ok ? 0 : 2;
@@ -179,11 +198,14 @@ export const VALIDATE_EXTERNAL_X402_ARTIFACTS_USAGE = `Usage:
     --required-amount-atomic <amount> \\
     --merchant-public-key <base58-public-key> \\
     --offer-file offer.json \\
+    [--campaign-terms-file campaign-terms.json] \\
     [--receipt-file receipt.json]
 
 This validates public Split402 artifacts against the external x402 route
-metadata. It never needs merchant private keys, bearer tokens, raw payment
-payloads, or facilitator secrets.`;
+metadata. When campaign terms are supplied, it recomputes the canonical terms
+hash and compares it to the signed offer and optional receipt. It never needs
+merchant private keys, bearer tokens, raw payment payloads, or facilitator
+secrets.`;
 
 function validateReceipt(
   input: ValidateExternalX402ArtifactsInput,
@@ -218,6 +240,33 @@ function validateReceipt(
   );
   checks.receiptMatchesOfferAndPayment = receiptMatchErrors.length === 0;
   errors.push(...receiptMatchErrors);
+}
+
+function validateCampaignTermsHash(
+  campaignTerms: unknown,
+  offer: Split402OfferV1,
+  receipt: unknown
+): string[] {
+  const errors: string[] = [];
+  const campaignTermsHash = hashProtocolObject(campaignTerms);
+  compare(
+    errors,
+    "campaignTermsHash",
+    campaignTermsHash,
+    offer.campaignTermsHash
+  );
+  if (receipt !== undefined) {
+    const parsedReceipt = Split402ReceiptV1Schema.safeParse(receipt);
+    if (parsedReceipt.success) {
+      compare(
+        errors,
+        "receipt.campaignTermsHash",
+        parsedReceipt.data.campaignTermsHash,
+        campaignTermsHash
+      );
+    }
+  }
+  return errors;
 }
 
 function validateOfferAgainstExternalPayment(
