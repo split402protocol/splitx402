@@ -51,6 +51,8 @@ JSON-RPC. It exposes:
 - `split402.execute` for a router-backed demo execution result;
 - `split402.discoverExternalX402` for metadata-only onboarding checks against
   external x402 APIs;
+- `split402.validateExternalX402Artifacts` for validating a provider's public
+  signed offer and optional receipt against external x402 route metadata;
 - `split402.getReceipt` for receipts captured during the current gateway
   session.
 
@@ -207,6 +209,31 @@ corepack pnpm demo:validate-external-x402-artifacts -- \
 `--receipt-file` is optional while checking the unpaid offer. The command checks
 schema, merchant signature, x402 route binding, offer/receipt consistency, and
 receipt arithmetic using public JSON and the merchant public key only.
+
+The same public-artifact check is available through the MCP gateway as
+`split402.validateExternalX402Artifacts`:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "validate-external-1",
+  "method": "tools/call",
+  "params": {
+    "name": "split402.validateExternalX402Artifacts",
+    "arguments": {
+      "merchantOrigin": "https://x402.example",
+      "operationId": "get.price",
+      "network": "eip155:8453",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "payToWallet": "0x68614873C5d624c07DCAA3aFF5243DD5027c3910",
+      "requiredAmountAtomic": "10000",
+      "merchantPublicKey": "<merchant-offer-receipt-public-key>",
+      "offer": {},
+      "receipt": {}
+    }
+  }
+}
+```
 
 When `network` or `asset` are omitted from `budget`, the gateway defaults them
 from the best provider that already matches the supplied budget filters and

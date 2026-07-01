@@ -95,6 +95,10 @@ merchant signature, x402 route metadata binding, offer/receipt consistency, and
 receipt arithmetic. It never needs private keys, bearer tokens, raw payment
 payloads, facilitator secrets, or private settlement evidence.
 
+The same check is exposed to MCP clients as
+`split402.validateExternalX402Artifacts`. Pass the same route metadata,
+`merchantPublicKey`, `offer`, and optional `receipt` as JSON tool arguments.
+
 Readiness meanings:
 
 | Readiness | Meaning |
