@@ -29,6 +29,10 @@ A release candidate must have:
   details, or custody evidence in the public tree;
 - explicit package/container artifacts selected for release;
 - a support statement describing what is and is not supported.
+- commercial readiness disclosures reviewed against
+  [Commercial readiness](COMMERCIAL_READINESS.md), including non-atomic MVP
+  settlement, merchant solvency risk, protocol fee basis, payout timing,
+  disputes, reversals, and launch-gate status.
 
 ## Public-Alpha Hosted Demo Requirements
 
@@ -40,6 +44,8 @@ Before a hosted public-alpha demo is announced:
   referrer balance, dashboard summary, webhook delivery, payout obligation,
   funding balance, MCP gateway evidence, commands run, and human approval;
 - approval remains `no-go` until every proof gate is ready.
+- public onboarding and demo material must keep the commercial readiness
+  disclosures intact.
 
 ## Production Or Mainnet Requirements
 
@@ -50,7 +56,8 @@ Before production custody or production mainnet use:
   reconciliation drills, RPC failover, and image provenance;
 - Phase 7 hosted proof must be approved;
 - release notes must keep the non-atomic MVP trust boundary clear;
-- counsel should review license, commercial terms, and support obligations.
+- counsel should review license, commercial terms, support obligations, and
+  [Commercial readiness](COMMERCIAL_READINESS.md).
 
 Before the first tiny mainnet canary:
 

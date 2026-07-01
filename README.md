@@ -764,6 +764,7 @@ assembled and approved.
 - [GitHub repository settings](docs/GITHUB_REPOSITORY_SETTINGS.md)
 - [Public and private boundary](docs/PUBLIC_PRIVATE_BOUNDARY.md)
 - [Release policy](docs/RELEASE_POLICY.md)
+- [Commercial readiness](docs/COMMERCIAL_READINESS.md)
 - [Architecture alignment note](docs/SPLIT402_ARCHITECTURE.md)
 - [Pre-launch public/private review checklist](docs/checklists/prelaunch-public-private-review.md)
 - [Phase 6 custody review checklist](docs/checklists/phase6-custody-review.md)

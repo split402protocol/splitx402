@@ -33,6 +33,7 @@ const REQUIRED_FILES = [
   "docs/GITHUB_REPOSITORY_SETTINGS.md",
   "docs/PUBLIC_PRIVATE_BOUNDARY.md",
   "docs/RELEASE_POLICY.md",
+  "docs/COMMERCIAL_READINESS.md",
   "docs/checklists/prelaunch-public-private-review.md",
   "docs/decisions/0009-public-private-boundary-and-apache-license.md",
 ] as const;
@@ -94,6 +95,7 @@ export function createSplit402PublicSurfaceCheckReport(
     createCodeownersCheck(exists, readText),
     createSupportPolicyCheck(exists, readText),
     createReleasePolicyCheck(exists, readText),
+    createCommercialReadinessCheck(exists, readText),
     createBoundaryPolicyCheck(exists, readText),
     createDecisionRecordCheck(exists, readText),
     createNoMitLaunchClaimCheck(exists, readText),
@@ -451,6 +453,46 @@ function createReleasePolicyCheck(
     details:
       blockers.length === 0
         ? ["Release policy keeps packages, hosted demos, production custody, mainnet canaries, and production mainnet behind explicit evidence gates."]
+        : blockers,
+  };
+}
+
+function createCommercialReadinessCheck(
+  exists: (path: string) => boolean,
+  readText: (path: string) => string,
+): Split402PublicSurfaceCheck {
+  const commercial = readIfExists("docs/COMMERCIAL_READINESS.md", exists, readText);
+  const blockers = [
+    ...(commercial?.includes("Public alpha only") === true
+      ? []
+      : ["docs/COMMERCIAL_READINESS.md must state public-alpha commercial status."]),
+    ...(commercial?.includes("not atomic on-chain payment splitting") === true
+      ? []
+      : ["docs/COMMERCIAL_READINESS.md must disclose the non-atomic MVP boundary."]),
+    ...(commercial?.includes("merchant payout wallet is solvent") === true
+      ? []
+      : ["docs/COMMERCIAL_READINESS.md must disclose merchant solvency risk."]),
+    ...(commercial?.includes("protocolFeeBpsOfCommission") === true
+      ? []
+      : ["docs/COMMERCIAL_READINESS.md must define the protocol fee basis."]),
+    ...(commercial?.includes("Phase 6") === true &&
+    commercial.includes("Phase 7 approval") === true
+      ? []
+      : ["docs/COMMERCIAL_READINESS.md must keep custody and hosted launch behind Phase 6/7 approval."]),
+    ...(commercial?.includes("Commercial launch remains blocked until all are true") === true
+      ? []
+      : ["docs/COMMERCIAL_READINESS.md must include a commercial pre-launch gate."]),
+  ];
+
+  return {
+    id: "commercial_readiness_boundary",
+    label: "Commercial readiness preserves public-alpha risk disclosures",
+    ok: blockers.length === 0,
+    details:
+      blockers.length === 0
+        ? [
+            "Commercial readiness doc keeps non-atomic settlement, solvency, fee, custody, and launch-gate disclosures explicit.",
+          ]
         : blockers,
   };
 }
