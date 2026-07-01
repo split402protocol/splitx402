@@ -533,6 +533,9 @@ custom launch evidence directory when not using the default:
 `phase6:evidence:assemble` auto-loads the default launch env file when present;
 for any other directory, pass `--evidence-env-file <path>` and an explicit
 output file path.
+`phase6:evidence:status` and `phase6:custody:check` resolve `attached:`
+artifact paths relative to the custody bundle directory and fail readiness if
+any referenced artifact is missing.
 Keep private URLs, secrets, private keys, and transaction bytes out of the file
 and out of Git.
 
