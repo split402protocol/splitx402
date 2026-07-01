@@ -202,7 +202,7 @@ flowchart TB
 | `@split402/x402-extension` | Split402 offer, attribution, and receipt hooks around standard x402 settlement. |
 | `@split402/express` | Express request-context adapter for stable operation-digest inputs. |
 | `@split402/agent-sdk` | Buyer-side offer inspection, referral-claim creation, SVM/EVM paid JSON calls, and receipt verification. |
-| `@split402/router` | Public-alpha capability router with static providers, control-plane route discovery, GET/POST SVM/EVM provider execution, budget enforcement, deterministic ranking, retry/fallback, pay-to wallet checks, and receipt verification for paid tools. |
+| `@split402/router` | Public-alpha capability router with static providers, control-plane route discovery, external x402 onboarding discovery, GET/POST SVM/EVM provider execution, budget enforcement, deterministic ranking, retry/fallback, pay-to wallet checks, and receipt verification for paid tools. |
 | `@split402/merchant-sdk` | Merchant helpers for campaign caching, service-key rotation, payment IDs, operation digests, and durable receipt outbox delivery. |
 | `@split402/demo-merchant` | Solana Devnet merchant API used to prove the x402 plus Split402 flow. |
 | `@split402/demo-agent` | Runnable buyer/agent harness for setup, preflight, offer inspection, and paid-suite proof runs. |

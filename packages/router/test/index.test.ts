@@ -2,15 +2,19 @@ import {
   createSampleProtocolArtifacts,
   type Split402ReceiptV1
 } from "@split402/protocol";
+import { encodePaymentRequiredHeader } from "@x402/core/http";
+import type { PaymentRequired } from "@x402/core/types";
 import { describe, expect, it, vi } from "vitest";
 
 import {
   Split402ControlPlaneDiscoveryClient,
+  Split402ExternalX402DiscoveryClient,
   Split402Router,
   Split402RouterProviderError,
   type Split402CapabilityProvider,
   type Split402DiscoveryFetch,
   type Split402DiscoveryFetchResponse,
+  type Split402ExternalX402DiscoveryFetch,
   type Split402RouterExecutor
 } from "../src/index.js";
 
@@ -765,6 +769,83 @@ describe("Split402ControlPlaneDiscoveryClient", () => {
   });
 });
 
+describe("Split402ExternalX402DiscoveryClient", () => {
+  it("discovers external x402 routes but blocks router use until Split402 campaign wiring exists", async () => {
+    const discovery = new Split402ExternalX402DiscoveryClient({
+      merchantOrigin: "https://x402.example",
+      fetch: externalX402Fetch({
+        paymentRequired: externalPaymentRequired({ includeSplit402: false })
+      }),
+      providerIdPrefix: "revenue-dojo",
+      capabilityMapper: (route) =>
+        route.operationId === "get.price.coin" ? "crypto.price" : undefined
+    });
+
+    await expect(
+      discovery.discoverCandidates({ capability: "crypto.price" })
+    ).resolves.toEqual([
+      expect.objectContaining({
+        providerId: "revenue-dojo:get.price.coin",
+        capability: "crypto.price",
+        merchantOrigin: "https://x402.example",
+        path: "/price/btc",
+        method: "GET",
+        operationId: "get.price.coin",
+        network: "eip155:8453",
+        asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        payToWallet: "0x68614873C5d624c07DCAA3aFF5243DD5027c3910",
+        amountAtomic: "20000",
+        readiness: "requires_split402_campaign",
+        blockers: ["missing Split402 offer extension"],
+        source: {
+          manifest: true,
+          openapi: true,
+          paymentRequiredHeader: true
+        }
+      })
+    ]);
+  });
+
+  it("creates router-ready providers when external x402 routes include Split402 offers", async () => {
+    const discovery = new Split402ExternalX402DiscoveryClient({
+      merchantOrigin: receipt.merchantOrigin,
+      fetch: externalX402Fetch({
+        paymentRequired: externalPaymentRequired({ includeSplit402: true })
+      }),
+      providerIdPrefix: "split402-ready",
+      merchantPublicKey,
+      capabilityMapper: () => "solana.wallet-risk"
+    });
+
+    const candidates = await discovery.discoverCandidates({
+      capability: "solana.wallet-risk"
+    });
+
+    expect(candidates).toEqual([
+      expect.objectContaining({
+        providerId: "split402-ready:get.price.coin",
+        readiness: "router_ready",
+        blockers: [],
+        split402Offer: sample.artifacts.offer,
+        provider: expect.objectContaining({
+          providerId: "split402-ready:get.price.coin",
+          capability: "solana.wallet-risk",
+          merchantOrigin: receipt.merchantOrigin,
+          path: "/price/btc",
+          method: "GET",
+          operationId: sample.artifacts.offer.operationId,
+          campaignId: sample.artifacts.offer.campaignId,
+          merchantPublicKey,
+          network: sample.artifacts.offer.network,
+          asset: sample.artifacts.offer.asset,
+          payToWallet: sample.artifacts.offer.payToWallet,
+          amountAtomic: sample.artifacts.offer.requiredAmountAtomic
+        })
+      })
+    ]);
+  });
+});
+
 function provider(
   overrides: Partial<Split402CapabilityProvider> = {},
   options: { omitPublicKey?: boolean } = {}
@@ -890,12 +971,169 @@ function controlPlaneFetch(
   };
 }
 
+function externalX402Fetch(options: {
+  paymentRequired: PaymentRequired;
+}): Split402ExternalX402DiscoveryFetch {
+  return async (url) => {
+    const parsed = new URL(url);
+    if (parsed.pathname === "/.well-known/x402") {
+      return jsonResponse({
+        version: 1,
+        resources: ["https://x402.example/price/btc"],
+        ownershipProofs: ["0x68614873C5d624c07DCAA3aFF5243DD5027c3910"],
+        paid_routes: [
+          {
+            method: "GET",
+            path: "/price/{coin}",
+            price: "$0.02",
+            description: "Specific coin USD price.",
+            example_unpaid_curl: "curl -i https://x402.example/price/btc"
+          },
+          {
+            method: "GET",
+            path: "/mcp/tools",
+            price: "free",
+            description: "Free tool catalog."
+          }
+        ],
+        facilitator: "https://api.cdp.coinbase.com/platform/v2/x402"
+      });
+    }
+    if (parsed.pathname === "/openapi.json") {
+      return jsonResponse({
+        openapi: "3.0.3",
+        paths: {
+          "/price/{coin}": {
+            get: {
+              description: "Returns current price for a specific cryptocurrency.",
+              parameters: [
+                {
+                  name: "coin",
+                  in: "path",
+                  required: true,
+                  schema: {
+                    type: "string",
+                    enum: ["btc", "eth"]
+                  }
+                }
+              ],
+              "x-payment-info": {
+                price: {
+                  mode: "fixed",
+                  currency: "USD",
+                  amount: "0.02"
+                }
+              },
+              responses: {
+                402: {
+                  description: "Payment required"
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+    if (parsed.pathname === "/price/btc") {
+      return textResponse("", {
+        status: 402,
+        headers: {
+          "Payment-Required": encodePaymentRequiredHeader(options.paymentRequired)
+        }
+      });
+    }
+    return jsonResponse({}, 404);
+  };
+}
+
+function externalPaymentRequired(options: {
+  includeSplit402: boolean;
+}): PaymentRequired {
+  if (options.includeSplit402) {
+    const offer = sample.artifacts.offer;
+    return {
+      x402Version: 2,
+      error: "Payment required",
+      resource: {
+        url: `${receipt.merchantOrigin}/price/btc`,
+        description: "Split402-enabled price route",
+        mimeType: "application/json"
+      },
+      accepts: [
+        {
+          scheme: "exact",
+          network: offer.network as `${string}:${string}`,
+          asset: offer.asset,
+          amount: offer.requiredAmountAtomic,
+          payTo: offer.payToWallet,
+          maxTimeoutSeconds: 300,
+          extra: {}
+        }
+      ],
+      extensions: {
+        split402: {
+          info: offer
+        }
+      }
+    };
+  }
+  return {
+    x402Version: 2,
+    error: "Payment required",
+    resource: {
+      url: "https://x402.example/price/btc",
+      description: "Specific coin USD price",
+      mimeType: "application/json"
+    },
+    accepts: [
+      {
+        scheme: "exact",
+        network: "eip155:8453",
+        asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        amount: "20000",
+        payTo: "0x68614873C5d624c07DCAA3aFF5243DD5027c3910",
+        maxTimeoutSeconds: 300,
+        extra: {
+          name: "USD Coin",
+          version: "2"
+        }
+      }
+    ],
+    extensions: {
+      bazaar: {
+        info: {
+          input: {
+            type: "http",
+            method: "GET"
+          }
+        }
+      }
+    }
+  };
+}
+
 function jsonResponse(
   body: unknown,
-  status = 200
+  status = 200,
+  headers: Record<string, string> = {}
 ): Split402DiscoveryFetchResponse {
   return {
     status,
+    headers,
     text: async () => JSON.stringify(body)
+  };
+}
+
+function textResponse(
+  body: string,
+  options: {
+    status?: number;
+    headers?: Record<string, string>;
+  } = {}
+): Split402DiscoveryFetchResponse {
+  return {
+    status: options.status ?? 200,
+    headers: options.headers ?? {},
+    text: async () => body
   };
 }
