@@ -60,6 +60,10 @@ try {
           readLivePrivateVulnerabilityReportingEnabled(),
         releaseCount: readLiveReleaseCount(),
         packageCount: readLivePackageCount(),
+        packagesUnpublishedConfirmed:
+          readOptionalYesNoEnv(
+            "SPLIT402_GITHUB_SETTINGS_PACKAGES_UNPUBLISHED_CONFIRMED",
+          ) === true,
         sourceCommit:
           env.SPLIT402_GITHUB_SETTINGS_SOURCE_COMMIT ?? readCurrentGitCommit(),
         reviewNotes: env.SPLIT402_GITHUB_SETTINGS_REVIEW_NOTES,
@@ -203,6 +207,21 @@ function readRequiredEnv(name: string): string {
     throw new Error(`${name} is required`);
   }
   return value;
+}
+
+function readOptionalYesNoEnv(name: string): boolean | undefined {
+  const value = env[name];
+  if (value === undefined || value.trim().length === 0) {
+    return undefined;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "yes") {
+    return true;
+  }
+  if (normalized === "no") {
+    return false;
+  }
+  throw new Error(`${name} must be yes or no`);
 }
 
 function readCurrentGitCommit(): string {
