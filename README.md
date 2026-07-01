@@ -667,8 +667,10 @@ corepack pnpm demo:discover-external-x402 https://x402.example \
 ```
 
 See [External x402 Provider Onboarding](docs/runbooks/external-x402-provider-onboarding.md)
-for the readiness meanings and the Split402 offer/receipt metadata a provider
-must add before routes become referral-ready.
+for readiness meanings, required Split402 offer fields, provider next actions,
+and the Base/EVM caveat: discovery can classify those routes today, but they
+remain onboarding candidates until signed Split402 offer and receipt validation
+for EVM asset and wallet identifiers is enabled.
 
 Run the deterministic gateway smoke proof:
 

@@ -148,7 +148,10 @@ Example external x402 onboarding request:
 This tool only reads public metadata and unpaid `402 Payment Required`
 responses. Plain x402 APIs are reported as `requires_split402_campaign` until
 their payment requirement includes a Split402 offer extension, so discovery does
-not overstate them as referral-ready providers.
+not overstate them as referral-ready providers. Candidate responses include
+`requiredSplit402Fields` and `nextActions`; for Base/EVM x402 routes the gateway
+keeps the route in onboarding until signed Split402 offer and receipt validation
+for EVM asset and wallet identifiers is enabled.
 
 The same onboarding check can be run without an MCP client:
 
@@ -161,8 +164,9 @@ corepack pnpm demo:discover-external-x402 \
 ```
 
 The command emits a JSON report with candidate routes, networks, assets,
-amounts, pay-to wallets, readiness, and blockers. It performs metadata-only
-discovery and unpaid 402 probes; it does not execute paid calls.
+amounts, pay-to wallets, readiness, blockers, required Split402 fields, and
+next actions. It performs metadata-only discovery and unpaid 402 probes; it does
+not execute paid calls.
 
 When `network` or `asset` are omitted from `budget`, the gateway defaults them
 from the best provider that already matches the supplied budget filters and
