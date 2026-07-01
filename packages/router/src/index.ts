@@ -14,7 +14,7 @@ export interface Split402CapabilityProvider {
   routeId?: string;
   merchantOrigin: string;
   path: string;
-  method: "POST";
+  method: Split402ProviderHttpMethod;
   operationId: string;
   campaignId: string;
   merchantPublicKey?: string;
@@ -32,6 +32,8 @@ export interface Split402CapabilityProvider {
     payoutWallet?: string;
   };
 }
+
+export type Split402ProviderHttpMethod = "GET" | "POST";
 
 export interface Split402RouterExecuteInput {
   capability: string;
@@ -504,8 +506,8 @@ export class Split402ControlPlaneDiscoveryClient {
       return undefined;
     }
     const accept = resource.accepts[0];
-    const method = resource.metadata.method.toUpperCase();
-    if (method !== "POST") {
+    const method = parseProviderHttpMethod(resource.metadata.method);
+    if (method === undefined) {
       return undefined;
     }
     const resourceUrl = parseUrl(resource.resource);
@@ -527,7 +529,7 @@ export class Split402ControlPlaneDiscoveryClient {
       routeId: resource.metadata.split402.routeId,
       merchantOrigin: resourceUrl.origin,
       path: `${resourceUrl.pathname}${resourceUrl.search}`,
-      method: "POST",
+      method,
       operationId: resource.metadata.operationId,
       campaignId: resource.metadata.split402.campaignId,
       ...(merchantPublicKey === undefined ? {} : { merchantPublicKey }),
@@ -624,10 +626,15 @@ export class Split402AgentSdkExecutor implements Split402RouterExecutor {
         : { merchantPublicKey: input.provider.merchantPublicKey }),
       ...(input.signer === undefined ? {} : { signer: input.signer })
     });
+    const getQuery = inputToQuery(input.body);
     const offer = await client.inspectOffer({
       path: input.provider.path,
       method: input.provider.method,
-      body: input.body
+      ...(input.provider.method === "GET"
+        ? getQuery === undefined
+          ? {}
+          : { query: getQuery }
+        : { body: input.body })
     });
     if (offer.verification.checked && !offer.verification.ok) {
       throw new Split402RouterProviderError(
@@ -641,6 +648,15 @@ export class Split402AgentSdkExecutor implements Split402RouterExecutor {
         `Split402 offer does not match provider: ${offerErrors.join("; ")}`,
         { retryable: true }
       );
+    }
+    if (input.provider.method === "GET") {
+      return client.getJson({
+        path: input.provider.path,
+        ...(getQuery === undefined ? {} : { query: getQuery }),
+        ...(input.referralClaim === undefined
+          ? {}
+          : { referralClaim: input.referralClaim })
+      });
     }
     return client.postJson({
       path: input.provider.path,
@@ -1006,6 +1022,23 @@ function parseBazaarResource(
       }
     }
   };
+}
+
+function parseProviderHttpMethod(
+  value: string | undefined
+): Split402ProviderHttpMethod | undefined {
+  const method = value?.toUpperCase();
+  return method === "GET" || method === "POST" ? method : undefined;
+}
+
+function inputToQuery(input: unknown): Record<string, unknown> | undefined {
+  if (input === undefined || input === null) {
+    return undefined;
+  }
+  if (typeof input !== "object" || Array.isArray(input)) {
+    return undefined;
+  }
+  return input as Record<string, unknown>;
 }
 
 function isActiveOfferReceiptKey(

@@ -139,4 +139,63 @@ describe("Split402 agent SDK", () => {
     expect(result.offer).toEqual(offer);
     expect(result.verification).toEqual({ checked: true, ok: true, errors: [] });
   });
+
+  it("inspects GET offers with query parameters", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const offer = bundle.artifacts.offer;
+    const paymentRequired: PaymentRequired = {
+      x402Version: 2,
+      error: "Payment required",
+      resource: {
+        url: "http://localhost:4021/price/btc?format=json",
+        description: "BTC price",
+        mimeType: "application/json"
+      },
+      accepts: [
+        {
+          scheme: "exact",
+          network: offer.network as `${string}:${string}`,
+          asset: offer.asset,
+          amount: offer.requiredAmountAtomic,
+          payTo: offer.payToWallet,
+          maxTimeoutSeconds: 300,
+          extra: {}
+        }
+      ],
+      extensions: {
+        split402: {
+          info: offer
+        }
+      }
+    };
+    const fetchMock = vi.fn(async () => {
+      return new Response("", {
+        status: 402,
+        headers: {
+          "payment-required": encodePaymentRequiredHeader(paymentRequired)
+        }
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new Split402AgentClient({
+      merchantOrigin: "http://localhost:4021",
+      merchantPublicKey: bundle.keys.merchantPublicKey
+    });
+    const result = await client.inspectOffer({
+      path: "/price/btc",
+      method: "GET",
+      query: { format: "json" }
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:4021/price/btc?format=json",
+      expect.objectContaining({
+        method: "GET"
+      })
+    );
+    expect(result.status).toBe(402);
+    expect(result.offer).toEqual(offer);
+    expect(result.verification).toEqual({ checked: true, ok: true, errors: [] });
+  });
 });
