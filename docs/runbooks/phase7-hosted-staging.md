@@ -54,6 +54,12 @@ are ready:
 docker compose -f deploy/phase7-staging/compose.yaml --profile demo --profile workers up
 ```
 
+The `workers` profile runs the receipt chain-verification worker, the webhook
+dispatch worker, and the payout finality worker. The payout finality worker
+only observes submitted and confirmed payout transactions and persists
+chain-observed outcomes; it never signs, broadcasts, or replaces transaction
+bytes, and outcome-unknown batches still require the operator reconcile flow.
+
 Seed the hosted-staging control-plane state from an operator shell after
 migrations have run and before collecting proof evidence:
 

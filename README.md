@@ -570,8 +570,15 @@ Run the worker processes alongside it:
 
 ```bash
 corepack pnpm worker:chain
+corepack pnpm worker:payout-finality
 corepack pnpm worker:webhook
 ```
+
+The payout finality worker observes submitted and confirmed payout
+transactions against Solana RPC and persists chain-observed outcomes,
+including outcome-unknown classification for the operator reconciliation
+queue. It never signs, broadcasts, or replaces transaction bytes, and
+outcome-unknown batches still require the operator reconcile flow.
 
 Run the dashboard:
 
