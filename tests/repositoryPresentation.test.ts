@@ -399,6 +399,8 @@ describe("repository presentation", () => {
     expect(currentState).toContain("records the source");
     expect(currentState).toContain("fails unless the source worktree is clean");
     expect(currentState).toContain("source worktree has");
+    expect(readme).toContain("source_commit` match before reporting ready");
+    expect(currentState).toContain("source_commit` alignment");
     expect(releasePolicy).toContain(
       "corepack pnpm product:mainnet-canary --brief --workspace split402-launch-evidence",
     );
