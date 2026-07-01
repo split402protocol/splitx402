@@ -465,6 +465,7 @@ describe("MCP demo gateway", () => {
       "split402.searchCapabilities",
       "split402.execute",
       "split402.discoverExternalX402",
+      "split402.validateExternalX402Artifacts",
       "split402.getReceipt"
     ]);
     expect(result.tools[0]?.inputSchema?.required).toEqual(["wallet"]);
@@ -496,6 +497,22 @@ describe("MCP demo gateway", () => {
         capability: { type: "string" },
         matchPath: { type: "string" },
         merchantPublicKey: { type: "string" }
+      }
+    });
+    expect(result.tools[4]?.inputSchema).toMatchObject({
+      required: [
+        "merchantOrigin",
+        "operationId",
+        "network",
+        "asset",
+        "payToWallet",
+        "requiredAmountAtomic",
+        "merchantPublicKey",
+        "offer"
+      ],
+      properties: {
+        offer: { type: "object" },
+        receipt: { type: "object" }
       }
     });
   });
@@ -816,6 +833,101 @@ describe("MCP demo gateway", () => {
     expect(
       structuredContent.structuredContent?.candidates?.[0]
     ).toHaveProperty("split402ReceiptTemplate");
+  });
+
+  it("validates external x402 artifacts through MCP tools/call", async () => {
+    const signed = createExternalSplit402Offer();
+    const receipt = createExternalSplit402Receipt(signed.offer);
+
+    const response = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "external-artifact-validation",
+        method: "tools/call",
+        params: {
+          name: "split402.validateExternalX402Artifacts",
+          arguments: {
+            merchantOrigin: "https://x402.example",
+            operationId: "get.price.coin",
+            network: EXTERNAL_X402_NETWORK,
+            asset: EXTERNAL_X402_ASSET,
+            payToWallet: EXTERNAL_X402_PAY_TO_WALLET,
+            requiredAmountAtomic: EXTERNAL_X402_AMOUNT_ATOMIC,
+            merchantPublicKey: signed.merchantPublicKey,
+            offer: signed.offer,
+            receipt
+          }
+        }
+      }),
+      createMcpGatewayContext()
+    );
+
+    expect(response).toMatchObject({
+      jsonrpc: "2.0",
+      id: "external-artifact-validation",
+      result: {
+        structuredContent: {
+          status: "artifacts_checked",
+          ok: true,
+          errors: [],
+          checks: {
+            offerSchema: true,
+            offerSignature: true,
+            offerMatchesPayment: true,
+            receiptSchema: true,
+            receiptSignatureAndArithmetic: true,
+            receiptMatchesOfferAndPayment: true
+          }
+        },
+        isError: false
+      }
+    });
+  });
+
+  it("reports external x402 artifact validation errors through MCP tools/call", async () => {
+    const signed = createExternalSplit402Offer();
+
+    const response = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "external-artifact-validation-fail",
+        method: "tools/call",
+        params: {
+          name: "split402.validateExternalX402Artifacts",
+          arguments: {
+            merchantOrigin: "https://x402.example",
+            operationId: "get.price.coin",
+            network: EXTERNAL_X402_NETWORK,
+            asset: EXTERNAL_X402_ASSET,
+            payToWallet: EXTERNAL_X402_PAY_TO_WALLET,
+            requiredAmountAtomic: "10000",
+            merchantPublicKey: signed.merchantPublicKey,
+            offer: signed.offer
+          }
+        }
+      }),
+      createMcpGatewayContext()
+    );
+
+    expect(response).toMatchObject({
+      jsonrpc: "2.0",
+      id: "external-artifact-validation-fail",
+      result: {
+        structuredContent: {
+          status: "offer_checked",
+          ok: false,
+          errors: expect.arrayContaining([
+            "offer.requiredAmountAtomic mismatch: expected 10000, got 20000"
+          ]),
+          checks: {
+            offerSchema: true,
+            offerSignature: true,
+            offerMatchesPayment: false
+          }
+        },
+        isError: false
+      }
+    });
   });
 
   it("rejects malformed router capability search budgets", async () => {
@@ -1562,6 +1674,7 @@ describe("MCP demo gateway", () => {
         "split402.searchCapabilities",
         "split402.execute",
         "split402.discoverExternalX402",
+        "split402.validateExternalX402Artifacts",
         "split402.getReceipt"
       ],
       providerId: "split402-demo-merchant",

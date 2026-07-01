@@ -32,6 +32,7 @@ import {
   type McpDemoBundle
 } from "./index.js";
 import { publicCandidateView as publicExternalX402CandidateView } from "./discover-external-x402.js";
+import { validateExternalX402Artifacts } from "./validate-external-x402-artifacts.js";
 
 export interface McpGatewayRequest {
   jsonrpc: "2.0";
@@ -366,10 +367,27 @@ async function handleToolCallAsync(
   if (record.name === "split402.discoverExternalX402") {
     return handleExternalX402DiscoveryTool(id, record.arguments, context);
   }
+  if (record.name === "split402.validateExternalX402Artifacts") {
+    return handleExternalX402ArtifactValidationTool(id, record.arguments);
+  }
   if (record.name === "split402.getReceipt") {
     return handleGetReceiptTool(id, record.arguments, context);
   }
   return handleToolCall(id, params, context.bundle);
+}
+
+function handleExternalX402ArtifactValidationTool(
+  id: string | number | null,
+  args: unknown
+): McpGatewayResponse {
+  const input = readExternalX402ArtifactValidationInput(args);
+  if ("message" in input) {
+    return createErrorResponse(id, -32602, input.message);
+  }
+  return createToolResultResponse(id, {
+    status: input.receipt === undefined ? "offer_checked" : "artifacts_checked",
+    ...validateExternalX402Artifacts(input)
+  });
 }
 
 async function handleExternalX402DiscoveryTool(
@@ -706,6 +724,36 @@ function routerToolCards() {
       }
     },
     {
+      name: "split402.validateExternalX402Artifacts",
+      description:
+        "Validate public Split402 offer and optional receipt artifacts against external x402 route metadata.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          merchantOrigin: { type: "string" },
+          operationId: { type: "string" },
+          network: { type: "string" },
+          asset: { type: "string" },
+          payToWallet: { type: "string" },
+          requiredAmountAtomic: { type: "string" },
+          merchantPublicKey: { type: "string" },
+          offer: { type: "object" },
+          receipt: { type: "object" }
+        },
+        required: [
+          "merchantOrigin",
+          "operationId",
+          "network",
+          "asset",
+          "payToWallet",
+          "requiredAmountAtomic",
+          "merchantPublicKey",
+          "offer"
+        ],
+        additionalProperties: false
+      }
+    },
+    {
       name: "split402.getReceipt",
       description: "Return a receipt captured during this gateway session.",
       inputSchema: {
@@ -936,6 +984,90 @@ function readCapabilitySearchInput(
   return {
     ...(capability === undefined ? {} : { capability }),
     ...(budget === undefined ? {} : { budget })
+  };
+}
+
+function readExternalX402ArtifactValidationInput(
+  args: unknown
+):
+  | {
+      merchantOrigin: string;
+      operationId: string;
+      network: string;
+      asset: string;
+      payToWallet: string;
+      requiredAmountAtomic: string;
+      merchantPublicKey: string;
+      offer: unknown;
+      receipt?: unknown;
+    }
+  | { message: string } {
+  if (typeof args !== "object" || args === null) {
+    return { message: "Tool arguments are required" };
+  }
+  const record = args as Record<string, unknown>;
+  const merchantOrigin = readRequiredStringArgument(
+    record.merchantOrigin,
+    "merchantOrigin"
+  );
+  if (typeof merchantOrigin !== "string") {
+    return merchantOrigin;
+  }
+  const operationId = readRequiredStringArgument(
+    record.operationId,
+    "operationId"
+  );
+  if (typeof operationId !== "string") {
+    return operationId;
+  }
+  const network = readRequiredStringArgument(record.network, "network");
+  if (typeof network !== "string") {
+    return network;
+  }
+  const asset = readRequiredStringArgument(record.asset, "asset");
+  if (typeof asset !== "string") {
+    return asset;
+  }
+  const payToWallet = readRequiredStringArgument(
+    record.payToWallet,
+    "payToWallet"
+  );
+  if (typeof payToWallet !== "string") {
+    return payToWallet;
+  }
+  const requiredAmountAtomic = readRequiredStringArgument(
+    record.requiredAmountAtomic,
+    "requiredAmountAtomic"
+  );
+  if (typeof requiredAmountAtomic !== "string") {
+    return requiredAmountAtomic;
+  }
+  const merchantPublicKey = readRequiredStringArgument(
+    record.merchantPublicKey,
+    "merchantPublicKey"
+  );
+  if (typeof merchantPublicKey !== "string") {
+    return merchantPublicKey;
+  }
+  if (typeof record.offer !== "object" || record.offer === null) {
+    return { message: "offer argument is required" };
+  }
+  if (
+    record.receipt !== undefined &&
+    (typeof record.receipt !== "object" || record.receipt === null)
+  ) {
+    return { message: "receipt must be an object when provided" };
+  }
+  return {
+    merchantOrigin,
+    operationId,
+    network,
+    asset,
+    payToWallet,
+    requiredAmountAtomic,
+    merchantPublicKey,
+    offer: record.offer,
+    ...(record.receipt === undefined ? {} : { receipt: record.receipt })
   };
 }
 
