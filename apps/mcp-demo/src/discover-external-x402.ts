@@ -32,6 +32,8 @@ export interface ExternalX402OnboardingCandidateView {
   amountAtomic?: string;
   readiness: string;
   blockers: string[];
+  requiredSplit402Fields: string[];
+  nextActions: string[];
   source: {
     manifest: boolean;
     openapi: boolean;
@@ -193,7 +195,64 @@ Environment:
   SPLIT402_EXTERNAL_X402_OUTPUT
 `;
 
-function publicCandidateView(
+export const SPLIT402_OFFER_EXTENSION_REQUIRED_FIELDS = [
+  "protocolVersion",
+  "campaignId",
+  "campaignVersion",
+  "campaignTermsHash",
+  "merchantId",
+  "resourceOrigin",
+  "operationId",
+  "network",
+  "asset",
+  "payToWallet",
+  "requiredAmountAtomic",
+  "commissionBps",
+  "protocolFeeBpsOfCommission",
+  "commissionBase",
+  "settlementMode",
+  "attributionRequired",
+  "allowSelfReferral",
+  "offerNonce",
+  "issuedAt",
+  "validUntil",
+  "kid",
+  "signature"
+] as const;
+
+export function createExternalX402CandidateNextActions(
+  candidate: Split402ExternalX402ProviderCandidate
+): string[] {
+  const actions =
+    candidate.readiness === "router_ready"
+      ? [
+          "Register or refresh a staging Split402 route for this provider candidate.",
+          "Run one low-value paid request and verify the returned merchant-signed Split402 receipt.",
+          "Keep the provider public-alpha until hosted Phase 7 evidence passes from the same source commit."
+        ]
+      : candidate.readiness === "incomplete_payment_metadata"
+        ? [
+            "Expose complete x402 exact payment metadata for this route: network, asset, amount, and payTo.",
+            "Ensure the unpaid route returns a parseable 402 Payment Required response.",
+            "Rerun demo:discover-external-x402 before attempting a paid request."
+          ]
+        : [
+            "Add extensions.split402.info to the unpaid 402 Payment Required response.",
+            "Bind the Split402 offer to the campaign, operation, amount, commission, protocol fee, and merchant signing key.",
+            "Return a merchant-signed Split402 receipt after successful x402 settlement.",
+            "Rerun demo:discover-external-x402; only router_ready candidates should enter paid staging tests."
+          ];
+
+  if (candidate.network?.startsWith("eip155:") === true) {
+    return [
+      ...actions,
+      "For Base/EVM x402 routes, keep this as onboarding until signed Split402 offer and receipt validation for EVM asset and wallet identifiers is enabled."
+    ];
+  }
+  return actions;
+}
+
+export function publicCandidateView(
   candidate: Split402ExternalX402ProviderCandidate
 ): ExternalX402OnboardingCandidateView {
   return {
@@ -217,6 +276,11 @@ function publicCandidateView(
       : { amountAtomic: candidate.amountAtomic }),
     readiness: candidate.readiness,
     blockers: candidate.blockers,
+    requiredSplit402Fields:
+      candidate.readiness === "requires_split402_campaign"
+        ? [...SPLIT402_OFFER_EXTENSION_REQUIRED_FIELDS]
+        : [],
+    nextActions: createExternalX402CandidateNextActions(candidate),
     source: candidate.source,
     routerReady: candidate.provider !== undefined
   };

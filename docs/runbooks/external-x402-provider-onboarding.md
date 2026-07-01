@@ -16,7 +16,8 @@ corepack pnpm demo:discover-external-x402 https://x402.example \
 ```
 
 The report lists candidate route paths, HTTP methods, network, asset,
-amountAtomic, pay-to wallet, readiness, and blockers.
+amountAtomic, pay-to wallet, readiness, blockers, required Split402 offer
+fields, and provider next actions.
 
 The same check is available through the MCP gateway tool
 `split402.discoverExternalX402`:
@@ -37,6 +38,11 @@ Readiness meanings:
 | `router_ready` | The route includes enough Split402 metadata to become a receipt-verified router provider. |
 | `requires_split402_campaign` | The route is a real x402 candidate but lacks a Split402 offer extension. |
 | `incomplete_payment_metadata` | The route did not expose complete x402 exact payment metadata. |
+
+For Base/EVM x402 candidates, keep the route in onboarding until signed
+Split402 offer and receipt validation for EVM asset and wallet identifiers is
+enabled. Discovery can read Base/CDP payment requirements today; it must not
+overstate them as referral-ready until the signed Split402 layer is verified.
 
 ## Current Issue #131 Shape
 
@@ -62,16 +68,24 @@ include a Split402 offer extension:
       "info": {
         "protocolVersion": "0.1",
         "campaignId": "cmp_...",
+        "campaignVersion": 1,
+        "campaignTermsHash": "sha256:...",
+        "merchantId": "mer_...",
         "operationId": "price.btc",
         "resourceOrigin": "https://x402.example",
         "network": "eip155:8453",
-        "asset": "0x...",
+        "asset": "<asset-id-for-enabled-network>",
         "payToWallet": "0x...",
         "requiredAmountAtomic": "20000",
         "commissionBps": 2000,
         "protocolFeeBpsOfCommission": 1000,
+        "commissionBase": "required_amount",
         "settlementMode": "accrual",
+        "attributionRequired": true,
+        "allowSelfReferral": false,
         "offerNonce": "ofn_...",
+        "issuedAt": "2026-07-01T00:00:00.000Z",
+        "validUntil": "2026-07-01T00:05:00.000Z",
         "kid": "kid_...",
         "signature": "..."
       }

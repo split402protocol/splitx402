@@ -22,7 +22,6 @@ import {
   type Split402CapabilityProvider,
   type Split402DiscoveryFetch,
   type Split402ExternalX402DiscoveryFetch,
-  type Split402ExternalX402ProviderCandidate,
   type Split402RouterExecuteResult,
   type Split402RouterExecutor
 } from "@split402/router";
@@ -32,6 +31,7 @@ import {
   createMcpDemoBundle,
   type McpDemoBundle
 } from "./index.js";
+import { publicCandidateView as publicExternalX402CandidateView } from "./discover-external-x402.js";
 
 export interface McpGatewayRequest {
   jsonrpc: "2.0";
@@ -844,35 +844,6 @@ function publicProviderView(provider: Split402CapabilityProvider) {
       ? {}
       : { payoutWallet: provider.metadata.payoutWallet }),
     reliability: provider.reliability ?? null
-  };
-}
-
-function publicExternalX402CandidateView(
-  candidate: Split402ExternalX402ProviderCandidate
-) {
-  return {
-    providerId: candidate.providerId,
-    capability: candidate.capability,
-    merchantOrigin: candidate.merchantOrigin,
-    path: candidate.path,
-    method: candidate.method,
-    operationId: candidate.operationId,
-    ...(candidate.description === undefined
-      ? {}
-      : { description: candidate.description }),
-    ...(candidate.price === undefined ? {} : { price: candidate.price }),
-    ...(candidate.network === undefined ? {} : { network: candidate.network }),
-    ...(candidate.asset === undefined ? {} : { asset: candidate.asset }),
-    ...(candidate.payToWallet === undefined
-      ? {}
-      : { payToWallet: candidate.payToWallet }),
-    ...(candidate.amountAtomic === undefined
-      ? {}
-      : { amountAtomic: candidate.amountAtomic }),
-    readiness: candidate.readiness,
-    blockers: candidate.blockers,
-    source: candidate.source,
-    routerReady: candidate.provider !== undefined
   };
 }
 

@@ -151,6 +151,19 @@ describe("external x402 onboarding CLI", () => {
           amountAtomic: "20000",
           readiness: "requires_split402_campaign",
           blockers: ["missing Split402 offer extension"],
+          requiredSplit402Fields: expect.arrayContaining([
+            "campaignId",
+            "campaignVersion",
+            "campaignTermsHash",
+            "merchantId",
+            "protocolFeeBpsOfCommission",
+            "signature"
+          ]),
+          nextActions: expect.arrayContaining([
+            "Add extensions.split402.info to the unpaid 402 Payment Required response.",
+            "Return a merchant-signed Split402 receipt after successful x402 settlement.",
+            "For Base/EVM x402 routes, keep this as onboarding until signed Split402 offer and receipt validation for EVM asset and wallet identifiers is enabled."
+          ]),
           routerReady: false
         })
       ]
@@ -441,6 +454,19 @@ describe("MCP demo gateway", () => {
               amountAtomic: "20000",
               readiness: "requires_split402_campaign",
               blockers: ["missing Split402 offer extension"],
+              requiredSplit402Fields: expect.arrayContaining([
+                "campaignId",
+                "campaignVersion",
+                "campaignTermsHash",
+                "merchantId",
+                "protocolFeeBpsOfCommission",
+                "signature"
+              ]),
+              nextActions: expect.arrayContaining([
+                "Add extensions.split402.info to the unpaid 402 Payment Required response.",
+                "Return a merchant-signed Split402 receipt after successful x402 settlement.",
+                "For Base/EVM x402 routes, keep this as onboarding until signed Split402 offer and receipt validation for EVM asset and wallet identifiers is enabled."
+              ]),
               routerReady: false
             })
           ]
