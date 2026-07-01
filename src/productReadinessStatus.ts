@@ -267,7 +267,7 @@ function createProductNextActions(
     leadActions.push(
       githubSettingsReview.checked
         ? "Fix GitHub public/private/license review blockers, then regenerate split402-launch-evidence/github-settings-review.txt with corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt."
-        : "Run corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt, then generate the live API review with corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt.",
+        : "Run corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt to generate the live no-go GitHub API snapshot; use --template only for a blank manual form.",
     );
     if (githubSettingsReview.checked) {
       leadActions.push(...githubSettingsReview.blockers);

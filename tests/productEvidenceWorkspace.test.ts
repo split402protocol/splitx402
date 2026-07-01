@@ -159,12 +159,12 @@ describe("Split402 product evidence workspace", () => {
       "quoted values are handled consistently",
     );
     expect(workspace.readmeText).toContain(
-      "corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt",
+      "corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt",
     );
     expect(workspace.nextCommands.slice(0, 5)).toEqual([
       "corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json",
-      "corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt",
-      "Generate the live GitHub API review with corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt, then keep it no-go until human review approves the live settings evidence.",
+      "corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt",
+      "Use corepack pnpm product:github-settings-review --template only when you need a blank manual GitHub review form; keep the live snapshot no-go until human review approves the settings evidence.",
       "corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence",
       "Fill split402-launch-evidence/phase7-staging.env with hosted staging values reported by launch preflight.",
     ]);

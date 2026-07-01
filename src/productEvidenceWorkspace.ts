@@ -241,8 +241,8 @@ function createNextCommands(input: {
   const launchPreflightCommand = `corepack pnpm product:launch-preflight --brief --workspace ${input.directory}`;
   return [
     `corepack pnpm product:local-proof --brief --output ${input.directory}/${input.localProofFileName}`,
-    `corepack pnpm product:github-settings-review --template --output ${input.directory}/${input.githubSettingsReviewFileName}`,
-    `Generate the live GitHub API review with corepack pnpm product:github-settings-review --from-github --output ${input.directory}/${input.githubSettingsReviewFileName}, then keep it no-go until human review approves the live settings evidence.`,
+    `corepack pnpm product:github-settings-review --from-github --output ${input.directory}/${input.githubSettingsReviewFileName}`,
+    "Use corepack pnpm product:github-settings-review --template only when you need a blank manual GitHub review form; keep the live snapshot no-go until human review approves the settings evidence.",
     launchPreflightCommand,
     `Fill ${phase7EnvFile} with hosted staging values reported by launch preflight.`,
     `Review generated ${phase6EnvFile} before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template ${input.directory} ${phase6EnvFile}`,
