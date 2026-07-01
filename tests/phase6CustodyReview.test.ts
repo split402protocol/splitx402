@@ -136,6 +136,32 @@ approval_decision: no-go
     );
   });
 
+  it("rejects custody artifact attachments outside the launch evidence workspace", () => {
+    const result = validatePhase6CustodyEvidence(
+      VALID_EVIDENCE.replace(
+        "network_policy_record: attached: network-policy-001.yaml",
+        "network_policy_record: attached: ../network-policy-001.yaml",
+      )
+        .replace(
+          "smoke_check_output: attached: smoke-check-001.log",
+          "smoke_check_output: attached: C:\\private\\smoke-check-001.log",
+        )
+        .replace(
+          "rpc_failover_record: attached: rpc-failover-001.md",
+          "rpc_failover_record: attached: /private/rpc-failover-001.md",
+        ),
+    );
+
+    expect(result.approved).toBe(false);
+    expect(result.invalidFields).toEqual(
+      expect.arrayContaining([
+        "network_policy_record attached artifact must be relative to the launch evidence workspace",
+        "smoke_check_output attached artifact must be relative to the launch evidence workspace",
+        "rpc_failover_record attached artifact must be relative to the launch evidence workspace",
+      ]),
+    );
+  });
+
   it("rejects malformed signer policy evidence", () => {
     const result = validatePhase6CustodyEvidence(
       VALID_EVIDENCE.replace(

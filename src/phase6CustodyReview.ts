@@ -81,6 +81,10 @@ export function validatePhase6CustodyEvidence(
         invalidFields.push(`${field} must use attached: <path>`);
       } else if (isUrlLikeArtifactPath(artifactPath)) {
         invalidFields.push(`${field} attached artifact must be a local path`);
+      } else if (!isWorkspaceRelativeArtifactPath(artifactPath)) {
+        invalidFields.push(
+          `${field} attached artifact must be relative to the launch evidence workspace`,
+        );
       }
     }
   }
@@ -237,6 +241,16 @@ function readAttachedArtifactPath(value: string): string | undefined {
 
 function isUrlLikeArtifactPath(value: string): boolean {
   return /^[a-z][a-z0-9+.-]*:\/\//iu.test(value.trim());
+}
+
+function isWorkspaceRelativeArtifactPath(value: string): boolean {
+  const normalized = value.trim().replace(/\\/gu, "/");
+  return (
+    normalized.length > 0 &&
+    !normalized.startsWith("/") &&
+    !/^[a-z]:\//iu.test(normalized) &&
+    normalized.split("/").every((segment) => segment !== "..")
+  );
 }
 
 function isIsoCalendarDate(value: string): boolean {
