@@ -203,12 +203,17 @@ corepack pnpm demo:validate-external-x402-artifacts -- \
   --required-amount-atomic 10000 \
   --merchant-public-key <merchant-offer-receipt-public-key> \
   --offer-file offer.json \
+  --campaign-terms-file campaign-terms.json \
   --receipt-file receipt.json
 ```
 
-`--receipt-file` is optional while checking the unpaid offer. The command checks
-schema, merchant signature, x402 route binding, offer/receipt consistency, and
-receipt arithmetic using public JSON and the merchant public key only.
+`--campaign-terms-file` and `--receipt-file` are optional while checking the
+unpaid offer, but campaign terms are recommended. When supplied, the command
+recomputes the canonical `campaignTermsHash` and checks that it matches the
+signed offer and optional receipt. The command checks schema, merchant
+signature, x402 route binding, campaign terms hash binding, offer/receipt
+consistency, and receipt arithmetic using public JSON and the merchant public
+key only.
 
 The same public-artifact check is available through the MCP gateway as
 `split402.validateExternalX402Artifacts`:
@@ -229,6 +234,7 @@ The same public-artifact check is available through the MCP gateway as
       "requiredAmountAtomic": "10000",
       "merchantPublicKey": "<merchant-offer-receipt-public-key>",
       "offer": {},
+      "campaignTerms": {},
       "receipt": {}
     }
   }

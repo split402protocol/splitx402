@@ -738,6 +738,7 @@ function routerToolCards() {
           requiredAmountAtomic: { type: "string" },
           merchantPublicKey: { type: "string" },
           offer: { type: "object" },
+          campaignTerms: { type: "object" },
           receipt: { type: "object" }
         },
         required: [
@@ -999,6 +1000,7 @@ function readExternalX402ArtifactValidationInput(
       requiredAmountAtomic: string;
       merchantPublicKey: string;
       offer: unknown;
+      campaignTerms?: unknown;
       receipt?: unknown;
     }
   | { message: string } {
@@ -1053,6 +1055,12 @@ function readExternalX402ArtifactValidationInput(
     return { message: "offer argument is required" };
   }
   if (
+    record.campaignTerms !== undefined &&
+    (typeof record.campaignTerms !== "object" || record.campaignTerms === null)
+  ) {
+    return { message: "campaignTerms must be an object when provided" };
+  }
+  if (
     record.receipt !== undefined &&
     (typeof record.receipt !== "object" || record.receipt === null)
   ) {
@@ -1067,6 +1075,9 @@ function readExternalX402ArtifactValidationInput(
     requiredAmountAtomic,
     merchantPublicKey,
     offer: record.offer,
+    ...(record.campaignTerms === undefined
+      ? {}
+      : { campaignTerms: record.campaignTerms }),
     ...(record.receipt === undefined ? {} : { receipt: record.receipt })
   };
 }
