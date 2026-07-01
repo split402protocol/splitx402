@@ -27,6 +27,7 @@ export interface VerifyMainnetCanaryEvidenceAttachmentInput {
 export interface MainnetCanaryEvidenceExpectedScope {
   merchantId?: string;
   campaignId?: string;
+  sourceCommit?: string;
   routeId?: string;
   payerWallet?: string;
   maxGrossAmountAtomic?: string;
@@ -277,6 +278,7 @@ function validateExpectedScope(
     return;
   }
   const comparisons = [
+    ["source_commit", expectedScope.sourceCommit],
     ["merchant_id", expectedScope.merchantId],
     ["campaign_id", expectedScope.campaignId],
     ["route_id", expectedScope.routeId],
@@ -284,10 +286,35 @@ function validateExpectedScope(
     ["max_gross_amount_atomic", expectedScope.maxGrossAmountAtomic],
   ] as const;
   for (const [field, expected] of comparisons) {
-    if (expected !== undefined && fields.get(field) !== expected) {
+    if (expected === undefined) {
+      continue;
+    }
+    if (
+      field === "source_commit" &&
+      !gitShasMatch(fields.get(field), expected)
+    ) {
+      errors.push(`${field} must match approved canary scope`);
+      continue;
+    }
+    if (field !== "source_commit" && fields.get(field) !== expected) {
       errors.push(`${field} must match approved canary scope`);
     }
   }
+}
+
+function gitShasMatch(left: string | undefined, right: string): boolean {
+  const normalizedLeft = left?.trim().toLowerCase() ?? "";
+  const normalizedRight = right.trim().toLowerCase();
+  if (
+    !/^[0-9a-f]{7,40}$/u.test(normalizedLeft) ||
+    !/^[0-9a-f]{7,40}$/u.test(normalizedRight)
+  ) {
+    return false;
+  }
+  return (
+    normalizedLeft.startsWith(normalizedRight) ||
+    normalizedRight.startsWith(normalizedLeft)
+  );
 }
 
 function validateReviewDate(errors: string[], value: string | undefined): void {

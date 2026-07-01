@@ -62,11 +62,12 @@ command. Keep filled canary env files local or private.
 `product:evidence:init --missing` creates private scaffold files for the canary
 dry-run and rollback plan. `product:mainnet-canary` resolves `attached:` paths
 relative to `--workspace` and verifies the attached files before it can report
-ready. The dry-run artifact must show passed receipt verification,
-economic-policy verification, chain verification, payout dry-run, and signer
-byte verification. The rollback artifact must include a stop-loss amount,
-rollback owner, rollback steps, reconciliation owner, reviewer, and
-`stop_conditions_reviewed: yes`.
+ready. The dry-run and rollback artifacts must use the same `source_commit` as
+the approved launch evidence checkout. The dry-run artifact must show passed
+receipt verification, economic-policy verification, chain verification, payout
+dry-run, and signer byte verification. The rollback artifact must include a
+stop-loss amount, rollback owner, rollback steps, reconciliation owner,
+reviewer, and `stop_conditions_reviewed: yes`.
 
 ## Execution
 

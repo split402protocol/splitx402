@@ -173,6 +173,37 @@ describe("mainnet canary evidence attachments", () => {
       ]),
     );
   });
+
+  it("rejects evidence from a different source commit than the approved launch scope", () => {
+    const result = verifyMainnetCanaryEvidenceAttachment({
+      expectedScope: {
+        sourceCommit: "def5678000000000000000000000000000000000",
+      },
+      kind: "dry_run",
+      value: "attached: dry-run.txt",
+      exists: () => true,
+      readText: () => createPassingDryRunEvidence(),
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContain(
+      "source_commit must match approved canary scope",
+    );
+  });
+
+  it("accepts short source commits when they match the approved launch scope", () => {
+    const result = verifyMainnetCanaryEvidenceAttachment({
+      expectedScope: {
+        sourceCommit: "abc1234000000000000000000000000000000000",
+      },
+      kind: "rollback_plan",
+      value: "attached: rollback.txt",
+      exists: () => true,
+      readText: () => createPassingRollbackPlan(),
+    });
+
+    expect(result).toMatchObject({ ok: true, errors: [] });
+  });
 });
 
 function createPassingDryRunEvidence(): string {

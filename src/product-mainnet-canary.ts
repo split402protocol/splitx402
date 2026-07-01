@@ -15,12 +15,18 @@ if (help) {
 }
 
 const env = createMainnetCanaryEnv({ workspaceDirectory });
+const expectedSourceCommit =
+  productReadiness.phase6.sourceCommitStatus.currentSourceCommit ??
+  productReadiness.phase7.sourceCommitStatus.currentSourceCommit ??
+  productReadiness.githubSettingsReview.sourceCommit ??
+  productReadiness.localProof.sourceCommit;
 const expectedScope = {
   merchantId: env.SPLIT402_MAINNET_CANARY_MERCHANT_ID,
   campaignId: env.SPLIT402_MAINNET_CANARY_CAMPAIGN_ID,
   routeId: env.SPLIT402_MAINNET_CANARY_ROUTE_ID,
   payerWallet: env.SPLIT402_MAINNET_CANARY_WALLET,
   maxGrossAmountAtomic: env.SPLIT402_MAINNET_CANARY_MAX_GROSS_AMOUNT_ATOMIC,
+  sourceCommit: expectedSourceCommit,
 };
 const report = createSplit402MainnetCanaryReport({
   productReadiness,
