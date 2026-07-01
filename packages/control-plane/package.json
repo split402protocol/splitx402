@@ -11,7 +11,10 @@
     "split402-chain-worker": "./dist/chain-worker.js",
     "split402-webhook-worker": "./dist/webhook-worker.js"
   },
-  "files": ["dist", "migrations"],
+  "files": [
+    "dist",
+    "migrations"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "lint": "eslint .",
@@ -30,6 +33,7 @@
     "@solana/kit": "^5.1.0",
     "@split402/protocol": "workspace:*",
     "express": "5.2.1",
+    "express-rate-limit": "^8.5.2",
     "pg": "8.22.0"
   },
   "devDependencies": {
