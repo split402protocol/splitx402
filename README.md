@@ -344,8 +344,8 @@ corepack pnpm product:evidence:init --force
 corepack pnpm product:local-proof --help
 corepack pnpm product:local-proof --brief
 corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json
-corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt
 corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt
+corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt
 corepack pnpm product:public-surface-check --brief
 corepack pnpm product:launch-preflight --help
 corepack pnpm product:launch-preflight --brief
