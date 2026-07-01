@@ -94,7 +94,9 @@ corepack pnpm demo:attach-external-x402-signature -- \
 
 The same no-secret preparation helpers are available through the MCP gateway as
 `split402.prepareExternalX402Offer` and `split402.prepareExternalX402Receipt`.
-Pass the same public JSON objects directly as tool arguments.
+The signature attachment helper is available as
+`split402.attachExternalX402Signature`. Pass the same public JSON objects
+directly as tool arguments.
 
 When x402 payment metadata is complete but Split402 metadata is missing or not
 yet trusted, candidate output also includes `split402OfferTemplate`. This is a

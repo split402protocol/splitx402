@@ -864,6 +864,7 @@ describe("MCP demo gateway", () => {
       "split402.discoverExternalX402",
       "split402.prepareExternalX402Offer",
       "split402.prepareExternalX402Receipt",
+      "split402.attachExternalX402Signature",
       "split402.validateExternalX402Artifacts",
       "split402.getReceipt"
     ]);
@@ -916,6 +917,18 @@ describe("MCP demo gateway", () => {
       properties: {
         offer: { type: "object" },
         unsignedReceipt: { type: "object" }
+      }
+    });
+    const attachSignatureTool = result.tools.find(
+      (tool) => tool.name === "split402.attachExternalX402Signature"
+    );
+    expect(attachSignatureTool?.inputSchema).toMatchObject({
+      required: ["kind", "unsignedArtifact", "signature"],
+      properties: {
+        kind: { type: "string" },
+        unsignedArtifact: { type: "object" },
+        signature: { type: "string" },
+        merchantPublicKey: { type: "string" }
       }
     });
     const validateTool = result.tools.find(
@@ -1387,6 +1400,45 @@ describe("MCP demo gateway", () => {
             referrerCreditAtomic: "3600"
           },
           receiptSigningBytesHex: expect.any(String)
+        },
+        isError: false
+      }
+    });
+  });
+
+  it("attaches external x402 signatures through MCP tools/call", async () => {
+    const signed = createExternalSplit402Offer();
+    const unsignedOffer = createUnsignedExternalOffer(signed.offer);
+
+    const response = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "external-signature-attach",
+        method: "tools/call",
+        params: {
+          name: "split402.attachExternalX402Signature",
+          arguments: {
+            kind: "offer",
+            unsignedArtifact: unsignedOffer,
+            signature: signed.offer.signature,
+            merchantPublicKey: signed.merchantPublicKey
+          }
+        }
+      }),
+      createMcpGatewayContext()
+    );
+
+    expect(response).toMatchObject({
+      jsonrpc: "2.0",
+      id: "external-signature-attach",
+      result: {
+        structuredContent: {
+          status: "signature_attached",
+          ok: true,
+          errors: [],
+          kind: "offer",
+          signatureVerified: true,
+          artifact: signed.offer
         },
         isError: false
       }
@@ -2185,6 +2237,7 @@ describe("MCP demo gateway", () => {
         "split402.discoverExternalX402",
         "split402.prepareExternalX402Offer",
         "split402.prepareExternalX402Receipt",
+        "split402.attachExternalX402Signature",
         "split402.validateExternalX402Artifacts",
         "split402.getReceipt"
       ],

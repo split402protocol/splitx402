@@ -31,6 +31,7 @@ import {
   createMcpDemoBundle,
   type McpDemoBundle
 } from "./index.js";
+import { attachExternalX402Signature } from "./attach-external-x402-signature.js";
 import { publicCandidateView as publicExternalX402CandidateView } from "./discover-external-x402.js";
 import { prepareExternalX402Offer } from "./prepare-external-x402-offer.js";
 import { prepareExternalX402Receipt } from "./prepare-external-x402-receipt.js";
@@ -375,6 +376,9 @@ async function handleToolCallAsync(
   if (record.name === "split402.prepareExternalX402Receipt") {
     return handleExternalX402ReceiptPreparationTool(id, record.arguments);
   }
+  if (record.name === "split402.attachExternalX402Signature") {
+    return handleExternalX402SignatureAttachmentTool(id, record.arguments);
+  }
   if (record.name === "split402.validateExternalX402Artifacts") {
     return handleExternalX402ArtifactValidationTool(id, record.arguments);
   }
@@ -382,6 +386,20 @@ async function handleToolCallAsync(
     return handleGetReceiptTool(id, record.arguments, context);
   }
   return handleToolCall(id, params, context.bundle);
+}
+
+function handleExternalX402SignatureAttachmentTool(
+  id: string | number | null,
+  args: unknown
+): McpGatewayResponse {
+  const input = readExternalX402SignatureAttachmentInput(args);
+  if ("message" in input) {
+    return createErrorResponse(id, -32602, input.message);
+  }
+  return createToolResultResponse(id, {
+    status: "signature_attached",
+    ...attachExternalX402Signature(input)
+  });
 }
 
 function handleExternalX402OfferPreparationTool(
@@ -788,6 +806,22 @@ function routerToolCards() {
       }
     },
     {
+      name: "split402.attachExternalX402Signature",
+      description:
+        "Attach and optionally verify an external base64url signature on a Split402 offer or receipt.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          kind: { type: "string", enum: ["offer", "receipt"] },
+          unsignedArtifact: { type: "object" },
+          signature: { type: "string" },
+          merchantPublicKey: { type: "string" }
+        },
+        required: ["kind", "unsignedArtifact", "signature"],
+        additionalProperties: false
+      }
+    },
+    {
       name: "split402.validateExternalX402Artifacts",
       description:
         "Validate public Split402 offer and optional receipt artifacts against external x402 route metadata.",
@@ -1100,6 +1134,48 @@ function readExternalX402ReceiptPreparationInput(
   return {
     offer: record.offer,
     unsignedReceipt: record.unsignedReceipt
+  };
+}
+
+function readExternalX402SignatureAttachmentInput(
+  args: unknown
+):
+  | {
+      kind: "offer" | "receipt";
+      unsignedArtifact: unknown;
+      signature: string;
+      merchantPublicKey?: string;
+    }
+  | { message: string } {
+  if (typeof args !== "object" || args === null) {
+    return { message: "Tool arguments are required" };
+  }
+  const record = args as Record<string, unknown>;
+  if (record.kind !== "offer" && record.kind !== "receipt") {
+    return { message: "kind must be offer or receipt" };
+  }
+  if (
+    typeof record.unsignedArtifact !== "object" ||
+    record.unsignedArtifact === null
+  ) {
+    return { message: "unsignedArtifact argument is required" };
+  }
+  const signature = readRequiredStringArgument(record.signature, "signature");
+  if (typeof signature !== "string") {
+    return signature;
+  }
+  const merchantPublicKey =
+    record.merchantPublicKey === undefined
+      ? undefined
+      : readRequiredStringArgument(record.merchantPublicKey, "merchantPublicKey");
+  if (merchantPublicKey !== undefined && typeof merchantPublicKey !== "string") {
+    return merchantPublicKey;
+  }
+  return {
+    kind: record.kind,
+    unsignedArtifact: record.unsignedArtifact,
+    signature,
+    ...(merchantPublicKey === undefined ? {} : { merchantPublicKey })
   };
 }
 

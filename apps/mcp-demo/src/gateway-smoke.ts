@@ -52,6 +52,7 @@ export async function runMcpGatewaySmoke(): Promise<McpGatewaySmokeReport> {
   assertTool(tools, "split402.discoverExternalX402");
   assertTool(tools, "split402.prepareExternalX402Offer");
   assertTool(tools, "split402.prepareExternalX402Receipt");
+  assertTool(tools, "split402.attachExternalX402Signature");
   assertTool(tools, "split402.validateExternalX402Artifacts");
   assertTool(tools, "split402.getReceipt");
 
