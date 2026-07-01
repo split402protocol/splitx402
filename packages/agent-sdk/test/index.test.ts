@@ -198,4 +198,17 @@ describe("Split402 agent SDK", () => {
     expect(result.offer).toEqual(offer);
     expect(result.verification).toEqual({ checked: true, ok: true, errors: [] });
   });
+
+  it("requires an EVM signer for EVM x402 networks", async () => {
+    const client = new Split402AgentClient({
+      merchantOrigin: "http://localhost:4021",
+      network: "eip155:8453"
+    });
+
+    await expect(
+      client.getJson({
+        path: "/price/btc"
+      })
+    ).rejects.toThrow("an EVM signer is required to make a paid x402 request");
+  });
 });

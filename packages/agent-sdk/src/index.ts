@@ -7,6 +7,11 @@ import {
   x402Client
 } from "@x402/axios";
 import { decodePaymentRequiredHeader } from "@x402/core/http";
+import { type ClientEvmSigner } from "@x402/evm";
+import {
+  registerExactEvmScheme,
+  type ExactEvmSchemeOptions
+} from "@x402/evm/exact/client";
 import { ExactSvmScheme } from "@x402/svm/exact/client";
 import {
   buildReferralClaimSigningBytes,
@@ -37,6 +42,9 @@ export interface Split402AgentClientOptions {
   merchantOrigin: string;
   merchantPublicKey?: string;
   signer?: KeyPairSigner;
+  evmSigner?: Split402EvmSigner;
+  evmNetworks?: `${string}:${string}`[];
+  evmSchemeOptions?: Split402EvmSchemeOptions;
   network?: `${string}:${string}`;
   axios?: AxiosInstance;
 }
@@ -117,11 +125,16 @@ export interface PaidJsonResult<TData = unknown> {
 }
 
 export type Split402HttpMethod = "GET" | "POST";
+export type Split402EvmSigner = ClientEvmSigner;
+export type Split402EvmSchemeOptions = ExactEvmSchemeOptions;
 
 export class Split402AgentClient {
   readonly merchantOrigin: string;
   readonly merchantPublicKey?: string;
   readonly signer?: KeyPairSigner;
+  readonly evmSigner?: Split402EvmSigner;
+  readonly evmNetworks?: `${string}:${string}`[];
+  readonly evmSchemeOptions?: Split402EvmSchemeOptions;
   readonly network: `${string}:${string}`;
 
   private readonly axios: AxiosInstance;
@@ -142,6 +155,15 @@ export class Split402AgentClient {
     }
     if (options.signer !== undefined) {
       this.signer = options.signer;
+    }
+    if (options.evmSigner !== undefined) {
+      this.evmSigner = options.evmSigner;
+    }
+    if (options.evmNetworks !== undefined) {
+      this.evmNetworks = [...options.evmNetworks];
+    }
+    if (options.evmSchemeOptions !== undefined) {
+      this.evmSchemeOptions = options.evmSchemeOptions;
     }
   }
 
@@ -198,14 +220,7 @@ export class Split402AgentClient {
   async requestJson<TData = unknown>(
     input: PaidJsonRequestInput
   ): Promise<PaidJsonResult<TData>> {
-    if (this.signer === undefined) {
-      throw new Error("a Solana signer is required to make a paid x402 request");
-    }
-    const client = new x402Client()
-      .register(this.network, new ExactSvmScheme(this.signer))
-      .registerExtension(
-        createSplit402ClientExtension(split402ExtensionOptions(input))
-      );
+    const client = this.createPaymentClient(input);
     const paidAxios = wrapAxiosWithPayment(this.axios, client);
     const headers: Record<string, string> = {
       Accept: "application/json",
@@ -264,6 +279,30 @@ export class Split402AgentClient {
     }
     const verification = verifySplit402Receipt(receipt, this.merchantPublicKey);
     return { checked: true, ok: verification.ok, errors: verification.errors };
+  }
+
+  private createPaymentClient(input: PaidJsonRequestInput): x402Client {
+    const client = new x402Client();
+    if (isEvmNetwork(this.network)) {
+      if (this.evmSigner === undefined) {
+        throw new Error("an EVM signer is required to make a paid x402 request");
+      }
+      registerExactEvmScheme(client, {
+        signer: this.evmSigner,
+        networks: this.evmNetworks ?? [this.network],
+        ...(this.evmSchemeOptions === undefined
+          ? {}
+          : { schemeOptions: this.evmSchemeOptions })
+      });
+    } else {
+      if (this.signer === undefined) {
+        throw new Error("a Solana signer is required to make a paid x402 request");
+      }
+      client.register(this.network, new ExactSvmScheme(this.signer));
+    }
+    return client.registerExtension(
+      createSplit402ClientExtension(split402ExtensionOptions(input))
+    );
   }
 }
 
@@ -381,6 +420,10 @@ function getHeader(headers: unknown, name: string): string | undefined {
   }
   const value = (headers as Record<string, unknown>)[name];
   return typeof value === "string" ? value : undefined;
+}
+
+function isEvmNetwork(network: string): boolean {
+  return network.startsWith("eip155:");
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
