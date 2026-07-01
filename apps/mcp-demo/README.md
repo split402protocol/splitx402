@@ -149,6 +149,20 @@ responses. Plain x402 APIs are reported as `requires_split402_campaign` until
 their payment requirement includes a Split402 offer extension, so discovery does
 not overstate them as referral-ready providers.
 
+The same onboarding check can be run without an MCP client:
+
+```bash
+corepack pnpm demo:discover-external-x402 \
+  https://x402.example \
+  --capability crypto.price \
+  --match-path /price \
+  --provider-id-prefix example-provider
+```
+
+The command emits a JSON report with candidate routes, networks, assets,
+amounts, pay-to wallets, readiness, and blockers. It performs metadata-only
+discovery and unpaid 402 probes; it does not execute paid calls.
+
 When `network` or `asset` are omitted from `budget`, the gateway defaults them
 from the best provider that already matches the supplied budget filters and
 still enforces `maxAmountAtomic`. `maxAmountAtomic` must be a non-negative

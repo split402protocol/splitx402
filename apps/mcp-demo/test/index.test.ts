@@ -22,6 +22,10 @@ import {
   handleMcpGatewayLine,
   handleMcpGatewayLineAsync
 } from "../src/gateway.js";
+import {
+  discoverExternalX402Onboarding,
+  writeExternalX402OnboardingOutput
+} from "../src/discover-external-x402.js";
 import { runMcpGatewaySmoke } from "../src/gateway-smoke.js";
 import { createMcpDemoBundle } from "../src/index.js";
 import { writeMcpDemoBundleOutput } from "../src/bundle.js";
@@ -115,6 +119,67 @@ describe("createMcpDemoBundle", () => {
       } else {
         process.env.INIT_CWD = previousInitCwd;
       }
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("external x402 onboarding CLI", () => {
+  it("renders external x402 onboarding reports without router-ready claims", async () => {
+    await expect(
+      discoverExternalX402Onboarding({
+        merchantOrigin: "https://x402.example",
+        capability: "crypto.price",
+        matchPath: "/price",
+        providerIdPrefix: "issue-131",
+        fetch: mcpExternalX402Fetch(),
+        generatedAt: "2026-07-01T00:00:00.000Z"
+      })
+    ).resolves.toMatchObject({
+      schema: "split402.external_x402_onboarding.v1",
+      generatedAt: "2026-07-01T00:00:00.000Z",
+      merchantOrigin: "https://x402.example",
+      candidateCount: 1,
+      routerReadyCount: 0,
+      candidates: [
+        expect.objectContaining({
+          providerId: "issue-131:get.price.coin",
+          capability: "crypto.price",
+          path: "/price/btc",
+          method: "GET",
+          network: "eip155:8453",
+          amountAtomic: "20000",
+          readiness: "requires_split402_campaign",
+          blockers: ["missing Split402 offer extension"],
+          routerReady: false
+        })
+      ]
+    });
+  });
+
+  it("writes external x402 onboarding reports as UTF-8 JSON", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "split402-x402-onboarding-"));
+    const outputPath = join(directory, "external-x402.json");
+    try {
+      await writeExternalX402OnboardingOutput({
+        merchantOrigin: "https://x402.example",
+        capability: "crypto.price",
+        matchPath: "/price",
+        providerIdPrefix: "issue-131",
+        fetch: mcpExternalX402Fetch(),
+        outputPath,
+        generatedAt: "2026-07-01T00:00:00.000Z"
+      });
+
+      const bytes = readFileSync(outputPath);
+      expect([...bytes.subarray(0, 2)]).not.toEqual([0xff, 0xfe]);
+      const parsed = JSON.parse(readFileSync(outputPath, "utf8")) as {
+        schema: string;
+        candidateCount: number;
+      };
+      expect(parsed.schema).toBe("split402.external_x402_onboarding.v1");
+      expect(parsed.candidateCount).toBe(1);
+    } finally {
       rmSync(directory, { recursive: true, force: true });
     }
   });

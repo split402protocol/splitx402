@@ -656,6 +656,16 @@ Run the MCP stdio gateway for clients that want direct MCP tool discovery:
 corepack pnpm demo:mcp-gateway
 ```
 
+Inspect an external x402 API as an onboarding candidate without making a paid
+call:
+
+```bash
+corepack pnpm demo:discover-external-x402 https://x402.example \
+  --capability crypto.price \
+  --match-path /price \
+  --provider-id-prefix example-provider
+```
+
 Run the deterministic gateway smoke proof:
 
 ```bash
