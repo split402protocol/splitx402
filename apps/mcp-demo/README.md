@@ -194,7 +194,7 @@ next actions. It performs metadata-only discovery and unpaid 402 probes; it does
 not execute paid calls.
 
 `--artifacts-dir` also writes per-candidate provider files: `manifest.json`, a
-candidate `README.md`, `campaign-terms.template.json`,
+candidate `README.md`, `route-metadata.json`, `campaign-terms.template.json`,
 `unsigned-offer.template.json`, and `receipt.template.json` when the route has
 complete x402 payment metadata. These are public scaffolds for provider
 implementation and validation; they are not signed production artifacts.
@@ -268,12 +268,7 @@ Providers can validate signed public artifacts locally before paid staging:
 
 ```bash
 corepack pnpm demo:validate-external-x402-artifacts -- \
-  --merchant-origin https://x402.example \
-  --operation-id get.price \
-  --network eip155:8453 \
-  --asset 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 \
-  --pay-to-wallet 0x68614873C5d624c07DCAA3aFF5243DD5027c3910 \
-  --required-amount-atomic 10000 \
+  --route-metadata-file route-metadata.json \
   --merchant-public-key <merchant-offer-receipt-public-key> \
   --offer-file offer.json \
   --campaign-terms-file campaign-terms.json \
@@ -287,6 +282,11 @@ signed offer and optional receipt. The command checks schema, merchant
 signature, x402 route binding, campaign terms hash binding, offer/receipt
 consistency, and receipt arithmetic using public JSON and the merchant public
 key only.
+
+If route metadata needs to be supplied manually instead of using
+`route-metadata.json`, pass `--merchant-origin`, `--operation-id`, `--network`,
+`--asset`, `--pay-to-wallet`, and `--required-amount-atomic` directly. When both
+the file and flags are supplied, conflicts fail closed.
 
 The same public-artifact check is available through the MCP gateway as
 `split402.validateExternalX402Artifacts`:

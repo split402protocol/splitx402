@@ -136,6 +136,20 @@ export interface ExternalX402ReceiptTemplateView {
   signatureInstructions: string[];
 }
 
+export interface ExternalX402RouteMetadataView {
+  schema: "split402.external_x402_route_metadata.v1";
+  providerId: string;
+  capability: string;
+  merchantOrigin: string;
+  path: string;
+  method: string;
+  operationId: string;
+  network: string;
+  asset: string;
+  payToWallet: string;
+  requiredAmountAtomic: string;
+}
+
 export interface DiscoverExternalX402Input {
   merchantOrigin: string;
   capability?: string;
@@ -243,6 +257,12 @@ export function writeExternalX402ProviderArtifacts(
     const candidateDirectory = join(resolvedArtifactsDir, candidateDirectoryName);
     mkdirSync(candidateDirectory, { recursive: true });
     const files: string[] = [];
+    const routeMetadata = createExternalX402RouteMetadataView(candidate);
+    if (routeMetadata !== undefined) {
+      files.push(
+        writeJsonArtifact(candidateDirectory, "route-metadata.json", routeMetadata)
+      );
+    }
     if (candidate.split402OfferTemplate !== undefined) {
       files.push(
         writeJsonArtifact(
@@ -590,6 +610,32 @@ function createSplit402ReceiptTemplateView(
   };
 }
 
+function createExternalX402RouteMetadataView(
+  candidate: ExternalX402OnboardingCandidateView
+): ExternalX402RouteMetadataView | undefined {
+  if (
+    candidate.network === undefined ||
+    candidate.asset === undefined ||
+    candidate.payToWallet === undefined ||
+    candidate.amountAtomic === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    schema: "split402.external_x402_route_metadata.v1",
+    providerId: candidate.providerId,
+    capability: candidate.capability,
+    merchantOrigin: candidate.merchantOrigin,
+    path: candidate.path,
+    method: candidate.method,
+    operationId: candidate.operationId,
+    network: candidate.network,
+    asset: candidate.asset,
+    payToWallet: candidate.payToWallet,
+    requiredAmountAtomic: candidate.amountAtomic
+  };
+}
+
 function createSplit402OfferTemplateView(
   candidate: Split402ExternalX402ProviderCandidate
 ): ExternalX402OfferTemplateView | undefined {
@@ -676,6 +722,11 @@ function writeProviderReadme(
 ): string {
   const filename = "README.md";
   const hasOfferTemplate = candidate.split402OfferTemplate !== undefined;
+  const hasRouteMetadata =
+    candidate.network !== undefined &&
+    candidate.asset !== undefined &&
+    candidate.payToWallet !== undefined &&
+    candidate.amountAtomic !== undefined;
   const lines = [
     `# Split402 Provider Artifact Templates`,
     "",
@@ -687,6 +738,11 @@ function writeProviderReadme(
     "",
     "## Files",
     "",
+    ...(hasRouteMetadata
+      ? [
+          "- `route-metadata.json`: exact public x402 route metadata for validation commands."
+        ]
+      : []),
     ...(hasOfferTemplate
       ? [
           "- `campaign-terms.template.json`: finalize campaign/merchant ids, economics, and policy fields, then compute its Split402 canonical hash.",
@@ -759,16 +815,7 @@ function writeProviderReadme(
     "",
     "```bash",
     "corepack pnpm demo:validate-external-x402-artifacts -- \\",
-    `  --merchant-origin ${candidate.merchantOrigin} \\`,
-    `  --operation-id ${candidate.operationId} \\`,
-    ...(candidate.network === undefined ? [] : [`  --network ${candidate.network} \\`]),
-    ...(candidate.asset === undefined ? [] : [`  --asset ${candidate.asset} \\`]),
-    ...(candidate.payToWallet === undefined
-      ? []
-      : [`  --pay-to-wallet ${candidate.payToWallet} \\`]),
-    ...(candidate.amountAtomic === undefined
-      ? []
-      : [`  --required-amount-atomic ${candidate.amountAtomic} \\`]),
+    "  --route-metadata-file route-metadata.json \\",
     "  --merchant-public-key <merchant-offer-receipt-public-key> \\",
     "  --offer-file offer.json \\",
     ...(hasOfferTemplate

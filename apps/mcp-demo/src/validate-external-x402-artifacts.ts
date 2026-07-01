@@ -46,10 +46,20 @@ interface ValidateExternalX402ArtifactsCliInput {
   asset?: string;
   payToWallet?: string;
   requiredAmountAtomic?: string;
+  routeMetadataFile?: string;
   merchantPublicKey?: string;
   offerFile?: string;
   receiptFile?: string;
   campaignTermsFile?: string;
+}
+
+interface ExternalX402RouteMetadataInput {
+  merchantOrigin?: string;
+  operationId?: string;
+  network?: string;
+  asset?: string;
+  payToWallet?: string;
+  requiredAmountAtomic?: string;
 }
 
 export function validateExternalX402Artifacts(
@@ -138,6 +148,8 @@ export function parseValidateExternalX402ArtifactsArgs(
       input.payToWallet = value;
     } else if (arg === "--required-amount-atomic") {
       input.requiredAmountAtomic = value;
+    } else if (arg === "--route-metadata-file") {
+      input.routeMetadataFile = value;
     } else if (arg === "--merchant-public-key") {
       input.merchantPublicKey = value;
     } else if (arg === "--offer-file") {
@@ -162,14 +174,31 @@ export async function runValidateExternalX402ArtifactsCli(
     console.log(VALIDATE_EXTERNAL_X402_ARTIFACTS_USAGE);
     return 0;
   }
+  const routeMetadata =
+    parsed.routeMetadataFile === undefined
+      ? {}
+      : readExternalX402RouteMetadata(parsed.routeMetadataFile);
   const result = validateExternalX402Artifacts({
-    merchantOrigin: required(parsed.merchantOrigin, "--merchant-origin"),
-    operationId: required(parsed.operationId, "--operation-id"),
-    network: required(parsed.network, "--network"),
-    asset: required(parsed.asset, "--asset"),
-    payToWallet: required(parsed.payToWallet, "--pay-to-wallet"),
-    requiredAmountAtomic: required(
+    merchantOrigin: readRouteValue(
+      parsed.merchantOrigin,
+      routeMetadata.merchantOrigin,
+      "--merchant-origin"
+    ),
+    operationId: readRouteValue(
+      parsed.operationId,
+      routeMetadata.operationId,
+      "--operation-id"
+    ),
+    network: readRouteValue(parsed.network, routeMetadata.network, "--network"),
+    asset: readRouteValue(parsed.asset, routeMetadata.asset, "--asset"),
+    payToWallet: readRouteValue(
+      parsed.payToWallet,
+      routeMetadata.payToWallet,
+      "--pay-to-wallet"
+    ),
+    requiredAmountAtomic: readRouteValue(
       parsed.requiredAmountAtomic,
+      routeMetadata.requiredAmountAtomic,
       "--required-amount-atomic"
     ),
     merchantPublicKey: required(
@@ -190,12 +219,13 @@ export async function runValidateExternalX402ArtifactsCli(
 
 export const VALIDATE_EXTERNAL_X402_ARTIFACTS_USAGE = `Usage:
   corepack pnpm demo:validate-external-x402-artifacts -- \\
-    --merchant-origin <origin> \\
-    --operation-id <operationId> \\
-    --network <network> \\
-    --asset <asset> \\
-    --pay-to-wallet <wallet-or-address> \\
-    --required-amount-atomic <amount> \\
+    [--route-metadata-file route-metadata.json] \\
+    [--merchant-origin <origin>] \\
+    [--operation-id <operationId>] \\
+    [--network <network>] \\
+    [--asset <asset>] \\
+    [--pay-to-wallet <wallet-or-address>] \\
+    [--required-amount-atomic <amount>] \\
     --merchant-public-key <base58-public-key> \\
     --offer-file offer.json \\
     [--campaign-terms-file campaign-terms.json] \\
@@ -206,6 +236,70 @@ metadata. When campaign terms are supplied, it recomputes the canonical terms
 hash and compares it to the signed offer and optional receipt. It never needs
 merchant private keys, bearer tokens, raw payment payloads, or facilitator
 secrets.`;
+
+function readExternalX402RouteMetadata(
+  path: string
+): ExternalX402RouteMetadataInput {
+  const value = readJson(path);
+  if (typeof value !== "object" || value === null) {
+    throw new Error("--route-metadata-file must contain a JSON object");
+  }
+  const record = value as Record<string, unknown>;
+  const metadata: ExternalX402RouteMetadataInput = {};
+  setOptionalRouteMetadataValue(
+    metadata,
+    "merchantOrigin",
+    record.merchantOrigin
+  );
+  setOptionalRouteMetadataValue(metadata, "operationId", record.operationId);
+  setOptionalRouteMetadataValue(metadata, "network", record.network);
+  setOptionalRouteMetadataValue(metadata, "asset", record.asset);
+  setOptionalRouteMetadataValue(metadata, "payToWallet", record.payToWallet);
+  setOptionalRouteMetadataValue(
+    metadata,
+    "requiredAmountAtomic",
+    record.requiredAmountAtomic
+  );
+  return metadata;
+}
+
+function readRouteValue(
+  flagValue: string | undefined,
+  metadataValue: string | undefined,
+  flag: string
+): string {
+  if (
+    flagValue !== undefined &&
+    metadataValue !== undefined &&
+    flagValue !== metadataValue
+  ) {
+    throw new Error(
+      `${flag} conflicts with --route-metadata-file: expected ${metadataValue}, got ${flagValue}`
+    );
+  }
+  return required(flagValue ?? metadataValue, flag);
+}
+
+function readOptionalString(value: unknown, label: string): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`route metadata ${label} must be a non-empty string`);
+  }
+  return value;
+}
+
+function setOptionalRouteMetadataValue(
+  metadata: ExternalX402RouteMetadataInput,
+  key: keyof ExternalX402RouteMetadataInput,
+  value: unknown
+): void {
+  const parsed = readOptionalString(value, key);
+  if (parsed !== undefined) {
+    metadata[key] = parsed;
+  }
+}
 
 function validateReceipt(
   input: ValidateExternalX402ArtifactsInput,
