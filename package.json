@@ -70,6 +70,7 @@
     "demo:agent": "corepack pnpm --filter @split402/demo-agent dev",
     "demo:mcp-bundle": "corepack pnpm --filter @split402/mcp-demo bundle",
     "demo:discover-external-x402": "corepack pnpm --filter @split402/mcp-demo discover-external-x402",
+    "demo:prepare-external-x402-offer": "corepack pnpm --filter @split402/mcp-demo prepare-external-x402-offer",
     "demo:validate-external-x402-artifacts": "corepack pnpm --filter @split402/mcp-demo validate-external-x402-artifacts",
     "demo:mcp-gateway": "corepack pnpm --filter @split402/mcp-demo gateway",
     "demo:mcp-gateway:smoke": "corepack pnpm --filter @split402/mcp-demo gateway:smoke",

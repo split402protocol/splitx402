@@ -39,6 +39,21 @@ should finalize campaign ids, merchant ids, economics, timestamps, nonce, and
 `kid`; compute the real campaign terms hash; sign the offer; then validate the
 public artifacts before paid staging.
 
+To compute the campaign terms hash and exact offer signing bytes without
+sharing a private key with Split402 tooling:
+
+```bash
+corepack pnpm demo:prepare-external-x402-offer -- \
+  --campaign-terms-file campaign-terms.json \
+  --unsigned-offer-file unsigned-offer.json \
+  --output-dir prepared-offer
+```
+
+This writes `offer-to-sign.json`, `campaign-terms.hash.txt`, and
+`offer-signing-bytes.hex`. Sign those bytes with the merchant `offer_receipt`
+key outside this tool, set the base64url signature on the offer, then run the
+artifact validator below.
+
 When x402 payment metadata is complete but Split402 metadata is missing or not
 yet trusted, candidate output also includes `split402OfferTemplate`. This is a
 non-secret scaffold built from the detected x402 route fields. It shows the

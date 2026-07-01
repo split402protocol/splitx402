@@ -700,6 +700,21 @@ function writeProviderReadme(
       : [
           "- `receipt.template.json`: shape for the merchant-signed receipt returned after successful x402 settlement."
         ]),
+    ...(hasOfferTemplate
+      ? [
+          "",
+          "## Prepare Signing Inputs",
+          "",
+          "After finalizing campaign terms and the unsigned offer, compute the canonical campaign terms hash and exact offer signing bytes:",
+          "",
+          "```bash",
+          "corepack pnpm demo:prepare-external-x402-offer -- \\",
+          "  --campaign-terms-file campaign-terms.json \\",
+          "  --unsigned-offer-file unsigned-offer.json \\",
+          "  --output-dir prepared-offer",
+          "```"
+        ]
+      : []),
     "",
     "## Validation",
     "",
