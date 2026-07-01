@@ -91,8 +91,10 @@ Then confirm the GitHub UI still matches this file.
 The local checks prove the tracked repository surface. The `--from-github`
 review captures live GitHub API state for repository metadata, branch
 protection, required checks, issue intake, releases, and readable package
-visibility, but it still leaves `review_decision: no-go` until a human reviewer
-confirms UI-only settings such as security advisories and attached evidence.
+visibility. It can run before human review fields are filled and will leave
+placeholder reviewers/evidence plus `review_decision: no-go` until a human
+reviewer confirms UI-only settings such as security advisories and attached
+evidence.
 
 After fixing live GitHub blockers, regenerate the API review record with:
 
@@ -100,7 +102,9 @@ After fixing live GitHub blockers, regenerate the API review record with:
 corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt
 ```
 
-The generated record must include the evidence source:
+The generated no-go record may keep `pending` reviewer and evidence fields while
+it is only an API snapshot. Before approval, replace placeholders with real
+review evidence:
 
 - `SPLIT402_GITHUB_SETTINGS_EVIDENCE_SOURCE`, for example
   `attached: github-settings-review-YYYY-MM-DD.md`.

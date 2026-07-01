@@ -414,15 +414,17 @@ The launch evidence workspace includes
 review artifact.
 Run
 `product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt`
-to generate a no-go review record from the live GitHub API. It checks the About
-description, topics, homepage posture, branch protection, pull-request/codeowner
-review, required checks, force-push/deletion blocks, blank issue intake,
-releases, and package visibility where the GitHub token can read it. Human
-review must still confirm security advisories and any UI-only evidence before
-changing the record to approved.
+to generate a no-go review record from the live GitHub API. The command can run
+without review env values; it writes placeholder reviewer and evidence fields
+until a human review fills them. It checks the About description, topics,
+homepage posture, branch protection, pull-request/codeowner review, required
+checks, force-push/deletion blocks, blank issue intake, releases, and package
+visibility where the GitHub token can read it. Human review must still confirm
+security advisories and any UI-only evidence before changing the record to
+approved.
 Use `--output` instead of shell redirection so Windows PowerShell does not write
 the evidence file in an incompatible encoding. An approved review must include
-real `SPLIT402_GITHUB_SETTINGS_REVIEW_METHOD` and
+real reviewer, `SPLIT402_GITHUB_SETTINGS_REVIEW_METHOD`, and
 `SPLIT402_GITHUB_SETTINGS_EVIDENCE_SOURCE` values, such as an attached private
 UI/API evidence record.
 `product:public-surface-check --brief` can also be run alone to verify that

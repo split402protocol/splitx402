@@ -47,12 +47,13 @@ try {
   if (args.fromGithub) {
     writeCliTextOutput({
       text: createGitHubRepositorySettingsReviewRecordFromLiveGitHub({
-        reviewId: readRequiredEnv("SPLIT402_GITHUB_SETTINGS_REVIEW_ID"),
+        reviewId:
+          env.SPLIT402_GITHUB_SETTINGS_REVIEW_ID ??
+          `github-settings-review-${isoDate()}`,
         reviewDate: env.SPLIT402_GITHUB_SETTINGS_REVIEW_DATE ?? isoDate(),
-        reviewers: readRequiredEnv("SPLIT402_GITHUB_SETTINGS_REVIEWERS"),
-        evidenceSource: readRequiredEnv(
-          "SPLIT402_GITHUB_SETTINGS_EVIDENCE_SOURCE",
-        ),
+        reviewers: env.SPLIT402_GITHUB_SETTINGS_REVIEWERS ?? "pending",
+        evidenceSource:
+          env.SPLIT402_GITHUB_SETTINGS_EVIDENCE_SOURCE ?? "pending",
         repositoryMetadata: readLiveRepositoryMetadata(),
         branchProtection: readLiveBranchProtection(),
         releaseCount: readLiveReleaseCount(),
