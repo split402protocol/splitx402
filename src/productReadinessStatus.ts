@@ -279,7 +279,7 @@ function createProductNextActions(
     hasStaleSourceCommit(githubSettingsReview)
   ) {
     leadActions.push(
-      "Run corepack pnpm product:evidence:init --refresh-source before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist.",
+      "If stale evidence files are still scaffold-only, run corepack pnpm product:evidence:init --refresh-source; otherwise recollect or regenerate filled evidence records from the current checkout before launch collection.",
     );
   }
   if (!phase7.proofChecked && !phase6.evidenceBundleChecked) {

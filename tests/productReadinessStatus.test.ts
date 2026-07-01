@@ -228,7 +228,7 @@ approval_notes: checked evidence is intentionally incomplete
       "Fix Phase 6 custody evidence blockers",
     );
     expect(report.nextActions).toContain(
-      "Run corepack pnpm product:evidence:init --refresh-source before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist.",
+      "If stale evidence files are still scaffold-only, run corepack pnpm product:evidence:init --refresh-source; otherwise recollect or regenerate filled evidence records from the current checkout before launch collection.",
     );
     expect(report.nextActions).toContain(
       "Run corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence for grouped env/setup blockers before collecting or recollecting evidence.",
@@ -270,7 +270,7 @@ approval_decision: no-go
       blockers: ["source_commit does not match current checkout"],
     });
     expect(report.nextActions).toContain(
-      "Run corepack pnpm product:evidence:init --refresh-source before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist.",
+      "If stale evidence files are still scaffold-only, run corepack pnpm product:evidence:init --refresh-source; otherwise recollect or regenerate filled evidence records from the current checkout before launch collection.",
     );
   });
 
