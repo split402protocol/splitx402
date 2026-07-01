@@ -26,6 +26,7 @@ files:
 
 ```text
 split402-provider-artifacts/
+  README.md
   manifest.json
   partner_get.price/
     README.md

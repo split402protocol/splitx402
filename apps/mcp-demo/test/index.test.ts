@@ -404,6 +404,22 @@ describe("external x402 onboarding CLI", () => {
       expect(
         readFileSync(join(candidateDir, "README.md"), "utf8")
       ).toContain("--campaign-terms-file campaign-terms.json");
+      const handoffReadme = readFileSync(
+        join(artifactsDir, "README.md"),
+        "utf8"
+      );
+      expect(handoffReadme).toContain(
+        "# Split402 External x402 Provider Artifacts"
+      );
+      expect(handoffReadme).toContain(
+        "| `issue-131:get.price.coin` | `GET /price/btc` | `requires_split402_campaign` | `issue-131_get.price.coin` |"
+      );
+      expect(handoffReadme).toContain(
+        "- Blocker: missing Split402 offer extension"
+      );
+      expect(handoffReadme).toContain(
+        "Do not put private keys, bearer tokens, raw payment payloads"
+      );
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

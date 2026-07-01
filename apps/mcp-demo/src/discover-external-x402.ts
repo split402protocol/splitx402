@@ -296,6 +296,7 @@ export function writeExternalX402ProviderArtifacts(
       files
     });
   }
+  writeProviderArtifactsReadme(resolvedArtifactsDir, report, manifest);
   writeJsonArtifact(resolvedArtifactsDir, "manifest.json", manifest);
   return manifest;
 }
@@ -828,6 +829,76 @@ function writeProviderReadme(
   ];
   writeFileSync(join(directory, filename), `${lines.join("\n")}`, "utf8");
   return filename;
+}
+
+function writeProviderArtifactsReadme(
+  directory: string,
+  report: ExternalX402OnboardingReport,
+  manifest: ExternalX402ProviderArtifactManifest
+): void {
+  const lines = [
+    "# Split402 External x402 Provider Artifacts",
+    "",
+    `Merchant origin: \`${report.merchantOrigin}\``,
+    "",
+    `Generated at: \`${report.generatedAt}\``,
+    "",
+    `Candidates: \`${report.candidateCount}\``,
+    "",
+    `Router-ready candidates: \`${report.routerReadyCount}\``,
+    "",
+    "## Candidate Summary",
+    "",
+    "| Provider | Route | Readiness | Directory |",
+    "| --- | --- | --- | --- |",
+    ...report.candidates.map((candidate, index) => {
+      const manifestCandidate = manifest.candidates[index];
+      const directoryName = manifestCandidate?.artifactDirectory ?? "";
+      return [
+        `| \`${candidate.providerId}\``,
+        `\`${candidate.method} ${candidate.path}\``,
+        `\`${candidate.readiness}\``,
+        `\`${directoryName}\` |`
+      ].join(" | ");
+    }),
+    "",
+    "## Next Step",
+    "",
+    ...createProviderArtifactsNextStepLines(report),
+    "",
+    "## Public-Safety Boundary",
+    "",
+    "These artifacts are public scaffolds for Split402 public-alpha onboarding.",
+    "Do not put private keys, bearer tokens, raw payment payloads, facilitator secrets, or private settlement evidence in this directory.",
+    "Keep production listing, mainnet approval, and custody claims gated on Phase 6/Phase 7 evidence.",
+    ""
+  ];
+  writeFileSync(join(directory, "README.md"), lines.join("\n"), "utf8");
+}
+
+function createProviderArtifactsNextStepLines(
+  report: ExternalX402OnboardingReport
+): string[] {
+  const firstRouterReady = report.candidates.find(
+    (candidate) => candidate.readiness === "router_ready"
+  );
+  if (firstRouterReady !== undefined) {
+    return [
+      `Start with \`${firstRouterReady.providerId}\`: it is router-ready in local artifact validation.`,
+      "Run one low-value hosted staging proof before treating it as a launch candidate."
+    ];
+  }
+  const firstCandidate = report.candidates[0];
+  if (firstCandidate === undefined) {
+    return [
+      "No candidate routes were discovered. Re-run discovery with the correct merchant origin and match path."
+    ];
+  }
+  return [
+    `Start with \`${firstCandidate.providerId}\`. Current readiness is \`${firstCandidate.readiness}\`.`,
+    ...firstCandidate.blockers.map((blocker) => `- Blocker: ${blocker}`),
+    ...firstCandidate.nextActions.map((action) => `- ${action}`)
+  ];
 }
 
 function sanitizePathSegment(value: string): string {
