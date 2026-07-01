@@ -328,7 +328,7 @@ describe("repository presentation", () => {
     expect(readme).toContain("corepack pnpm product:local-proof --help");
     expect(readme).toContain("corepack pnpm product:local-proof --brief");
     expect(readme).toContain(
-      "corepack pnpm product:github-settings-review --template",
+      "corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt",
     );
     expect(readme).toContain("corepack pnpm product:github-settings-review");
     expect(readme).toContain("corepack pnpm product:public-surface-check --brief");

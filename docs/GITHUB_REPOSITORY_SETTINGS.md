@@ -76,7 +76,7 @@ support statement.
 Run this before launch-facing updates:
 
 ```bash
-corepack pnpm product:github-settings-review --template > split402-launch-evidence/github-settings-review.txt
+corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt
 corepack pnpm product:public-surface-check --brief
 corepack pnpm product:local-proof --brief
 ```
@@ -88,7 +88,7 @@ The local checks prove the tracked repository surface, not live branch protectio
 After verifying the live GitHub UI, generate a review record with:
 
 ```bash
-corepack pnpm product:github-settings-review
+corepack pnpm product:github-settings-review --output split402-launch-evidence/github-settings-review.txt
 ```
 
 The generated record must include the review method and evidence source:
@@ -105,3 +105,5 @@ Keep the generated record with private launch evidence if it contains reviewer
 names, screenshots, or operational context that should not be public. The
 default local launch-evidence path is
 `split402-launch-evidence/github-settings-review.txt`.
+Use `--output` instead of shell redirection so the evidence file is written as
+UTF-8 on Windows PowerShell and remains parseable by launch preflight.

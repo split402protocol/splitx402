@@ -241,8 +241,8 @@ function createNextCommands(input: {
   const launchPreflightCommand = `corepack pnpm product:launch-preflight --brief --workspace ${input.directory}`;
   return [
     `corepack pnpm product:local-proof --brief --output ${input.directory}/${input.localProofFileName}`,
-    `corepack pnpm product:github-settings-review --template > ${input.directory}/${input.githubSettingsReviewFileName}`,
-    `Review ${input.directory}/${input.githubSettingsReviewFileName}, verify live GitHub settings, then regenerate it with corepack pnpm product:github-settings-review.`,
+    `corepack pnpm product:github-settings-review --template --output ${input.directory}/${input.githubSettingsReviewFileName}`,
+    `Review ${input.directory}/${input.githubSettingsReviewFileName}, verify live GitHub settings, then regenerate it with corepack pnpm product:github-settings-review --output ${input.directory}/${input.githubSettingsReviewFileName}.`,
     launchPreflightCommand,
     `Fill ${phase7EnvFile} with hosted staging values reported by launch preflight.`,
     `Review generated ${phase6EnvFile} before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template ${input.directory} ${phase6EnvFile}`,

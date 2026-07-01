@@ -1,5 +1,10 @@
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
+import { writeCliTextOutput } from "../src/cliOutput.js";
 import {
   assertYesNo,
   createGitHubRepositorySettingsReviewRecord,
@@ -178,6 +183,26 @@ describe("GitHub repository settings review", () => {
     expect(githubRepositorySettingsReviewRequiredEnv()).toContain(
       "SPLIT402_GITHUB_SETTINGS_PACKAGES_AND_RELEASES_UNPUBLISHED",
     );
+  });
+
+  it("writes the CLI template directly as UTF-8 evidence", () => {
+    const directory = mkdtempSync(join(tmpdir(), "split402-github-review-"));
+    const outputPath = join(directory, "github-settings-review.txt");
+
+    try {
+      writeCliTextOutput({
+        text: createGitHubRepositorySettingsReviewTemplate(),
+        outputPath,
+      });
+
+      const bytes = readFileSync(outputPath);
+      expect(bytes[0]).toBe("s".charCodeAt(0));
+      expect(bytes.toString("utf8")).toContain(
+        "schema: split402.github_repository_settings_review.v1",
+      );
+    } finally {
+      rmSync(directory, { force: true, recursive: true });
+    }
   });
 });
 

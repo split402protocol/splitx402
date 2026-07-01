@@ -159,12 +159,12 @@ describe("Split402 product evidence workspace", () => {
       "quoted values are handled consistently",
     );
     expect(workspace.readmeText).toContain(
-      "corepack pnpm product:github-settings-review --template > split402-launch-evidence/github-settings-review.txt",
+      "corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt",
     );
     expect(workspace.nextCommands.slice(0, 5)).toEqual([
       "corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json",
-      "corepack pnpm product:github-settings-review --template > split402-launch-evidence/github-settings-review.txt",
-      "Review split402-launch-evidence/github-settings-review.txt, verify live GitHub settings, then regenerate it with corepack pnpm product:github-settings-review.",
+      "corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt",
+      "Review split402-launch-evidence/github-settings-review.txt, verify live GitHub settings, then regenerate it with corepack pnpm product:github-settings-review --output split402-launch-evidence/github-settings-review.txt.",
       "corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence",
       "Fill split402-launch-evidence/phase7-staging.env with hosted staging values reported by launch preflight.",
     ]);
