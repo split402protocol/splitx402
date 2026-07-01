@@ -70,6 +70,33 @@ describe("mainnet canary evidence attachments", () => {
     });
   });
 
+  it("rejects attachment references outside the launch evidence workspace", () => {
+    const rejectedValues = [
+      "attached: https://evidence.example/dry-run.txt",
+      "attached: /tmp/dry-run.txt",
+      "attached: C:\\temp\\dry-run.txt",
+      "attached: ../dry-run.txt",
+      "attached: nested/../../dry-run.txt",
+    ];
+
+    for (const value of rejectedValues) {
+      expect(
+        verifyMainnetCanaryEvidenceAttachment({
+          kind: "dry_run",
+          value,
+          exists: () => {
+            throw new Error("unexpected file existence check");
+          },
+        }),
+      ).toMatchObject({
+        ok: false,
+        errors: [
+          "evidence must use `attached: <path>` and must not contain a placeholder",
+        ],
+      });
+    }
+  });
+
   it("rejects scaffold dry-run artifacts until every required result is passed", () => {
     const result = verifyMainnetCanaryEvidenceAttachment({
       kind: "dry_run",
@@ -111,6 +138,38 @@ describe("mainnet canary evidence attachments", () => {
 
     expect(result.ok).toBe(false);
     expect(result.errors).toContain("stop_conditions_reviewed must be yes");
+  });
+
+  it("rejects rollback plans with malformed or oversized stop-loss amounts", () => {
+    const malformed = verifyMainnetCanaryEvidenceAttachment({
+      kind: "rollback_plan",
+      value: "attached: rollback.txt",
+      exists: () => true,
+      readText: () =>
+        createPassingRollbackPlan().replace(
+          "stop_loss_amount_atomic: 100000",
+          "stop_loss_amount_atomic: not-a-number",
+        ),
+    });
+    const oversized = verifyMainnetCanaryEvidenceAttachment({
+      kind: "rollback_plan",
+      value: "attached: rollback.txt",
+      exists: () => true,
+      readText: () =>
+        createPassingRollbackPlan()
+          .replace("max_gross_amount_atomic: 100000", "max_gross_amount_atomic: 50000")
+          .replace("stop_loss_amount_atomic: 100000", "stop_loss_amount_atomic: 100001"),
+    });
+
+    expect(malformed.ok).toBe(false);
+    expect(malformed.errors).toContain(
+      "stop_loss_amount_atomic must be a positive atomic amount",
+    );
+    expect(oversized.ok).toBe(false);
+    expect(oversized.errors).toContain("stop_loss_amount_atomic must be <= 100000");
+    expect(oversized.errors).toContain(
+      "stop_loss_amount_atomic must be <= max_gross_amount_atomic",
+    );
   });
 
   it("rejects artifacts that exceed the canary amount cap", () => {
@@ -172,6 +231,37 @@ describe("mainnet canary evidence attachments", () => {
         "max_gross_amount_atomic must match approved canary scope",
       ]),
     );
+  });
+
+  it("rejects evidence from a different source commit than the approved launch scope", () => {
+    const result = verifyMainnetCanaryEvidenceAttachment({
+      expectedScope: {
+        sourceCommit: "def5678000000000000000000000000000000000",
+      },
+      kind: "dry_run",
+      value: "attached: dry-run.txt",
+      exists: () => true,
+      readText: () => createPassingDryRunEvidence(),
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContain(
+      "source_commit must match approved canary scope",
+    );
+  });
+
+  it("accepts short source commits when they match the approved launch scope", () => {
+    const result = verifyMainnetCanaryEvidenceAttachment({
+      expectedScope: {
+        sourceCommit: "abc1234000000000000000000000000000000000",
+      },
+      kind: "rollback_plan",
+      value: "attached: rollback.txt",
+      exists: () => true,
+      readText: () => createPassingRollbackPlan(),
+    });
+
+    expect(result).toMatchObject({ ok: true, errors: [] });
   });
 });
 

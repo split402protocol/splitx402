@@ -80,6 +80,10 @@ export function readSplit402ProductReadinessCliInput(
     phase7ProofPath === undefined || phase7ProofPath.trim().length === 0
       ? undefined
       : dirname(resolve(phase7ProofPath));
+  const phase6ArtifactBaseDir =
+    phase6EvidencePath === undefined || phase6EvidencePath.trim().length === 0
+      ? undefined
+      : dirname(resolve(phase6EvidencePath));
   const currentSourceCommit = readCurrentGitCommit();
   const currentWorktreeDirty = readCurrentWorktreeDirty(
     phase7ProofPath,
@@ -103,6 +107,14 @@ export function readSplit402ProductReadinessCliInput(
       phase6EvidenceText,
       phase6Options: {
         currentSourceCommit,
+        ...(phase6ArtifactBaseDir === undefined
+          ? {}
+          : {
+              artifactBaseDir: phase6ArtifactBaseDir,
+              artifactExists: existsSync,
+              resolveArtifactPath: (artifactPath, baseDir) =>
+                resolve(baseDir, artifactPath),
+            }),
       },
       phase7ProofText,
       phase7Options: {

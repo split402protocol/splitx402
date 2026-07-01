@@ -1,8 +1,14 @@
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
+import { writeCliTextOutput } from "../src/cliOutput.js";
 import {
   assertYesNo,
   createGitHubRepositorySettingsReviewRecord,
+  createGitHubRepositorySettingsReviewRecordFromLiveGitHub,
   createGitHubRepositorySettingsReviewTemplate,
   githubRepositorySettingsReviewRequiredEnv,
   verifyGitHubRepositorySettingsReviewRecord,
@@ -124,7 +130,7 @@ describe("GitHub repository settings review", () => {
         "required_checks must include Check vectors",
         "required_checks must include Audit",
         "required_checks must include Local public-alpha proof",
-        "required_checks must include PostgreSQL integration tests",
+        "required_checks must include postgres-integration",
         "required_checks must include CodeQL",
         "required_checks must include Secret scan",
       ],
@@ -179,10 +185,143 @@ describe("GitHub repository settings review", () => {
       "SPLIT402_GITHUB_SETTINGS_PACKAGES_AND_RELEASES_UNPUBLISHED",
     );
   });
+
+  it("writes the CLI template directly as UTF-8 evidence", () => {
+    const directory = mkdtempSync(join(tmpdir(), "split402-github-review-"));
+    const outputPath = join(directory, "github-settings-review.txt");
+
+    try {
+      writeCliTextOutput({
+        text: createGitHubRepositorySettingsReviewTemplate(),
+        outputPath,
+      });
+
+      const bytes = readFileSync(outputPath);
+      expect(bytes[0]).toBe("s".charCodeAt(0));
+      expect(bytes.toString("utf8")).toContain(
+        "schema: split402.github_repository_settings_review.v1",
+      );
+    } finally {
+      rmSync(directory, { force: true, recursive: true });
+    }
+  });
+
+  it("creates a no-go review from live GitHub API metadata", () => {
+    const record = createGitHubRepositorySettingsReviewRecordFromLiveGitHub({
+      reviewId: "github-settings-review-001",
+      reviewDate: "2026-06-30",
+      reviewers: "split402protocol",
+      evidenceSource: "attached: github-api-review.json",
+      sourceCommit: "abc1234",
+      releaseCount: 0,
+      privateVulnerabilityReportingEnabled: true,
+      repositoryMetadata: {
+        nameWithOwner: "split402protocol/splitx402",
+        description:
+          "Agent payment routing and verifiable referral accounting for x402 APIs.",
+        homepageUrl: "",
+        isBlankIssuesEnabled: true,
+        repositoryTopics: [
+          { name: "payments" },
+          { name: "protocol" },
+          { name: "typescript" },
+          { name: "x402" },
+          { name: "agents" },
+          { name: "mcp" },
+          { name: "solana" },
+          { name: "usdc" },
+        ],
+      },
+      branchProtection: {
+        required_pull_request_reviews: {
+          require_code_owner_reviews: true,
+          required_approving_review_count: 1,
+        },
+        required_status_checks: {
+          contexts: ["test", "postgres-integration", "Gitleaks"],
+          checks: [{ context: "Analyze JavaScript and TypeScript" }],
+        },
+        allow_force_pushes: { enabled: false },
+        allow_deletions: { enabled: false },
+      },
+    });
+
+    expect(record).toContain("review_method: github-api");
+    expect(record).toContain("about_description_matches: yes");
+    expect(record).toContain("topics_match: yes");
+    expect(record).toContain("blank_issues_disabled: no");
+    expect(record).toContain("security_advisories_enabled: yes");
+    expect(record).toContain("packages_and_releases_unpublished: no");
+    expect(record).toContain("review_decision: no-go");
+    expect(verifyGitHubRepositorySettingsReviewRecord(record)).toEqual({
+      ok: false,
+      errors: [
+        "required_checks must include Lint",
+        "required_checks must include Public surface check",
+        "required_checks must include Typecheck",
+        "required_checks must include Test",
+        "required_checks must include Build",
+        "required_checks must include Check vectors",
+        "required_checks must include Audit",
+        "required_checks must include Local public-alpha proof",
+        "required_checks must include CodeQL",
+        "required_checks must include Secret scan",
+      ],
+    });
+  });
+
+  it("allows no-go live API snapshots before human review fields are filled", () => {
+    const record = createGitHubRepositorySettingsReviewRecordFromLiveGitHub({
+      reviewId: "github-settings-review-2026-06-30",
+      reviewDate: "2026-06-30",
+      reviewers: "pending",
+      evidenceSource: "pending",
+      sourceCommit: "abc1234",
+      releaseCount: 0,
+      packageCount: 0,
+      privateVulnerabilityReportingEnabled: true,
+      repositoryMetadata: {
+        nameWithOwner: "split402protocol/splitx402",
+        description:
+          "Agent payment routing and verifiable referral accounting for x402 APIs.",
+        homepageUrl: "",
+        isBlankIssuesEnabled: false,
+        repositoryTopics: [
+          { name: "agents" },
+          { name: "mcp" },
+          { name: "payments" },
+          { name: "protocol" },
+          { name: "solana" },
+          { name: "typescript" },
+          { name: "usdc" },
+          { name: "x402" },
+        ],
+      },
+      branchProtection: {
+        required_pull_request_reviews: {
+          require_code_owner_reviews: true,
+          required_approving_review_count: 1,
+        },
+        required_status_checks: {
+          contexts: [REQUIRED_CHECKS],
+        },
+        allow_force_pushes: { enabled: false },
+        allow_deletions: { enabled: false },
+      },
+    });
+
+    expect(record).toContain("reviewers: pending");
+    expect(record).toContain("evidence_source: pending");
+    expect(record).toContain("review_decision: no-go");
+    expect(verifyGitHubRepositorySettingsReviewRecord(record)).toEqual({
+      ok: true,
+      errors: [],
+    });
+  });
 });
 
 const REQUIRED_CHECKS =
-  "Lint, Public surface check, Typecheck, Test, Build, Check vectors, Audit, Local public-alpha proof, PostgreSQL integration tests, CodeQL, Secret scan";
+  "Lint, Public surface check, Typecheck, Test, Build, Check vectors, Audit, Local public-alpha proof, postgres-integration, CodeQL, Secret scan";
 
 function createValidInput() {
   return {

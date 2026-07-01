@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { isAbsolute, join } from "node:path";
+import { join } from "node:path";
 
 import {
   MAINNET_CANARY_MAX_GROSS_AMOUNT_ATOMIC,
@@ -27,6 +27,7 @@ export interface VerifyMainnetCanaryEvidenceAttachmentInput {
 export interface MainnetCanaryEvidenceExpectedScope {
   merchantId?: string;
   campaignId?: string;
+  sourceCommit?: string;
   routeId?: string;
   payerWallet?: string;
   maxGrossAmountAtomic?: string;
@@ -188,6 +189,11 @@ function verifyEvidenceText(input: {
     for (const field of ROLLBACK_REQUIRED_FIELDS) {
       requireFilledField(errors, fields, field);
     }
+    validateStopLossAmount(
+      errors,
+      fields.get("stop_loss_amount_atomic"),
+      fields.get("max_gross_amount_atomic"),
+    );
     requireExactField(errors, fields, "stop_conditions_reviewed", "yes");
   }
 
@@ -208,6 +214,7 @@ function parseAttachedPath(value: string | undefined): string | undefined {
     path === undefined ||
     path.length === 0 ||
     path.toLowerCase() === "pending" ||
+    isUnsafeAttachedPath(path) ||
     /[<>]/u.test(path)
   ) {
     return undefined;
@@ -216,10 +223,20 @@ function parseAttachedPath(value: string | undefined): string | undefined {
 }
 
 function resolveEvidencePath(path: string, workspaceDirectory: string | undefined): string {
-  if (isAbsolute(path) || workspaceDirectory === undefined) {
+  if (workspaceDirectory === undefined) {
     return path;
   }
   return join(workspaceDirectory, path);
+}
+
+function isUnsafeAttachedPath(path: string): boolean {
+  const normalized = path.trim().replace(/\\/gu, "/");
+  return (
+    /^[a-z][a-z0-9+.-]*:\/\//iu.test(normalized) ||
+    normalized.startsWith("/") ||
+    /^[a-z]:\//iu.test(normalized) ||
+    normalized.split("/").some((segment) => segment === "..")
+  );
 }
 
 function parseRecordFields(text: string): Map<string, string> {
@@ -268,6 +285,33 @@ function validateAmountCap(errors: string[], value: string | undefined): void {
   }
 }
 
+function validateStopLossAmount(
+  errors: string[],
+  value: string | undefined,
+  maxGrossAmountAtomic: string | undefined,
+): void {
+  if (value === undefined || !/^[1-9][0-9]*$/u.test(value)) {
+    errors.push("stop_loss_amount_atomic must be a positive atomic amount");
+    return;
+  }
+
+  const stopLossAmount = BigInt(value);
+  const canaryMaxAmount = BigInt(MAINNET_CANARY_MAX_GROSS_AMOUNT_ATOMIC);
+  if (stopLossAmount > canaryMaxAmount) {
+    errors.push(
+      `stop_loss_amount_atomic must be <= ${MAINNET_CANARY_MAX_GROSS_AMOUNT_ATOMIC}`,
+    );
+  }
+
+  if (
+    maxGrossAmountAtomic !== undefined &&
+    /^[1-9][0-9]*$/u.test(maxGrossAmountAtomic) &&
+    stopLossAmount > BigInt(maxGrossAmountAtomic)
+  ) {
+    errors.push("stop_loss_amount_atomic must be <= max_gross_amount_atomic");
+  }
+}
+
 function validateExpectedScope(
   errors: string[],
   fields: ReadonlyMap<string, string>,
@@ -277,6 +321,7 @@ function validateExpectedScope(
     return;
   }
   const comparisons = [
+    ["source_commit", expectedScope.sourceCommit],
     ["merchant_id", expectedScope.merchantId],
     ["campaign_id", expectedScope.campaignId],
     ["route_id", expectedScope.routeId],
@@ -284,10 +329,35 @@ function validateExpectedScope(
     ["max_gross_amount_atomic", expectedScope.maxGrossAmountAtomic],
   ] as const;
   for (const [field, expected] of comparisons) {
-    if (expected !== undefined && fields.get(field) !== expected) {
+    if (expected === undefined) {
+      continue;
+    }
+    if (
+      field === "source_commit" &&
+      !gitShasMatch(fields.get(field), expected)
+    ) {
+      errors.push(`${field} must match approved canary scope`);
+      continue;
+    }
+    if (field !== "source_commit" && fields.get(field) !== expected) {
       errors.push(`${field} must match approved canary scope`);
     }
   }
+}
+
+function gitShasMatch(left: string | undefined, right: string): boolean {
+  const normalizedLeft = left?.trim().toLowerCase() ?? "";
+  const normalizedRight = right.trim().toLowerCase();
+  if (
+    !/^[0-9a-f]{7,40}$/u.test(normalizedLeft) ||
+    !/^[0-9a-f]{7,40}$/u.test(normalizedRight)
+  ) {
+    return false;
+  }
+  return (
+    normalizedLeft.startsWith(normalizedRight) ||
+    normalizedRight.startsWith(normalizedLeft)
+  );
 }
 
 function validateReviewDate(errors: string[], value: string | undefined): void {

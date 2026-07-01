@@ -39,7 +39,7 @@ describe("Split402 product readiness status", () => {
       "Run corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json.",
     );
     expect(report.nextActions).toContain(
-      "Run corepack pnpm product:github-settings-review --template > split402-launch-evidence/github-settings-review.txt, verify live GitHub settings, then regenerate it with corepack pnpm product:github-settings-review.",
+      "Run corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt to generate the live no-go GitHub API snapshot; use --template only for a blank manual form.",
     );
     expect(report.nextActions).toContain(
       "Fill the generated Phase 7 and Phase 6 env files with hosted staging and custody evidence values.",
@@ -228,7 +228,7 @@ approval_notes: checked evidence is intentionally incomplete
       "Fix Phase 6 custody evidence blockers",
     );
     expect(report.nextActions).toContain(
-      "Run corepack pnpm product:evidence:init --refresh-source before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist.",
+      "If stale evidence files are still scaffold-only, run corepack pnpm product:evidence:init --refresh-source; otherwise recollect or regenerate filled evidence records from the current checkout before launch collection.",
     );
     expect(report.nextActions).toContain(
       "Run corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence for grouped env/setup blockers before collecting or recollecting evidence.",
@@ -270,7 +270,7 @@ approval_decision: no-go
       blockers: ["source_commit does not match current checkout"],
     });
     expect(report.nextActions).toContain(
-      "Run corepack pnpm product:evidence:init --refresh-source before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist.",
+      "If stale evidence files are still scaffold-only, run corepack pnpm product:evidence:init --refresh-source; otherwise recollect or regenerate filled evidence records from the current checkout before launch collection.",
     );
   });
 
@@ -311,7 +311,7 @@ approval_decision: no-go
     expect(report.readyForPublicBoundary).toBe(false);
     expect(report.launchDecision).toBe("no-go");
     expect(report.nextActions).toContain(
-      "Run corepack pnpm product:github-settings-review --template > split402-launch-evidence/github-settings-review.txt, verify live GitHub settings, then regenerate it with corepack pnpm product:github-settings-review.",
+      "Run corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt to generate the live no-go GitHub API snapshot; use --template only for a blank manual form.",
     );
   });
 
@@ -394,7 +394,7 @@ branch_protection_enabled: yes
 requires_pull_request: yes
 requires_code_owner_review: yes
 requires_status_checks: yes
-required_checks: Lint, Public surface check, Typecheck, Test, Build, Check vectors, Audit, Local public-alpha proof, PostgreSQL integration tests, CodeQL, Secret scan
+required_checks: Lint, Public surface check, Typecheck, Test, Build, Check vectors, Audit, Local public-alpha proof, postgres-integration, CodeQL, Secret scan
 blocks_force_pushes: yes
 blocks_deletion: yes
 blank_issues_disabled: yes

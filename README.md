@@ -344,8 +344,8 @@ corepack pnpm product:evidence:init --force
 corepack pnpm product:local-proof --help
 corepack pnpm product:local-proof --brief
 corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json
-corepack pnpm product:github-settings-review --template > split402-launch-evidence/github-settings-review.txt
-corepack pnpm product:github-settings-review
+corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt
+corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt
 corepack pnpm product:public-surface-check --brief
 corepack pnpm product:launch-preflight --help
 corepack pnpm product:launch-preflight --brief
@@ -406,18 +406,25 @@ commercial operations. The saved proof records the source commit, and
 `product:local-proof` fails unless the source worktree is clean.
 `product:status --workspace` also treats saved proof as stale if it does not
 match the current checkout or if the source worktree has uncommitted changes.
-`product:github-settings-review --template` prints a fillable review record for
-the live GitHub repository settings in
+`product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt`
+writes a fillable UTF-8 review record for the live GitHub repository settings in
 [`docs/GITHUB_REPOSITORY_SETTINGS.md`](docs/GITHUB_REPOSITORY_SETTINGS.md).
 The launch evidence workspace includes
 `split402-launch-evidence/github-settings-review.txt` as the intended saved
 review artifact.
-After verifying branch protection, Code Owners review, required checks, issue
-intake, and release posture in the GitHub UI/API, run
-`product:github-settings-review` with the required `SPLIT402_GITHUB_SETTINGS_*`
-environment values and keep the output with launch evidence. This command
-records the review; it does not itself prove live GitHub branch protection. An
-approved review must include real `SPLIT402_GITHUB_SETTINGS_REVIEW_METHOD` and
+Run
+`product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt`
+to generate a no-go review record from the live GitHub API. The command can run
+without review env values; it writes placeholder reviewer and evidence fields
+until a human review fills them. It checks the About description, topics,
+homepage posture, branch protection, pull-request/codeowner review, required
+checks, force-push/deletion blocks, blank issue intake, releases, and package
+visibility where the GitHub token can read it. Human review must still confirm
+security advisories and any UI-only evidence before changing the record to
+approved.
+Use `--output` instead of shell redirection so Windows PowerShell does not write
+the evidence file in an incompatible encoding. An approved review must include
+real reviewer, `SPLIT402_GITHUB_SETTINGS_REVIEW_METHOD`, and
 `SPLIT402_GITHUB_SETTINGS_EVIDENCE_SOURCE` values, such as an attached private
 UI/API evidence record.
 `product:public-surface-check --brief` can also be run alone to verify that
@@ -438,8 +445,8 @@ settlement, and a one-merchant/one-route/one-wallet dry-run and rollback plan
 are attached. With `--workspace`, it auto-loads
 `split402-launch-evidence/mainnet-canary.env`, resolves `attached:` dry-run and
 rollback artifact paths relative to that private workspace, and validates the
-required artifact fields before reporting ready. Shell environment variables
-override local file values.
+required artifact fields and `source_commit` match before reporting ready. Shell
+environment variables override local file values.
 
 Generate the Phase 6 image provenance review record after building immutable
 signer and control-plane images:
@@ -531,6 +538,9 @@ custom launch evidence directory when not using the default:
 `phase6:evidence:assemble` auto-loads the default launch env file when present;
 for any other directory, pass `--evidence-env-file <path>` and an explicit
 output file path.
+`phase6:evidence:status` and `phase6:custody:check` resolve `attached:`
+artifact paths relative to the custody bundle directory and fail readiness if
+any referenced artifact is missing.
 Keep private URLs, secrets, private keys, and transaction bytes out of the file
 and out of Git.
 

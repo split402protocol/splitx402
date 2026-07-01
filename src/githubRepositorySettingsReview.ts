@@ -29,6 +29,49 @@ export interface GitHubRepositorySettingsReviewVerificationResult {
   errors: string[];
 }
 
+export interface LiveGitHubRepositoryMetadata {
+  description?: string | null;
+  hasIssuesEnabled?: boolean;
+  homepageUrl?: string | null;
+  isBlankIssuesEnabled?: boolean;
+  licenseInfo?: {
+    key?: string | null;
+  } | null;
+  nameWithOwner?: string;
+  repositoryTopics?: Array<{ name?: string | null }>;
+}
+
+export interface LiveGitHubBranchProtection {
+  allow_deletions?: {
+    enabled?: boolean;
+  };
+  allow_force_pushes?: {
+    enabled?: boolean;
+  };
+  required_pull_request_reviews?: {
+    require_code_owner_reviews?: boolean;
+    required_approving_review_count?: number;
+  } | null;
+  required_status_checks?: {
+    checks?: Array<{ context?: string | null }>;
+    contexts?: string[];
+  } | null;
+}
+
+export interface GitHubRepositorySettingsLiveReviewInput {
+  branchProtection?: LiveGitHubBranchProtection;
+  evidenceSource: string;
+  packageCount?: number;
+  privateVulnerabilityReportingEnabled?: boolean;
+  repositoryMetadata: LiveGitHubRepositoryMetadata;
+  releaseCount?: number;
+  reviewDate: string;
+  reviewers: string;
+  reviewId: string;
+  reviewNotes?: string;
+  sourceCommit: string;
+}
+
 const GITHUB_SETTINGS_REVIEW_SCHEMA =
   "split402.github_repository_settings_review.v1";
 
@@ -82,9 +125,21 @@ const REQUIRED_CHECK_LABELS = [
   "Check vectors",
   "Audit",
   "Local public-alpha proof",
-  "PostgreSQL integration tests",
+  "postgres-integration",
   "CodeQL",
   "Secret scan",
+] as const;
+const EXPECTED_DESCRIPTION =
+  "Agent payment routing and verifiable referral accounting for x402 APIs.";
+const EXPECTED_TOPICS = [
+  "agents",
+  "mcp",
+  "payments",
+  "protocol",
+  "solana",
+  "typescript",
+  "usdc",
+  "x402",
 ] as const;
 
 export function createGitHubRepositorySettingsReviewRecord(
@@ -170,7 +225,7 @@ export function createGitHubRepositorySettingsReviewTemplate(): string {
     requiresCodeOwnerReview: "no",
     requiresStatusChecks: "no",
     requiredChecks:
-      "Lint, Public surface check, Typecheck, Test, Build, Check vectors, Audit, Local public-alpha proof, PostgreSQL integration tests, CodeQL, Secret scan",
+      "Lint, Public surface check, Typecheck, Test, Build, Check vectors, Audit, Local public-alpha proof, postgres-integration, CodeQL, Secret scan",
     blocksForcePushes: "no",
     blocksDeletion: "no",
     blankIssuesDisabled: "no",
@@ -179,6 +234,72 @@ export function createGitHubRepositorySettingsReviewTemplate(): string {
     reviewDecision: "no-go",
     reviewNotes:
       "template only; replace with live GitHub UI/API evidence before approval",
+  });
+}
+
+export function createGitHubRepositorySettingsReviewRecordFromLiveGitHub(
+  input: GitHubRepositorySettingsLiveReviewInput,
+): string {
+  const actualRequiredChecks = readRequiredStatusCheckNames(input.branchProtection);
+  const packageCount = input.packageCount;
+  const releaseCount = input.releaseCount;
+  return createGitHubRepositorySettingsReviewRecord({
+    reviewId: input.reviewId,
+    reviewDate: input.reviewDate,
+    reviewers: input.reviewers,
+    reviewMethod: "github-api",
+    evidenceSource: input.evidenceSource,
+    repository: input.repositoryMetadata.nameWithOwner ?? "",
+    sourceCommit: input.sourceCommit,
+    branch: "main",
+    aboutDescriptionMatches: yesNo(
+      input.repositoryMetadata.description === EXPECTED_DESCRIPTION,
+    ),
+    topicsMatch: yesNo(topicsMatch(input.repositoryMetadata.repositoryTopics ?? [])),
+    homepagePolicyMatches: yesNo(
+      (input.repositoryMetadata.homepageUrl ?? "").trim().length === 0,
+    ),
+    branchProtectionEnabled: yesNo(input.branchProtection !== undefined),
+    requiresPullRequest: yesNo(
+      (input.branchProtection?.required_pull_request_reviews
+        ?.required_approving_review_count ?? 0) > 0,
+    ),
+    requiresCodeOwnerReview: yesNo(
+      input.branchProtection?.required_pull_request_reviews
+        ?.require_code_owner_reviews === true,
+    ),
+    requiresStatusChecks: yesNo(actualRequiredChecks.length > 0),
+    requiredChecks:
+      actualRequiredChecks.length > 0
+        ? actualRequiredChecks.join(", ")
+        : "none configured",
+    blocksForcePushes: yesNo(
+      input.branchProtection?.allow_force_pushes?.enabled === false,
+    ),
+    blocksDeletion: yesNo(
+      input.branchProtection?.allow_deletions?.enabled === false,
+    ),
+    blankIssuesDisabled: yesNo(
+      input.repositoryMetadata.isBlankIssuesEnabled === false,
+    ),
+    securityAdvisoriesEnabled: yesNo(
+      input.privateVulnerabilityReportingEnabled === true,
+    ),
+    packagesAndReleasesUnpublished: yesNo(
+      packageCount !== undefined &&
+        releaseCount !== undefined &&
+        packageCount === 0 &&
+        releaseCount === 0,
+    ),
+    reviewDecision: "no-go",
+    reviewNotes:
+      input.reviewNotes ??
+      [
+        `generated from live GitHub API; releases=${releaseCount ?? "unverified"}; packages=${packageCount ?? "unverified"}`,
+        input.privateVulnerabilityReportingEnabled === true
+          ? "private vulnerability reporting enabled via GitHub API"
+          : "security advisories must be confirmed in GitHub UI before approval",
+      ].join("; "),
   });
 }
 
@@ -325,6 +446,44 @@ function assertRequired(value: string, fieldName: string): string {
     throw new Error(`${fieldName} is required`);
   }
   return trimmed;
+}
+
+function readRequiredStatusCheckNames(
+  protection: LiveGitHubBranchProtection | undefined,
+): string[] {
+  const checks = protection?.required_status_checks;
+  if (checks === undefined || checks === null) {
+    return [];
+  }
+  const names = new Set<string>();
+  for (const context of checks.contexts ?? []) {
+    if (context.trim().length > 0) {
+      names.add(context.trim());
+    }
+  }
+  for (const check of checks.checks ?? []) {
+    const context = check.context?.trim();
+    if (context !== undefined && context.length > 0) {
+      names.add(context);
+    }
+  }
+  return [...names].sort((left, right) => left.localeCompare(right));
+}
+
+function topicsMatch(topics: readonly { name?: string | null }[]): boolean {
+  const actual = new Set(
+    topics
+      .map((topic) => topic.name?.trim().toLowerCase())
+      .filter((topic): topic is string => topic !== undefined && topic.length > 0),
+  );
+  return (
+    actual.size === EXPECTED_TOPICS.length &&
+    EXPECTED_TOPICS.every((topic) => actual.has(topic))
+  );
+}
+
+function yesNo(value: boolean): "yes" | "no" {
+  return value ? "yes" : "no";
 }
 
 function hasRequiredField(

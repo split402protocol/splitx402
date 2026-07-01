@@ -110,7 +110,7 @@ describe("Split402 product readiness CLI parsing", () => {
     expect(input.report.phase7.proofChecked).toBe(true);
     expect(input.report.launchDecision).toBe("no-go");
     expect(input.report.nextActions).toContain(
-      "Run corepack pnpm product:evidence:init --refresh-source before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist.",
+      "If stale evidence files are still scaffold-only, run corepack pnpm product:evidence:init --refresh-source; otherwise recollect or regenerate filled evidence records from the current checkout before launch collection.",
     );
   });
 

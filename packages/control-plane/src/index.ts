@@ -9,6 +9,7 @@ import {
 } from "@split402/protocol";
 import express from "express";
 import type { NextFunction, Request, Response, Router } from "express";
+import { rateLimit } from "express-rate-limit";
 import { Pool, type PoolConfig } from "pg";
 
 import {
@@ -1314,6 +1315,8 @@ export interface ControlPlaneAppOptions {
   payoutFinalityMonitor?: PayoutFinalityMonitor;
   auth?: ControlPlaneAuthOptions;
   jsonLimit?: string;
+  rateLimitWindowMs?: number;
+  rateLimitMaxRequests?: number;
 }
 
 export type PayoutReconciliationFinalityStatus =
@@ -1366,6 +1369,8 @@ export interface CreateControlPlaneRuntimeOptions {
   authPolicy?: ControlPlaneRuntimeAuthPolicy;
   close?: () => Promise<void> | void;
   jsonLimit?: string;
+  rateLimitWindowMs?: number;
+  rateLimitMaxRequests?: number;
   merchantFundingBalanceProvider?: MerchantFundingBalanceProvider;
   payoutFinalityMonitor?: PayoutFinalityMonitor;
   walletAuth?: WalletAuthenticatorOptions;
@@ -1436,6 +1441,12 @@ export function createControlPlaneRuntime(
       ? {}
       : { payoutFinalityMonitor: options.payoutFinalityMonitor }),
     ...(options.jsonLimit === undefined ? {} : { jsonLimit: options.jsonLimit }),
+    ...(options.rateLimitWindowMs === undefined
+      ? {}
+      : { rateLimitWindowMs: options.rateLimitWindowMs }),
+    ...(options.rateLimitMaxRequests === undefined
+      ? {}
+      : { rateLimitMaxRequests: options.rateLimitMaxRequests }),
     ...(authenticator === undefined
       ? {}
       : {
@@ -1476,6 +1487,7 @@ export function createControlPlaneRuntimeFromEnv(
     ...(env.SPLIT402_CONTROL_PLANE_JSON_LIMIT === undefined
       ? {}
       : { jsonLimit: env.SPLIT402_CONTROL_PLANE_JSON_LIMIT }),
+    ...readRuntimeRateLimitEnvOptions(env),
     ...(() => {
       const provider = createRuntimeMerchantFundingBalanceProvider(env);
       return provider === undefined ? {} : { merchantFundingBalanceProvider: provider };
@@ -1496,6 +1508,18 @@ export function createControlPlaneApp(
 ): express.Express {
   const app = express();
   app.disable("x-powered-by");
+  app.use(
+    rateLimit({
+      windowMs: options.rateLimitWindowMs ?? 60_000,
+      limit: options.rateLimitMaxRequests ?? 1_000,
+      standardHeaders: "draft-8",
+      legacyHeaders: false,
+      message: {
+        error: "rate_limited",
+        message: "Too many control-plane requests"
+      }
+    })
+  );
 
   app.get("/v1/health", (_req, res) => {
     res.json({
@@ -3709,6 +3733,26 @@ function readRuntimeAuthPolicy(value: string): ControlPlaneRuntimeAuthPolicy {
   throw new Error(
     "SPLIT402_CONTROL_PLANE_AUTH_POLICY must be disabled, optional, or required"
   );
+}
+
+function readRuntimeRateLimitEnvOptions(
+  env: NodeJS.ProcessEnv
+): Pick<
+  CreateControlPlaneRuntimeOptions,
+  "rateLimitWindowMs" | "rateLimitMaxRequests"
+> {
+  const rateLimitWindowMs = readOptionalRuntimePositiveInteger(
+    env.SPLIT402_CONTROL_PLANE_RATE_LIMIT_WINDOW_MS,
+    "SPLIT402_CONTROL_PLANE_RATE_LIMIT_WINDOW_MS"
+  );
+  const rateLimitMaxRequests = readOptionalRuntimePositiveInteger(
+    env.SPLIT402_CONTROL_PLANE_RATE_LIMIT_MAX_REQUESTS,
+    "SPLIT402_CONTROL_PLANE_RATE_LIMIT_MAX_REQUESTS"
+  );
+  return {
+    ...(rateLimitWindowMs === undefined ? {} : { rateLimitWindowMs }),
+    ...(rateLimitMaxRequests === undefined ? {} : { rateLimitMaxRequests })
+  };
 }
 
 function readWalletAuthEnvOptions(

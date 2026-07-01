@@ -178,7 +178,7 @@ function createGithubSettingsReviewText(
     requiresCodeOwnerReview: "no",
     requiresStatusChecks: "no",
     requiredChecks:
-      "Lint, Public surface check, Typecheck, Test, Build, Check vectors, Audit, Local public-alpha proof, PostgreSQL integration tests, CodeQL, Secret scan",
+      "Lint, Public surface check, Typecheck, Test, Build, Check vectors, Audit, Local public-alpha proof, postgres-integration, CodeQL, Secret scan",
     blocksForcePushes: "no",
     blocksDeletion: "no",
     blankIssuesDisabled: "no",
@@ -241,8 +241,8 @@ function createNextCommands(input: {
   const launchPreflightCommand = `corepack pnpm product:launch-preflight --brief --workspace ${input.directory}`;
   return [
     `corepack pnpm product:local-proof --brief --output ${input.directory}/${input.localProofFileName}`,
-    `corepack pnpm product:github-settings-review --template > ${input.directory}/${input.githubSettingsReviewFileName}`,
-    `Review ${input.directory}/${input.githubSettingsReviewFileName}, verify live GitHub settings, then regenerate it with corepack pnpm product:github-settings-review.`,
+    `corepack pnpm product:github-settings-review --from-github --output ${input.directory}/${input.githubSettingsReviewFileName}`,
+    "Use corepack pnpm product:github-settings-review --template only when you need a blank manual GitHub review form; keep the live snapshot no-go until human review approves the settings evidence.",
     launchPreflightCommand,
     `Fill ${phase7EnvFile} with hosted staging values reported by launch preflight.`,
     `Review generated ${phase6EnvFile} before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template ${input.directory} ${phase6EnvFile}`,

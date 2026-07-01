@@ -138,4 +138,80 @@ approval_decision: no-go
       "source_commit does not match current checkout",
     );
   });
+
+  it("checks approved Phase 6 attached artifacts from the evidence bundle directory", () => {
+    const report = createPhase6EvidenceStatusReport(APPROVED_EVIDENCE, {
+      artifactBaseDir: "split402-launch-evidence",
+      artifactExists: () => true,
+      currentSourceCommit: "f932ddb000000000000000000000000000000000",
+      resolveArtifactPath: (artifactPath, baseDir) => `${baseDir}/${artifactPath}`,
+    });
+
+    expect(report.readyForCustody).toBe(true);
+    expect(report.attachmentStatus).toMatchObject({
+      status: "valid",
+      missingArtifacts: [],
+    });
+    expect(report.attachmentStatus.checkedArtifacts).toContain(
+      "split402-launch-evidence/signer-image-audit-001.log",
+    );
+  });
+
+  it("blocks approved Phase 6 custody evidence when attached artifacts are missing", () => {
+    const report = createPhase6EvidenceStatusReport(APPROVED_EVIDENCE, {
+      artifactBaseDir: "split402-launch-evidence",
+      artifactExists: (path) =>
+        path !== "split402-launch-evidence/key-custody-review-001.md",
+      currentSourceCommit: "f932ddb000000000000000000000000000000000",
+      resolveArtifactPath: (artifactPath, baseDir) => `${baseDir}/${artifactPath}`,
+    });
+
+    expect(report.readyForCustody).toBe(false);
+    expect(report.attachmentStatus).toMatchObject({
+      status: "invalid",
+      missingArtifacts: [
+        "split402-launch-evidence/key-custody-review-001.md",
+      ],
+      blockers: [
+        "Phase 6 attached artifact is missing: split402-launch-evidence/key-custody-review-001.md",
+      ],
+    });
+    expect(report.nextActions).toContain(
+      "Phase 6 attached artifact is missing: split402-launch-evidence/key-custody-review-001.md",
+    );
+    expect(formatPhase6EvidenceStatusBrief(report)).toContain(
+      "Attached artifacts: invalid",
+    );
+  });
 });
+
+const APPROVED_EVIDENCE = `review_id: phase6-review-001
+review_date: 2026-06-25
+reviewers: security, operations, protocol
+source_commit: f932ddb
+signer_image_digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+signer_image_build_command: docker build -f apps/payout-signer/Dockerfile -t ghcr.io/split402protocol/splitx402/payout-signer@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa .
+signer_image_dependency_audit_output: attached: signer-image-audit-001.log
+control_plane_image_digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+staging_environment: split402-staging
+funding_wallet: 8jYFQwU6P4L3uYJwqN4uJtVq4n5o7x8p9a1b2c3d4e5f
+network: solana:devnet
+network_policy_record: attached: network-policy-001.yaml
+signer_policy_record: attached: signer-policy-review-001.md
+signer_policy_network: solana:devnet
+signer_policy_funding_wallet: 8jYFQwU6P4L3uYJwqN4uJtVq4n5o7x8p9a1b2c3d4e5f
+signer_policy_source_token_account: source-token-account
+signer_policy_mint: usdc_mint
+signer_policy_allowed_token_program_ids: TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA
+signer_policy_max_transaction_amount_atomic: 100000000
+smoke_check_output: attached: smoke-check-001.log
+unknown_outcome_reconciliation_record: attached: reconciliation-drill-001.md
+rotation_drill_record: attached: rotation-drill-001.md
+emergency_revocation_drill_record: attached: emergency-revocation-drill-001.md
+key_custody_record: attached: key-custody-review-001.md
+incident_drill_record: attached: incident-drill-001.md
+rollback_drill_record: attached: rollback-drill-001.md
+rpc_failover_record: attached: rpc-failover-001.md
+approval_decision: approved
+approval_notes: approved for staged production custody only
+`;

@@ -1,7 +1,8 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 
 export interface Split402PublicSurfaceCheckInput {
   exists?: (path: string) => boolean;
+  listDirectory?: (path: string) => string[];
   readText?: (path: string) => string;
 }
 
@@ -28,6 +29,7 @@ const REQUIRED_FILES = [
   "README.md",
   "SECURITY.md",
   "SUPPORT.md",
+  "pnpm-workspace.yaml",
   ".github/CODEOWNERS",
   "docs/GITHUB_PUBLIC_PROFILE.md",
   "docs/GITHUB_REPOSITORY_SETTINGS.md",
@@ -39,21 +41,6 @@ const REQUIRED_FILES = [
 ] as const;
 
 const MIT_FREE_PUBLIC_FILES = ["LICENSE", "README.md", "package.json"] as const;
-const WORKSPACE_PACKAGE_MANIFESTS = [
-  "apps/dashboard/package.json",
-  "apps/demo-agent/package.json",
-  "apps/demo-merchant/package.json",
-  "apps/mcp-demo/package.json",
-  "apps/payout-signer/package.json",
-  "packages/agent-sdk/package.json",
-  "packages/control-plane/package.json",
-  "packages/express/package.json",
-  "packages/merchant-sdk/package.json",
-  "packages/protocol/package.json",
-  "packages/router/package.json",
-  "packages/test-vectors/package.json",
-  "packages/x402-extension/package.json",
-] as const;
 const GITHUB_PROFILE_FILE = "docs/GITHUB_PUBLIC_PROFILE.md";
 const EXPECTED_GITHUB_DESCRIPTION =
   "Agent payment routing and verifiable referral accounting for x402 APIs.";
@@ -72,6 +59,8 @@ export function createSplit402PublicSurfaceCheckReport(
   input: Split402PublicSurfaceCheckInput = {},
 ): Split402PublicSurfaceCheckReport {
   const exists = input.exists ?? existsSync;
+  const listDirectory =
+    input.listDirectory ?? ((path: string) => readdirSync(path));
   const readText =
     input.readText ?? ((path: string) => readFileSync(path, "utf8"));
 
@@ -87,7 +76,7 @@ export function createSplit402PublicSurfaceCheckReport(
           : missingRequiredFiles.map((path) => `Missing ${path}.`),
     },
     createPackageLicenseCheck(exists, readText),
-    createWorkspacePackagePrivacyCheck(exists, readText),
+    createWorkspacePackagePrivacyCheck(exists, listDirectory, readText),
     createApacheLicenseFileCheck(exists, readText),
     createReadmeBoundaryCheck(exists, readText),
     createGitHubProfileContractCheck(exists, readText),
@@ -189,9 +178,15 @@ function createPackageLicenseCheck(
 
 function createWorkspacePackagePrivacyCheck(
   exists: (path: string) => boolean,
+  listDirectory: (path: string) => string[],
   readText: (path: string) => string,
 ): Split402PublicSurfaceCheck {
-  const blockers = WORKSPACE_PACKAGE_MANIFESTS.flatMap((path) => {
+  const workspacePackageManifests = discoverWorkspacePackageManifests(
+    exists,
+    listDirectory,
+    readText,
+  );
+  const blockers = workspacePackageManifests.flatMap((path) => {
     const packageJson = readIfExists(path, exists, readText);
     if (packageJson === undefined) {
       return [`Missing ${path}.`];
@@ -219,10 +214,43 @@ function createWorkspacePackagePrivacyCheck(
     details:
       blockers.length === 0
         ? [
-            "All workspace app and package manifests keep private: true until publishable artifacts are explicitly approved.",
+            "All pnpm workspace app and package manifests keep private: true until publishable artifacts are explicitly approved.",
           ]
         : blockers,
   };
+}
+
+function discoverWorkspacePackageManifests(
+  exists: (path: string) => boolean,
+  listDirectory: (path: string) => string[],
+  readText: (path: string) => string,
+): string[] {
+  const workspace = readIfExists("pnpm-workspace.yaml", exists, readText);
+  if (workspace === undefined) {
+    return [];
+  }
+
+  return parseWorkspacePackagePatterns(workspace).flatMap((pattern) => {
+    const parentDirectory = pattern.slice(0, -"/*".length);
+    if (!exists(parentDirectory)) {
+      return [];
+    }
+    return listDirectory(parentDirectory)
+      .map((entry) => `${parentDirectory}/${entry}/package.json`)
+      .sort((left, right) => left.localeCompare(right));
+  });
+}
+
+function parseWorkspacePackagePatterns(workspace: string): string[] {
+  const patterns = new Set<string>();
+  for (const line of workspace.split(/\r?\n/u)) {
+    const match = /^\s*-\s*["']?([^"'\s]+)["']?\s*$/u.exec(line);
+    const pattern = match?.[1];
+    if (pattern !== undefined && /^[a-z0-9_-]+\/\*$/iu.test(pattern)) {
+      patterns.add(pattern);
+    }
+  }
+  return [...patterns].sort((left, right) => left.localeCompare(right));
 }
 
 function createApacheLicenseFileCheck(
@@ -305,13 +333,14 @@ function createGitHubRepositorySettingsCheck(
     "block force pushes",
     "block branch deletion",
     "Local public-alpha proof",
-    "PostgreSQL integration tests",
+    "postgres-integration",
     "CodeQL",
     "Secret scan",
     "Keep blank issues disabled",
     "GitHub Security Advisories",
     'Workspace packages stay `"private": true`',
-    "local checks prove the tracked repository surface, not live branch protection settings",
+    "The local checks prove the tracked repository surface.",
+    "product:github-settings-review --from-github",
     "product:github-settings-review",
   ];
   const missingPhrases = requiredPhrases.filter(

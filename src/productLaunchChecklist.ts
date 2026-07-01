@@ -142,8 +142,8 @@ function createPublicPrivateLicenseSection(
     status: reviewStatus.status,
     externalEvidenceRequired: false,
     commands: [
-      "corepack pnpm product:github-settings-review --template",
-      "corepack pnpm product:github-settings-review",
+      "corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt",
+      "corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt",
       "corepack pnpm product:public-surface-check --brief",
       "corepack pnpm repo:guard",
     ],
@@ -151,7 +151,7 @@ function createPublicPrivateLicenseSection(
       "Keep the public repository as the Apache-2.0 protocol foundation.",
       "Keep hosted operations, provider strategy, custody evidence, private URLs, live transaction bytes, and partner-identifying details private unless intentionally sanitized.",
       "Do not reintroduce MIT in README, package metadata, GitHub About text, release notes, or package manifests.",
-      "The GitHub settings review records the human review; it does not prove live branch protection by itself.",
+      "The GitHub settings review can be generated from the live GitHub API, but approval still requires human review of security advisories, issue intake, packages, releases, and screenshots/evidence.",
       ...reviewStatus.notes,
     ],
   };

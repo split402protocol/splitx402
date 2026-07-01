@@ -266,8 +266,8 @@ function createProductNextActions(
   if (!githubSettingsReview.ready) {
     leadActions.push(
       githubSettingsReview.checked
-        ? "Fix GitHub public/private/license review blockers, then regenerate split402-launch-evidence/github-settings-review.txt with corepack pnpm product:github-settings-review."
-        : "Run corepack pnpm product:github-settings-review --template > split402-launch-evidence/github-settings-review.txt, verify live GitHub settings, then regenerate it with corepack pnpm product:github-settings-review.",
+        ? "Fix GitHub public/private/license review blockers, then regenerate split402-launch-evidence/github-settings-review.txt with corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt."
+        : "Run corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt to generate the live no-go GitHub API snapshot; use --template only for a blank manual form.",
     );
     if (githubSettingsReview.checked) {
       leadActions.push(...githubSettingsReview.blockers);
@@ -279,7 +279,7 @@ function createProductNextActions(
     hasStaleSourceCommit(githubSettingsReview)
   ) {
     leadActions.push(
-      "Run corepack pnpm product:evidence:init --refresh-source before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist.",
+      "If stale evidence files are still scaffold-only, run corepack pnpm product:evidence:init --refresh-source; otherwise recollect or regenerate filled evidence records from the current checkout before launch collection.",
     );
   }
   if (!phase7.proofChecked && !phase6.evidenceBundleChecked) {
@@ -432,7 +432,7 @@ function createGitHubSettingsReviewStatus(input: {
       ready: false,
       status: "not_checked",
       blockers: [
-        "Run product:github-settings-review and save github-settings-review.txt.",
+        "Run product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt.",
       ],
     };
   }
