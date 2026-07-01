@@ -1,5 +1,5 @@
 import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, isAbsolute, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { calculateCommission } from "@split402/protocol";
@@ -64,6 +64,8 @@ export interface ExternalX402OfferTemplateView {
     protocolFeeBpsOfCommission: number;
     commissionBase: "required_amount";
     settlementMode: "accrual";
+    attributionRequired: boolean;
+    allowSelfReferral: boolean;
   };
   unsignedOfferTemplate: {
     protocolVersion: "0.1";
@@ -145,6 +147,18 @@ export interface DiscoverExternalX402Input {
   generatedAt?: string;
 }
 
+export interface ExternalX402ProviderArtifactManifest {
+  schema: "split402.external_x402_provider_artifacts.v1";
+  generatedAt: string;
+  merchantOrigin: string;
+  candidates: Array<{
+    providerId: string;
+    artifactDirectory: string;
+    readiness: string;
+    files: string[];
+  }>;
+}
+
 export async function discoverExternalX402Onboarding(
   input: DiscoverExternalX402Input
 ): Promise<ExternalX402OnboardingReport> {
@@ -192,26 +206,85 @@ export function renderExternalX402OnboardingReportJson(
 }
 
 export async function writeExternalX402OnboardingOutput(
-  input: DiscoverExternalX402Input & { outputPath?: string }
+  input: DiscoverExternalX402Input & {
+    outputPath?: string;
+    artifactsDir?: string;
+  }
 ): Promise<void> {
-  const json = renderExternalX402OnboardingReportJson(
-    await discoverExternalX402Onboarding(input)
-  );
+  const report = await discoverExternalX402Onboarding(input);
+  const json = renderExternalX402OnboardingReportJson(report);
   if (input.outputPath === undefined || input.outputPath.trim().length === 0) {
     process.stdout.write(json);
-    return;
+  } else {
+    const resolvedOutputPath = resolveOutputPath(input.outputPath);
+    mkdirSync(dirname(resolvedOutputPath), { recursive: true });
+    writeFileSync(resolvedOutputPath, json, "utf8");
   }
 
-  const resolvedOutputPath = resolveOutputPath(input.outputPath);
-  mkdirSync(dirname(resolvedOutputPath), { recursive: true });
-  writeFileSync(resolvedOutputPath, json, "utf8");
+  if (input.artifactsDir !== undefined && input.artifactsDir.trim().length > 0) {
+    writeExternalX402ProviderArtifacts(report, input.artifactsDir);
+  }
+}
+
+export function writeExternalX402ProviderArtifacts(
+  report: ExternalX402OnboardingReport,
+  artifactsDir: string
+): ExternalX402ProviderArtifactManifest {
+  const resolvedArtifactsDir = resolveOutputPath(artifactsDir);
+  const manifest: ExternalX402ProviderArtifactManifest = {
+    schema: "split402.external_x402_provider_artifacts.v1",
+    generatedAt: report.generatedAt,
+    merchantOrigin: report.merchantOrigin,
+    candidates: []
+  };
+  mkdirSync(resolvedArtifactsDir, { recursive: true });
+  for (const candidate of report.candidates) {
+    const candidateDirectoryName = sanitizePathSegment(candidate.providerId);
+    const candidateDirectory = join(resolvedArtifactsDir, candidateDirectoryName);
+    mkdirSync(candidateDirectory, { recursive: true });
+    const files: string[] = [];
+    if (candidate.split402OfferTemplate !== undefined) {
+      files.push(
+        writeJsonArtifact(
+          candidateDirectory,
+          "campaign-terms.template.json",
+          candidate.split402OfferTemplate.campaignTermsTemplate
+        )
+      );
+      files.push(
+        writeJsonArtifact(
+          candidateDirectory,
+          "unsigned-offer.template.json",
+          candidate.split402OfferTemplate.unsignedOfferTemplate
+        )
+      );
+    }
+    if (candidate.split402ReceiptTemplate !== undefined) {
+      files.push(
+        writeJsonArtifact(
+          candidateDirectory,
+          "receipt.template.json",
+          candidate.split402ReceiptTemplate.commissionBearingReceiptTemplate
+        )
+      );
+    }
+    files.push(writeProviderReadme(candidateDirectory, candidate));
+    manifest.candidates.push({
+      providerId: candidate.providerId,
+      artifactDirectory: candidateDirectoryName,
+      readiness: candidate.readiness,
+      files
+    });
+  }
+  writeJsonArtifact(resolvedArtifactsDir, "manifest.json", manifest);
+  return manifest;
 }
 
 export function parseDiscoverExternalX402Args(
   argv: readonly string[],
   env: NodeJS.ProcessEnv = process.env
 ):
-  | (DiscoverExternalX402Input & { outputPath?: string })
+  | (DiscoverExternalX402Input & { outputPath?: string; artifactsDir?: string })
   | { help: true }
   | { error: string } {
   if (argv.includes("--help") || argv.includes("-h")) {
@@ -227,6 +300,9 @@ export function parseDiscoverExternalX402Args(
     env.SPLIT402_EXTERNAL_X402_MERCHANT_PUBLIC_KEY
   );
   let outputPath = normalizeOptionalString(env.SPLIT402_EXTERNAL_X402_OUTPUT);
+  let artifactsDir = normalizeOptionalString(
+    env.SPLIT402_EXTERNAL_X402_ARTIFACTS_DIR
+  );
   let includeFreeRoutes = env.SPLIT402_EXTERNAL_X402_INCLUDE_FREE === "1";
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -260,6 +336,11 @@ export function parseDiscoverExternalX402Args(
       index += 1;
       continue;
     }
+    if (arg === "--artifacts-dir") {
+      artifactsDir = readFollowingArg(argv, index, arg);
+      index += 1;
+      continue;
+    }
     if (arg === "--include-free") {
       includeFreeRoutes = true;
       continue;
@@ -277,6 +358,7 @@ export function parseDiscoverExternalX402Args(
     ...(providerIdPrefix === undefined ? {} : { providerIdPrefix }),
     ...(merchantPublicKey === undefined ? {} : { merchantPublicKey }),
     ...(outputPath === undefined ? {} : { outputPath }),
+    ...(artifactsDir === undefined ? {} : { artifactsDir }),
     includeFreeRoutes
   };
 }
@@ -291,6 +373,7 @@ Options:
   --merchant-public-key <key>     Verify signed Split402 offers with this merchant key.
   --include-free                  Include free routes from the external manifest.
   --output <path>                 Write JSON report to a file.
+  --artifacts-dir <dir>           Export per-candidate provider template files.
 
 Environment:
   SPLIT402_EXTERNAL_X402_ORIGIN
@@ -300,6 +383,7 @@ Environment:
   SPLIT402_EXTERNAL_X402_MERCHANT_PUBLIC_KEY
   SPLIT402_EXTERNAL_X402_INCLUDE_FREE=1
   SPLIT402_EXTERNAL_X402_OUTPUT
+  SPLIT402_EXTERNAL_X402_ARTIFACTS_DIR
 `;
 
 export const SPLIT402_OFFER_EXTENSION_REQUIRED_FIELDS = [
@@ -536,7 +620,9 @@ function createSplit402OfferTemplateView(
     commissionBps,
     protocolFeeBpsOfCommission,
     commissionBase: "required_amount",
-    settlementMode: "accrual"
+    settlementMode: "accrual",
+    attributionRequired: true,
+    allowSelfReferral: false
   } satisfies ExternalX402OfferTemplateView["campaignTermsTemplate"];
   return {
     extensionPath: "extensions.split402.info",
@@ -573,6 +659,81 @@ function createSplit402OfferTemplateView(
       "Set signature on extensions.split402.info and publish only the public verification key for the kid."
     ]
   };
+}
+
+function writeJsonArtifact(
+  directory: string,
+  filename: string,
+  value: unknown
+): string {
+  writeFileSync(join(directory, filename), `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  return filename;
+}
+
+function writeProviderReadme(
+  directory: string,
+  candidate: ExternalX402OnboardingCandidateView
+): string {
+  const filename = "README.md";
+  const hasOfferTemplate = candidate.split402OfferTemplate !== undefined;
+  const lines = [
+    `# Split402 Provider Artifact Templates`,
+    "",
+    `Provider: \`${candidate.providerId}\``,
+    "",
+    `Route: \`${candidate.method} ${candidate.path}\``,
+    "",
+    `Readiness: \`${candidate.readiness}\``,
+    "",
+    "## Files",
+    "",
+    ...(hasOfferTemplate
+      ? [
+          "- `campaign-terms.template.json`: finalize campaign/merchant ids, economics, and policy fields, then compute its Split402 canonical hash.",
+          "- `unsigned-offer.template.json`: set `campaignTermsHash`, nonce, timestamps, and key id before signing into `extensions.split402.info`."
+        ]
+      : [
+          "- This candidate already has a signed Split402 offer in discovery output, so no offer template is exported."
+        ]),
+    ...(candidate.split402ReceiptTemplate === undefined
+      ? []
+      : [
+          "- `receipt.template.json`: shape for the merchant-signed receipt returned after successful x402 settlement."
+        ]),
+    "",
+    "## Validation",
+    "",
+    "After signing the offer, validate public artifacts before paid staging:",
+    "",
+    "```bash",
+    "corepack pnpm demo:validate-external-x402-artifacts -- \\",
+    `  --merchant-origin ${candidate.merchantOrigin} \\`,
+    `  --operation-id ${candidate.operationId} \\`,
+    ...(candidate.network === undefined ? [] : [`  --network ${candidate.network} \\`]),
+    ...(candidate.asset === undefined ? [] : [`  --asset ${candidate.asset} \\`]),
+    ...(candidate.payToWallet === undefined
+      ? []
+      : [`  --pay-to-wallet ${candidate.payToWallet} \\`]),
+    ...(candidate.amountAtomic === undefined
+      ? []
+      : [`  --required-amount-atomic ${candidate.amountAtomic} \\`]),
+    "  --merchant-public-key <merchant-offer-receipt-public-key> \\",
+    "  --offer-file offer.json \\",
+    ...(hasOfferTemplate
+      ? ["  --campaign-terms-file campaign-terms.json"]
+      : ["  --receipt-file receipt.json"]),
+    "```",
+    "",
+    "Use public metadata only. Do not place private keys, bearer tokens, raw payment payloads, facilitator secrets, or private settlement evidence in these files.",
+    ""
+  ];
+  writeFileSync(join(directory, filename), `${lines.join("\n")}`, "utf8");
+  return filename;
+}
+
+function sanitizePathSegment(value: string): string {
+  const sanitized = value.replace(/[^A-Za-z0-9._-]+/gu, "_");
+  return sanitized.length === 0 ? "candidate" : sanitized;
 }
 
 function readFollowingArg(

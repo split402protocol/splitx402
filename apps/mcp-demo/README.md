@@ -178,13 +178,20 @@ corepack pnpm demo:discover-external-x402 \
   --capability crypto.price \
   --match-path /price \
   --provider-id-prefix example-provider \
-  --merchant-public-key <merchant-offer-receipt-public-key>
+  --merchant-public-key <merchant-offer-receipt-public-key> \
+  --artifacts-dir split402-provider-artifacts
 ```
 
 The command emits a JSON report with candidate routes, networks, assets,
 amounts, pay-to wallets, readiness, blockers, required Split402 fields, and
 next actions. It performs metadata-only discovery and unpaid 402 probes; it does
 not execute paid calls.
+
+`--artifacts-dir` also writes per-candidate provider files: `manifest.json`, a
+candidate `README.md`, `campaign-terms.template.json`,
+`unsigned-offer.template.json`, and `receipt.template.json` when the route has
+complete x402 payment metadata. These are public scaffolds for provider
+implementation and validation; they are not signed production artifacts.
 
 For CLI automation, the same verification key can be supplied with
 `SPLIT402_EXTERNAL_X402_MERCHANT_PUBLIC_KEY`. Use only the public verification
