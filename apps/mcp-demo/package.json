@@ -9,6 +9,7 @@
     "build": "tsc -p tsconfig.build.json",
     "bundle": "tsx src/bundle.ts",
     "discover-external-x402": "tsx src/discover-external-x402.ts",
+    "prepare-external-x402-offer": "tsx src/prepare-external-x402-offer.ts",
     "validate-external-x402-artifacts": "tsx src/validate-external-x402-artifacts.ts",
     "gateway": "tsx src/gateway.ts",
     "gateway:smoke": "tsx src/gateway-smoke.ts",

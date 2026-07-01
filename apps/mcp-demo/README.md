@@ -193,6 +193,22 @@ candidate `README.md`, `campaign-terms.template.json`,
 complete x402 payment metadata. These are public scaffolds for provider
 implementation and validation; they are not signed production artifacts.
 
+After finalizing `campaign-terms.json` and `unsigned-offer.json`, compute the
+canonical campaign terms hash and exact offer signing bytes without handing
+Split402 tooling any private key:
+
+```bash
+corepack pnpm demo:prepare-external-x402-offer -- \
+  --campaign-terms-file campaign-terms.json \
+  --unsigned-offer-file unsigned-offer.json \
+  --output-dir prepared-offer
+```
+
+The command writes `offer-to-sign.json`, `campaign-terms.hash.txt`, and
+`offer-signing-bytes.hex`. Sign those bytes with the merchant `offer_receipt`
+key outside this helper, set the base64url signature on the offer, then run the
+artifact validator below.
+
 For CLI automation, the same verification key can be supplied with
 `SPLIT402_EXTERNAL_X402_MERCHANT_PUBLIC_KEY`. Use only the public verification
 key here; private signing keys and payment payloads must stay out of public logs

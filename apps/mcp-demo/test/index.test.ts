@@ -43,6 +43,11 @@ import {
   runValidateExternalX402ArtifactsCli,
   validateExternalX402Artifacts
 } from "../src/validate-external-x402-artifacts.js";
+import {
+  parsePrepareExternalX402OfferArgs,
+  prepareExternalX402Offer,
+  runPrepareExternalX402OfferCli
+} from "../src/prepare-external-x402-offer.js";
 import { runMcpGatewaySmoke } from "../src/gateway-smoke.js";
 import { createMcpDemoBundle } from "../src/index.js";
 import { writeMcpDemoBundleOutput } from "../src/bundle.js";
@@ -375,6 +380,111 @@ describe("external x402 onboarding CLI", () => {
 });
 
 describe("external x402 artifact validation", () => {
+  it("prepares external offers for no-secret provider signing", () => {
+    const signed = createExternalSplit402Offer();
+    const unsignedOffer = createUnsignedExternalOffer(signed.offer);
+
+    expect(
+      prepareExternalX402Offer({
+        campaignTerms: signed.campaignTerms,
+        unsignedOffer: {
+          ...unsignedOffer,
+          campaignTermsHash:
+            "sha256:<hash of finalized campaignTermsTemplate canonical JSON>"
+        }
+      })
+    ).toMatchObject({
+      ok: true,
+      errors: [],
+      campaignTermsHash: signed.offer.campaignTermsHash,
+      offerToSign: {
+        campaignTermsHash: signed.offer.campaignTermsHash,
+        operationId: "get.price.coin"
+      },
+      offerSigningBytesHex: expect.any(String)
+    });
+  });
+
+  it("rejects prepared offers that disagree with campaign terms", () => {
+    const signed = createExternalSplit402Offer();
+    const unsignedOffer = createUnsignedExternalOffer(signed.offer);
+
+    expect(
+      prepareExternalX402Offer({
+        campaignTerms: {
+          ...signed.campaignTerms,
+          requiredAmountAtomic: "10000"
+        },
+        unsignedOffer
+      })
+    ).toMatchObject({
+      ok: false,
+      errors: expect.arrayContaining([
+        "offer.requiredAmountAtomic mismatch: expected 10000, got 20000"
+      ])
+    });
+  });
+
+  it("runs external offer preparation from JSON files", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "split402-x402-prepare-"));
+    const campaignTermsPath = join(directory, "campaign-terms.json");
+    const unsignedOfferPath = join(directory, "unsigned-offer.json");
+    const outputDir = join(directory, "prepared");
+    const signed = createExternalSplit402Offer();
+    const unsignedOffer = createUnsignedExternalOffer(signed.offer);
+    const logs: string[] = [];
+    const originalLog = console.log;
+    try {
+      writeFileSync(
+        campaignTermsPath,
+        JSON.stringify(signed.campaignTerms),
+        "utf8"
+      );
+      writeFileSync(
+        unsignedOfferPath,
+        JSON.stringify({
+          ...unsignedOffer,
+          campaignTermsHash:
+            "sha256:<hash of finalized campaignTermsTemplate canonical JSON>"
+        }),
+        "utf8"
+      );
+      console.log = (value?: unknown) => {
+        logs.push(String(value));
+      };
+
+      await expect(
+        runPrepareExternalX402OfferCli([
+          "--campaign-terms-file",
+          campaignTermsPath,
+          "--unsigned-offer-file",
+          unsignedOfferPath,
+          "--output-dir",
+          outputDir
+        ])
+      ).resolves.toBe(0);
+    } finally {
+      console.log = originalLog;
+    }
+
+    expect(JSON.parse(logs.join("\n"))).toMatchObject({
+      ok: true,
+      campaignTermsHash: signed.offer.campaignTermsHash
+    });
+    expect(
+      JSON.parse(readFileSync(join(outputDir, "offer-to-sign.json"), "utf8"))
+    ).toMatchObject({
+      campaignTermsHash: signed.offer.campaignTermsHash
+    });
+    expect(readFileSync(join(outputDir, "offer-signing-bytes.hex"), "utf8")).toMatch(
+      /^[0-9a-f]+\n$/u
+    );
+    expect(parsePrepareExternalX402OfferArgs(["--help"])).toEqual({
+      help: true
+    });
+    rmSync(directory, { recursive: true, force: true });
+  });
+
   it("validates signed offers and receipts against route metadata", () => {
     const signed = createExternalSplit402Offer();
     const receipt = createExternalSplit402Receipt(signed.offer);
@@ -2017,6 +2127,14 @@ function createExternalSplit402Offer(): {
       signature
     }
   };
+}
+
+function createUnsignedExternalOffer(
+  offer: Split402OfferV1
+): Omit<Split402OfferV1, "signature"> {
+  const copy: Partial<Split402OfferV1> = { ...offer };
+  delete copy.signature;
+  return copy as Omit<Split402OfferV1, "signature">;
 }
 
 function createExternalSplit402Receipt(
