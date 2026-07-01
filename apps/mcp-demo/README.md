@@ -194,10 +194,11 @@ next actions. It performs metadata-only discovery and unpaid 402 probes; it does
 not execute paid calls.
 
 `--artifacts-dir` also writes per-candidate provider files: `manifest.json`, a
-candidate `README.md`, `route-metadata.json`, `campaign-terms.template.json`,
-`unsigned-offer.template.json`, and `receipt.template.json` when the route has
-complete x402 payment metadata. These are public scaffolds for provider
-implementation and validation; they are not signed production artifacts.
+top-level handoff `README.md`, a candidate `README.md`, `route-metadata.json`,
+`campaign-terms.template.json`, `unsigned-offer.template.json`, and
+`receipt.template.json` when the route has complete x402 payment metadata. These
+are public scaffolds for provider implementation and validation; they are not
+signed production artifacts.
 
 After finalizing `campaign-terms.json` and `unsigned-offer.json`, compute the
 canonical campaign terms hash and exact offer signing bytes without handing
