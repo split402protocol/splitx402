@@ -366,12 +366,33 @@ describe("external x402 onboarding CLI", () => {
       );
       expect(manifest.candidates[0]?.files).toEqual(
         expect.arrayContaining([
+          "route-metadata.json",
           "campaign-terms.template.json",
           "unsigned-offer.template.json",
           "receipt.template.json",
           "README.md"
         ])
       );
+      const routeMetadata = JSON.parse(
+        readFileSync(join(candidateDir, "route-metadata.json"), "utf8")
+      ) as {
+        schema: string;
+        merchantOrigin: string;
+        operationId: string;
+        network: string;
+        asset: string;
+        payToWallet: string;
+        requiredAmountAtomic: string;
+      };
+      expect(routeMetadata).toMatchObject({
+        schema: "split402.external_x402_route_metadata.v1",
+        merchantOrigin: "https://x402.example",
+        operationId: "get.price.coin",
+        network: EXTERNAL_X402_NETWORK,
+        asset: EXTERNAL_X402_ASSET,
+        payToWallet: EXTERNAL_X402_PAY_TO_WALLET,
+        requiredAmountAtomic: EXTERNAL_X402_AMOUNT_ATOMIC
+      });
       const campaignTerms = JSON.parse(
         readFileSync(join(candidateDir, "campaign-terms.template.json"), "utf8")
       ) as {
@@ -780,6 +801,7 @@ describe("external x402 artifact validation", () => {
     const offerPath = join(directory, "offer.json");
     const receiptPath = join(directory, "receipt.json");
     const campaignTermsPath = join(directory, "campaign-terms.json");
+    const routeMetadataPath = join(directory, "route-metadata.json");
     const signed = createExternalSplit402Offer();
     const receipt = createExternalSplit402Receipt(signed.offer);
     const logs: string[] = [];
@@ -792,24 +814,26 @@ describe("external x402 artifact validation", () => {
         JSON.stringify(signed.campaignTerms),
         "utf8"
       );
+      writeFileSync(
+        routeMetadataPath,
+        JSON.stringify({
+          merchantOrigin: "https://x402.example",
+          operationId: "get.price.coin",
+          network: EXTERNAL_X402_NETWORK,
+          asset: EXTERNAL_X402_ASSET,
+          payToWallet: EXTERNAL_X402_PAY_TO_WALLET,
+          requiredAmountAtomic: EXTERNAL_X402_AMOUNT_ATOMIC
+        }),
+        "utf8"
+      );
       console.log = (value?: unknown) => {
         logs.push(String(value));
       };
 
       await expect(
         runValidateExternalX402ArtifactsCli([
-          "--merchant-origin",
-          "https://x402.example",
-          "--operation-id",
-          "get.price.coin",
-          "--network",
-          EXTERNAL_X402_NETWORK,
-          "--asset",
-          EXTERNAL_X402_ASSET,
-          "--pay-to-wallet",
-          EXTERNAL_X402_PAY_TO_WALLET,
-          "--required-amount-atomic",
-          EXTERNAL_X402_AMOUNT_ATOMIC,
+          "--route-metadata-file",
+          routeMetadataPath,
           "--merchant-public-key",
           signed.merchantPublicKey,
           "--offer-file",
@@ -830,6 +854,45 @@ describe("external x402 artifact validation", () => {
         campaignTermsHash: true
       }
     });
+  });
+
+  it("rejects artifact validation route metadata conflicts", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "split402-x402-route-"));
+    const offerPath = join(directory, "offer.json");
+    const routeMetadataPath = join(directory, "route-metadata.json");
+    const signed = createExternalSplit402Offer();
+    try {
+      writeFileSync(offerPath, JSON.stringify(signed.offer), "utf8");
+      writeFileSync(
+        routeMetadataPath,
+        JSON.stringify({
+          merchantOrigin: "https://x402.example",
+          operationId: "get.price.coin",
+          network: EXTERNAL_X402_NETWORK,
+          asset: EXTERNAL_X402_ASSET,
+          payToWallet: EXTERNAL_X402_PAY_TO_WALLET,
+          requiredAmountAtomic: EXTERNAL_X402_AMOUNT_ATOMIC
+        }),
+        "utf8"
+      );
+
+      await expect(
+        runValidateExternalX402ArtifactsCli([
+          "--route-metadata-file",
+          routeMetadataPath,
+          "--required-amount-atomic",
+          "10000",
+          "--merchant-public-key",
+          signed.merchantPublicKey,
+          "--offer-file",
+          offerPath
+        ])
+      ).rejects.toThrow(
+        "--required-amount-atomic conflicts with --route-metadata-file"
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it("parses artifact validation help flags", () => {

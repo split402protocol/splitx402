@@ -29,6 +29,7 @@ split402-provider-artifacts/
   manifest.json
   partner_get.price/
     README.md
+    route-metadata.json
     campaign-terms.template.json
     unsigned-offer.template.json
     receipt.template.json
@@ -156,12 +157,7 @@ paid staging:
 
 ```bash
 corepack pnpm demo:validate-external-x402-artifacts -- \
-  --merchant-origin https://x402.example \
-  --operation-id get.price \
-  --network eip155:8453 \
-  --asset 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 \
-  --pay-to-wallet 0x68614873C5d624c07DCAA3aFF5243DD5027c3910 \
-  --required-amount-atomic 10000 \
+  --route-metadata-file route-metadata.json \
   --merchant-public-key <merchant-offer-receipt-public-key> \
   --offer-file offer.json \
   --campaign-terms-file campaign-terms.json \
@@ -176,6 +172,11 @@ checks public JSON artifacts only: schema, merchant signature, x402 route
 metadata binding, campaign terms hash binding, offer/receipt consistency, and
 receipt arithmetic. It never needs private keys, bearer tokens, raw payment
 payloads, facilitator secrets, or private settlement evidence.
+
+The route metadata can still be supplied manually with `--merchant-origin`,
+`--operation-id`, `--network`, `--asset`, `--pay-to-wallet`, and
+`--required-amount-atomic`. If both manual flags and `route-metadata.json` are
+provided, mismatches are rejected.
 
 The same check is exposed to MCP clients as
 `split402.validateExternalX402Artifacts`. Pass the same route metadata,
