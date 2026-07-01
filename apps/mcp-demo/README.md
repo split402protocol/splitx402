@@ -55,6 +55,8 @@ JSON-RPC. It exposes:
   public campaign terms and an unsigned offer;
 - `split402.prepareExternalX402Receipt` for no-secret receipt signing inputs
   from a signed offer and an unsigned receipt;
+- `split402.attachExternalX402Signature` for attaching and optionally verifying
+  externally produced signatures on public offer/receipt JSON;
 - `split402.validateExternalX402Artifacts` for validating a provider's public
   signed offer and optional receipt against external x402 route metadata;
 - `split402.getReceipt` for receipts captured during the current gateway
@@ -253,7 +255,9 @@ corepack pnpm demo:attach-external-x402-signature -- \
 
 The same no-secret preparation helpers are available through MCP as
 `split402.prepareExternalX402Offer` and `split402.prepareExternalX402Receipt`.
-Pass the same public JSON objects directly as tool arguments.
+The signature attachment helper is available as
+`split402.attachExternalX402Signature`. Pass the same public JSON objects
+directly as tool arguments.
 
 For CLI automation, the same verification key can be supplied with
 `SPLIT402_EXTERNAL_X402_MERCHANT_PUBLIC_KEY`. Use only the public verification
