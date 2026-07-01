@@ -62,6 +62,7 @@ export interface GitHubRepositorySettingsLiveReviewInput {
   branchProtection?: LiveGitHubBranchProtection;
   evidenceSource: string;
   packageCount?: number;
+  privateVulnerabilityReportingEnabled?: boolean;
   repositoryMetadata: LiveGitHubRepositoryMetadata;
   releaseCount?: number;
   reviewDate: string;
@@ -281,7 +282,9 @@ export function createGitHubRepositorySettingsReviewRecordFromLiveGitHub(
     blankIssuesDisabled: yesNo(
       input.repositoryMetadata.isBlankIssuesEnabled === false,
     ),
-    securityAdvisoriesEnabled: "no",
+    securityAdvisoriesEnabled: yesNo(
+      input.privateVulnerabilityReportingEnabled === true,
+    ),
     packagesAndReleasesUnpublished: yesNo(
       packageCount !== undefined &&
         releaseCount !== undefined &&
@@ -293,7 +296,9 @@ export function createGitHubRepositorySettingsReviewRecordFromLiveGitHub(
       input.reviewNotes ??
       [
         `generated from live GitHub API; releases=${releaseCount ?? "unverified"}; packages=${packageCount ?? "unverified"}`,
-        "security advisories must be confirmed in GitHub UI before approval",
+        input.privateVulnerabilityReportingEnabled === true
+          ? "private vulnerability reporting enabled via GitHub API"
+          : "security advisories must be confirmed in GitHub UI before approval",
       ].join("; "),
   });
 }
