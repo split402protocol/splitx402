@@ -839,6 +839,42 @@ describe("Split402ExternalX402DiscoveryClient", () => {
     ]);
   });
 
+  it("blocks router use when Split402 offers conflict with x402 payment metadata", async () => {
+    const { offer, publicKey } = createSignedEvmOffer();
+    const discovery = new Split402ExternalX402DiscoveryClient({
+      merchantOrigin: "https://x402.example",
+      fetch: externalX402Fetch({
+        paymentRequired: externalPaymentRequired({
+          split402Offer: offer,
+          acceptOverrides: {
+            network: "eip155:84532",
+            amount: "10000",
+            payTo: "0x0000000000000000000000000000000000000001"
+          }
+        })
+      }),
+      providerIdPrefix: "conflicting-offer",
+      merchantPublicKey: publicKey,
+      capabilityMapper: () => "crypto.price"
+    });
+
+    await expect(
+      discovery.discoverCandidates({ capability: "crypto.price" })
+    ).resolves.toEqual([
+      expect.objectContaining({
+        providerId: "conflicting-offer:get.price.coin",
+        readiness: "requires_split402_campaign",
+        blockers: ["Split402 offer does not match x402 payment metadata"],
+        split402Offer: offer,
+        split402OfferErrors: expect.arrayContaining([
+          expect.stringContaining("network: expected eip155:84532"),
+          expect.stringContaining("payToWallet: expected 0x0000000000000000000000000000000000000001"),
+          expect.stringContaining("requiredAmountAtomic: expected 10000")
+        ])
+      })
+    ]);
+  });
+
   it("creates router-ready providers when external x402 routes include Split402 offers", async () => {
     const discovery = new Split402ExternalX402DiscoveryClient({
       merchantOrigin: receipt.merchantOrigin,
@@ -1121,6 +1157,12 @@ function externalPaymentRequired(options: {
   includeSplit402?: boolean;
   split402Offer?: Split402OfferV1;
   split402Info?: unknown;
+  acceptOverrides?: Partial<{
+    network: `${string}:${string}`;
+    asset: string;
+    amount: string;
+    payTo: string;
+  }>;
 }): PaymentRequired {
   const offer =
     options.split402Offer ??
@@ -1137,12 +1179,15 @@ function externalPaymentRequired(options: {
         mimeType: "application/json"
       },
       accepts: [
-          {
-            scheme: "exact",
-            network: paymentOffer.network as `${string}:${string}`,
-            asset: paymentOffer.asset,
-            amount: paymentOffer.requiredAmountAtomic,
-            payTo: paymentOffer.payToWallet,
+        {
+          scheme: "exact",
+          network:
+            options.acceptOverrides?.network ??
+            (paymentOffer.network as `${string}:${string}`),
+          asset: options.acceptOverrides?.asset ?? paymentOffer.asset,
+          amount:
+            options.acceptOverrides?.amount ?? paymentOffer.requiredAmountAtomic,
+          payTo: options.acceptOverrides?.payTo ?? paymentOffer.payToWallet,
           maxTimeoutSeconds: 300,
           extra: {}
         }

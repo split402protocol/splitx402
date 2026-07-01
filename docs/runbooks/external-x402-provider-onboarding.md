@@ -25,6 +25,12 @@ field paths that failed schema validation. That is different from
 `missing Split402 offer extension`, which means no Split402 offer was found in
 the unpaid `402 Payment Required` response.
 
+If the Split402 offer parses but disagrees with the x402 `accepts` metadata,
+discovery reports `Split402 offer does not match x402 payment metadata`. The
+signed offer must match the x402 exact payment metadata for `network`, `asset`,
+`payToWallet`, and `requiredAmountAtomic`; `resourceOrigin` must match the
+external merchant origin being discovered.
+
 The same check is available through the MCP gateway tool
 `split402.discoverExternalX402`:
 
@@ -51,6 +57,7 @@ Common blockers:
 | --- | --- |
 | `missing Split402 offer extension` | Add `extensions.split402.info` to the unpaid 402 response. |
 | `invalid Split402 offer extension` | The extension exists, but one or more signed offer fields failed validation. Check `split402OfferErrors`. |
+| `Split402 offer does not match x402 payment metadata` | The signed offer parses, but its payment fields disagree with the x402 `accepts` metadata. Check `split402OfferErrors`. |
 | `missing complete x402 exact payment metadata` | The x402 `accepts` metadata is missing `network`, `asset`, `amount`, or `payTo`. |
 
 Base/EVM x402 candidates can become router-ready when the unpaid response

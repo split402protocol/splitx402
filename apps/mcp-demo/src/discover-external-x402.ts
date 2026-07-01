@@ -244,6 +244,14 @@ export function createExternalX402CandidateNextActions(
               "Ensure the signed offer binds the campaign, operation, amount, commission, protocol fee, and merchant signing key.",
               "Rerun demo:discover-external-x402; only router_ready candidates should enter paid staging tests."
             ]
+          : candidate.blockers.includes(
+                "Split402 offer does not match x402 payment metadata"
+              )
+            ? [
+                "Fix extensions.split402.info so signed offer fields match the x402 exact payment metadata.",
+                "Use split402OfferErrors to align network, asset, payToWallet, requiredAmountAtomic, and resourceOrigin.",
+                "Rerun demo:discover-external-x402; only router_ready candidates should enter paid staging tests."
+              ]
         : [
             "Add extensions.split402.info to the unpaid 402 Payment Required response.",
             "Bind the Split402 offer to the campaign, operation, amount, commission, protocol fee, and merchant signing key.",
