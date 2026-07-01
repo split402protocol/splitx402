@@ -769,6 +769,8 @@ describe("MCP demo gateway", () => {
       "split402.searchCapabilities",
       "split402.execute",
       "split402.discoverExternalX402",
+      "split402.prepareExternalX402Offer",
+      "split402.prepareExternalX402Receipt",
       "split402.validateExternalX402Artifacts",
       "split402.getReceipt"
     ]);
@@ -803,7 +805,30 @@ describe("MCP demo gateway", () => {
         merchantPublicKey: { type: "string" }
       }
     });
-    expect(result.tools[4]?.inputSchema).toMatchObject({
+    const offerPrepTool = result.tools.find(
+      (tool) => tool.name === "split402.prepareExternalX402Offer"
+    );
+    expect(offerPrepTool?.inputSchema).toMatchObject({
+      required: ["campaignTerms", "unsignedOffer"],
+      properties: {
+        campaignTerms: { type: "object" },
+        unsignedOffer: { type: "object" }
+      }
+    });
+    const receiptPrepTool = result.tools.find(
+      (tool) => tool.name === "split402.prepareExternalX402Receipt"
+    );
+    expect(receiptPrepTool?.inputSchema).toMatchObject({
+      required: ["offer", "unsignedReceipt"],
+      properties: {
+        offer: { type: "object" },
+        unsignedReceipt: { type: "object" }
+      }
+    });
+    const validateTool = result.tools.find(
+      (tool) => tool.name === "split402.validateExternalX402Artifacts"
+    );
+    expect(validateTool?.inputSchema).toMatchObject({
       required: [
         "merchantOrigin",
         "operationId",
@@ -1184,6 +1209,91 @@ describe("MCP demo gateway", () => {
             receiptSignatureAndArithmetic: true,
             receiptMatchesOfferAndPayment: true
           }
+        },
+        isError: false
+      }
+    });
+  });
+
+  it("prepares external x402 offers through MCP tools/call", async () => {
+    const signed = createExternalSplit402Offer();
+    const unsignedOffer = createUnsignedExternalOffer(signed.offer);
+
+    const response = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "external-offer-prep",
+        method: "tools/call",
+        params: {
+          name: "split402.prepareExternalX402Offer",
+          arguments: {
+            campaignTerms: signed.campaignTerms,
+            unsignedOffer: {
+              ...unsignedOffer,
+              campaignTermsHash:
+                "sha256:<hash of finalized campaignTermsTemplate canonical JSON>"
+            }
+          }
+        }
+      }),
+      createMcpGatewayContext()
+    );
+
+    expect(response).toMatchObject({
+      jsonrpc: "2.0",
+      id: "external-offer-prep",
+      result: {
+        structuredContent: {
+          status: "offer_prepared",
+          ok: true,
+          errors: [],
+          campaignTermsHash: signed.offer.campaignTermsHash,
+          offerToSign: {
+            campaignTermsHash: signed.offer.campaignTermsHash
+          },
+          offerSigningBytesHex: expect.any(String)
+        },
+        isError: false
+      }
+    });
+  });
+
+  it("prepares external x402 receipts through MCP tools/call", async () => {
+    const signed = createExternalSplit402Offer();
+    const receipt = createExternalSplit402Receipt(signed.offer);
+    const unsignedReceipt = createUnsignedExternalReceipt(receipt);
+
+    const response = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "external-receipt-prep",
+        method: "tools/call",
+        params: {
+          name: "split402.prepareExternalX402Receipt",
+          arguments: {
+            offer: signed.offer,
+            unsignedReceipt
+          }
+        }
+      }),
+      createMcpGatewayContext()
+    );
+
+    expect(response).toMatchObject({
+      jsonrpc: "2.0",
+      id: "external-receipt-prep",
+      result: {
+        structuredContent: {
+          status: "receipt_prepared",
+          ok: true,
+          errors: [],
+          receiptToSign: {
+            campaignTermsHash: signed.offer.campaignTermsHash,
+            commissionAmountAtomic: "4000",
+            protocolFeeAtomic: "400",
+            referrerCreditAtomic: "3600"
+          },
+          receiptSigningBytesHex: expect.any(String)
         },
         isError: false
       }
@@ -1980,6 +2090,8 @@ describe("MCP demo gateway", () => {
         "split402.searchCapabilities",
         "split402.execute",
         "split402.discoverExternalX402",
+        "split402.prepareExternalX402Offer",
+        "split402.prepareExternalX402Receipt",
         "split402.validateExternalX402Artifacts",
         "split402.getReceipt"
       ],
