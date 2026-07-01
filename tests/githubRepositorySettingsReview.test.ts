@@ -130,7 +130,7 @@ describe("GitHub repository settings review", () => {
         "required_checks must include Check vectors",
         "required_checks must include Audit",
         "required_checks must include Local public-alpha proof",
-        "required_checks must include PostgreSQL integration tests",
+        "required_checks must include postgres-integration",
         "required_checks must include CodeQL",
         "required_checks must include Secret scan",
       ],
@@ -262,7 +262,6 @@ describe("GitHub repository settings review", () => {
         "required_checks must include Check vectors",
         "required_checks must include Audit",
         "required_checks must include Local public-alpha proof",
-        "required_checks must include PostgreSQL integration tests",
         "required_checks must include CodeQL",
         "required_checks must include Secret scan",
       ],
@@ -319,7 +318,7 @@ describe("GitHub repository settings review", () => {
 });
 
 const REQUIRED_CHECKS =
-  "Lint, Public surface check, Typecheck, Test, Build, Check vectors, Audit, Local public-alpha proof, PostgreSQL integration tests, CodeQL, Secret scan";
+  "Lint, Public surface check, Typecheck, Test, Build, Check vectors, Audit, Local public-alpha proof, postgres-integration, CodeQL, Secret scan";
 
 function createValidInput() {
   return {

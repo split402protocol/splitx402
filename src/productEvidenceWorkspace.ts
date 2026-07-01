@@ -178,7 +178,7 @@ function createGithubSettingsReviewText(
     requiresCodeOwnerReview: "no",
     requiresStatusChecks: "no",
     requiredChecks:
-      "Lint, Public surface check, Typecheck, Test, Build, Check vectors, Audit, Local public-alpha proof, PostgreSQL integration tests, CodeQL, Secret scan",
+      "Lint, Public surface check, Typecheck, Test, Build, Check vectors, Audit, Local public-alpha proof, postgres-integration, CodeQL, Secret scan",
     blocksForcePushes: "no",
     blocksDeletion: "no",
     blankIssuesDisabled: "no",
