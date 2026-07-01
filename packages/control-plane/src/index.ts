@@ -90,6 +90,9 @@ import {
   attachPayoutTransactionItemMappings,
   filterPayoutEligibleAccruals,
   isPayoutTransactionOutcomeUnknown,
+  isPayoutTransactionPendingFinality,
+  comparePayoutTransactionsPendingFinality,
+  normalizePayoutPendingFinalityLimit,
   releasePayoutBatchAllocationsForBatch,
   summarizePayoutBatchTransactionItemFinality,
   verifyPayoutFinalizedTransfersBeforeLedgerClosure,
@@ -98,6 +101,7 @@ import {
   isPayoutPreviewValidationError,
   type CreatePayoutBatchFromAvailableAccrualsInput,
   type ListPayoutEligibleAccrualsInput,
+  type ListPayoutTransactionsPendingFinalityInput,
   type PayoutAccrualStore,
   type PayoutBatchRecord,
   type PayoutBatchStore,
@@ -665,6 +669,16 @@ export class InMemoryReceiptIngestionStore
     return Array.from(this.payoutTransactionsById.values())
       .filter((transaction) => transaction.payoutBatchId === payoutBatchId)
       .sort(comparePayoutTransactions);
+  }
+
+  listPayoutTransactionsPendingFinality(
+    input: ListPayoutTransactionsPendingFinalityInput = {}
+  ): PayoutTransactionRecord[] {
+    const limit = normalizePayoutPendingFinalityLimit(input.limit);
+    return Array.from(this.payoutTransactionsById.values())
+      .filter(isPayoutTransactionPendingFinality)
+      .sort(comparePayoutTransactionsPendingFinality)
+      .slice(0, limit);
   }
 
   listPayoutReconciliationItems(
@@ -3598,6 +3612,12 @@ function normalizeOptionalTimestamp(value: string | undefined): string {
     throw new Error("timestamp must be an ISO timestamp");
   }
   return date.toISOString();
+}
+
+export function createPayoutFinalityMonitorFromEnv(
+  env: NodeJS.ProcessEnv = process.env
+): PayoutFinalityMonitor {
+  return createRuntimePayoutFinalityMonitor(env);
 }
 
 function createRuntimePayoutFinalityMonitor(

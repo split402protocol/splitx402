@@ -3,14 +3,23 @@ import { describe, expect, it } from "vitest";
 
 import {
   InMemoryReceiptIngestionStore,
+  PayoutFinalityWorker,
   ReceiptChainVerificationWorker,
   ReceiptIngestor,
   WebhookDispatchWorker,
+  runPayoutFinalityWorkerLoop,
   runReceiptChainVerificationWorkerLoop,
   runWebhookDispatchWorkerLoop,
+  type ListPayoutTransactionsPendingFinalityInput,
   type MarkOutboxEventFailedInput,
+  type MarkPayoutTransactionFinalityInput,
   type OutboxEventRecord,
   type OutboxEventStore,
+  type PayoutFinalityProcessor,
+  type PayoutFinalityWorkerResult,
+  type PayoutReconciliationFinalityResult,
+  type PayoutTransactionRecord,
+  type PayoutTransactionStore,
   type ReceiptChainVerificationProcessor,
   type ReceiptChainVerificationResult,
   type ReceiptChainVerificationWorkerResult,
@@ -551,6 +560,356 @@ class FakeLoopProcessor implements ReceiptChainVerificationProcessor {
     }
     return result ?? { status: "idle" };
   }
+}
+
+describe("PayoutFinalityWorker", () => {
+  it("is idle when no payout transactions are pending finality", async () => {
+    const store = new FakePayoutTransactionStore([]);
+    const monitor = new FakePayoutFinalityMonitor({});
+    const worker = new PayoutFinalityWorker(store, monitor, {
+      now: () => FIXED_NOW
+    });
+
+    const result = await worker.processNext();
+
+    expect(result).toEqual({ status: "idle" });
+    expect(store.markedInputs).toEqual([]);
+  });
+
+  it("persists chain-observed finality transitions", async () => {
+    const submitted = createPendingPayoutTransaction({
+      id: "ptx_finalize",
+      expectedSignature: "sig_finalize"
+    });
+    const store = new FakePayoutTransactionStore([submitted]);
+    const monitor = new FakePayoutFinalityMonitor({
+      ptx_finalize: {
+        transactionId: "ptx_finalize",
+        status: "finalized",
+        signature: "sig_finalize",
+        rpcUrl: "https://rpc.example"
+      }
+    });
+    const worker = new PayoutFinalityWorker(store, monitor, {
+      now: () => FIXED_NOW
+    });
+
+    const result = await worker.processNext();
+
+    expect(result.status).toBe("swept");
+    if (result.status !== "swept") {
+      throw new Error("expected swept result");
+    }
+    expect(result.checked).toBe(1);
+    expect(result.pendingTransactionIds).toEqual([]);
+    expect(result.errors).toEqual([]);
+    expect(result.updatedTransactions.map((transaction) => transaction.status)).toEqual([
+      "finalized"
+    ]);
+    expect(store.markedInputs).toEqual([
+      {
+        id: "ptx_finalize",
+        status: "finalized",
+        observedAt: FIXED_NOW.toISOString()
+      }
+    ]);
+  });
+
+  it("keeps retry and unchanged transactions pending without re-persisting", async () => {
+    const submitted = createPendingPayoutTransaction({
+      id: "ptx_retry",
+      expectedSignature: "sig_retry"
+    });
+    const confirmed = createPendingPayoutTransaction({
+      id: "ptx_confirmed",
+      expectedSignature: "sig_confirmed",
+      status: "confirmed"
+    });
+    const store = new FakePayoutTransactionStore([submitted, confirmed]);
+    const monitor = new FakePayoutFinalityMonitor({
+      ptx_retry: {
+        transactionId: "ptx_retry",
+        status: "retry",
+        error: "rpc timeout"
+      },
+      ptx_confirmed: {
+        transactionId: "ptx_confirmed",
+        status: "confirmed"
+      }
+    });
+    const worker = new PayoutFinalityWorker(store, monitor, {
+      now: () => FIXED_NOW
+    });
+
+    const result = await worker.processNext();
+
+    expect(result.status).toBe("swept");
+    if (result.status !== "swept") {
+      throw new Error("expected swept result");
+    }
+    expect(result.pendingTransactionIds).toEqual(["ptx_retry", "ptx_confirmed"]);
+    expect(result.updatedTransactions).toEqual([]);
+    expect(result.errors).toEqual([]);
+    expect(store.markedInputs).toEqual([]);
+  });
+
+  it("records failed finality outcomes with observed error details", async () => {
+    const submitted = createPendingPayoutTransaction({
+      id: "ptx_failed",
+      expectedSignature: "sig_failed"
+    });
+    const store = new FakePayoutTransactionStore([submitted]);
+    const monitor = new FakePayoutFinalityMonitor({
+      ptx_failed: {
+        transactionId: "ptx_failed",
+        status: "failed",
+        signature: "sig_failed",
+        rpcUrl: "https://rpc.example",
+        error: "custom program error"
+      }
+    });
+    const worker = new PayoutFinalityWorker(store, monitor, {
+      now: () => FIXED_NOW
+    });
+
+    const result = await worker.processNext();
+
+    expect(result.status).toBe("swept");
+    expect(store.markedInputs).toEqual([
+      {
+        id: "ptx_failed",
+        status: "failed",
+        observedAt: FIXED_NOW.toISOString(),
+        error: {
+          message: "custom program error",
+          status: "failed",
+          signature: "sig_failed",
+          rpcUrl: "https://rpc.example"
+        }
+      }
+    ]);
+  });
+
+  it("records per-transaction sweep errors and continues the sweep", async () => {
+    const throwing = createPendingPayoutTransaction({
+      id: "ptx_throws",
+      expectedSignature: "sig_throws"
+    });
+    const healthy = createPendingPayoutTransaction({
+      id: "ptx_healthy",
+      expectedSignature: "sig_healthy"
+    });
+    const store = new FakePayoutTransactionStore([throwing, healthy]);
+    const monitor = new FakePayoutFinalityMonitor({
+      ptx_throws: new Error("monitor exploded"),
+      ptx_healthy: {
+        transactionId: "ptx_healthy",
+        status: "finalized"
+      }
+    });
+    const worker = new PayoutFinalityWorker(store, monitor, {
+      now: () => FIXED_NOW
+    });
+
+    const result = await worker.processNext();
+
+    expect(result.status).toBe("swept");
+    if (result.status !== "swept") {
+      throw new Error("expected swept result");
+    }
+    expect(result.errors).toEqual([
+      { transactionId: "ptx_throws", error: "monitor exploded" }
+    ]);
+    expect(result.updatedTransactions.map((transaction) => transaction.id)).toEqual([
+      "ptx_healthy"
+    ]);
+  });
+
+  it("reports transactions that disappear during the sweep", async () => {
+    const vanishing = createPendingPayoutTransaction({
+      id: "ptx_vanishes",
+      expectedSignature: "sig_vanishes"
+    });
+    const store = new FakePayoutTransactionStore([vanishing], {
+      vanishOnMark: true
+    });
+    const monitor = new FakePayoutFinalityMonitor({
+      ptx_vanishes: {
+        transactionId: "ptx_vanishes",
+        status: "finalized"
+      }
+    });
+    const worker = new PayoutFinalityWorker(store, monitor, {
+      now: () => FIXED_NOW
+    });
+
+    const result = await worker.processNext();
+
+    expect(result.status).toBe("swept");
+    if (result.status !== "swept") {
+      throw new Error("expected swept result");
+    }
+    expect(result.errors).toEqual([
+      {
+        transactionId: "ptx_vanishes",
+        error: "payout transaction disappeared during finality sweep"
+      }
+    ]);
+  });
+
+  it("passes the sweep limit to the transaction store", async () => {
+    const store = new FakePayoutTransactionStore([]);
+    const monitor = new FakePayoutFinalityMonitor({});
+    const worker = new PayoutFinalityWorker(store, monitor, {
+      now: () => FIXED_NOW,
+      sweepLimit: 7
+    });
+
+    await worker.processNext();
+
+    expect(store.listLimits).toEqual([7]);
+  });
+
+  it("runs the payout finality worker loop until max iterations", async () => {
+    const processor = new FakePayoutFinalityLoopProcessor([
+      {
+        status: "swept",
+        checked: 1,
+        updatedTransactions: [],
+        pendingTransactionIds: ["ptx_pending"],
+        errors: []
+      },
+      { status: "idle" }
+    ]);
+    const results: PayoutFinalityWorkerResult[] = [];
+
+    const summary = await runPayoutFinalityWorkerLoop(processor, {
+      maxIterations: 2,
+      onResult: (result) => {
+        results.push(result);
+      },
+      sleep: () => undefined
+    });
+
+    expect(summary).toEqual({ iterations: 2, stoppedBy: "max_iterations" });
+    expect(results.map((result) => result.status)).toEqual(["swept", "idle"]);
+  });
+});
+
+class FakePayoutTransactionStore implements PayoutTransactionStore {
+  readonly listLimits: Array<number | undefined> = [];
+  readonly markedInputs: MarkPayoutTransactionFinalityInput[] = [];
+  private transactions: PayoutTransactionRecord[];
+
+  constructor(
+    transactions: PayoutTransactionRecord[],
+    private readonly options: { vanishOnMark?: boolean } = {}
+  ) {
+    this.transactions = transactions;
+  }
+
+  saveSignedPayoutTransactions(): never {
+    throw new Error("not implemented");
+  }
+
+  listPayoutTransactions(): never {
+    throw new Error("not implemented");
+  }
+
+  listPayoutTransactionsPendingFinality(
+    input: ListPayoutTransactionsPendingFinalityInput = {}
+  ): PayoutTransactionRecord[] {
+    this.listLimits.push(input.limit);
+    return this.transactions.filter(
+      (transaction) =>
+        transaction.status === "submitted" || transaction.status === "confirmed"
+    );
+  }
+
+  markPayoutTransactionSubmitted(): never {
+    throw new Error("not implemented");
+  }
+
+  markPayoutTransactionFinality(
+    input: MarkPayoutTransactionFinalityInput
+  ): PayoutTransactionRecord | undefined {
+    this.markedInputs.push(input);
+    if (this.options.vanishOnMark === true) {
+      return undefined;
+    }
+    const existing = this.transactions.find(
+      (transaction) => transaction.id === input.id
+    );
+    if (existing === undefined) {
+      return undefined;
+    }
+    const updated: PayoutTransactionRecord = {
+      ...existing,
+      status: input.status,
+      ...(input.error === undefined ? {} : { error: input.error })
+    };
+    this.transactions = this.transactions.map((transaction) =>
+      transaction.id === input.id ? updated : transaction
+    );
+    return updated;
+  }
+}
+
+class FakePayoutFinalityMonitor {
+  constructor(
+    private readonly results: Record<
+      string,
+      PayoutReconciliationFinalityResult | Error
+    >
+  ) {}
+
+  monitor(input: {
+    transaction: PayoutTransactionRecord;
+  }): PayoutReconciliationFinalityResult {
+    const result = this.results[input.transaction.id];
+    if (result === undefined) {
+      throw new Error(`unexpected transaction: ${input.transaction.id}`);
+    }
+    if (result instanceof Error) {
+      throw result;
+    }
+    return result;
+  }
+}
+
+class FakePayoutFinalityLoopProcessor implements PayoutFinalityProcessor {
+  private index = 0;
+
+  constructor(
+    private readonly results: Array<PayoutFinalityWorkerResult | Error>
+  ) {}
+
+  processNext(): PayoutFinalityWorkerResult {
+    const result = this.results[this.index];
+    this.index += 1;
+    if (result instanceof Error) {
+      throw result;
+    }
+    return result ?? { status: "idle" };
+  }
+}
+
+function createPendingPayoutTransaction(
+  overrides: Partial<PayoutTransactionRecord> = {}
+): PayoutTransactionRecord {
+  return {
+    id: "ptx_default",
+    payoutBatchId: "pb_default",
+    sequence: 0,
+    attempt: 1,
+    signedTransactionBase64: "AQID",
+    expectedSignature: "sig_default",
+    status: "submitted",
+    submittedAt: "2026-06-24T00:03:00.000Z",
+    createdAt: "2026-06-24T00:02:00.000Z",
+    items: [],
+    ...overrides
+  };
 }
 
 class FakeWebhookDispatcher {

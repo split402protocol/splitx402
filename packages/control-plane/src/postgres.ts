@@ -120,6 +120,7 @@ import type {
   PayoutReconciliationItem,
   PayoutReconciliationStore,
   ListPayoutReconciliationItemsInput,
+  ListPayoutTransactionsPendingFinalityInput,
   ReferrerBalanceSummary,
   ReferrerPayoutHistoryItem,
   ReferrerPayoutViewInput,
@@ -137,6 +138,7 @@ import {
   createReferrerBalanceSummary,
   createReferrerPayoutHistoryItems,
   createSignedPayoutTransactionRecords,
+  normalizePayoutPendingFinalityLimit,
   releasePayoutBatchAllocationsForBatch,
   summarizePayoutBatchTransactionItemFinality,
   verifyPayoutFinalizedTransfersBeforeLedgerClosure
@@ -670,6 +672,27 @@ export class PostgresReceiptIngestionStore
         where payout_batch_id = $1
         order by sequence, attempt, created_at, id`,
       [payoutBatchId]
+    );
+    return mapPayoutTransactionsWithItems(
+      result.rows,
+      await this.listPayoutTransactionItems(result.rows.map((row) => row.id))
+    );
+  }
+
+  async listPayoutTransactionsPendingFinality(
+    input: ListPayoutTransactionsPendingFinalityInput = {}
+  ): Promise<PayoutTransactionRecord[]> {
+    const limit = normalizePayoutPendingFinalityLimit(input.limit);
+    const result = await this.db.query<PayoutTransactionRow>(
+      `select id, payout_batch_id, sequence, attempt, recent_blockhash,
+              last_valid_block_height, signed_transaction_base64,
+              expected_signature, status, submitted_at, confirmed_at,
+              finalized_at, error_json, created_at
+         from payout_transactions
+        where status in ('submitted', 'confirmed')
+        order by submitted_at asc nulls last, created_at asc, id asc
+        limit $1`,
+      [limit]
     );
     return mapPayoutTransactionsWithItems(
       result.rows,
