@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildOfferSigningBytes,
+  buildReceiptSigningBytes,
   ReferralClaimV1Schema,
   Split402AttributionV1Schema,
   Split402OfferV1Schema,
   Split402ReceiptV1Schema,
   createTestVectorBundle,
+  hexToBytes,
+  signEd25519Message,
   verifyReferralClaim,
   verifySplit402Attribution,
   verifySplit402Offer,
@@ -57,6 +61,56 @@ describe("protocol artifacts", () => {
     expect(
       verifySplit402Receipt(bundle.artifacts.receipt, bundle.keys.merchantPublicKey)
     ).toEqual({
+      ok: true,
+      errors: []
+    });
+  });
+
+  it("accepts EVM payment identifiers in signed offers and receipts", () => {
+    const merchantSeed = hexToBytes(
+      "101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f"
+    );
+    const unsignedOffer = {
+      ...bundle.artifacts.offer,
+      network: "eip155:8453",
+      asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      payToWallet: "0x68614873C5d624c07DCAA3aFF5243DD5027c3910"
+    };
+    const offerSignature = signEd25519Message(
+      buildOfferSigningBytes(unsignedOffer),
+      merchantSeed
+    );
+    const evmOffer = {
+      ...unsignedOffer,
+      signature: offerSignature.signature
+    };
+
+    expect(Split402OfferV1Schema.parse(evmOffer)).toEqual(evmOffer);
+    expect(verifySplit402Offer(evmOffer, offerSignature.publicKey)).toEqual({
+      ok: true,
+      errors: []
+    });
+
+    const unsignedReceipt = {
+      ...bundle.artifacts.receipt,
+      network: "eip155:8453",
+      asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      payerWallet: "0x0000000000000000000000000000000000000001",
+      payToWallet: "0x68614873C5d624c07DCAA3aFF5243DD5027c3910",
+      settlementTxSignature:
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    };
+    const receiptSignature = signEd25519Message(
+      buildReceiptSigningBytes(unsignedReceipt),
+      merchantSeed
+    );
+    const evmReceipt = {
+      ...unsignedReceipt,
+      signature: receiptSignature.signature
+    };
+
+    expect(Split402ReceiptV1Schema.parse(evmReceipt)).toEqual(evmReceipt);
+    expect(verifySplit402Receipt(evmReceipt, receiptSignature.publicKey)).toEqual({
       ok: true,
       errors: []
     });

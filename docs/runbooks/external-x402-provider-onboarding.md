@@ -39,10 +39,11 @@ Readiness meanings:
 | `requires_split402_campaign` | The route is a real x402 candidate but lacks a Split402 offer extension. |
 | `incomplete_payment_metadata` | The route did not expose complete x402 exact payment metadata. |
 
-For Base/EVM x402 candidates, keep the route in onboarding until signed
-Split402 offer and receipt validation for EVM asset and wallet identifiers is
-enabled. Discovery can read Base/CDP payment requirements today; it must not
-overstate them as referral-ready until the signed Split402 layer is verified.
+Base/EVM x402 candidates can become router-ready when the unpaid response
+includes a valid signed Split402 offer and the paid response returns a
+merchant-signed Split402 receipt with matching EVM asset and wallet identifiers.
+That still proves public-alpha compatibility only; production, custody, and
+mainnet claims remain gated by Phase 6 and Phase 7 evidence.
 
 ## Current Issue #131 Shape
 
@@ -74,7 +75,7 @@ include a Split402 offer extension:
         "operationId": "price.btc",
         "resourceOrigin": "https://x402.example",
         "network": "eip155:8453",
-        "asset": "<asset-id-for-enabled-network>",
+        "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
         "payToWallet": "0x...",
         "requiredAmountAtomic": "20000",
         "commissionBps": 2000,
