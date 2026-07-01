@@ -117,6 +117,7 @@ SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 \
 corepack pnpm phase7:staging:collect-mcp-gateway --evidence-env-file split402-launch-evidence/phase7-staging.env
 corepack pnpm demo:mcp-gateway:smoke
 corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log
+corepack pnpm phase7:staging:commands-status --brief split402-launch-evidence/phase7-staging-evidence/commands.log
 corepack pnpm demo:mcp-bundle split402-launch-evidence/phase7-staging-evidence/mcp-bundle.json
 corepack pnpm demo:paid-suite split402-launch-evidence/phase7-staging-evidence/paid-suite.log
 corepack pnpm phase7:staging:derive-receipt-verification --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-evidence/paid-suite.log split402-launch-evidence/phase7-staging-evidence/receipt-verification.json
@@ -129,7 +130,9 @@ corepack pnpm product:status --brief --workspace split402-launch-evidence
 The `commands_run` transcript must include the full validation suite, including
 `corepack pnpm product:public-surface-check --brief`, and the real output for
 `git status --short --branch`; it must show only the branch/status header and no
-changed-file rows.
+changed-file rows. Run `corepack pnpm phase7:staging:commands-status --brief
+split402-launch-evidence/phase7-staging-evidence/commands.log` before assembling
+the proof to catch command-transcript problems early.
 
 `phase7:staging:collect-reads` writes both payout-obligation and
 funding-balance artifacts from the payout-obligations endpoint and validates
