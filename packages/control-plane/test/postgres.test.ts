@@ -16,6 +16,7 @@ import {
   InMemoryReceiptIngestionStore,
   MerchantRegistryConflictError,
   PayoutBatchConflictError,
+  PayoutBatchReleaseBlockedError,
   PostgresCampaignRegistry,
   PostgresMerchantRegistry,
   PostgresOutboxEventStore,
@@ -786,13 +787,35 @@ describe("PostgresReceiptIngestionStore", () => {
     ).resolves.toEqual([]);
   });
 
-  it("releases planned payout allocations back to available", async () => {
+  it("blocks releasing allocations while signed transactions may already be broadcast", async () => {
+    const fixture = await createPostgresPayoutTransactionFixture();
+
+    await expect(
+      fixture.store.releasePayoutBatchAllocations({
+        payoutBatchId: fixture.batch.id,
+        reason: "transaction bytes failed verification",
+        now: "2026-06-24T00:07:00Z"
+      })
+    ).rejects.toBeInstanceOf(PayoutBatchReleaseBlockedError);
+    await expect(
+      fixture.store.getByReceiptId(fixture.bundle.artifacts.receipt.receiptId)
+    ).resolves.toEqual(
+      expect.objectContaining({
+        accrual: expect.objectContaining({ status: "allocated" })
+      })
+    );
+  });
+
+  it("releases planned payout allocations back to available with chain proof of expiry", async () => {
     const fixture = await createPostgresPayoutTransactionFixture();
 
     const released = await fixture.store.releasePayoutBatchAllocations({
       payoutBatchId: fixture.batch.id,
       reason: "transaction bytes failed verification",
-      now: "2026-06-24T00:07:00Z"
+      now: "2026-06-24T00:07:00Z",
+      chainChecks: [
+        { transactionId: fixture.transaction.id, status: "expired" }
+      ]
     });
     const loaded = await fixture.store.getPayoutBatch(fixture.batch.id);
 
@@ -822,6 +845,34 @@ describe("PostgresReceiptIngestionStore", () => {
         now: "2026-06-24T00:07:00Z"
       })
     ).resolves.toHaveLength(1);
+  });
+
+  it("releases allocations with an operator override and records the reason", async () => {
+    const fixture = await createPostgresPayoutTransactionFixture();
+
+    const released = await fixture.store.releasePayoutBatchAllocations({
+      payoutBatchId: fixture.batch.id,
+      reason: "broadcast timed out",
+      now: "2026-06-24T00:07:00Z",
+      override: { reason: "operator verified no transfer landed" }
+    });
+
+    expect(released).toEqual(
+      expect.objectContaining({
+        id: fixture.batch.id,
+        status: "cancelled",
+        failureCode: "allocations_released",
+        failureMessage:
+          "broadcast timed out (operator override: operator verified no transfer landed)"
+      })
+    );
+    await expect(
+      fixture.store.getByReceiptId(fixture.bundle.artifacts.receipt.receiptId)
+    ).resolves.toEqual(
+      expect.objectContaining({
+        accrual: expect.objectContaining({ status: "available" })
+      })
+    );
   });
 
   it("does not release submitted or outcome-unknown allocations", async () => {

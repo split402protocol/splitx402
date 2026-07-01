@@ -79,6 +79,9 @@ import {
 } from "./postgres.js";
 import {
   PayoutBatchConflictError,
+  PayoutBatchReleaseBlockedError,
+  assertPayoutBatchAllocationsReleasable,
+  listPayoutBatchAllocationReleaseHazards,
   createMerchantObligationSummary,
   createReferrerBalanceSummary,
   createReferrerPayoutHistoryItems,
@@ -89,6 +92,7 @@ import {
   createPayoutPreview,
   attachPayoutTransactionItemMappings,
   filterPayoutEligibleAccruals,
+  isPayoutBatchAllocationReleaseAllowed,
   isPayoutTransactionOutcomeUnknown,
   isPayoutTransactionPendingFinality,
   comparePayoutTransactionsPendingFinality,
@@ -97,6 +101,7 @@ import {
   summarizePayoutBatchTransactionItemFinality,
   verifyPayoutFinalizedTransfersBeforeLedgerClosure,
   isPayoutBatchConflictError,
+  isPayoutBatchReleaseBlockedError,
   isPayoutBatchValidationError,
   isPayoutPreviewValidationError,
   type CreatePayoutBatchFromAvailableAccrualsInput,
@@ -115,6 +120,9 @@ import {
   type PayoutLedgerClosureStore,
   type PayoutReconciliationStore,
   type MerchantObligationViewStore,
+  type PayoutBatchAllocationReleaseOverride,
+  type PayoutBatchReleaseChainCheck,
+  type PayoutBatchReleaseHazardDetail,
   type ReferrerPayoutViewStore,
   type ReleasePayoutBatchAllocationsInput,
   type SaveSignedPayoutTransactionsInput
@@ -585,10 +593,20 @@ export class InMemoryReceiptIngestionStore
     if (batch === undefined) {
       return undefined;
     }
+    // Compute first so non-releasable batch statuses keep conflict precedence
+    // over the broadcast-hazard guard.
     const released = releasePayoutBatchAllocationsForBatch({
       batch,
       reason: input.reason,
-      ...(input.now === undefined ? {} : { now: input.now })
+      ...(input.now === undefined ? {} : { now: input.now }),
+      ...(input.override === undefined ? {} : { override: input.override })
+    });
+    assertPayoutBatchAllocationsReleasable({
+      transactions: this.listPayoutTransactions(batch.id),
+      ...(input.chainChecks === undefined
+        ? {}
+        : { chainChecks: input.chainChecks }),
+      ...(input.override === undefined ? {} : { override: input.override })
     });
     const releasedAccrualIds = new Set(
       released.items.flatMap((item) =>
@@ -2068,10 +2086,34 @@ export function createPayoutRouter(
         }
         const body = readJsonObject(req.body) ?? {};
         const now = readOptionalString(body.now, "now");
+        const reason = readRequiredString(body.reason, "reason");
+        const override = readOptionalPayoutReleaseOverride(body.override);
+        let chainChecks: PayoutBatchReleaseChainCheck[] | undefined;
+        if (
+          override === undefined &&
+          options.payoutTransactionStore !== undefined &&
+          isPayoutBatchAllocationReleaseAllowed(batch.status)
+        ) {
+          const transactions =
+            await options.payoutTransactionStore.listPayoutTransactions(batch.id);
+          const hazards = listPayoutBatchAllocationReleaseHazards(transactions);
+          if (hazards.length > 0) {
+            chainChecks = await runPayoutBatchReleaseChainChecks({
+              hazards,
+              payoutTransactionStore: options.payoutTransactionStore,
+              ...(options.payoutFinalityMonitor === undefined
+                ? {}
+                : { monitor: options.payoutFinalityMonitor }),
+              ...(now === undefined ? {} : { observedAt: now })
+            });
+          }
+        }
         const released = await options.payoutBatchStore.releasePayoutBatchAllocations({
           payoutBatchId: batch.id,
-          reason: readRequiredString(body.reason, "reason"),
-          ...(now === undefined ? {} : { now })
+          reason,
+          ...(now === undefined ? {} : { now }),
+          ...(override === undefined ? {} : { override }),
+          ...(chainChecks === undefined ? {} : { chainChecks })
         });
         if (released === undefined) {
           res.status(404).json({
@@ -3620,6 +3662,111 @@ function isPersistablePayoutFinalityStatus(
   return status !== "retry";
 }
 
+async function runPayoutBatchReleaseChainChecks(input: {
+  hazards: readonly PayoutTransactionRecord[];
+  payoutTransactionStore: PayoutTransactionStore;
+  monitor?: PayoutFinalityMonitor;
+  observedAt?: string;
+}): Promise<PayoutBatchReleaseChainCheck[]> {
+  const monitor = input.monitor;
+  if (monitor === undefined) {
+    throw new PayoutBatchReleaseBlockedError(
+      "payout batch allocations cannot be released: signed payout transactions may already be broadcast and no payout finality monitor is configured to prove otherwise; provide an explicit operator override with a reason to force release",
+      input.hazards.map((transaction) => createPayoutReleaseHazardDetail(transaction))
+    );
+  }
+  const observedAt = normalizeOptionalTimestamp(input.observedAt);
+  const checks: PayoutBatchReleaseChainCheck[] = [];
+  const blocked: PayoutBatchReleaseHazardDetail[] = [];
+  for (const transaction of input.hazards) {
+    if (
+      transaction.status === "confirmed" ||
+      transaction.status === "finalized"
+    ) {
+      blocked.push({
+        ...createPayoutReleaseHazardDetail(transaction),
+        chainStatus: transaction.status,
+        error: "payout transaction already landed on-chain"
+      });
+      continue;
+    }
+    let result: PayoutReconciliationFinalityResult;
+    try {
+      result = await monitor.monitor({ transaction });
+    } catch (error) {
+      blocked.push({
+        ...createPayoutReleaseHazardDetail(transaction),
+        error: `payout finality check failed: ${
+          error instanceof Error ? error.message : "unknown error"
+        }`
+      });
+      continue;
+    }
+    checks.push({ transactionId: transaction.id, status: result.status });
+    // Persist landed outcomes so the batch rolls into the normal finality
+    // pipeline. "expired" stays unpersisted: the batch rollup classifies
+    // expired transactions as outcome_unknown, which would wedge a release
+    // the chain check just proved safe.
+    if (
+      result.status === "confirmed" ||
+      result.status === "finalized" ||
+      result.status === "failed"
+    ) {
+      await input.payoutTransactionStore.markPayoutTransactionFinality({
+        id: transaction.id,
+        status: result.status,
+        observedAt,
+        ...(result.error === undefined
+          ? {}
+          : { error: createPayoutReconciliationError(result) })
+      });
+    }
+    if (result.status !== "expired" && result.status !== "failed") {
+      blocked.push({
+        ...createPayoutReleaseHazardDetail(transaction),
+        chainStatus: result.status,
+        ...(result.error === undefined ? {} : { error: result.error })
+      });
+    }
+  }
+  if (blocked.length > 0) {
+    throw new PayoutBatchReleaseBlockedError(
+      `payout batch allocations cannot be released: chain finality checks did not prove ${blocked.length} signed payout transaction(s) can no longer land (${blocked
+        .map((hazard) => hazard.transactionId)
+        .join(
+          ", "
+        )}); reconcile landed transactions or wait for blockhash expiry, or provide an explicit operator override with a reason`,
+      blocked
+    );
+  }
+  return checks;
+}
+
+function createPayoutReleaseHazardDetail(
+  transaction: PayoutTransactionRecord
+): PayoutBatchReleaseHazardDetail {
+  return {
+    transactionId: transaction.id,
+    status: transaction.status,
+    ...(transaction.expectedSignature === undefined
+      ? {}
+      : { expectedSignature: transaction.expectedSignature })
+  };
+}
+
+function readOptionalPayoutReleaseOverride(
+  value: unknown
+): PayoutBatchAllocationReleaseOverride | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const override = readJsonObject(value);
+  if (override === undefined) {
+    throw new MerchantRegistryValidationError("override must be an object");
+  }
+  return { reason: readRequiredString(override.reason, "override.reason") };
+}
+
 function createPayoutReconciliationError(
   result: PayoutReconciliationFinalityResult
 ): Record<string, unknown> {
@@ -4086,6 +4233,14 @@ function sendPayoutBatchError(res: Response, error: unknown): boolean {
   }
   if (isPayoutBatchConflictError(error)) {
     res.status(409).json({ error: "conflict", message: error.message });
+    return true;
+  }
+  if (isPayoutBatchReleaseBlockedError(error)) {
+    res.status(409).json({
+      error: "payout_batch_release_blocked",
+      message: error.message,
+      hazards: error.hazards
+    });
     return true;
   }
   return false;

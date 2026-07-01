@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  PayoutBatchReleaseBlockedError,
+  assertPayoutBatchAllocationsReleasable,
   attachPayoutTransactionItemMappings,
   comparePayoutTransactionsPendingFinality,
   createPayoutBatchPlan,
@@ -12,6 +14,7 @@ import {
   createSignedPayoutTransactionRecords,
   filterPayoutEligibleAccruals,
   isPayoutTransactionPendingFinality,
+  listPayoutBatchAllocationReleaseHazards,
   normalizePayoutPendingFinalityLimit,
   releasePayoutBatchAllocationsForBatch,
   summarizePayoutBatchTransactionItemFinality,
@@ -632,6 +635,171 @@ describe("payout allocation release", () => {
         reason: "manual release"
       })
     ).toThrow("payout batch status outcome_unknown cannot release allocations");
+  });
+
+  it("records the operator override reason on the released batch", () => {
+    const released = releasePayoutBatchAllocationsForBatch({
+      batch: finalizedBatch({ status: "signing", itemStatus: "allocated" }),
+      reason: "broadcast timed out",
+      now: "2026-06-24T00:11:00Z",
+      override: { reason: "custody incident 42" }
+    });
+
+    expect(released).toEqual(
+      expect.objectContaining({
+        status: "cancelled",
+        failureCode: "allocations_released",
+        failureMessage: "broadcast timed out (operator override: custody incident 42)"
+      })
+    );
+  });
+});
+
+describe("payout allocation release guard", () => {
+  it("flags maybe-broadcast expected-signature transactions as hazards", () => {
+    const hazard = createFinalityTransaction({
+      id: "ptx_hazard",
+      status: "signed",
+      expectedSignature: "sig_hazard",
+      lastValidBlockHeight: 150
+    });
+    const failedOnChain = createFinalityTransaction({
+      id: "ptx_failed",
+      status: "failed",
+      expectedSignature: "sig_failed"
+    });
+    const expiredBlockhash = createFinalityTransaction({
+      id: "ptx_expired",
+      status: "expired",
+      expectedSignature: "sig_expired"
+    });
+    const withoutSignature = createFinalityTransaction({
+      id: "ptx_no_signature",
+      status: "signed"
+    });
+
+    expect(
+      listPayoutBatchAllocationReleaseHazards([
+        hazard,
+        failedOnChain,
+        expiredBlockhash,
+        withoutSignature
+      ]).map((transaction) => transaction.id)
+    ).toEqual(["ptx_hazard"]);
+  });
+
+  it("blocks release when hazards lack chain proof", () => {
+    expect(() =>
+      assertPayoutBatchAllocationsReleasable({
+        transactions: [
+          createFinalityTransaction({
+            id: "ptx_hazard",
+            status: "signed",
+            expectedSignature: "sig_hazard"
+          })
+        ]
+      })
+    ).toThrowError(PayoutBatchReleaseBlockedError);
+    expect(() =>
+      assertPayoutBatchAllocationsReleasable({
+        transactions: [
+          createFinalityTransaction({
+            id: "ptx_hazard",
+            status: "signed",
+            expectedSignature: "sig_hazard"
+          })
+        ]
+      })
+    ).toThrow("may already be broadcast");
+  });
+
+  it("allows release when chain checks prove expiry or on-chain failure", () => {
+    expect(() =>
+      assertPayoutBatchAllocationsReleasable({
+        transactions: [
+          createFinalityTransaction({
+            id: "ptx_expired_check",
+            status: "signed",
+            expectedSignature: "sig_a"
+          }),
+          createFinalityTransaction({
+            id: "ptx_failed_check",
+            status: "signed",
+            expectedSignature: "sig_b"
+          })
+        ],
+        chainChecks: [
+          { transactionId: "ptx_expired_check", status: "expired" },
+          { transactionId: "ptx_failed_check", status: "failed" }
+        ]
+      })
+    ).not.toThrow();
+  });
+
+  it("does not accept landed or unproven chain checks as release proof", () => {
+    for (const status of [
+      "confirmed",
+      "finalized",
+      "retry",
+      "outcome_unknown"
+    ] as const) {
+      expect(() =>
+        assertPayoutBatchAllocationsReleasable({
+          transactions: [
+            createFinalityTransaction({
+              id: "ptx_hazard",
+              status: "signed",
+              expectedSignature: "sig_hazard"
+            })
+          ],
+          chainChecks: [{ transactionId: "ptx_hazard", status }]
+        })
+      ).toThrowError(PayoutBatchReleaseBlockedError);
+    }
+  });
+
+  it("allows release with an explicit operator override", () => {
+    expect(() =>
+      assertPayoutBatchAllocationsReleasable({
+        transactions: [
+          createFinalityTransaction({
+            id: "ptx_hazard",
+            status: "signed",
+            expectedSignature: "sig_hazard"
+          })
+        ],
+        override: { reason: "operator verified no transfer landed" }
+      })
+    ).not.toThrow();
+  });
+
+  it("reports hazard details on the blocked error", () => {
+    try {
+      assertPayoutBatchAllocationsReleasable({
+        transactions: [
+          createFinalityTransaction({
+            id: "ptx_hazard",
+            status: "signed",
+            expectedSignature: "sig_hazard"
+          })
+        ],
+        chainChecks: [{ transactionId: "ptx_hazard", status: "retry" }]
+      });
+      throw new Error("expected release to be blocked");
+    } catch (error) {
+      if (!(error instanceof PayoutBatchReleaseBlockedError)) {
+        throw error;
+      }
+      expect(error.code).toBe("payout_batch_release_blocked");
+      expect(error.hazards).toEqual([
+        {
+          transactionId: "ptx_hazard",
+          status: "signed",
+          expectedSignature: "sig_hazard",
+          chainStatus: "retry"
+        }
+      ]);
+    }
   });
 });
 

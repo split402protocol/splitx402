@@ -396,6 +396,9 @@ Current slice:
   internal and webhook outbox events;
 - add an unknown-outcome payout reconciliation queue for merchant/operator review;
 - add a payout reconciliation action endpoint and unknown-outcome runbook;
+- guard payout allocation release for maybe-broadcast signed transactions
+  behind chain proof (signature not found and blockhash expired at finalized
+  commitment) or an explicit operator override with a recorded reason;
 - add a Phase 6 custody review checklist and structured payout custody incident
   drill evidence;
 - add a Phase 6 custody evidence validator for production go/no-go bundles;

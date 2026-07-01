@@ -98,6 +98,39 @@ export interface ReleasePayoutBatchAllocationsInput {
   payoutBatchId: string;
   reason: string;
   now?: string;
+  override?: PayoutBatchAllocationReleaseOverride;
+  chainChecks?: readonly PayoutBatchReleaseChainCheck[];
+}
+
+export interface PayoutBatchAllocationReleaseOverride {
+  reason: string;
+}
+
+export type PayoutBatchReleaseChainCheckStatus =
+  | "confirmed"
+  | "finalized"
+  | "failed"
+  | "expired"
+  | "outcome_unknown"
+  | "retry";
+
+export interface PayoutBatchReleaseChainCheck {
+  transactionId: string;
+  status: PayoutBatchReleaseChainCheckStatus;
+}
+
+export interface PayoutBatchAllocationReleaseGuardTransaction {
+  id: string;
+  status: PayoutTransactionStatus;
+  expectedSignature?: string;
+}
+
+export interface PayoutBatchReleaseHazardDetail {
+  transactionId: string;
+  status: PayoutTransactionStatus;
+  expectedSignature?: string;
+  chainStatus?: PayoutBatchReleaseChainCheckStatus;
+  error?: string;
 }
 
 export interface SaveSignedPayoutTransactionsInput {
@@ -492,6 +525,18 @@ export class PayoutBatchConflictError extends Error {
   }
 }
 
+export class PayoutBatchReleaseBlockedError extends Error {
+  readonly code = "payout_batch_release_blocked";
+
+  constructor(
+    message: string,
+    readonly hazards: readonly PayoutBatchReleaseHazardDetail[] = []
+  ) {
+    super(message);
+    this.name = "PayoutBatchReleaseBlockedError";
+  }
+}
+
 export function createPayoutPreview(
   input: CreatePayoutPreviewInput
 ): PayoutPreview {
@@ -729,12 +774,23 @@ export function isPayoutBatchConflictError(
   return error instanceof PayoutBatchConflictError;
 }
 
+export function isPayoutBatchReleaseBlockedError(
+  error: unknown
+): error is PayoutBatchReleaseBlockedError {
+  return error instanceof PayoutBatchReleaseBlockedError;
+}
+
 export function releasePayoutBatchAllocationsForBatch(input: {
   batch: PayoutBatchRecord;
   reason: string;
   now?: string;
+  override?: PayoutBatchAllocationReleaseOverride;
 }): PayoutBatchRecord {
   const reason = assertNonEmptyString(input.reason, "reason");
+  const overrideReason =
+    input.override === undefined
+      ? undefined
+      : assertNonEmptyString(input.override.reason, "override.reason");
   const updatedAt = normalizeTimestamp(input.now ?? new Date().toISOString(), "now");
   if (!isPayoutBatchAllocationReleaseAllowed(input.batch.status)) {
     throw new PayoutBatchConflictError(
@@ -745,13 +801,71 @@ export function releasePayoutBatchAllocationsForBatch(input: {
     ...input.batch,
     status: "cancelled",
     failureCode: "allocations_released",
-    failureMessage: reason,
+    failureMessage:
+      overrideReason === undefined
+        ? reason
+        : `${reason} (operator override: ${overrideReason})`,
     updatedAt,
     items: input.batch.items.map((item) => ({
       ...item,
       status: "released"
     }))
   };
+}
+
+export function listPayoutBatchAllocationReleaseHazards<
+  T extends PayoutBatchAllocationReleaseGuardTransaction
+>(transactions: readonly T[]): T[] {
+  // A transaction with persisted expected-signature bytes may already have been
+  // accepted by an RPC even when the broadcast attempt reported "retry", so
+  // only chain-terminal statuses that cannot land later are safe to release.
+  return transactions.filter(
+    (transaction) =>
+      transaction.expectedSignature !== undefined &&
+      transaction.status !== "failed" &&
+      transaction.status !== "expired"
+  );
+}
+
+export function assertPayoutBatchAllocationsReleasable(input: {
+  transactions: readonly PayoutBatchAllocationReleaseGuardTransaction[];
+  chainChecks?: readonly PayoutBatchReleaseChainCheck[];
+  override?: PayoutBatchAllocationReleaseOverride;
+}): void {
+  if (input.override !== undefined) {
+    assertNonEmptyString(input.override.reason, "override.reason");
+    return;
+  }
+  const chainStatusByTransactionId = new Map(
+    (input.chainChecks ?? []).map((check) => [check.transactionId, check.status])
+  );
+  const hazards = listPayoutBatchAllocationReleaseHazards(
+    input.transactions
+  ).filter((transaction) => {
+    const chainStatus = chainStatusByTransactionId.get(transaction.id);
+    return chainStatus !== "expired" && chainStatus !== "failed";
+  });
+  if (hazards.length === 0) {
+    return;
+  }
+  throw new PayoutBatchReleaseBlockedError(
+    `payout batch allocations cannot be released: ${hazards.length} signed payout transaction(s) may already be broadcast (${hazards
+      .map((transaction) => transaction.id)
+      .join(
+        ", "
+      )}); require a chain finality check proving the signature did not land and the blockhash expired, or an explicit operator override with a reason`,
+    hazards.map((transaction) => {
+      const chainStatus = chainStatusByTransactionId.get(transaction.id);
+      return {
+        transactionId: transaction.id,
+        status: transaction.status,
+        ...(transaction.expectedSignature === undefined
+          ? {}
+          : { expectedSignature: transaction.expectedSignature }),
+        ...(chainStatus === undefined ? {} : { chainStatus })
+      };
+    })
+  );
 }
 
 export function isPayoutBatchAllocationReleaseAllowed(
