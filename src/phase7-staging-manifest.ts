@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
 
 import { writeCliTextOutput } from "./cliOutput.js";
@@ -21,7 +21,9 @@ if (proofPath === undefined || proofPath.trim().length === 0) {
     artifactBaseDir,
     readArtifact: (path) => readFileSync(path),
     resolveArtifactPath: (artifactPath, baseDir) =>
-      isAbsolute(artifactPath) ? artifactPath : resolve(baseDir, artifactPath),
+      isAbsolute(artifactPath) || existsSync(artifactPath)
+        ? artifactPath
+        : resolve(baseDir, artifactPath),
   });
   writeCliTextOutput({
     text: `${JSON.stringify(manifest, null, 2)}\n`,
