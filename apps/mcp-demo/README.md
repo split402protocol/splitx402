@@ -138,6 +138,7 @@ Example external x402 onboarding request:
     "arguments": {
       "merchantOrigin": "https://x402.example",
       "capability": "crypto.price",
+      "matchPath": "/price",
       "providerIdPrefix": "example-provider"
     }
   }

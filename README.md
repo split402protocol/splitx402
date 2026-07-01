@@ -666,6 +666,10 @@ corepack pnpm demo:discover-external-x402 https://x402.example \
   --provider-id-prefix example-provider
 ```
 
+See [External x402 Provider Onboarding](docs/runbooks/external-x402-provider-onboarding.md)
+for the readiness meanings and the Split402 offer/receipt metadata a provider
+must add before routes become referral-ready.
+
 Run the deterministic gateway smoke proof:
 
 ```bash

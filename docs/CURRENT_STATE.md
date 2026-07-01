@@ -58,6 +58,12 @@ flowchart LR
 | Control plane | Implemented foundation: receipt ingestion, merchant/campaign/route registries, wallet auth, PostgreSQL persistence, receipt economic-policy verification, pending-only public merchant/origin registration, outbox workers, chain verification, public merchant reliability profiles, merchant dashboard summaries, payout-obligation summaries with optional Solana RPC funding balances, webhook delivery feeds, referrer balances/routes, Bazaar-compatible route metadata, and signed webhooks for accepted receipts and payout lifecycle events. |
 | Payout engine | In progress: preview, allocation, safe allocation release, Solana transfer planning, simulation, signer policy, local-dev signer, remote signer client, signer appliance scaffold, signer deployment and private-network artifacts, custody evidence gates, signed-byte persistence, broadcast boundary, finality monitor, rollup, lifecycle events, terminal accrual states for chain rejection and paid payout closure, unknown-outcome reconciliation queue, referrer payout views, and ledger closure are present. |
 
+External x402 provider onboarding is documented in
+[External x402 Provider Onboarding](runbooks/external-x402-provider-onboarding.md).
+The issue #131 provider currently discovers as a Base x402 candidate, but its
+routes are not referral-ready until they return Split402 offer and receipt
+metadata.
+
 ## What Is Not Built Yet
 
 - The original x402 payment is not atomically split onchain in the MVP.

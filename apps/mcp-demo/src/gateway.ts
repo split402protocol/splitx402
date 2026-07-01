@@ -402,6 +402,13 @@ async function handleExternalX402DiscoveryTool(
   if (providerIdPrefix !== undefined && typeof providerIdPrefix !== "string") {
     return createErrorResponse(id, -32602, providerIdPrefix.message);
   }
+  const matchPath =
+    record.matchPath === undefined
+      ? undefined
+      : readRequiredStringArgument(record.matchPath, "matchPath");
+  if (matchPath !== undefined && typeof matchPath !== "string") {
+    return createErrorResponse(id, -32602, matchPath.message);
+  }
   const includeFreeRoutes =
     record.includeFreeRoutes === undefined
       ? false
@@ -426,10 +433,16 @@ async function handleExternalX402DiscoveryTool(
                 : `external.${route.operationId}`
           })
     });
-    const candidates = await discovery.discoverCandidates({
+    const discoveredCandidates = await discovery.discoverCandidates({
       ...(capability === undefined ? {} : { capability }),
       includeFreeRoutes
     });
+    const candidates =
+      matchPath === undefined
+        ? discoveredCandidates
+        : discoveredCandidates.filter((candidate) =>
+            candidate.path.includes(matchPath)
+          );
     return createToolResultResponse(id, {
       status: "discovered",
       merchantOrigin,
@@ -675,6 +688,7 @@ function routerToolCards() {
         properties: {
           merchantOrigin: { type: "string" },
           capability: { type: "string" },
+          matchPath: { type: "string" },
           providerIdPrefix: { type: "string" },
           includeFreeRoutes: { type: "boolean" }
         },
