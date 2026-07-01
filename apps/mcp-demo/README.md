@@ -149,10 +149,12 @@ This tool only reads public metadata and unpaid `402 Payment Required`
 responses. Plain x402 APIs are reported as `requires_split402_campaign` until
 their payment requirement includes a Split402 offer extension, so discovery does
 not overstate them as referral-ready providers. Candidate responses include
-`requiredSplit402Fields` and `nextActions`. Base/EVM x402 routes can become
-router-ready after a signed Split402 offer and matching merchant-signed receipt,
-but they still require low-value hosted staging proof before any production or
-mainnet claim.
+`requiredSplit402Fields` and `nextActions`. If an external API includes a
+malformed `extensions.split402.info`, the response includes
+`split402OfferErrors` so the provider can fix exact fields before paid staging.
+Base/EVM x402 routes can become router-ready after a signed Split402 offer and
+matching merchant-signed receipt, but they still require low-value hosted
+staging proof before any production or mainnet claim.
 
 The same onboarding check can be run without an MCP client:
 

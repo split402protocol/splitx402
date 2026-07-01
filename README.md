@@ -668,9 +668,10 @@ corepack pnpm demo:discover-external-x402 https://x402.example \
 
 See [External x402 Provider Onboarding](docs/runbooks/external-x402-provider-onboarding.md)
 for readiness meanings, required Split402 offer fields, provider next actions,
-and the Base/EVM boundary: signed offers and receipts can carry EVM asset and
-wallet identifiers for public-alpha routing, but hosted proof, custody, and
-mainnet approvals remain separate gates.
+field-level `split402OfferErrors` for malformed extensions, and the Base/EVM
+boundary: signed offers and receipts can carry EVM asset and wallet identifiers
+for public-alpha routing, but hosted proof, custody, and mainnet approvals
+remain separate gates.
 
 Run the deterministic gateway smoke proof:
 

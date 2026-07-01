@@ -177,6 +177,7 @@ export interface Split402ExternalX402ProviderCandidate {
   facilitator?: string;
   inputSchema?: unknown;
   split402Offer?: Split402OfferV1;
+  split402OfferErrors?: string[];
   readiness:
     | "router_ready"
     | "requires_split402_campaign"
@@ -769,7 +770,8 @@ export class Split402ExternalX402DiscoveryClient {
     const probe = await this.probePaymentRequired(route);
     const paymentRequired = probe.paymentRequired;
     const accept = selectExactPaymentRequirement(paymentRequired);
-    const split402Offer = extractSplit402OfferFromPaymentRequired(paymentRequired);
+    const split402OfferResult = parseSplit402OfferFromPaymentRequired(paymentRequired);
+    const split402Offer = split402OfferResult.offer;
     const network = accept?.network;
     const asset = accept?.asset;
     const payToWallet = accept?.payTo;
@@ -785,8 +787,10 @@ export class Split402ExternalX402DiscoveryClient {
     ) {
       blockers.push("missing complete x402 exact payment metadata");
     }
-    if (split402Offer === undefined) {
+    if (!split402OfferResult.present) {
       blockers.push("missing Split402 offer extension");
+    } else if (split402Offer === undefined) {
+      blockers.push("invalid Split402 offer extension");
     }
     const provider =
       blockers.length === 0 && split402Offer !== undefined
@@ -819,6 +823,9 @@ export class Split402ExternalX402DiscoveryClient {
       ...(facilitator === undefined ? {} : { facilitator }),
       ...(route.inputSchema === undefined ? {} : { inputSchema: route.inputSchema }),
       ...(split402Offer === undefined ? {} : { split402Offer }),
+      ...(split402OfferResult.errors.length === 0
+        ? {}
+        : { split402OfferErrors: split402OfferResult.errors }),
       readiness,
       blockers,
       source: {
@@ -1262,12 +1269,28 @@ function selectExactPaymentRequirement(
   return paymentRequired?.accepts.find((accept) => accept.scheme === "exact");
 }
 
-function extractSplit402OfferFromPaymentRequired(
+function parseSplit402OfferFromPaymentRequired(
   paymentRequired: PaymentRequired | undefined
-): Split402OfferV1 | undefined {
+): {
+  present: boolean;
+  offer?: Split402OfferV1;
+  errors: string[];
+} {
   const split402 = readRecord(readRecord(paymentRequired?.extensions)?.split402);
-  const parsed = Split402OfferV1Schema.safeParse(split402?.info);
-  return parsed.success ? parsed.data : undefined;
+  if (split402?.info === undefined) {
+    return { present: false, errors: [] };
+  }
+  const parsed = Split402OfferV1Schema.safeParse(split402.info);
+  if (parsed.success) {
+    return { present: true, offer: parsed.data, errors: [] };
+  }
+  return {
+    present: true,
+    errors: parsed.error.issues.map((issue) => {
+      const path = issue.path.length === 0 ? "info" : issue.path.join(".");
+      return `${path}: ${issue.message}`;
+    })
+  };
 }
 
 function readPaymentResourcePath(
