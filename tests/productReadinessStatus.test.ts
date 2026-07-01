@@ -332,6 +332,12 @@ approval_decision: no-go
     expect(report.githubSettingsReview.blockers).toContain(
       "github settings review decision is not approved; keep launch no-go until live public/private/license review is complete",
     );
+    expect(report.nextActions).toContain(
+      "Complete the human GitHub public/private/license review, then set split402-launch-evidence/github-settings-review.txt review_decision to approved only when the live review is complete.",
+    );
+    expect(report.nextActions).not.toContain(
+      "Fix GitHub public/private/license review blockers, then regenerate split402-launch-evidence/github-settings-review.txt with corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt.",
+    );
     expect(report.readyForPublicBoundary).toBe(false);
     expect(report.launchDecision).toBe("no-go");
   });
