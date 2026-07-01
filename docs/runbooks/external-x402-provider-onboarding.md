@@ -13,12 +13,31 @@ corepack pnpm demo:discover-external-x402 https://x402.example \
   --capability crypto.price \
   --match-path /price \
   --provider-id-prefix partner \
-  --merchant-public-key <merchant-offer-receipt-public-key>
+  --merchant-public-key <merchant-offer-receipt-public-key> \
+  --artifacts-dir split402-provider-artifacts
 ```
 
 The report lists candidate route paths, HTTP methods, network, asset,
 amountAtomic, pay-to wallet, readiness, blockers, required Split402 offer
 fields, and provider next actions.
+
+When `--artifacts-dir` is supplied, discovery also writes per-candidate provider
+files:
+
+```text
+split402-provider-artifacts/
+  manifest.json
+  partner_get.price/
+    README.md
+    campaign-terms.template.json
+    unsigned-offer.template.json
+    receipt.template.json
+```
+
+These files are safe scaffolds, not signed production artifacts. Providers
+should finalize campaign ids, merchant ids, economics, timestamps, nonce, and
+`kid`; compute the real campaign terms hash; sign the offer; then validate the
+public artifacts before paid staging.
 
 When x402 payment metadata is complete but Split402 metadata is missing or not
 yet trusted, candidate output also includes `split402OfferTemplate`. This is a

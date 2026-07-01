@@ -147,20 +147,25 @@ describe("external x402 onboarding CLI", () => {
       parseDiscoverExternalX402Args([
         "https://x402.example",
         "--merchant-public-key",
-        "merchant-public-key"
+        "merchant-public-key",
+        "--artifacts-dir",
+        "provider-artifacts"
       ])
     ).toMatchObject({
       merchantOrigin: "https://x402.example",
-      merchantPublicKey: "merchant-public-key"
+      merchantPublicKey: "merchant-public-key",
+      artifactsDir: "provider-artifacts"
     });
     expect(
       parseDiscoverExternalX402Args([], {
         SPLIT402_EXTERNAL_X402_ORIGIN: "https://x402.example",
-        SPLIT402_EXTERNAL_X402_MERCHANT_PUBLIC_KEY: "env-merchant-public-key"
+        SPLIT402_EXTERNAL_X402_MERCHANT_PUBLIC_KEY: "env-merchant-public-key",
+        SPLIT402_EXTERNAL_X402_ARTIFACTS_DIR: "env-provider-artifacts"
       })
     ).toMatchObject({
       merchantOrigin: "https://x402.example",
-      merchantPublicKey: "env-merchant-public-key"
+      merchantPublicKey: "env-merchant-public-key",
+      artifactsDir: "env-provider-artifacts"
     });
   });
 
@@ -208,7 +213,9 @@ describe("external x402 onboarding CLI", () => {
               requiredAmountAtomic: "20000",
               payToWallet: "0x68614873C5d624c07DCAA3aFF5243DD5027c3910",
               commissionBps: 2000,
-              protocolFeeBpsOfCommission: 1000
+              protocolFeeBpsOfCommission: 1000,
+              attributionRequired: true,
+              allowSelfReferral: false
             }),
             unsignedOfferTemplate: expect.objectContaining({
               resourceOrigin: "https://x402.example",
@@ -308,6 +315,7 @@ describe("external x402 onboarding CLI", () => {
   it("writes external x402 onboarding reports as UTF-8 JSON", async () => {
     const directory = mkdtempSync(join(tmpdir(), "split402-x402-onboarding-"));
     const outputPath = join(directory, "external-x402.json");
+    const artifactsDir = join(directory, "provider-artifacts");
     try {
       await writeExternalX402OnboardingOutput({
         merchantOrigin: "https://x402.example",
@@ -316,6 +324,7 @@ describe("external x402 onboarding CLI", () => {
         providerIdPrefix: "issue-131",
         fetch: mcpExternalX402Fetch(),
         outputPath,
+        artifactsDir,
         generatedAt: "2026-07-01T00:00:00.000Z"
       });
 
@@ -327,6 +336,38 @@ describe("external x402 onboarding CLI", () => {
       };
       expect(parsed.schema).toBe("split402.external_x402_onboarding.v1");
       expect(parsed.candidateCount).toBe(1);
+      const candidateDir = join(
+        artifactsDir,
+        "issue-131_get.price.coin"
+      );
+      const manifest = JSON.parse(
+        readFileSync(join(artifactsDir, "manifest.json"), "utf8")
+      ) as {
+        schema: string;
+        candidates: Array<{ files: string[] }>;
+      };
+      expect(manifest.schema).toBe(
+        "split402.external_x402_provider_artifacts.v1"
+      );
+      expect(manifest.candidates[0]?.files).toEqual(
+        expect.arrayContaining([
+          "campaign-terms.template.json",
+          "unsigned-offer.template.json",
+          "receipt.template.json",
+          "README.md"
+        ])
+      );
+      const campaignTerms = JSON.parse(
+        readFileSync(join(candidateDir, "campaign-terms.template.json"), "utf8")
+      ) as {
+        attributionRequired: boolean;
+        allowSelfReferral: boolean;
+      };
+      expect(campaignTerms.attributionRequired).toBe(true);
+      expect(campaignTerms.allowSelfReferral).toBe(false);
+      expect(
+        readFileSync(join(candidateDir, "README.md"), "utf8")
+      ).toContain("--campaign-terms-file campaign-terms.json");
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
@@ -1937,7 +1978,9 @@ function createExternalSplit402Offer(): {
     commissionBps: 2000,
     protocolFeeBpsOfCommission: 1000,
     commissionBase: "required_amount",
-    settlementMode: "accrual"
+    settlementMode: "accrual",
+    attributionRequired: true,
+    allowSelfReferral: false
   };
   const unsignedOffer = {
     protocolVersion: "0.1",
