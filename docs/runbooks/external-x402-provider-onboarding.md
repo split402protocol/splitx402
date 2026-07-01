@@ -72,6 +72,29 @@ The same check is available through the MCP gateway tool
 }
 ```
 
+After building a signed offer and, later, a signed receipt, providers can run a
+local no-secrets artifact check before asking Split402 to rerun discovery or
+paid staging:
+
+```bash
+corepack pnpm demo:validate-external-x402-artifacts -- \
+  --merchant-origin https://x402.example \
+  --operation-id get.price \
+  --network eip155:8453 \
+  --asset 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 \
+  --pay-to-wallet 0x68614873C5d624c07DCAA3aFF5243DD5027c3910 \
+  --required-amount-atomic 10000 \
+  --merchant-public-key <merchant-offer-receipt-public-key> \
+  --offer-file offer.json \
+  --receipt-file receipt.json
+```
+
+The receipt file is optional while validating the unpaid `402 Payment Required`
+offer response. The validator checks public JSON artifacts only: schema,
+merchant signature, x402 route metadata binding, offer/receipt consistency, and
+receipt arithmetic. It never needs private keys, bearer tokens, raw payment
+payloads, facilitator secrets, or private settlement evidence.
+
 Readiness meanings:
 
 | Readiness | Meaning |

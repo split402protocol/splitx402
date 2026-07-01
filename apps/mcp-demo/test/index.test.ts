@@ -1,16 +1,19 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 import { describe, expect, it } from "vitest";
 import {
   buildOfferSigningBytes,
+  buildReceiptSigningBytes,
+  calculateCommission,
   createSampleProtocolArtifacts,
   deriveEd25519PublicKey,
   hashProtocolObject,
   hexToBytes,
   signEd25519Message,
-  type Split402OfferV1
+  type Split402OfferV1,
+  type Split402ReceiptV1
 } from "@split402/protocol";
 import { encodePaymentRequiredHeader } from "@x402/core/http";
 import type { PaymentRequired } from "@x402/core/types";
@@ -35,6 +38,11 @@ import {
   parseDiscoverExternalX402Args,
   writeExternalX402OnboardingOutput
 } from "../src/discover-external-x402.js";
+import {
+  parseValidateExternalX402ArtifactsArgs,
+  runValidateExternalX402ArtifactsCli,
+  validateExternalX402Artifacts
+} from "../src/validate-external-x402-artifacts.js";
 import { runMcpGatewaySmoke } from "../src/gateway-smoke.js";
 import { createMcpDemoBundle } from "../src/index.js";
 import { writeMcpDemoBundleOutput } from "../src/bundle.js";
@@ -322,6 +330,115 @@ describe("external x402 onboarding CLI", () => {
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
+  });
+});
+
+describe("external x402 artifact validation", () => {
+  it("validates signed offers and receipts against route metadata", () => {
+    const signed = createExternalSplit402Offer();
+    const receipt = createExternalSplit402Receipt(signed.offer);
+
+    expect(
+      validateExternalX402Artifacts({
+        merchantOrigin: "https://x402.example",
+        operationId: "get.price.coin",
+        network: EXTERNAL_X402_NETWORK,
+        asset: EXTERNAL_X402_ASSET,
+        payToWallet: EXTERNAL_X402_PAY_TO_WALLET,
+        requiredAmountAtomic: EXTERNAL_X402_AMOUNT_ATOMIC,
+        merchantPublicKey: signed.merchantPublicKey,
+        offer: signed.offer,
+        receipt
+      })
+    ).toEqual({
+      ok: true,
+      errors: [],
+      checks: {
+        offerSchema: true,
+        offerSignature: true,
+        offerMatchesPayment: true,
+        receiptSchema: true,
+        receiptSignatureAndArithmetic: true,
+        receiptMatchesOfferAndPayment: true
+      }
+    });
+  });
+
+  it("rejects artifacts that disagree with external x402 route metadata", () => {
+    const signed = createExternalSplit402Offer();
+
+    expect(
+      validateExternalX402Artifacts({
+        merchantOrigin: "https://x402.example",
+        operationId: "get.price.coin",
+        network: EXTERNAL_X402_NETWORK,
+        asset: EXTERNAL_X402_ASSET,
+        payToWallet: EXTERNAL_X402_PAY_TO_WALLET,
+        requiredAmountAtomic: "10000",
+        merchantPublicKey: signed.merchantPublicKey,
+        offer: signed.offer
+      })
+    ).toMatchObject({
+      ok: false,
+      errors: expect.arrayContaining([
+        "offer.requiredAmountAtomic mismatch: expected 10000, got 20000"
+      ]),
+      checks: {
+        offerSchema: true,
+        offerSignature: true,
+        offerMatchesPayment: false
+      }
+    });
+  });
+
+  it("runs artifact validation from JSON files", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "split402-x402-validate-"));
+    const offerPath = join(directory, "offer.json");
+    const receiptPath = join(directory, "receipt.json");
+    const signed = createExternalSplit402Offer();
+    const receipt = createExternalSplit402Receipt(signed.offer);
+    const logs: string[] = [];
+    const originalLog = console.log;
+    try {
+      writeFileSync(offerPath, JSON.stringify(signed.offer), "utf8");
+      writeFileSync(receiptPath, JSON.stringify(receipt), "utf8");
+      console.log = (value?: unknown) => {
+        logs.push(String(value));
+      };
+
+      await expect(
+        runValidateExternalX402ArtifactsCli([
+          "--merchant-origin",
+          "https://x402.example",
+          "--operation-id",
+          "get.price.coin",
+          "--network",
+          EXTERNAL_X402_NETWORK,
+          "--asset",
+          EXTERNAL_X402_ASSET,
+          "--pay-to-wallet",
+          EXTERNAL_X402_PAY_TO_WALLET,
+          "--required-amount-atomic",
+          EXTERNAL_X402_AMOUNT_ATOMIC,
+          "--merchant-public-key",
+          signed.merchantPublicKey,
+          "--offer-file",
+          offerPath,
+          "--receipt-file",
+          receiptPath
+        ])
+      ).resolves.toBe(0);
+    } finally {
+      console.log = originalLog;
+      rmSync(directory, { recursive: true, force: true });
+    }
+    expect(JSON.parse(logs.join("\n"))).toMatchObject({ ok: true });
+  });
+
+  it("parses artifact validation help flags", () => {
+    expect(parseValidateExternalX402ArtifactsArgs(["--help"])).toEqual({
+      help: true
+    });
   });
 });
 
@@ -1692,6 +1809,63 @@ function createExternalSplit402Offer(): {
       ...unsignedOffer,
       signature
     }
+  };
+}
+
+function createExternalSplit402Receipt(
+  offer: Split402OfferV1
+): Split402ReceiptV1 {
+  const sample = createSampleProtocolArtifacts();
+  const economics = calculateCommission(
+    BigInt(offer.requiredAmountAtomic),
+    BigInt(offer.commissionBps),
+    BigInt(offer.protocolFeeBpsOfCommission)
+  );
+  const unsignedReceipt = {
+    protocolVersion: "0.1",
+    receiptId: "rcp_10000000000000000000000000000001",
+    merchantId: offer.merchantId,
+    merchantOrigin: offer.resourceOrigin,
+    operationId: offer.operationId,
+    requestDigest:
+      "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    campaignId: offer.campaignId,
+    campaignVersion: offer.campaignVersion,
+    campaignTermsHash: offer.campaignTermsHash,
+    routeId: "rte_10000000000000000000000000000001",
+    referralClaimHash:
+      "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    referrerWallet: sample.keys.referrerPublicKey,
+    payoutWallet: sample.keys.payoutWallet,
+    paymentId: "pay_10000000000000000000000000000001",
+    network: offer.network,
+    asset: offer.asset,
+    payerWallet: "0x1111111111111111111111111111111111111111",
+    payToWallet: offer.payToWallet,
+    requiredAmountAtomic: offer.requiredAmountAtomic,
+    settledAmountAtomic: offer.requiredAmountAtomic,
+    settlementTxSignature: "0xsettled",
+    commissionBps: offer.commissionBps,
+    protocolFeeBpsOfCommission: offer.protocolFeeBpsOfCommission,
+    commissionBaseAtomic: offer.requiredAmountAtomic,
+    commissionAmountAtomic: economics.commission.toString(),
+    protocolFeeAtomic: economics.protocolFee.toString(),
+    referrerCreditAtomic: economics.referrerCredit.toString(),
+    settlementMode: "accrual",
+    offerNonce: offer.offerNonce,
+    settledAt: "2026-07-01T00:01:00.000Z",
+    issuedAt: "2026-07-01T00:01:01.000Z",
+    recordingStatus: "accepted",
+    eventId: "evt_10000000000000000000000000000001",
+    kid: offer.kid
+  } satisfies Omit<Split402ReceiptV1, "signature">;
+  const signature = signEd25519Message(
+    buildReceiptSigningBytes(unsignedReceipt),
+    EXTERNAL_MERCHANT_SEED
+  ).signature;
+  return {
+    ...unsignedReceipt,
+    signature
   };
 }
 
