@@ -48,6 +48,7 @@ export interface DiscoverExternalX402Input {
   capability?: string;
   matchPath?: string;
   providerIdPrefix?: string;
+  merchantPublicKey?: string;
   includeFreeRoutes?: boolean;
   fetch?: Split402ExternalX402DiscoveryFetch;
   generatedAt?: string;
@@ -63,6 +64,9 @@ export async function discoverExternalX402Onboarding(
     ...(input.providerIdPrefix === undefined
       ? {}
       : { providerIdPrefix: input.providerIdPrefix }),
+    ...(input.merchantPublicKey === undefined
+      ? {}
+      : { merchantPublicKey: input.merchantPublicKey }),
     ...(capability === undefined
       ? {}
       : { capabilityMapper: () => capability })
@@ -128,6 +132,9 @@ export function parseDiscoverExternalX402Args(
   let providerIdPrefix = normalizeOptionalString(
     env.SPLIT402_EXTERNAL_X402_PROVIDER_ID_PREFIX
   );
+  let merchantPublicKey = normalizeOptionalString(
+    env.SPLIT402_EXTERNAL_X402_MERCHANT_PUBLIC_KEY
+  );
   let outputPath = normalizeOptionalString(env.SPLIT402_EXTERNAL_X402_OUTPUT);
   let includeFreeRoutes = env.SPLIT402_EXTERNAL_X402_INCLUDE_FREE === "1";
 
@@ -144,6 +151,11 @@ export function parseDiscoverExternalX402Args(
     }
     if (arg === "--provider-id-prefix") {
       providerIdPrefix = readFollowingArg(argv, index, arg);
+      index += 1;
+      continue;
+    }
+    if (arg === "--merchant-public-key") {
+      merchantPublicKey = readFollowingArg(argv, index, arg);
       index += 1;
       continue;
     }
@@ -172,6 +184,7 @@ export function parseDiscoverExternalX402Args(
     ...(capability === undefined ? {} : { capability }),
     ...(matchPath === undefined ? {} : { matchPath }),
     ...(providerIdPrefix === undefined ? {} : { providerIdPrefix }),
+    ...(merchantPublicKey === undefined ? {} : { merchantPublicKey }),
     ...(outputPath === undefined ? {} : { outputPath }),
     includeFreeRoutes
   };
@@ -184,6 +197,7 @@ Options:
   --capability <name>             Label discovered candidates with a capability.
   --match-path <substring>        Keep only candidates whose path contains it.
   --provider-id-prefix <prefix>   Prefix generated provider ids.
+  --merchant-public-key <key>     Verify signed Split402 offers with this merchant key.
   --include-free                  Include free routes from the external manifest.
   --output <path>                 Write JSON report to a file.
 
@@ -192,6 +206,7 @@ Environment:
   SPLIT402_EXTERNAL_X402_CAPABILITY
   SPLIT402_EXTERNAL_X402_MATCH_PATH
   SPLIT402_EXTERNAL_X402_PROVIDER_ID_PREFIX
+  SPLIT402_EXTERNAL_X402_MERCHANT_PUBLIC_KEY
   SPLIT402_EXTERNAL_X402_INCLUDE_FREE=1
   SPLIT402_EXTERNAL_X402_OUTPUT
 `;
