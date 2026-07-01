@@ -76,6 +76,10 @@ describe("repository presentation", () => {
 
   it("keeps required GitHub validation and security automation configured", () => {
     const ciWorkflow = readFileSync(".github/workflows/ci.yml", "utf8");
+    const launchGatesWorkflow = readFileSync(
+      ".github/workflows/launch-gates.yml",
+      "utf8",
+    );
     const codeowners = readFileSync(".github/CODEOWNERS", "utf8");
     const repositorySettings = readFileSync(
       "docs/GITHUB_REPOSITORY_SETTINGS.md",
@@ -104,6 +108,34 @@ describe("repository presentation", () => {
     expect(ciWorkflow).toContain("corepack pnpm test:postgres");
     expect(ciWorkflow).toContain("postgres:16");
 
+    for (const checkName of [
+      "Lint",
+      "Public surface check",
+      "Typecheck",
+      "Test",
+      "Build",
+      "Check vectors",
+      "Audit",
+      "Local public-alpha proof",
+    ]) {
+      expect(launchGatesWorkflow).toContain(`name: ${checkName}`);
+    }
+    expect(launchGatesWorkflow).toContain("corepack pnpm lint");
+    expect(launchGatesWorkflow).toContain(
+      "corepack pnpm product:public-surface-check --brief",
+    );
+    expect(launchGatesWorkflow).toContain("corepack pnpm typecheck");
+    expect(launchGatesWorkflow).toContain("corepack pnpm test");
+    expect(launchGatesWorkflow).toContain("corepack pnpm build");
+    expect(launchGatesWorkflow).toContain("corepack pnpm vectors:check");
+    expect(launchGatesWorkflow).toContain(
+      "corepack pnpm audit --audit-level high",
+    );
+    expect(launchGatesWorkflow).toContain(
+      "corepack pnpm product:local-proof --brief",
+    );
+    expect(launchGatesWorkflow).toContain("name: Build workspace");
+
     expect(codeowners).toContain("* @split402protocol");
     expect(codeowners).toContain("/packages/protocol/ @split402protocol");
     expect(codeowners).toContain("/packages/control-plane/ @split402protocol");
@@ -124,8 +156,10 @@ describe("repository presentation", () => {
 
     expect(codeqlWorkflow).toContain("github/codeql-action/init@v3");
     expect(codeqlWorkflow).toContain("javascript-typescript");
+    expect(codeqlWorkflow).toContain("name: CodeQL");
 
     expect(secretScanWorkflow).toContain("gitleaks/gitleaks-action@v2.3.9");
+    expect(secretScanWorkflow).toContain("name: Secret scan");
     expect(secretScanWorkflow).toContain("fetch-depth: 0");
     expect(secretScanWorkflow).toContain("GITHUB_TOKEN");
 

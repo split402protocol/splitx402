@@ -45,6 +45,10 @@ Required status checks:
 - CodeQL
 - Secret scan
 
+The tracked Launch Gates workflow exposes the local validation commands as
+separate check names so branch protection can require each launch gate directly
+instead of only requiring the aggregate CI job.
+
 ## Merge Policy
 
 Use reviewable pull requests. Squash, merge commit, and rebase can remain
