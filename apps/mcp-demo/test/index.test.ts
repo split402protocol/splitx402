@@ -236,7 +236,8 @@ describe("MCP demo gateway", () => {
       required: ["merchantOrigin"],
       properties: {
         merchantOrigin: { type: "string" },
-        capability: { type: "string" }
+        capability: { type: "string" },
+        matchPath: { type: "string" }
       }
     });
   });
@@ -412,6 +413,7 @@ describe("MCP demo gateway", () => {
           arguments: {
             merchantOrigin: "https://x402.example",
             capability: "crypto.price",
+            matchPath: "/price",
             providerIdPrefix: "issue-131"
           }
         }
