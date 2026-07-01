@@ -190,6 +190,32 @@ describe("external x402 onboarding CLI", () => {
             "protocolFeeBpsOfCommission",
             "signature"
           ]),
+          split402OfferTemplate: expect.objectContaining({
+            extensionPath: "extensions.split402.info",
+            campaignTermsTemplate: expect.objectContaining({
+              resourceOrigin: "https://x402.example",
+              operationIds: ["get.price.coin"],
+              network: "eip155:8453",
+              asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+              requiredAmountAtomic: "20000",
+              payToWallet: "0x68614873C5d624c07DCAA3aFF5243DD5027c3910",
+              commissionBps: 2000,
+              protocolFeeBpsOfCommission: 1000
+            }),
+            unsignedOfferTemplate: expect.objectContaining({
+              resourceOrigin: "https://x402.example",
+              operationId: "get.price.coin",
+              network: "eip155:8453",
+              asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+              requiredAmountAtomic: "20000",
+              payToWallet: "0x68614873C5d624c07DCAA3aFF5243DD5027c3910",
+              campaignTermsHash:
+                "sha256:<hash of finalized campaignTermsTemplate canonical JSON>"
+            }),
+            signatureInstructions: expect.arrayContaining([
+              "Set signature on extensions.split402.info and publish only the public verification key for the kid."
+            ])
+          }),
           nextActions: expect.arrayContaining([
             "Add extensions.split402.info to the unpaid 402 Payment Required response.",
             "Return a merchant-signed Split402 receipt after successful x402 settlement.",
@@ -204,17 +230,17 @@ describe("external x402 onboarding CLI", () => {
   it("marks signed external x402 candidates router-ready when the merchant key verifies", async () => {
     const signed = createExternalSplit402Offer();
 
-    await expect(
-      discoverExternalX402Onboarding({
-        merchantOrigin: "https://x402.example",
-        capability: "crypto.price",
-        matchPath: "/price",
-        providerIdPrefix: "issue-131",
-        merchantPublicKey: signed.merchantPublicKey,
-        fetch: mcpExternalX402Fetch({ split402Offer: signed.offer }),
-        generatedAt: "2026-07-01T00:00:00.000Z"
-      })
-    ).resolves.toMatchObject({
+    const report = await discoverExternalX402Onboarding({
+      merchantOrigin: "https://x402.example",
+      capability: "crypto.price",
+      matchPath: "/price",
+      providerIdPrefix: "issue-131",
+      merchantPublicKey: signed.merchantPublicKey,
+      fetch: mcpExternalX402Fetch({ split402Offer: signed.offer }),
+      generatedAt: "2026-07-01T00:00:00.000Z"
+    });
+
+    expect(report).toMatchObject({
       candidateCount: 1,
       routerReadyCount: 1,
       candidates: [
@@ -237,6 +263,7 @@ describe("external x402 onboarding CLI", () => {
         })
       ]
     });
+    expect(report.candidates[0]).not.toHaveProperty("split402OfferTemplate");
   });
 
   it("writes external x402 onboarding reports as UTF-8 JSON", async () => {
@@ -532,6 +559,15 @@ describe("MCP demo gateway", () => {
                 "protocolFeeBpsOfCommission",
                 "signature"
               ]),
+              split402OfferTemplate: expect.objectContaining({
+                extensionPath: "extensions.split402.info",
+                unsignedOfferTemplate: expect.objectContaining({
+                  operationId: "get.price.coin",
+                  network: "eip155:8453",
+                  asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                  requiredAmountAtomic: "20000"
+                })
+              }),
               nextActions: expect.arrayContaining([
                 "Add extensions.split402.info to the unpaid 402 Payment Required response.",
                 "Return a merchant-signed Split402 receipt after successful x402 settlement.",
@@ -605,6 +641,14 @@ describe("MCP demo gateway", () => {
         isError: false
       }
     });
+    const structuredContent = response?.result as {
+      structuredContent?: {
+        candidates?: Record<string, unknown>[];
+      };
+    };
+    expect(
+      structuredContent.structuredContent?.candidates?.[0]
+    ).not.toHaveProperty("split402OfferTemplate");
   });
 
   it("rejects malformed router capability search budgets", async () => {
