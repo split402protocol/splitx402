@@ -24,6 +24,7 @@ corepack pnpm phase7:staging:collect-reads --evidence-env-file split402-launch-e
 corepack pnpm phase7:staging:collect-mcp-gateway --evidence-env-file split402-launch-evidence/phase7-staging.env
 corepack pnpm demo:mcp-gateway:smoke
 corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log
+corepack pnpm phase7:staging:commands-status --brief split402-launch-evidence/phase7-staging-evidence/commands.log
 corepack pnpm demo:mcp-bundle split402-launch-evidence/phase7-staging-evidence/mcp-bundle.json
 corepack pnpm demo:paid-suite split402-launch-evidence/phase7-staging-evidence/paid-suite.log
 corepack pnpm phase7:staging:derive-receipt-verification --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-evidence/paid-suite.log split402-launch-evidence/phase7-staging-evidence/receipt-verification.json
@@ -42,6 +43,10 @@ the hosted staging run.
 The `commands.log` transcript may use `corepack pnpm product:evidence:init` as
 the workspace-initialization command; the status checker treats it as equivalent
 to `corepack pnpm phase7:staging:init` for the combined launch workspace.
+Run `corepack pnpm phase7:staging:commands-status --brief
+split402-launch-evidence/phase7-staging-evidence/commands.log` before assembly
+to catch missing command lines or placeholder output without rebuilding the full
+Phase 7 proof.
 On Windows, PowerShell transcript lines with environment assignments are valid
 as long as the executed command remains on the same uncommented line, for
 example:
@@ -239,6 +244,8 @@ The validator requires:
   and no changed-file rows. The pasted launch-preflight output must include
   `Split402 launch preflight: ready`, and the pasted public-surface output must
   include `Split402 public surface check: passed`.
+  Run `corepack pnpm phase7:staging:commands-status --brief <commands.log>`
+  before proof assembly to validate this artifact directly.
 - `funding_balance_evidence` must be a local attached
   `funding-balance.json` artifact containing a merchant obligation summary.
   Each asset must report `covered` with `fundingDeficitAtomic: "0"` or

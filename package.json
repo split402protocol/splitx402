@@ -52,6 +52,7 @@
     "phase7:staging:collect-reads": "tsx src/phase7-staging-collect-reads.ts",
     "phase7:staging:collect-mcp-gateway": "tsx src/phase7-staging-collect-mcp-gateway.ts",
     "phase7:staging:commands-template": "tsx src/phase7-staging-commands-template.ts",
+    "phase7:staging:commands-status": "tsx src/phase7-staging-commands-status.ts",
     "phase7:staging:derive-receipt-verification": "tsx src/phase7-staging-derive-receipt-verification.ts",
     "phase7:staging:assemble": "tsx src/phase7-staging-assemble.ts",
     "phase7:staging:manifest": "tsx src/phase7-staging-manifest.ts",

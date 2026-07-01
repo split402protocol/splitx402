@@ -305,9 +305,11 @@ describe("repository presentation", () => {
     expect(phase7).toContain("same active route, campaign");
     expect(phase7).toContain("referrer wallet, and merchant id");
     expect(phase7).toContain("phase7:staging:commands-template");
+    expect(phase7).toContain("phase7:staging:commands-status");
     expect(stagingProof).toContain("proof artifacts are local-only");
     expect(stagingProof).toContain("close the status gate");
     expect(stagingProof).toContain("phase7:staging:commands-template");
+    expect(stagingProof).toContain("phase7:staging:commands-status");
     expect(stagingProof).toContain(
       "receipt summaries from a different run",
     );

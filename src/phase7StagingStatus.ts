@@ -8,8 +8,7 @@ import {
   validatePhase7StagingProof,
 } from "./phase7StagingProof.js";
 import {
-  PHASE7_COMMAND_EVIDENCE_ALTERNATIVES,
-  PHASE7_REQUIRED_COMMAND_EVIDENCE,
+  validatePhase7CommandEvidence,
 } from "./phase7CommandEvidence.js";
 import { decodeArtifactText } from "./artifactEncoding.js";
 
@@ -206,7 +205,7 @@ const PHASE7_MISSING_FIELD_ACTIONS: readonly Phase7MissingFieldAction[] = [
   {
     fields: ["commands_run"],
     createAction: () =>
-      "Capture commands_run with corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log, then replace template comments with the real command transcript.",
+      "Capture commands_run with corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log, validate it with corepack pnpm phase7:staging:commands-status --brief split402-launch-evidence/phase7-staging-evidence/commands.log, then replace template comments with the real command transcript.",
   },
   {
     fields: ["approval_decision"],
@@ -2071,167 +2070,10 @@ function createCommandEvidenceStatus(
   if (text === undefined) {
     return { status: "invalid", blockers };
   }
-  validateCommandEvidence(text, blockers);
+  blockers.push(...validatePhase7CommandEvidence(text).errors);
   return blockers.length === 0
     ? { status: "valid", blockers: [] }
     : { status: "invalid", blockers };
-}
-
-function validateCommandEvidence(text: string, blockers: string[]): void {
-  if (text.trim().length === 0) {
-    blockers.push("commands_run artifact is empty");
-    return;
-  }
-  const commandLines = extractCommandEvidenceLines(text);
-  if (commandLines.length === 0) {
-    blockers.push(
-      "commands_run artifact must include shell command lines, not only prose",
-    );
-  }
-  for (const command of PHASE7_REQUIRED_COMMAND_EVIDENCE) {
-    if (!isRequiredCommandPresent(commandLines, command)) {
-      blockers.push(`commands_run missing required command: ${command}`);
-    }
-  }
-  validateGitStatusCommandOutput(text, blockers);
-  validateLaunchPreflightCommandOutput(text, blockers);
-  validatePublicSurfaceCommandOutput(text, blockers);
-}
-
-interface CommandEvidenceBlock {
-  command: string;
-  outputLines: string[];
-}
-
-function validateGitStatusCommandOutput(text: string, blockers: string[]): void {
-  const gitStatusBlock = extractCommandEvidenceBlocks(text).find((block) =>
-    block.command.includes("git status --short --branch"),
-  );
-  if (gitStatusBlock === undefined) {
-    return;
-  }
-
-  const outputLines = gitStatusBlock.outputLines
-    .map((line) => line.trimEnd())
-    .filter((line) => line.trim().length > 0);
-  if (outputLines.length === 0) {
-    blockers.push("commands_run git status output is missing");
-    return;
-  }
-  const changedFileLines = outputLines.filter((line) => !line.startsWith("## "));
-  if (changedFileLines.length > 0) {
-    blockers.push(
-      "commands_run git status output must show a clean source worktree",
-    );
-  }
-}
-
-function validateLaunchPreflightCommandOutput(
-  text: string,
-  blockers: string[],
-): void {
-  const launchPreflightBlock = extractCommandEvidenceBlocks(text).find((block) =>
-    block.command.includes("corepack pnpm product:launch-preflight"),
-  );
-  if (launchPreflightBlock === undefined) {
-    return;
-  }
-
-  const outputLines = launchPreflightBlock.outputLines
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-  if (outputLines.length === 0) {
-    blockers.push("commands_run launch preflight output is missing");
-    return;
-  }
-  if (!outputLines.some((line) => line === "Split402 launch preflight: ready")) {
-    blockers.push("commands_run launch preflight output must be ready");
-  }
-}
-
-function validatePublicSurfaceCommandOutput(
-  text: string,
-  blockers: string[],
-): void {
-  const publicSurfaceBlock = extractCommandEvidenceBlocks(text).find((block) =>
-    block.command.includes("corepack pnpm product:public-surface-check"),
-  );
-  if (publicSurfaceBlock === undefined) {
-    return;
-  }
-
-  const outputLines = publicSurfaceBlock.outputLines
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-  if (outputLines.length === 0) {
-    blockers.push("commands_run public surface check output is missing");
-    return;
-  }
-  if (
-    !outputLines.some((line) => line === "Split402 public surface check: passed")
-  ) {
-    blockers.push("commands_run public surface check output must pass");
-  }
-}
-
-function extractCommandEvidenceBlocks(text: string): CommandEvidenceBlock[] {
-  const blocks: CommandEvidenceBlock[] = [];
-  let currentBlock: CommandEvidenceBlock | undefined;
-  for (const rawLine of text.split(/\r?\n/u)) {
-    const trimmed = rawLine.trim();
-    const command = normalizeCommandText(stripCommandPrompt(trimmed));
-    if (command.length > 0 && isCommandEvidenceLine(command)) {
-      currentBlock = { command, outputLines: [] };
-      blocks.push(currentBlock);
-      continue;
-    }
-    if (currentBlock !== undefined && trimmed.length > 0) {
-      currentBlock.outputLines.push(rawLine);
-    }
-  }
-  return blocks;
-}
-
-function isRequiredCommandPresent(
-  commandLines: readonly string[],
-  requiredCommand: string,
-): boolean {
-  const acceptedCommands = [
-    requiredCommand,
-    ...PHASE7_COMMAND_EVIDENCE_ALTERNATIVES.flatMap((entry) =>
-      entry.required === requiredCommand ? entry.alternatives : [],
-    ),
-  ].map((command) => normalizeCommandText(command));
-  return acceptedCommands.some((command) =>
-    commandLines.some((line) => line.includes(command)),
-  );
-}
-
-function extractCommandEvidenceLines(text: string): string[] {
-  return text
-    .split(/\r?\n/u)
-    .map((line) => normalizeCommandText(stripCommandPrompt(line.trim())))
-    .filter((line) => line.length > 0 && isCommandEvidenceLine(line));
-}
-
-function stripCommandPrompt(line: string): string {
-  if (line.startsWith("$ ")) {
-    return line.slice(2);
-  }
-  const powershellPrompt = line.match(/^PS\s+[^>]+>\s*(?<command>.+)$/u);
-  return powershellPrompt?.groups?.command ?? line;
-}
-
-function isCommandEvidenceLine(line: string): boolean {
-  return (
-    line.startsWith("corepack ") ||
-    line.startsWith("git ") ||
-    line.startsWith("pnpm ") ||
-    line.startsWith("npm ") ||
-    line.startsWith("node ") ||
-    line.startsWith("SPLIT402_") ||
-    line.startsWith("$env:SPLIT402_")
-  );
 }
 
 function parseMcpGatewayTranscript(
@@ -3154,7 +2996,7 @@ function createCommandEvidenceAction(blockers: readonly string[]): string {
       : ` Missing commands include: ${missingCommands.slice(0, 5).join(", ")}${
           missingCommands.length > 5 ? `, and ${missingCommands.length - 5} more` : ""
         }.`;
-  return `Replace split402-launch-evidence/phase7-staging-evidence/commands.log with a real command transcript: run corepack pnpm phase7:staging:commands-template to get the checklist, then paste executed shell command lines and outputs with command lines uncommented.${missingSummary}`;
+  return `Replace split402-launch-evidence/phase7-staging-evidence/commands.log with a real command transcript: run corepack pnpm phase7:staging:commands-template to get the checklist, paste executed shell command lines and outputs with command lines uncommented, then run corepack pnpm phase7:staging:commands-status --brief split402-launch-evidence/phase7-staging-evidence/commands.log.${missingSummary}`;
 }
 
 function isReadCollectorArtifactField(field: string): boolean {
@@ -3199,7 +3041,7 @@ function createMissingArtifactAction(field: string): string[] {
       ];
     case "commands_run":
       return [
-        "Capture commands_run with corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log, then replace the template comments with the real command transcript.",
+        "Capture commands_run with corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log, validate it with corepack pnpm phase7:staging:commands-status --brief split402-launch-evidence/phase7-staging-evidence/commands.log, then replace the template comments with the real command transcript.",
       ];
     default:
       return [`Capture ${field} and attach the local artifact before approval.`];
@@ -3564,10 +3406,6 @@ function readPositiveInteger(value: unknown): number | undefined {
   return Number.isInteger(value) && typeof value === "number" && value > 0
     ? value
     : undefined;
-}
-
-function normalizeCommandText(value: string): string {
-  return value.replace(/\s+/gu, " ").trim();
 }
 
 function isManifestEntry(value: unknown): value is Phase7ArtifactManifestEntry {
