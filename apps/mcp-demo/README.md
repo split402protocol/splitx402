@@ -158,6 +158,10 @@ responses also include `split402OfferTemplate`, a non-secret scaffold for the
 provider's `extensions.split402.info` object. It includes route-derived payment
 fields plus placeholders for campaign ids, timestamps, nonce, kid, hash, and
 signature.
+Responses include `split402ReceiptTemplate` whenever complete x402 payment
+metadata is readable. This gives providers the merchant-signed receipt shape to
+return after settlement, including placeholder settlement fields and the
+commission/protocol-fee/referrer-credit arithmetic for the detected amount.
 Base/EVM x402 routes can become router-ready after a signed Split402 offer and
 matching merchant-signed receipt; discovery also requires the merchant public
 key to verify the offer signature before marking a candidate router-ready. They

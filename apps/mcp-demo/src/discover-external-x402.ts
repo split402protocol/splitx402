@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { calculateCommission } from "@split402/protocol";
 import {
   Split402ExternalX402DiscoveryClient,
   type Split402ExternalX402DiscoveryFetch,
@@ -35,6 +36,7 @@ export interface ExternalX402OnboardingCandidateView {
   split402OfferErrors?: string[];
   requiredSplit402Fields: string[];
   split402OfferTemplate?: ExternalX402OfferTemplateView;
+  split402ReceiptTemplate?: ExternalX402ReceiptTemplateView;
   nextActions: string[];
   source: {
     manifest: boolean;
@@ -86,6 +88,49 @@ export interface ExternalX402OfferTemplateView {
     validUntil: string;
     kid: string;
   };
+  signatureInstructions: string[];
+}
+
+export interface ExternalX402ReceiptTemplateView {
+  responseRequirement: string;
+  note: string;
+  commissionBearingReceiptTemplate: {
+    protocolVersion: "0.1";
+    receiptId: string;
+    merchantId: string;
+    merchantOrigin: string;
+    operationId: string;
+    requestDigest: string;
+    campaignId: string;
+    campaignVersion: number;
+    campaignTermsHash: string;
+    routeId: string;
+    referralClaimHash: string;
+    referrerWallet: string;
+    payoutWallet: string;
+    paymentId: string;
+    network: string;
+    asset: string;
+    payerWallet: string;
+    payToWallet: string;
+    requiredAmountAtomic: string;
+    settledAmountAtomic: string;
+    settlementTxSignature: string;
+    commissionBps: number;
+    protocolFeeBpsOfCommission: number;
+    commissionBaseAtomic: string;
+    commissionAmountAtomic: string;
+    protocolFeeAtomic: string;
+    referrerCreditAtomic: string;
+    settlementMode: "accrual";
+    offerNonce: string;
+    settledAt: string;
+    issuedAt: string;
+    recordingStatus: "accepted";
+    eventId: string;
+    kid: string;
+  };
+  noReferralReceiptRule: string;
   signatureInstructions: string[];
 }
 
@@ -350,6 +395,7 @@ export function publicCandidateView(
     candidate.readiness === "router_ready"
       ? undefined
       : createSplit402OfferTemplateView(candidate);
+  const split402ReceiptTemplate = createSplit402ReceiptTemplateView(candidate);
   return {
     providerId: candidate.providerId,
     capability: candidate.capability,
@@ -381,9 +427,82 @@ export function publicCandidateView(
     ...(split402OfferTemplate === undefined
       ? {}
       : { split402OfferTemplate }),
+    ...(split402ReceiptTemplate === undefined
+      ? {}
+      : { split402ReceiptTemplate }),
     nextActions: createExternalX402CandidateNextActions(candidate),
     source: candidate.source,
     routerReady: candidate.provider !== undefined
+  };
+}
+
+function createSplit402ReceiptTemplateView(
+  candidate: Split402ExternalX402ProviderCandidate
+): ExternalX402ReceiptTemplateView | undefined {
+  if (
+    candidate.network === undefined ||
+    candidate.asset === undefined ||
+    candidate.payToWallet === undefined ||
+    candidate.amountAtomic === undefined
+  ) {
+    return undefined;
+  }
+  const commissionBps = 2000;
+  const protocolFeeBpsOfCommission = 1000;
+  const economics = calculateCommission(
+    BigInt(candidate.amountAtomic),
+    BigInt(commissionBps),
+    BigInt(protocolFeeBpsOfCommission)
+  );
+  return {
+    responseRequirement:
+      "Return this merchant-signed Split402 receipt, or an equivalent field documented by the provider, after successful x402 settlement.",
+    note:
+      "Fill placeholders from the settled x402 payment, the accepted Split402 attribution route, and the finalized signed offer. Route fields must appear together for a commission-bearing receipt.",
+    commissionBearingReceiptTemplate: {
+      protocolVersion: "0.1",
+      receiptId: "<rcp_...>",
+      merchantId: "<mrc_...>",
+      merchantOrigin: candidate.merchantOrigin,
+      operationId: candidate.operationId,
+      requestDigest: "sha256:<canonical paid request digest>",
+      campaignId: "<cmp_...>",
+      campaignVersion: 1,
+      campaignTermsHash:
+        "sha256:<hash of finalized campaignTermsTemplate canonical JSON>",
+      routeId: "<rte_...>",
+      referralClaimHash: "sha256:<hash of accepted referral claim>",
+      referrerWallet: "<referrer identity wallet>",
+      payoutWallet: "<referrer payout wallet>",
+      paymentId: "<pay_...>",
+      network: candidate.network,
+      asset: candidate.asset,
+      payerWallet: "<settled payer wallet>",
+      payToWallet: candidate.payToWallet,
+      requiredAmountAtomic: candidate.amountAtomic,
+      settledAmountAtomic: candidate.amountAtomic,
+      settlementTxSignature: "<x402 settlement transaction signature/hash>",
+      commissionBps,
+      protocolFeeBpsOfCommission,
+      commissionBaseAtomic: candidate.amountAtomic,
+      commissionAmountAtomic: economics.commission.toString(),
+      protocolFeeAtomic: economics.protocolFee.toString(),
+      referrerCreditAtomic: economics.referrerCredit.toString(),
+      settlementMode: "accrual",
+      offerNonce: "<offer nonce from signed offer>",
+      settledAt: "<settlement RFC3339 UTC>",
+      issuedAt: "<receipt issued RFC3339 UTC>",
+      recordingStatus: "accepted",
+      eventId: "<evt_...>",
+      kid: "<merchant-offer-receipt-kid>"
+    },
+    noReferralReceiptRule:
+      "If there is no accepted referral route, omit routeId/referralClaimHash/referrerWallet/payoutWallet together and set commissionAmountAtomic, protocolFeeAtomic, and referrerCreditAtomic to 0.",
+    signatureInstructions: [
+      "Verify the settled x402 payment before issuing the receipt.",
+      "Sign the receipt with Split402 receipt signing bytes and the same merchant offer_receipt key family used for offers.",
+      "Return the receipt with signature; the router/control plane must verify the signature, payment identifiers, route attribution, and commission arithmetic before accrual."
+    ]
   };
 }
 
