@@ -2,6 +2,7 @@ import "./env.js";
 
 import { access, appendFile, readFile, writeFile } from "node:fs/promises";
 
+import { readDemoNetwork } from "./network.js";
 import { getSolLamports, requestSolAirdrop, waitForSignatureConfirmation } from "./solana-rpc.js";
 import {
   createSvmSignerFromBase58,
@@ -11,8 +12,10 @@ import {
 import { WORKSPACE_ENV_PATH } from "./env.js";
 
 const ENV_PATH = WORKSPACE_ENV_PATH;
+const NETWORK = readDemoNetwork();
 const AIRDROP_LAMPORTS = BigInt(process.env.SPLIT402_AIRDROP_LAMPORTS ?? "1000000000");
-const SKIP_AIRDROP = process.env.SPLIT402_SKIP_AIRDROP === "true";
+const SKIP_AIRDROP =
+  process.env.SPLIT402_SKIP_AIRDROP === "true" || NETWORK.cluster === "mainnet";
 
 await main();
 
@@ -54,8 +57,11 @@ async function main(): Promise<void> {
         address: setup.address,
         generatedNewKey: setup.generatedNewKey,
         secretFormat: setup.secretFormat,
+        network: NETWORK.networkId,
+        networkLabel: NETWORK.label,
         airdrop: {
           skipped: SKIP_AIRDROP,
+          skippedBecauseMainnet: NETWORK.cluster === "mainnet",
           lamportsRequested: airdropLamportsRequested,
           signature: airdropSignature,
           error: airdropError
@@ -66,8 +72,8 @@ async function main(): Promise<void> {
         hasSolForDirectTransactions,
         env: envWrite,
         next: [
-          "Devnet SOL is optional for the x402 demo because the facilitator supplies the fee payer",
-          "fund this address with Devnet USDC for mint 4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+          `${NETWORK.label} SOL is optional for the x402 demo because the facilitator supplies the fee payer`,
+          `fund this address with ${NETWORK.label} USDC for mint ${NETWORK.usdcMint}`,
           "run corepack pnpm demo:preflight",
           "run corepack pnpm demo:paid-suite when preflight reports readyForPaidRun: true"
         ]
