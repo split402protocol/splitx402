@@ -9,6 +9,7 @@ import {
 } from "@split402/protocol";
 import express from "express";
 import type { NextFunction, Request, Response, Router } from "express";
+import rateLimit from "express-rate-limit";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { Pool, type PoolConfig } from "pg";
 
@@ -167,6 +168,15 @@ const WEBHOOK_MANAGEMENT_EVENT_TYPES = [
   WEBHOOK_PAYOUT_FAILED_EVENT_TYPE,
   WEBHOOK_PAYOUT_OUTCOME_UNKNOWN_EVENT_TYPE
 ];
+
+function createAuthenticatedRouteRateLimit() {
+  return rateLimit({
+    windowMs: 60_000,
+    limit: 1_000,
+    standardHeaders: true,
+    legacyHeaders: false
+  });
+}
 
 export interface ReceiptRecord {
   id: string;
@@ -1629,6 +1639,7 @@ export function createWalletAuthRouter(
 ): Router {
   const router = express.Router();
   router.use(express.json({ limit: options.jsonLimit ?? "128kb" }));
+  router.use(createAuthenticatedRouteRateLimit());
 
   router.post("/v1/auth/challenges", async (req, res, next) => {
     try {
@@ -1702,6 +1713,7 @@ export function createReceiptIngestionRouter(
 ): Router {
   const router = express.Router();
   router.use(express.json({ limit: options.jsonLimit ?? "128kb" }));
+  router.use(createAuthenticatedRouteRateLimit());
 
   router.post("/v1/receipts", async (req, res, next) => {
     try {
@@ -1760,6 +1772,7 @@ export function createPayoutRouter(
 ): Router {
   const router = express.Router();
   router.use(express.json({ limit: options.jsonLimit ?? "128kb" }));
+  router.use(createAuthenticatedRouteRateLimit());
 
   router.post("/v1/merchants/:merchantId/payouts/preview", async (req, res, next) => {
     try {
@@ -2313,6 +2326,7 @@ export function createMerchantRegistryRouter(
 ): Router {
   const router = express.Router();
   router.use(express.json({ limit: options.jsonLimit ?? "128kb" }));
+  router.use(createAuthenticatedRouteRateLimit());
 
   router.post("/v1/merchants", async (req, res, next) => {
     try {
@@ -2775,6 +2789,7 @@ export function createCampaignRegistryRouter(
 ): Router {
   const router = express.Router();
   router.use(express.json({ limit: options.jsonLimit ?? "128kb" }));
+  router.use(createAuthenticatedRouteRateLimit());
 
   router.post("/v1/campaigns", async (req, res, next) => {
     try {
