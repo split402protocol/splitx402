@@ -29,7 +29,9 @@ import {
   type PayoutReconciliationFinalityResult,
   type RouteDraft,
   type UnsignedReferralClaim,
-  type WebhookEventManagementStore
+  type RequeueDeadLetterWebhookEventInput,
+  type WebhookEventManagementStore,
+  WebhookEventRequeueConflictError
 } from "../src/index.js";
 
 const OWNER_SEED = hexToBytes(
@@ -2195,6 +2197,73 @@ describe("campaign lifecycle status routes", () => {
   });
 });
 
+describe("dead-letter webhook requeue route", () => {
+  it("requeues a merchant's dead-letter webhook event and rejects other states", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const merchantId = bundle.artifacts.receipt.merchantId;
+    const webhookStore = new FakeWebhookEventManagementStore([
+      createWebhookEvent({
+        id: "55555555-5555-4555-8555-555555555555",
+        merchantId,
+        status: "dead_letter",
+        eventType: "webhook.receipt.accepted.v1"
+      }),
+      createWebhookEvent({
+        id: "66666666-6666-4666-8666-666666666666",
+        merchantId,
+        status: "delivered",
+        eventType: "webhook.payout.finalized.v1"
+      }),
+      createWebhookEvent({
+        id: "77777777-7777-4777-8777-777777777777",
+        merchantId: "mrc_ffffffffffffffffffffffffffffffff",
+        status: "dead_letter",
+        eventType: "webhook.receipt.accepted.v1"
+      })
+    ]);
+    const { app } = createTestApp({
+      withMerchantRegistry: true,
+      webhookEventManagementStore: webhookStore
+    });
+    await request(app)
+      .post("/v1/merchants")
+      .send({
+        id: merchantId,
+        slug: "requeue-merchant",
+        displayName: "Requeue Merchant",
+        ownerWallet: bundle.keys.payerWallet
+      })
+      .expect(201);
+
+    const requeued = await request(app)
+      .post(
+        `/v1/merchants/${merchantId}/webhook-events/55555555-5555-4555-8555-555555555555/requeue`
+      )
+      .expect(200);
+    expect(requeued.body.event.status).toBe("pending");
+    expect(requeued.body.event.attempts).toBe(0);
+    expect(requeued.body.event.lastError).toBeUndefined();
+
+    const conflict = await request(app)
+      .post(
+        `/v1/merchants/${merchantId}/webhook-events/66666666-6666-4666-8666-666666666666/requeue`
+      )
+      .expect(409);
+    expect(conflict.body.message).toMatch(/only dead_letter events/u);
+
+    await request(app)
+      .post(
+        `/v1/merchants/${merchantId}/webhook-events/77777777-7777-4777-8777-777777777777/requeue`
+      )
+      .expect(404);
+    await request(app)
+      .post(
+        "/v1/merchants/mrc_00000000000000000000000000000099/webhook-events/55555555-5555-4555-8555-555555555555/requeue"
+      )
+      .expect(404);
+  });
+});
+
 describe("payout batch read and ledger closure routes", () => {
   it("reads, lists, and closes finalized payout batches", async () => {
     const { app, store, receipt } = createTestApp({
@@ -2787,8 +2856,11 @@ async function createMaybeBroadcastPayoutBatchFixture(
 
 class FakeWebhookEventManagementStore implements WebhookEventManagementStore {
   readonly inputs: Parameters<WebhookEventManagementStore["listWebhookEvents"]>[0][] = [];
+  readonly events: OutboxEventRecord[];
 
-  constructor(private readonly events: readonly OutboxEventRecord[]) {}
+  constructor(events: readonly OutboxEventRecord[]) {
+    this.events = events.map((event) => ({ ...event }));
+  }
 
   listWebhookEvents(
     input: Parameters<WebhookEventManagementStore["listWebhookEvents"]>[0]
@@ -2802,6 +2874,29 @@ class FakeWebhookEventManagementStore implements WebhookEventManagementStore {
       )
       .filter((event) => input.status === undefined || event.status === input.status)
       .slice(0, input.limit ?? 50);
+  }
+
+  requeueDeadLetterWebhookEvent(
+    input: RequeueDeadLetterWebhookEventInput
+  ): OutboxEventRecord | undefined {
+    const event = this.events.find(
+      (candidate) =>
+        candidate.id === input.eventId &&
+        candidate.payload.merchantId === input.merchantId
+    );
+    if (event === undefined) {
+      return undefined;
+    }
+    if (event.status !== "dead_letter") {
+      throw new WebhookEventRequeueConflictError(
+        `webhook event is ${event.status}; only dead_letter events can be requeued`
+      );
+    }
+    event.status = "pending";
+    event.attempts = 0;
+    delete event.lastError;
+    delete event.lockedAt;
+    return { ...event };
   }
 }
 

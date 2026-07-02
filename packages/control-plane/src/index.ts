@@ -33,7 +33,10 @@ import {
   type CampaignStatusTransition,
   type CampaignTermsInput
 } from "./campaigns.js";
-import { isReceiptIngestionPersistenceConflict } from "./errors.js";
+import {
+  WebhookEventRequeueConflictError,
+  isReceiptIngestionPersistenceConflict
+} from "./errors.js";
 import { checkMerchantOriginWellKnown } from "./origin-verification.js";
 import {
   createMerchantDashboardSummary,
@@ -278,6 +281,15 @@ export interface WebhookEventManagementStore {
   listWebhookEvents(
     input: ListWebhookEventsInput
   ): Promise<OutboxEventRecord[]> | OutboxEventRecord[];
+  requeueDeadLetterWebhookEvent(
+    input: RequeueDeadLetterWebhookEventInput
+  ): Promise<OutboxEventRecord | undefined> | OutboxEventRecord | undefined;
+}
+
+export interface RequeueDeadLetterWebhookEventInput {
+  merchantId: string;
+  eventId: string;
+  now?: string;
 }
 
 export interface MerchantFundingBalanceProvider {
@@ -2558,6 +2570,51 @@ export function createMerchantRegistryRouter(
     }
   );
 
+  router.post(
+    "/v1/merchants/:merchantId/webhook-events/:eventId/requeue",
+    async (req, res, next) => {
+      try {
+        if (options.webhookEventManagementStore === undefined) {
+          res.status(500).json({
+            error: "internal_server_error",
+            message: "webhook event management store is required"
+          });
+          return;
+        }
+        const merchantId = readRouteParam(req.params.merchantId, "merchantId");
+        const eventId = readRouteParam(req.params.eventId, "eventId");
+        const merchant = await merchantRegistry.getMerchantProfile(merchantId);
+        if (merchant === undefined) {
+          res.status(404).json({ error: "merchant_not_found" });
+          return;
+        }
+        const session = await requireMerchantOwnerSession(
+          req,
+          res,
+          options,
+          merchantRegistry
+        );
+        if (session === undefined && isMerchantAuthRequired(options)) {
+          return;
+        }
+        const event =
+          await options.webhookEventManagementStore.requeueDeadLetterWebhookEvent({
+            merchantId,
+            eventId
+          });
+        if (event === undefined) {
+          res.status(404).json({ error: "webhook_event_not_found" });
+          return;
+        }
+        res.json({ event });
+      } catch (error) {
+        if (!sendWebhookEventRequeueError(res, error)) {
+          next(error);
+        }
+      }
+    }
+  );
+
   router.post("/v1/merchants/:merchantId/origins", async (req, res, next) => {
     try {
       const session = await requireMerchantOwnerSession(
@@ -4800,6 +4857,14 @@ function readBearerAccessToken(req: Request): string | undefined {
   }
   const token = parts[1];
   return token === undefined || token.trim().length === 0 ? undefined : token;
+}
+
+function sendWebhookEventRequeueError(res: Response, error: unknown): boolean {
+  if (error instanceof WebhookEventRequeueConflictError) {
+    res.status(409).json({ error: "conflict", message: error.message });
+    return true;
+  }
+  return false;
 }
 
 function sendMerchantRegistryError(res: Response, error: unknown): boolean {
