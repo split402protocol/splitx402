@@ -2873,6 +2873,50 @@ export function createRouteRegistryRouter(
     }
   });
 
+  router.post("/v1/routes/:routeId/resume", async (req, res, next) => {
+    try {
+      const routeId = readRouteParam(req.params.routeId, "routeId");
+      const route = await routeRegistry.getRoute(routeId);
+      if (route === undefined) {
+        res.status(404).json({ error: "route_not_found" });
+        return;
+      }
+
+      if (isMerchantAuthRequired(options)) {
+        const campaignRegistry = requireRouteCampaignRegistry(options);
+        const campaign = await campaignRegistry.getCampaign(route.campaignId);
+        if (campaign === undefined) {
+          res.status(404).json({ error: "campaign_not_found" });
+          return;
+        }
+        const session = await requireMerchantOwnerForMerchantId(
+          req,
+          res,
+          options,
+          campaign.merchantId
+        );
+        if (session === undefined) {
+          return;
+        }
+      }
+
+      const resumed = await routeRegistry.resumeRoute({ routeId });
+      if (resumed === undefined) {
+        res.status(404).json({ error: "route_not_found" });
+        return;
+      }
+      res.json({ route: resumed });
+    } catch (error) {
+      if (
+        !sendRouteRegistryError(res, error) &&
+        !sendCampaignRegistryError(res, error) &&
+        !sendMerchantRegistryError(res, error)
+      ) {
+        next(error);
+      }
+    }
+  });
+
   router.post("/v1/routes/:routeId/rotate-payout", async (req, res, next) => {
     try {
       const routeId = readRouteParam(req.params.routeId, "routeId");

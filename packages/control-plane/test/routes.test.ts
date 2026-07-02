@@ -158,6 +158,26 @@ describe("InMemoryRouteRegistry", () => {
     ).toBeUndefined();
   });
 
+  it("resumes suspended routes idempotently and rejects other statuses", () => {
+    const registry = createRouteRegistry();
+    const route = registry.activateRoute({ claim: signRouteDraft(createRouteDraft()) });
+
+    const beforeSuspend = registry.resumeRoute({ routeId: route.id });
+    expect(beforeSuspend?.status).toBe("active");
+
+    registry.suspendRoute({ routeId: route.id });
+    const resumed = registry.resumeRoute({ routeId: route.id });
+    const duplicate = registry.resumeRoute({ routeId: route.id });
+    const loaded = registry.getRoute(route.id);
+
+    expect(resumed?.status).toBe("active");
+    expect(duplicate?.status).toBe("active");
+    expect(loaded?.status).toBe("active");
+    expect(
+      registry.resumeRoute({ routeId: "rte_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" })
+    ).toBeUndefined();
+  });
+
   it("searches routes with active defaults, filters, wildcard operation matches, and limits", () => {
     const bundle = createSampleProtocolArtifacts();
     const registry = createRouteRegistry();

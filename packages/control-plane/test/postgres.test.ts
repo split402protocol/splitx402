@@ -1573,6 +1573,28 @@ describe("PostgresRouteRegistry", () => {
     ).resolves.toBeUndefined();
   });
 
+  it("resumes suspended routes idempotently", async () => {
+    const fakePool = new FakePostgresPool();
+    const registry = createPostgresRouteRegistry(fakePool);
+    const claim = signRouteDraft(
+      registry.createRouteDraft(createRouteDraftInput())
+    );
+    const route = await registry.activateRoute({ claim });
+    await registry.suspendRoute({ routeId: route.id });
+
+    const resumed = await registry.resumeRoute({ routeId: route.id });
+    const duplicate = await registry.resumeRoute({ routeId: route.id });
+    const loaded = await registry.getRoute(route.id);
+
+    expect(resumed?.status).toBe("active");
+    expect(duplicate?.status).toBe("active");
+    expect(loaded?.status).toBe("active");
+    expect(fakePool.database.routes[0]?.status).toBe("active");
+    await expect(
+      registry.resumeRoute({ routeId: "rte_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" })
+    ).resolves.toBeUndefined();
+  });
+
   it("searches persisted routes by filters and status", async () => {
     const bundle = createSampleProtocolArtifacts();
     const fakePool = new FakePostgresPool();
@@ -2093,6 +2115,12 @@ class FakePostgresClient implements PostgresTransactionClient {
       return result(
         this.database.updateRouteCurrentVersion(values) as unknown as Row[]
       );
+    }
+    if (
+      normalized.startsWith("update routes") &&
+      normalized.includes("set status = 'active'")
+    ) {
+      return result(this.database.resumeRoute(values) as unknown as Row[]);
     }
     if (normalized.startsWith("update routes")) {
       return result(this.database.suspendRoute(values) as unknown as Row[]);
@@ -3499,6 +3527,15 @@ class FakePostgresDatabase {
     route.expires_at = readString(values[8]);
     route.nonce = readString(values[9]);
     route.metadata_hash = readNullableString(values[10]) as `sha256:${string}` | null;
+    return [route];
+  }
+
+  resumeRoute(values: readonly unknown[]): StoredRouteRow[] {
+    const route = this.routes.find((row) => row.id === readString(values[0]));
+    if (route === undefined || route.status !== "suspended") {
+      return [];
+    }
+    route.status = "active";
     return [route];
   }
 
