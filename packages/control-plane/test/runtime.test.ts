@@ -86,6 +86,34 @@ describe("control-plane runtime", () => {
     expect(pool.closed).toBe(true);
   });
 
+  it("enables operator approval endpoints only when operator tokens are configured", async () => {
+    const disabledRuntime = createControlPlaneRuntime({
+      db: new ThrowingPostgresPool(),
+      authPolicy: "disabled"
+    });
+    const disabledResponse = await request(disabledRuntime.app)
+      .post("/v1/operator/merchants/mrc_00000000000000000000000000000001/approve")
+      .set("authorization", "Bearer operator-secret")
+      .expect(403);
+    expect(disabledResponse.body.error).toBe("operator_disabled");
+
+    const enabledRuntime = createControlPlaneRuntimeFromEnv({
+      env: {
+        SPLIT402_DATABASE_URL: "postgresql://split402.example/db",
+        SPLIT402_CONTROL_PLANE_AUTH_POLICY: "disabled",
+        SPLIT402_CONTROL_PLANE_OPERATOR_TOKENS: " operator-secret , ,second-secret"
+      },
+      poolFactory: () => new ThrowingPostgresPool()
+    });
+    await request(enabledRuntime.app)
+      .post("/v1/operator/merchants/mrc_00000000000000000000000000000001/approve")
+      .expect(401);
+    await request(enabledRuntime.app)
+      .post("/v1/operator/merchants/mrc_00000000000000000000000000000001/approve")
+      .set("authorization", "Bearer wrong-secret")
+      .expect(401);
+  });
+
   it("rejects invalid runtime environment configuration", () => {
     expect(() => createControlPlaneRuntimeFromEnv({ env: {} })).toThrow(
       "SPLIT402_DATABASE_URL or DATABASE_URL is required"

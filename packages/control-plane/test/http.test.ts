@@ -2039,6 +2039,169 @@ describe("control-plane HTTP API", () => {
   });
 });
 
+describe("control-plane operator approval endpoints", () => {
+  it("fails closed when no operator tokens are configured", async () => {
+    const { app, merchantRegistry } = createTestApp({ withMerchantRegistry: true });
+    seedMerchantFixture(merchantRegistry, {
+      merchantStatus: "pending",
+      originStatus: "pending"
+    });
+    const bundle = createSampleProtocolArtifacts();
+
+    const response = await request(app)
+      .post(`/v1/operator/merchants/${bundle.artifacts.receipt.merchantId}/approve`)
+      .set("authorization", "Bearer any-token")
+      .expect(403);
+    expect(response.body.error).toBe("operator_disabled");
+    expect(
+      merchantRegistry?.getMerchantProfile(bundle.artifacts.receipt.merchantId)?.status
+    ).toBe("pending");
+  });
+
+  it("rejects missing and invalid operator tokens", async () => {
+    const { app, merchantRegistry } = createTestApp({
+      withMerchantRegistry: true,
+      operatorTokens: ["operator-secret-1"]
+    });
+    seedMerchantFixture(merchantRegistry, {
+      merchantStatus: "pending",
+      originStatus: "pending"
+    });
+    const bundle = createSampleProtocolArtifacts();
+
+    await request(app)
+      .post(`/v1/operator/merchants/${bundle.artifacts.receipt.merchantId}/approve`)
+      .expect(401);
+    await request(app)
+      .post(`/v1/operator/merchants/${bundle.artifacts.receipt.merchantId}/approve`)
+      .set("authorization", "Bearer wrong-token")
+      .expect(401);
+    expect(
+      merchantRegistry?.getMerchantProfile(bundle.artifacts.receipt.merchantId)?.status
+    ).toBe("pending");
+  });
+
+  it("approves, suspends, and closes merchants with an operator token", async () => {
+    const { app, merchantRegistry } = createTestApp({
+      withMerchantRegistry: true,
+      operatorTokens: ["operator-secret-1", "operator-secret-2"]
+    });
+    seedMerchantFixture(merchantRegistry, {
+      merchantStatus: "pending",
+      originStatus: "pending"
+    });
+    const bundle = createSampleProtocolArtifacts();
+    const merchantId = bundle.artifacts.receipt.merchantId;
+
+    const approved = await request(app)
+      .post(`/v1/operator/merchants/${merchantId}/approve`)
+      .set("authorization", "Bearer operator-secret-2")
+      .expect(200);
+    expect(approved.body.merchant.status).toBe("active");
+
+    const suspended = await request(app)
+      .post(`/v1/operator/merchants/${merchantId}/suspend`)
+      .set("authorization", "Bearer operator-secret-1")
+      .expect(200);
+    expect(suspended.body.merchant.status).toBe("suspended");
+
+    const closed = await request(app)
+      .post(`/v1/operator/merchants/${merchantId}/close`)
+      .set("authorization", "Bearer operator-secret-1")
+      .expect(200);
+    expect(closed.body.merchant.status).toBe("closed");
+
+    await request(app)
+      .post("/v1/operator/merchants/mrc_00000000000000000000000000000099/approve")
+      .set("authorization", "Bearer operator-secret-1")
+      .expect(404);
+  });
+
+  it("verifies and revokes merchant origins with an operator token", async () => {
+    const { app, merchantRegistry } = createTestApp({
+      withMerchantRegistry: true,
+      operatorTokens: ["operator-secret-1"]
+    });
+    seedMerchantFixture(merchantRegistry, {
+      merchantStatus: "pending",
+      originStatus: "pending"
+    });
+    const bundle = createSampleProtocolArtifacts();
+    const merchantId = bundle.artifacts.receipt.merchantId;
+    const origin = bundle.artifacts.receipt.merchantOrigin;
+
+    const verified = await request(app)
+      .post(`/v1/operator/merchants/${merchantId}/origins/verify`)
+      .set("authorization", "Bearer operator-secret-1")
+      .send({ origin, verifiedAt: "2026-06-24T00:05:00Z" })
+      .expect(200);
+    expect(verified.body.origin.status).toBe("verified");
+    expect(verified.body.origin.verifiedAt).toBe("2026-06-24T00:05:00Z");
+
+    const revoked = await request(app)
+      .post(`/v1/operator/merchants/${merchantId}/origins/revoke`)
+      .set("authorization", "Bearer operator-secret-1")
+      .send({ origin })
+      .expect(200);
+    expect(revoked.body.origin.status).toBe("revoked");
+    expect(revoked.body.origin.verifiedAt).toBeUndefined();
+
+    await request(app)
+      .post(`/v1/operator/merchants/${merchantId}/origins/verify`)
+      .set("authorization", "Bearer operator-secret-1")
+      .send({ origin: "https://unknown.example" })
+      .expect(404);
+    await request(app)
+      .post(`/v1/operator/merchants/${merchantId}/origins/verify`)
+      .set("authorization", "Bearer operator-secret-1")
+      .send({})
+      .expect(400);
+  });
+
+  it("lets an operator-approved merchant pass campaign activation checks", async () => {
+    const { app, merchantRegistry } = createTestApp({
+      withMerchantRegistry: true,
+      withCampaignRegistry: true,
+      operatorTokens: ["operator-secret-1"]
+    });
+    seedMerchantFixture(merchantRegistry, {
+      merchantStatus: "pending",
+      originStatus: "pending"
+    });
+    const bundle = createSampleProtocolArtifacts();
+    const merchantId = bundle.artifacts.receipt.merchantId;
+
+    await request(app)
+      .post(`/v1/operator/merchants/${merchantId}/approve`)
+      .set("authorization", "Bearer operator-secret-1")
+      .expect(200);
+    await request(app)
+      .post(`/v1/operator/merchants/${merchantId}/origins/verify`)
+      .set("authorization", "Bearer operator-secret-1")
+      .send({ origin: bundle.artifacts.receipt.merchantOrigin })
+      .expect(200);
+
+    const campaignResponse = await request(app)
+      .post("/v1/campaigns")
+      .send({
+        id: bundle.artifacts.receipt.campaignId,
+        merchantId,
+        ...createCampaignBody()
+      })
+      .expect(201);
+    const currentVersion = campaignResponse.body.campaign
+      .current as CampaignVersionRecord;
+
+    await request(app)
+      .post(`/v1/campaigns/${bundle.artifacts.receipt.campaignId}/activate`)
+      .send({
+        kid: bundle.artifacts.receipt.kid,
+        signature: signCampaignTerms(currentVersion)
+      })
+      .expect(200);
+  });
+});
+
 function createTestApp(
   options: {
     withAuth?: boolean;
@@ -2051,6 +2214,7 @@ function createTestApp(
     withRouteRegistry?: boolean;
     rateLimitWindowMs?: number;
     rateLimitMaxRequests?: number;
+    operatorTokens?: string[];
   } = {}
 ) {
   const bundle = createSampleProtocolArtifacts();
@@ -2116,7 +2280,10 @@ function createTestApp(
         : { rateLimitWindowMs: options.rateLimitWindowMs }),
       ...(options.rateLimitMaxRequests === undefined
         ? {}
-        : { rateLimitMaxRequests: options.rateLimitMaxRequests })
+        : { rateLimitMaxRequests: options.rateLimitMaxRequests }),
+      ...(options.operatorTokens === undefined
+        ? {}
+        : { operator: { accessTokens: options.operatorTokens } })
     }),
     merchantRegistry,
     store,
