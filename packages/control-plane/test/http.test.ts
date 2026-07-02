@@ -2195,6 +2195,124 @@ describe("campaign lifecycle status routes", () => {
   });
 });
 
+describe("payout batch read and ledger closure routes", () => {
+  it("reads, lists, and closes finalized payout batches", async () => {
+    const { app, store, receipt } = createTestApp({
+      withMerchantRegistry: true,
+      withPayouts: true
+    });
+    await request(app)
+      .post("/v1/merchants")
+      .send({
+        id: receipt.merchantId,
+        slug: "ledger-merchant",
+        displayName: "Ledger Merchant",
+        ownerWallet: receipt.payerWallet
+      })
+      .expect(201);
+    await request(app).post("/v1/receipts").send({ receipt }).expect(201);
+    const snapshot = store.getByReceiptId(receipt.receiptId);
+    if (snapshot?.accrual === undefined) {
+      throw new Error("expected receipt accrual");
+    }
+    store.save({
+      ...snapshot,
+      receipt: {
+        ...snapshot.receipt,
+        verificationState: "signature_verified"
+      },
+      accrual: {
+        ...snapshot.accrual,
+        status: "available",
+        availableAt: "2026-06-24T00:04:00.000Z"
+      }
+    });
+    const availableAccrual = store.getByReceiptId(receipt.receiptId)?.accrual;
+    if (availableAccrual === undefined) {
+      throw new Error("expected available accrual");
+    }
+    const batch = store.createPayoutBatch({
+      merchantId: receipt.merchantId,
+      payoutWalletId: "mpw_ffffffffffffffffffffffffffffffff",
+      network: receipt.network,
+      asset: receipt.asset,
+      accruals: [availableAccrual],
+      now: "2026-06-24T00:05:00Z"
+    });
+
+    const read = await request(app)
+      .get(`/v1/payout-batches/${batch.id}`)
+      .expect(200);
+    expect(read.body.batch.id).toBe(batch.id);
+    expect(read.body.batch.status).toBe("planned");
+
+    const listed = await request(app)
+      .get(`/v1/merchants/${receipt.merchantId}/payout-batches`)
+      .expect(200);
+    expect(listed.body.batches).toHaveLength(1);
+    expect(listed.body.batches[0].id).toBe(batch.id);
+
+    const filtered = await request(app)
+      .get(`/v1/merchants/${receipt.merchantId}/payout-batches`)
+      .query({ status: "finalized" })
+      .expect(200);
+    expect(filtered.body.batches).toHaveLength(0);
+    await request(app)
+      .get(`/v1/merchants/${receipt.merchantId}/payout-batches`)
+      .query({ status: "bogus" })
+      .expect(400);
+
+    const prematureClose = await request(app)
+      .post(`/v1/payout-batches/${batch.id}/close-ledger`)
+      .expect(400);
+    expect(prematureClose.body.message).toMatch(/must be finalized/u);
+
+    const saved = store.saveSignedPayoutTransactions({
+      payoutBatchId: batch.id,
+      now: "2026-06-24T00:06:00Z",
+      transactions: [
+        {
+          sequence: 0,
+          signedTransactionBase64: "AQID",
+          expectedSignature: "expected_sig_0"
+        }
+      ]
+    });
+    store.markPayoutTransactionSubmitted({
+      id: saved[0]?.id ?? "",
+      submittedAt: "2026-06-24T00:07:00Z",
+      expectedSignature: "expected_sig_0"
+    });
+    store.markPayoutTransactionFinality({
+      id: saved[0]?.id ?? "",
+      status: "finalized",
+      observedAt: "2026-06-24T00:08:00Z"
+    });
+
+    const closed = await request(app)
+      .post(`/v1/payout-batches/${batch.id}/close-ledger`)
+      .expect(200);
+    expect(closed.body.ledgerTransaction.entries.length).toBeGreaterThan(0);
+    expect(store.getByReceiptId(receipt.receiptId)?.accrual?.status).toBe(
+      "paid"
+    );
+
+    const repeated = await request(app)
+      .post(`/v1/payout-batches/${batch.id}/close-ledger`)
+      .expect(200);
+    expect(repeated.body.ledgerTransaction.transactionId).toBe(
+      closed.body.ledgerTransaction.transactionId
+    );
+
+    await request(app)
+      .get("/v1/payout-batches/pbt_00000000000000000000000000000099")
+      .expect(404);
+    await request(app)
+      .post("/v1/payout-batches/pbt_00000000000000000000000000000099/close-ledger")
+      .expect(404);
+  });
+});
+
 describe("merchant payout wallet status routes", () => {
   it("pauses, resumes, and retires payout wallets through the API", async () => {
     const { app, merchantRegistry } = createTestApp({ withMerchantRegistry: true });
@@ -2557,6 +2675,10 @@ function createTestApp(
                     options.merchantFundingBalanceProvider
                 }),
             referrerPayoutViewStore: store,
+            payoutLedgerClosureStore: store,
+            payoutFinalizedTransferVerifier: {
+              verifyFinalizedPayout: () => ({ ok: true, errors: [] })
+            },
             ...(options.payoutFinalityMonitor === undefined
               ? {}
               : { payoutFinalityMonitor: options.payoutFinalityMonitor })

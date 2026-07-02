@@ -107,6 +107,7 @@ import type {
 import type {
   CreatePayoutBatchFromAvailableAccrualsInput,
   CreatePayoutBatchInput,
+  ListMerchantPayoutBatchesInput,
   ListPayoutEligibleAccrualsInput,
   PayoutAccrualStore,
   PayoutAllocationRecord,
@@ -142,6 +143,7 @@ import {
   PayoutBatchConflictError,
   assertPayoutBatchAllocationsReleasable,
   attachPayoutTransactionItemMappings,
+  normalizeListMerchantPayoutBatchesLimit,
   createMerchantObligationSummary,
   createPayoutFinalizationLedgerTransaction,
   createPayoutBatchPlan,
@@ -619,6 +621,34 @@ export class PostgresReceiptIngestionStore
 
   async getPayoutBatch(batchId: string): Promise<PayoutBatchRecord | undefined> {
     return loadPayoutBatch(this.db, batchId);
+  }
+
+  async listMerchantPayoutBatches(
+    input: ListMerchantPayoutBatchesInput
+  ): Promise<PayoutBatchRecord[]> {
+    const limit = normalizeListMerchantPayoutBatchesLimit(input.limit);
+    const values: unknown[] = [input.merchantId, limit];
+    let statusClause = "";
+    if (input.status !== undefined) {
+      values.push(input.status);
+      statusClause = "\n          and status = $3";
+    }
+    const result = await this.db.query<Pick<PayoutBatchRow, "id">>(
+      `select id
+         from payout_batches
+        where merchant_id = $1${statusClause}
+        order by created_at desc, id desc
+        limit $2`,
+      values
+    );
+    const batches: PayoutBatchRecord[] = [];
+    for (const row of result.rows) {
+      const batch = await loadPayoutBatch(this.db, row.id);
+      if (batch !== undefined) {
+        batches.push(batch);
+      }
+    }
+    return batches;
   }
 
   async releasePayoutBatchAllocations(
