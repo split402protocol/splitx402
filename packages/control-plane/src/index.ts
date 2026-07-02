@@ -62,6 +62,7 @@ import {
   type RouteStatus
 } from "./routes.js";
 import {
+  SolanaRpcPayoutFinalizedTransferVerifier,
   SolanaRpcMerchantFundingBalanceProvider,
   SolanaRpcPayoutTransactionFinalityMonitor
 } from "./solana.js";
@@ -100,11 +101,15 @@ import {
   verifyPayoutFinalizedTransfersBeforeLedgerClosure,
   isPayoutBatchConflictError,
   isPayoutBatchValidationError,
+  PayoutBatchValidationError,
   isPayoutPreviewValidationError,
   type CreatePayoutBatchFromAvailableAccrualsInput,
   type ListPayoutEligibleAccrualsInput,
   type PayoutAccrualStore,
   type PayoutBatchRecord,
+  normalizeListMerchantPayoutBatchesLimit,
+  type ListMerchantPayoutBatchesInput,
+  type PayoutBatchStatus,
   type PayoutBatchStore,
   type PayoutFundingBalance,
   type PayoutTransactionRecord,
@@ -114,6 +119,7 @@ import {
   type MarkPayoutTransactionFinalityInput,
   type ClosePayoutBatchLedgerInput,
   type PayoutLedgerClosureStore,
+  type PayoutFinalizedTransferVerifier,
   type PayoutReconciliationStore,
   type MerchantObligationViewStore,
   type ReferrerPayoutViewStore,
@@ -577,6 +583,23 @@ export class InMemoryReceiptIngestionStore
 
   getPayoutBatch(batchId: string): PayoutBatchRecord | undefined {
     return this.payoutBatchesById.get(batchId);
+  }
+
+  listMerchantPayoutBatches(
+    input: ListMerchantPayoutBatchesInput
+  ): PayoutBatchRecord[] {
+    const limit = normalizeListMerchantPayoutBatchesLimit(input.limit);
+    return Array.from(this.payoutBatchesById.values())
+      .filter((batch) => batch.merchantId === input.merchantId)
+      .filter(
+        (batch) => input.status === undefined || batch.status === input.status
+      )
+      .sort(
+        (left, right) =>
+          right.createdAt.localeCompare(left.createdAt) ||
+          right.id.localeCompare(left.id)
+      )
+      .slice(0, limit);
   }
 
   releasePayoutBatchAllocations(
@@ -1318,6 +1341,8 @@ export interface ControlPlaneAppOptions {
   referrerPayoutViewStore?: ReferrerPayoutViewStore;
   webhookEventManagementStore?: WebhookEventManagementStore;
   payoutFinalityMonitor?: PayoutFinalityMonitor;
+  payoutLedgerClosureStore?: PayoutLedgerClosureStore;
+  payoutFinalizedTransferVerifier?: PayoutFinalizedTransferVerifier;
   auth?: ControlPlaneAuthOptions;
   operator?: ControlPlaneOperatorOptions;
   jsonLimit?: string;
@@ -1380,6 +1405,7 @@ export interface CreateControlPlaneRuntimeOptions {
   close?: () => Promise<void> | void;
   jsonLimit?: string;
   operatorAccessTokens?: string[];
+  payoutFinalizedTransferVerifier?: PayoutFinalizedTransferVerifier;
   merchantFundingBalanceProvider?: MerchantFundingBalanceProvider;
   payoutFinalityMonitor?: PayoutFinalityMonitor;
   walletAuth?: WalletAuthenticatorOptions;
@@ -1445,6 +1471,12 @@ export function createControlPlaneRuntime(
           merchantFundingBalanceProvider: options.merchantFundingBalanceProvider
         }),
     referrerPayoutViewStore: receiptStore,
+    payoutLedgerClosureStore: receiptStore,
+    ...(options.payoutFinalizedTransferVerifier === undefined
+      ? {}
+      : {
+          payoutFinalizedTransferVerifier: options.payoutFinalizedTransferVerifier
+        }),
     webhookEventManagementStore: outboxStore,
     ...(options.payoutFinalityMonitor === undefined
       ? {}
@@ -1504,6 +1536,12 @@ export function createControlPlaneRuntimeFromEnv(
       return provider === undefined ? {} : { merchantFundingBalanceProvider: provider };
     })(),
     payoutFinalityMonitor: createRuntimePayoutFinalityMonitor(env),
+    ...(() => {
+      const verifier = createRuntimePayoutFinalizedTransferVerifier(env);
+      return verifier === undefined
+        ? {}
+        : { payoutFinalizedTransferVerifier: verifier };
+    })(),
     ...(() => {
       const tokens = readOperatorAccessTokens(
         env.SPLIT402_CONTROL_PLANE_OPERATOR_TOKENS?.split(",")
@@ -1686,6 +1724,8 @@ export function createPayoutRouter(
     | "payoutBatchStore"
     | "payoutTransactionStore"
     | "payoutReconciliationStore"
+    | "payoutLedgerClosureStore"
+    | "payoutFinalizedTransferVerifier"
     | "merchantObligationViewStore"
     | "merchantFundingBalanceProvider"
     | "referrerPayoutViewStore"
@@ -1920,6 +1960,142 @@ export function createPayoutRouter(
         res.json({ items });
       } catch (error) {
         if (!sendMerchantRegistryError(res, error)) {
+          next(error);
+        }
+      }
+    }
+  );
+
+  router.get("/v1/payout-batches/:batchId", async (req, res, next) => {
+    try {
+      if (options.payoutBatchStore === undefined) {
+        res.status(500).json({
+          error: "internal_server_error",
+          message: "payout batch store is required"
+        });
+        return;
+      }
+      const batchId = readRouteParam(req.params.batchId, "batchId");
+      const batch = await options.payoutBatchStore.getPayoutBatch(batchId);
+      if (batch === undefined) {
+        res.status(404).json({
+          error: "not_found",
+          message: "payout batch was not found"
+        });
+        return;
+      }
+      const session = await requireMerchantOwnerForMerchantId(
+        req,
+        res,
+        options,
+        batch.merchantId
+      );
+      if (session === undefined && isMerchantAuthRequired(options)) {
+        return;
+      }
+      res.json({ batch });
+    } catch (error) {
+      if (!sendPayoutBatchError(res, error) && !sendMerchantRegistryError(res, error)) {
+        next(error);
+      }
+    }
+  });
+
+  router.get(
+    "/v1/merchants/:merchantId/payout-batches",
+    async (req, res, next) => {
+      try {
+        if (options.payoutBatchStore === undefined) {
+          res.status(500).json({
+            error: "internal_server_error",
+            message: "payout batch store is required"
+          });
+          return;
+        }
+        const merchantId = readRouteParam(req.params.merchantId, "merchantId");
+        const session = await requireMerchantOwnerForMerchantId(
+          req,
+          res,
+          options,
+          merchantId
+        );
+        if (session === undefined && isMerchantAuthRequired(options)) {
+          return;
+        }
+        const status = readOptionalPayoutBatchStatusFilter(req.query.status);
+        const limit = readOptionalPositiveIntegerQuery(req.query.limit, "limit");
+        const batches = await options.payoutBatchStore.listMerchantPayoutBatches({
+          merchantId,
+          ...(status === undefined ? {} : { status }),
+          ...(limit === undefined ? {} : { limit })
+        });
+        res.json({ batches });
+      } catch (error) {
+        if (!sendPayoutBatchError(res, error) && !sendMerchantRegistryError(res, error)) {
+          next(error);
+        }
+      }
+    }
+  );
+
+  router.post(
+    "/v1/payout-batches/:batchId/close-ledger",
+    async (req, res, next) => {
+      try {
+        if (options.payoutBatchStore === undefined) {
+          res.status(500).json({
+            error: "internal_server_error",
+            message: "payout batch store is required"
+          });
+          return;
+        }
+        if (
+          options.payoutLedgerClosureStore === undefined ||
+          options.payoutFinalizedTransferVerifier === undefined
+        ) {
+          res.status(500).json({
+            error: "internal_server_error",
+            message:
+              "payout ledger closure store and finalized transfer verifier are required"
+          });
+          return;
+        }
+        const batchId = readRouteParam(req.params.batchId, "batchId");
+        const batch = await options.payoutBatchStore.getPayoutBatch(batchId);
+        if (batch === undefined) {
+          res.status(404).json({
+            error: "not_found",
+            message: "payout batch was not found"
+          });
+          return;
+        }
+        const session = await requireMerchantOwnerForMerchantId(
+          req,
+          res,
+          options,
+          batch.merchantId
+        );
+        if (session === undefined && isMerchantAuthRequired(options)) {
+          return;
+        }
+        const ledgerTransaction =
+          await options.payoutLedgerClosureStore.closeFinalizedPayoutBatchLedger({
+            payoutBatchId: batchId,
+            finalizedTransferVerifier: options.payoutFinalizedTransferVerifier
+          });
+        if (ledgerTransaction === undefined) {
+          res.status(404).json({
+            error: "not_found",
+            message: "payout batch was not found"
+          });
+          return;
+        }
+        res.json({ ledgerTransaction });
+      } catch (error) {
+        if (
+          !sendPayoutBatchError(res, error) &&
+          !sendMerchantRegistryError(res, error)
+        ) {
           next(error);
         }
       }
@@ -3239,6 +3415,30 @@ function readOptionalMerchantKeyPurpose(
   );
 }
 
+function readOptionalPayoutBatchStatusFilter(
+  value: unknown
+): PayoutBatchStatus | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (
+    value === "draft" ||
+    value === "planned" ||
+    value === "signing" ||
+    value === "submitted" ||
+    value === "confirmed" ||
+    value === "finalized" ||
+    value === "failed" ||
+    value === "cancelled" ||
+    value === "outcome_unknown"
+  ) {
+    return value;
+  }
+  throw new PayoutBatchValidationError(
+    "status must be a valid payout batch status"
+  );
+}
+
 function readOptionalCampaignStatusFilter(
   value: unknown
 ): CampaignStatus | undefined {
@@ -3838,6 +4038,46 @@ function createRuntimePayoutFinalityMonitor(
     ...(rpcUrls.length === 0 ? {} : { rpcUrls }),
     ...(retryDelayMs === undefined ? {} : { retryDelayMs }),
     unknownOutcomeAfterMs
+  });
+}
+
+function createRuntimePayoutFinalizedTransferVerifier(
+  env: NodeJS.ProcessEnv
+): PayoutFinalizedTransferVerifier | undefined {
+  const fundingWallet = readOptionalNonEmptyEnv(
+    env.SPLIT402_PAYOUT_LEDGER_CLOSURE_FUNDING_WALLET
+  );
+  const sourceTokenAccount = readOptionalNonEmptyEnv(
+    env.SPLIT402_PAYOUT_LEDGER_CLOSURE_SOURCE_TOKEN_ACCOUNT
+  );
+  if (fundingWallet === undefined || sourceTokenAccount === undefined) {
+    return undefined;
+  }
+  const rpcUrls = readOptionalRpcUrlList(
+    env.SPLIT402_PAYOUT_FINALITY_SOLANA_RPC_URLS ??
+      env.SPLIT402_CHAIN_WORKER_SOLANA_RPC_URLS
+  );
+  const rpcUrl =
+    readOptionalNonEmptyEnv(env.SPLIT402_PAYOUT_FINALITY_SOLANA_RPC_URL) ??
+    readOptionalNonEmptyEnv(env.SPLIT402_CHAIN_WORKER_SOLANA_RPC_URL) ??
+    rpcUrls[0] ??
+    "https://api.devnet.solana.com";
+  const network = readRuntimeSolanaNetwork(
+    readOptionalNonEmptyEnv(env.SPLIT402_PAYOUT_FINALITY_NETWORK) ??
+      readOptionalNonEmptyEnv(env.SPLIT402_CHAIN_WORKER_NETWORK) ??
+      "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+    "SPLIT402_PAYOUT_FINALITY_NETWORK"
+  );
+  const tokenProgramId = readOptionalNonEmptyEnv(
+    env.SPLIT402_PAYOUT_LEDGER_CLOSURE_TOKEN_PROGRAM_ID
+  );
+  return new SolanaRpcPayoutFinalizedTransferVerifier({
+    rpcUrl,
+    ...(rpcUrls.length === 0 ? {} : { rpcUrls }),
+    network,
+    fundingWallet,
+    sourceTokenAccount,
+    ...(tokenProgramId === undefined ? {} : { tokenProgramId })
   });
 }
 

@@ -121,6 +121,14 @@ non-broadcasting dry-run check before the canary payment.
 9. Broadcast one tiny payout only after dry-run evidence and reviewer approval
    are attached.
 10. Verify finalized transfer contents before closing ledger items to paid.
+    `POST /v1/payout-batches/:batchId/close-ledger` performs both steps when
+    the control plane is configured with
+    `SPLIT402_PAYOUT_LEDGER_CLOSURE_FUNDING_WALLET` and
+    `SPLIT402_PAYOUT_LEDGER_CLOSURE_SOURCE_TOKEN_ACCOUNT`; it verifies the
+    finalized transfer contents against the funding wallet before closing, and
+    `GET /v1/payout-batches/:batchId` plus
+    `GET /v1/merchants/:merchantId/payout-batches` report batch and item
+    status throughout.
 
 During the canary, two owner-authorized stop-loss controls are available
 without database access:

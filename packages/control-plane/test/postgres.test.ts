@@ -500,6 +500,57 @@ describe("PostgresReceiptIngestionStore", () => {
     );
   });
 
+  it("lists merchant payout batches newest first with status filtering", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const fakePool = new FakePostgresPool();
+    const store = new PostgresReceiptIngestionStore(fakePool);
+    const ingestor = new ReceiptIngestor(store, {
+      resolveMerchantPublicKey: () => bundle.keys.merchantPublicKey,
+      now: () => new Date("2026-06-24T00:02:00Z")
+    });
+    await ingestor.ingest({ receipt: bundle.artifacts.receipt, source: "merchant" });
+    const verified = await store.markReceiptChainVerified({
+      receiptId: bundle.artifacts.receipt.receiptId,
+      verifiedAt: "2026-06-24T00:04:00Z"
+    });
+    if (verified?.accrual === undefined) {
+      throw new Error("expected verified accrual");
+    }
+    const batch = await store.createPayoutBatch({
+      merchantId: bundle.artifacts.receipt.merchantId,
+      payoutWalletId: "mpw_ffffffffffffffffffffffffffffffff",
+      network: bundle.artifacts.receipt.network,
+      asset: bundle.artifacts.receipt.asset,
+      accruals: [verified.accrual],
+      batchId: "pbt_ffffffffffffffffffffffffffffffff",
+      itemIdFactory: () => "pit_ffffffffffffffffffffffffffffffff",
+      now: "2026-06-24T00:05:00Z"
+    });
+
+    const listed = await store.listMerchantPayoutBatches({
+      merchantId: bundle.artifacts.receipt.merchantId
+    });
+    const planned = await store.listMerchantPayoutBatches({
+      merchantId: bundle.artifacts.receipt.merchantId,
+      status: "planned"
+    });
+    const finalized = await store.listMerchantPayoutBatches({
+      merchantId: bundle.artifacts.receipt.merchantId,
+      status: "finalized"
+    });
+
+    expect(listed.map((row) => row.id)).toEqual([batch.id]);
+    expect(listed[0]?.items).toHaveLength(1);
+    expect(planned.map((row) => row.id)).toEqual([batch.id]);
+    expect(finalized).toEqual([]);
+    await expect(
+      store.listMerchantPayoutBatches({
+        merchantId: bundle.artifacts.receipt.merchantId,
+        limit: 0
+      })
+    ).rejects.toThrow(/limit must be an integer from 1 to 100/u);
+  });
+
   it("persists signed payout transactions before submission", async () => {
     const bundle = createSampleProtocolArtifacts();
     const fakePool = new FakePostgresPool();
@@ -3148,6 +3199,21 @@ class FakePostgresDatabase {
             right.updated_at.localeCompare(left.updated_at) ||
             left.id.localeCompare(right.id)
         )
+        .map((row) => ({ id: row.id }) as StoredPayoutBatchRow);
+    }
+    if (normalizedSql.includes("order by created_at desc")) {
+      const merchantId = readString(values[0]);
+      const limit = readNumber(values[1]);
+      const status = values.length > 2 ? readString(values[2]) : undefined;
+      return this.payoutBatches
+        .filter((row) => row.merchant_id === merchantId)
+        .filter((row) => status === undefined || row.status === status)
+        .sort(
+          (left, right) =>
+            right.created_at.localeCompare(left.created_at) ||
+            right.id.localeCompare(left.id)
+        )
+        .slice(0, limit)
         .map((row) => ({ id: row.id }) as StoredPayoutBatchRow);
     }
     if (normalizedSql.includes("where merchant_id = $1")) {

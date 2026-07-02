@@ -89,9 +89,30 @@ export interface PayoutBatchStore {
   getPayoutBatch(
     batchId: string
   ): Promise<PayoutBatchRecord | undefined> | PayoutBatchRecord | undefined;
+  listMerchantPayoutBatches(
+    input: ListMerchantPayoutBatchesInput
+  ): Promise<PayoutBatchRecord[]> | PayoutBatchRecord[];
   releasePayoutBatchAllocations(
     input: ReleasePayoutBatchAllocationsInput
   ): Promise<PayoutBatchRecord | undefined> | PayoutBatchRecord | undefined;
+}
+
+export interface ListMerchantPayoutBatchesInput {
+  merchantId: string;
+  status?: PayoutBatchStatus;
+  limit?: number;
+}
+
+export function normalizeListMerchantPayoutBatchesLimit(
+  limit: number | undefined
+): number {
+  const normalized = limit ?? 50;
+  if (!Number.isInteger(normalized) || normalized <= 0 || normalized > 100) {
+    throw new PayoutBatchValidationError(
+      "limit must be an integer from 1 to 100"
+    );
+  }
+  return normalized;
 }
 
 export interface ReleasePayoutBatchAllocationsInput {
