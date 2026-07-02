@@ -122,9 +122,14 @@ non-broadcasting dry-run check before the canary payment.
    are attached.
 10. Verify finalized transfer contents before closing ledger items to paid.
 
-During the canary, `POST /v1/merchants/:merchantId/payout-wallets/:payoutWalletId/pause`
-is the fastest owner-authorized stop-loss for payout activity: paused funding
-wallets are rejected by payout batch creation until explicitly resumed.
+During the canary, two owner-authorized stop-loss controls are available
+without database access:
+
+- `POST /v1/campaigns/:campaignId/pause` stops new commission accrual because
+  receipt economic policy rejects receipts for non-active campaigns.
+- `POST /v1/merchants/:merchantId/payout-wallets/:payoutWalletId/pause` stops
+  payout activity: paused funding wallets are rejected by payout batch creation
+  until explicitly resumed.
 
 ## Stop Conditions
 

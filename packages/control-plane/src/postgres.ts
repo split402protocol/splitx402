@@ -18,6 +18,7 @@ import type {
 import {
   CampaignRegistryConflictError,
   CampaignRegistryValidationError,
+  assertCampaignStatusTransition,
   createCampaignVersionRecord,
   verifyCampaignTermsSignature,
   type ActivateCampaignVersionInput,
@@ -29,6 +30,7 @@ import {
   type CampaignTerms,
   type CampaignVersionRecord,
   type CreateCampaignInput,
+  type UpdateCampaignStatusInput,
   type CreateCampaignVersionInput,
   type ListMerchantCampaignsInput
 } from "./campaigns.js";
@@ -1633,6 +1635,37 @@ export class PostgresCampaignRegistry implements CampaignRegistry {
     throw new CampaignRegistryConflictError(
       "campaign version is already activated with a different signature"
     );
+  }
+
+  async updateCampaignStatus(
+    input: UpdateCampaignStatusInput
+  ): Promise<CampaignProfile | undefined> {
+    const campaign = await this.loadCampaign(input.campaignId);
+    if (campaign === undefined) {
+      return undefined;
+    }
+    assertCampaignStatusTransition(campaign.status, input.status);
+
+    const result = await this.db.query(
+      `update campaigns
+          set status = $2,
+              updated_at = $3
+        where id = $1
+          and status = $4`,
+      [campaign.id, input.status, this.now(), campaign.status]
+    );
+    if (result.rowCount !== 1) {
+      const latest = await this.loadCampaign(input.campaignId);
+      if (latest === undefined) {
+        return undefined;
+      }
+      if (latest.status !== input.status) {
+        throw new CampaignRegistryConflictError(
+          "campaign status changed concurrently; retry the transition"
+        );
+      }
+    }
+    return await this.getCampaign(campaign.id);
   }
 
   private async loadCampaign(campaignId: string): Promise<CampaignRecord | undefined> {

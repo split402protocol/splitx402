@@ -111,6 +111,13 @@ export interface ListMerchantCampaignsInput {
   limit?: number;
 }
 
+export type CampaignStatusTransition = Exclude<CampaignStatus, "draft">;
+
+export interface UpdateCampaignStatusInput {
+  campaignId: string;
+  status: CampaignStatusTransition;
+}
+
 export interface CampaignRegistry {
   createCampaign(input: CreateCampaignInput): Promise<CampaignProfile> | CampaignProfile;
   getCampaign(campaignId: string): Promise<CampaignProfile | undefined> | CampaignProfile | undefined;
@@ -127,11 +134,42 @@ export interface CampaignRegistry {
   activateCampaignVersion(
     input: ActivateCampaignVersionInput
   ): Promise<CampaignProfile> | CampaignProfile;
+  updateCampaignStatus(
+    input: UpdateCampaignStatusInput
+  ): Promise<CampaignProfile | undefined> | CampaignProfile | undefined;
 }
 
 export interface InMemoryCampaignRegistryOptions {
   now?: () => Date;
   campaignIdFactory?: () => string;
+}
+
+export function assertCampaignStatusTransition(
+  current: CampaignStatus,
+  next: CampaignStatusTransition
+): void {
+  if (next === "closed") {
+    return;
+  }
+  if (next === "paused") {
+    if (current !== "active") {
+      throw new CampaignRegistryValidationError(
+        "only active campaigns can be paused"
+      );
+    }
+    return;
+  }
+  if (next === "active") {
+    if (current !== "paused") {
+      throw new CampaignRegistryValidationError(
+        "only paused campaigns can be resumed; activate a signed campaign version instead"
+      );
+    }
+    return;
+  }
+  throw new CampaignRegistryValidationError(
+    "campaign status transition must be active, paused, or closed"
+  );
 }
 
 export class CampaignRegistryValidationError extends Error {
@@ -353,6 +391,23 @@ export class InMemoryCampaignRegistry implements CampaignRegistry {
       ...cloneCampaign(activatedCampaign),
       current: cloneCampaignVersion(activatedVersion)
     };
+  }
+
+  updateCampaignStatus(
+    input: UpdateCampaignStatusInput
+  ): CampaignProfile | undefined {
+    const campaign = this.campaigns.get(input.campaignId);
+    if (campaign === undefined) {
+      return undefined;
+    }
+    assertCampaignStatusTransition(campaign.status, input.status);
+
+    this.campaigns.set(campaign.id, {
+      ...campaign,
+      status: input.status,
+      updatedAt: this.now()
+    });
+    return this.getCampaign(campaign.id);
   }
 
   private now(): string {

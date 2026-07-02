@@ -1754,6 +1754,75 @@ describe("control-plane HTTP API", () => {
   });
 });
 
+describe("campaign lifecycle status routes", () => {
+  it("pauses, resumes, and closes an activated campaign", async () => {
+    const { app, merchantRegistry } = createTestApp({
+      withMerchantRegistry: true,
+      withCampaignRegistry: true
+    });
+    await createActiveCampaign({ app, merchantRegistry });
+    const bundle = createSampleProtocolArtifacts();
+    const campaignId = bundle.artifacts.receipt.campaignId;
+
+    const paused = await request(app)
+      .post(`/v1/campaigns/${campaignId}/pause`)
+      .expect(200);
+    expect(paused.body.campaign.status).toBe("paused");
+
+    const doublePause = await request(app)
+      .post(`/v1/campaigns/${campaignId}/pause`)
+      .expect(400);
+    expect(doublePause.body.message).toMatch(/only active campaigns/u);
+
+    const resumed = await request(app)
+      .post(`/v1/campaigns/${campaignId}/resume`)
+      .expect(200);
+    expect(resumed.body.campaign.status).toBe("active");
+
+    const closed = await request(app)
+      .post(`/v1/campaigns/${campaignId}/close`)
+      .expect(200);
+    expect(closed.body.campaign.status).toBe("closed");
+
+    await request(app)
+      .post(`/v1/campaigns/${campaignId}/resume`)
+      .expect(400);
+    await request(app)
+      .post("/v1/campaigns/cmp_00000000000000000000000000000099/pause")
+      .expect(404);
+  });
+
+  it("requires the campaign merchant owner when auth is enabled", async () => {
+    const { app, merchantRegistry } = createTestApp({
+      withMerchantRegistry: true,
+      withCampaignRegistry: true,
+      withAuth: true
+    });
+    const ownerToken = await createAccessToken(app, OWNER_SEED, OWNER_WALLET);
+    await createActiveCampaign({ app, merchantRegistry, ownerToken });
+    const bundle = createSampleProtocolArtifacts();
+    const campaignId = bundle.artifacts.receipt.campaignId;
+
+    await request(app).post(`/v1/campaigns/${campaignId}/pause`).expect(401);
+
+    const otherToken = await createAccessToken(
+      app,
+      OTHER_OWNER_SEED,
+      OTHER_OWNER_WALLET
+    );
+    await request(app)
+      .post(`/v1/campaigns/${campaignId}/pause`)
+      .set("authorization", `Bearer ${otherToken}`)
+      .expect(403);
+
+    const paused = await request(app)
+      .post(`/v1/campaigns/${campaignId}/pause`)
+      .set("authorization", `Bearer ${ownerToken}`)
+      .expect(200);
+    expect(paused.body.campaign.status).toBe("paused");
+  });
+});
+
 describe("merchant payout wallet status routes", () => {
   it("pauses, resumes, and retires payout wallets through the API", async () => {
     const { app, merchantRegistry } = createTestApp({ withMerchantRegistry: true });

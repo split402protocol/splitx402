@@ -1372,6 +1372,51 @@ describe("PostgresCampaignRegistry", () => {
     ).rejects.toBeInstanceOf(CampaignRegistryConflictError);
   });
 
+  it("pauses, resumes, and closes campaigns through guarded SQL transitions", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const fakePool = new FakePostgresPool();
+    const registry = createPostgresCampaignRegistry(fakePool);
+    const campaign = await registry.createCampaign({
+      id: bundle.artifacts.receipt.campaignId,
+      merchantId: bundle.artifacts.receipt.merchantId,
+      ...createCampaignTerms()
+    });
+    await expect(
+      registry.updateCampaignStatus({ campaignId: campaign.id, status: "paused" })
+    ).rejects.toThrow("only active campaigns can be paused");
+
+    await registry.activateCampaignVersion({
+      campaignId: campaign.id,
+      merchantKid: bundle.artifacts.receipt.kid,
+      merchantPublicKey: bundle.keys.merchantPublicKey,
+      merchantSignature: signCampaignTerms(campaign.current)
+    });
+
+    const paused = await registry.updateCampaignStatus({
+      campaignId: campaign.id,
+      status: "paused"
+    });
+    expect(paused?.status).toBe("paused");
+
+    const resumed = await registry.updateCampaignStatus({
+      campaignId: campaign.id,
+      status: "active"
+    });
+    expect(resumed?.status).toBe("active");
+
+    const closed = await registry.updateCampaignStatus({
+      campaignId: campaign.id,
+      status: "closed"
+    });
+    expect(closed?.status).toBe("closed");
+    expect(
+      await registry.updateCampaignStatus({
+        campaignId: "cmp_00000000000000000000000000000099",
+        status: "closed"
+      })
+    ).toBeUndefined();
+  });
+
   it("lists merchant campaigns from PostgreSQL rows", async () => {
     const bundle = createSampleProtocolArtifacts();
     const fakePool = new FakePostgresPool();
@@ -2051,6 +2096,12 @@ class FakePostgresClient implements PostgresTransactionClient {
     }
     if (normalized.startsWith("update routes")) {
       return result(this.database.suspendRoute(values) as unknown as Row[]);
+    }
+    if (
+      normalized.startsWith("update campaigns") &&
+      normalized.includes("status = $2")
+    ) {
+      return commandResult(this.database.updateCampaignStatus(values));
     }
     if (normalized.startsWith("update campaigns")) {
       this.database.updateCampaign(normalized, values);
@@ -3208,6 +3259,22 @@ class FakePostgresDatabase {
       throw Object.assign(new Error("duplicate key"), { code: "23505" });
     }
     this.campaignOperations.push(row);
+  }
+
+  updateCampaignStatus(values: readonly unknown[]): number {
+    const campaignId = readString(values[0]);
+    const status = readString(values[1]);
+    const updatedAt = readString(values[2]);
+    const expectedStatus = readString(values[3]);
+    const campaign = this.campaigns.find(
+      (row) => row.id === campaignId && row.status === expectedStatus
+    );
+    if (campaign === undefined) {
+      return 0;
+    }
+    campaign.status = status;
+    campaign.updated_at = updatedAt;
+    return 1;
   }
 
   updateCampaign(normalizedSql: string, values: readonly unknown[]): void {
