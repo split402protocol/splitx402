@@ -4,8 +4,15 @@ import request from "supertest";
 import { describe, expect, it } from "vitest";
 
 import {
+  SOLANA_MAINNET_NETWORK_ID,
+  SOLANA_MAINNET_USDC_MINT,
+  base58Encode
+} from "@split402/protocol";
+
+import {
   CAMPAIGN_ID,
   DEFAULT_DEVNET_USDC,
+  MAINNET_DEMO_CONFIRMATION,
   MERCHANT_ID,
   OPERATION_ID,
   SOLANA_DEVNET,
@@ -131,9 +138,84 @@ describe("Split402 demo merchant", () => {
         expect(paymentRequired.extensions?.split402).toBeDefined();
       });
   });
+
+  it("refuses mainnet with demo defaults and no canary acknowledgement", () => {
+    expect(() =>
+      createDemoMerchantApp({
+        merchantOrigin: "http://localhost:4021",
+        requiredAmountAtomic: "10000",
+        commissionBps: 2000,
+        network: "solana:mainnet",
+        syncFacilitator: false
+      })
+    ).toThrow(/refusing to start the demo merchant on Solana Mainnet/u);
+  });
+
+  it("refuses mainnet amounts above the canary gross cap", () => {
+    expect(() =>
+      createDemoMerchantApp({
+        ...mainnetGuardOverrides(),
+        requiredAmountAtomic: "100001"
+      })
+    ).toThrow(/canary cap/u);
+  });
+
+  it("serves mainnet offers when every canary guard is satisfied", async () => {
+    const { app, config, merchantPayTo } = createDemoMerchantApp({
+      ...mainnetGuardOverrides(),
+      syncFacilitator: true,
+      facilitatorClient: createSupportedFacilitatorClient(SOLANA_MAINNET_NETWORK_ID)
+    });
+
+    expect(config.network.networkId).toBe(SOLANA_MAINNET_NETWORK_ID);
+    expect(config.paymentAsset).toBe(SOLANA_MAINNET_USDC_MINT);
+    expect(merchantPayTo).toBe(MAINNET_TEST_PAY_TO);
+
+    await request(app)
+      .get("/health")
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toMatchObject({
+          ok: true,
+          network: SOLANA_MAINNET_NETWORK_ID,
+          networkLabel: "Solana Mainnet",
+          paymentAsset: SOLANA_MAINNET_USDC_MINT
+        });
+      });
+
+    await request(app)
+      .post("/v1/risk")
+      .send({ wallet: "Wallet111" })
+      .expect(402)
+      .expect(({ headers }) => {
+        const paymentRequired = decodePaymentRequiredHeader(headers["payment-required"] as string);
+        expect(paymentRequired.accepts[0]).toMatchObject({
+          scheme: "exact",
+          network: SOLANA_MAINNET_NETWORK_ID,
+          asset: SOLANA_MAINNET_USDC_MINT
+        });
+      });
+  });
 });
 
-function createSupportedFacilitatorClient(): FacilitatorClient {
+const MAINNET_TEST_PAY_TO = base58Encode(new Uint8Array(32).fill(9));
+
+function mainnetGuardOverrides() {
+  return {
+    merchantOrigin: "http://localhost:4021",
+    requiredAmountAtomic: "10000",
+    commissionBps: 2000,
+    network: "solana:mainnet",
+    mainnetCanaryConfirmation: MAINNET_DEMO_CONFIRMATION,
+    serviceSeed: new Uint8Array(32).fill(7),
+    merchantPayTo: MAINNET_TEST_PAY_TO,
+    syncFacilitator: false
+  };
+}
+
+function createSupportedFacilitatorClient(
+  network: `${string}:${string}` = SOLANA_DEVNET
+): FacilitatorClient {
   return {
     async getSupported() {
       return {
@@ -141,7 +223,7 @@ function createSupportedFacilitatorClient(): FacilitatorClient {
           {
             x402Version: 2,
             scheme: "exact",
-            network: SOLANA_DEVNET
+            network
           }
         ],
         extensions: [],
