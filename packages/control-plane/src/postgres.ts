@@ -690,6 +690,7 @@ export class PostgresReceiptIngestionStore
               finalized_at, error_json, created_at
          from payout_transactions
         where status in ('submitted', 'confirmed')
+          and expected_signature is not null
         order by submitted_at asc nulls last, created_at asc, id asc
         limit $1`,
       [limit]
@@ -917,6 +918,16 @@ export class PostgresReceiptIngestionStore
           : JSON.stringify(existing.error)
         : JSON.stringify(input.error);
     const lifecycleKind = payoutLifecycleKindForFinalityStatus(input.status);
+    const expectedStatusClause =
+      input.expectedStatus === undefined ? "" : " and status = $6";
+    const updateValues: unknown[] = [
+      input.id,
+      input.status,
+      confirmedAt,
+      finalizedAt,
+      errorJson,
+      ...(input.expectedStatus === undefined ? [] : [input.expectedStatus])
+    ];
     return this.withTransaction(async (client) => {
       const result = await client.query<PayoutTransactionRow>(
         `update payout_transactions
@@ -924,12 +935,12 @@ export class PostgresReceiptIngestionStore
                 confirmed_at = $3,
                 finalized_at = $4,
                 error_json = $5
-          where id = $1
+          where id = $1${expectedStatusClause}
           returning id, payout_batch_id, sequence, attempt, recent_blockhash,
                     last_valid_block_height, signed_transaction_base64,
                     expected_signature, status, submitted_at, confirmed_at,
                     finalized_at, error_json, created_at`,
-        [input.id, input.status, confirmedAt, finalizedAt, errorJson]
+        updateValues
       );
       const row = result.rows[0];
       if (row === undefined) {
