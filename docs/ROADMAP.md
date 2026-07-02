@@ -353,6 +353,9 @@ Current slice:
 - owner-authorized payout-wallet pause/resume/retire status transitions with a
   terminal retired state, so merchants can stop new payout batches from a
   funding wallet without database access;
+- owner-authorized campaign pause/resume/close lifecycle transitions, so
+  merchants can stop new commission accrual for a campaign without database
+  access while keeping activation signature requirements intact;
 - `POST /v1/merchants/:merchantId/payouts/preview`;
 - `GET /v1/merchants/:merchantId/payouts/reconciliation`;
 - `GET /v1/payout-batches/:batchId`;

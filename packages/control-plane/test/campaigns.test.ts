@@ -171,6 +171,57 @@ describe("campaign registry", () => {
     expect(activated.current.activatedAt).toBe(FIXED_NOW.toISOString());
   });
 
+  it("pauses, resumes, and closes activated campaigns with guarded transitions", () => {
+    const bundle = createSampleProtocolArtifacts();
+    const registry = createRegistry();
+    const campaign = registry.createCampaign({
+      id: bundle.artifacts.receipt.campaignId,
+      merchantId: bundle.artifacts.receipt.merchantId,
+      ...createCampaignTerms()
+    });
+
+    expect(() =>
+      registry.updateCampaignStatus({ campaignId: campaign.id, status: "paused" })
+    ).toThrow("only active campaigns can be paused");
+    expect(() =>
+      registry.updateCampaignStatus({ campaignId: campaign.id, status: "active" })
+    ).toThrow(/only paused campaigns can be resumed/u);
+
+    registry.activateCampaignVersion({
+      campaignId: campaign.id,
+      merchantKid: bundle.artifacts.receipt.kid,
+      merchantPublicKey: bundle.keys.merchantPublicKey,
+      merchantSignature: signCampaignTerms(campaign.current)
+    });
+
+    const paused = registry.updateCampaignStatus({
+      campaignId: campaign.id,
+      status: "paused"
+    });
+    expect(paused?.status).toBe("paused");
+
+    const resumed = registry.updateCampaignStatus({
+      campaignId: campaign.id,
+      status: "active"
+    });
+    expect(resumed?.status).toBe("active");
+
+    const closed = registry.updateCampaignStatus({
+      campaignId: campaign.id,
+      status: "closed"
+    });
+    expect(closed?.status).toBe("closed");
+    expect(() =>
+      registry.updateCampaignStatus({ campaignId: campaign.id, status: "active" })
+    ).toThrow(/only paused campaigns can be resumed/u);
+    expect(
+      registry.updateCampaignStatus({
+        campaignId: "cmp_00000000000000000000000000000099",
+        status: "closed"
+      })
+    ).toBeUndefined();
+  });
+
   it("rejects campaign activation when the merchant signature is invalid", () => {
     const bundle = createSampleProtocolArtifacts();
     const registry = createRegistry();
