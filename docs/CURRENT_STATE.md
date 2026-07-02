@@ -78,7 +78,14 @@ metadata.
   viewer gate and expiring sessions, not a production mainnet dashboard service
   yet.
 - Public merchant/origin approval workflows are not production admin workflows
-  yet; public registration creates pending state only.
+  yet; public registration creates pending state only. The control plane now
+  exposes operator-token-gated approval endpoints
+  (`POST /v1/operator/merchants/:merchantId/approve|suspend|close` and
+  `POST /v1/operator/merchants/:merchantId/origins/verify|revoke`) that stay
+  disabled (fail-closed) until `SPLIT402_CONTROL_PLANE_OPERATOR_TOKENS` is
+  configured, so operators can activate an allowlisted merchant without manual
+  database work. This is an operator boundary, not a public self-approval
+  workflow.
 - Mainnet production operation is not approved.
 - Customer-facing commercial terms are not approved; public-alpha disclosures in
   [Commercial readiness](COMMERCIAL_READINESS.md) must remain true until a real

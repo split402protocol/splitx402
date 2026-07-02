@@ -367,6 +367,10 @@ Current hardening:
   and verification timestamps and creates pending origins;
 - receipt ingestion can run a control-plane policy verifier before accrual
   creation.
+- operator-token-gated merchant approve/suspend/close and origin verify/revoke
+  endpoints stay disabled until `SPLIT402_CONTROL_PLANE_OPERATOR_TOKENS` is
+  configured, keeping public registration pending-only while giving operators a
+  non-database approval path.
 - chain-verification rejection moves pending accruals to `rejected`.
 - finalized payout ledger closure moves allocated accruals to `paid`.
 - allocation release cancels only safe pre-submission/problem batches and moves
