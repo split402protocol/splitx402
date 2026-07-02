@@ -5,6 +5,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { base58Encode, deriveEd25519PublicKey, hexToBytes } from "@split402/protocol";
 
 import { WORKSPACE_ENV_PATH } from "./env.js";
+import { readDemoNetwork } from "./network.js";
 import { getTokenAccountSummary } from "./solana-rpc.js";
 
 const EXISTING_BUYER_SEED_HEX =
@@ -21,6 +22,12 @@ try {
 }
 
 async function main(): Promise<void> {
+  const network = readDemoNetwork();
+  if (network.cluster === "mainnet") {
+    throw new Error(
+      "existing-token setup is Devnet-only; it writes a published demo seed and must never run against Solana Mainnet"
+    );
+  }
   const seed = hexToBytes(EXISTING_BUYER_SEED_HEX);
   const buyerAddress = deriveEd25519PublicKey(seed);
   const summary = await getTokenAccountSummary(buyerAddress, EXISTING_PAYMENT_ASSET);
