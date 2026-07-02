@@ -1912,6 +1912,60 @@ describe("campaign lifecycle status routes", () => {
   });
 });
 
+describe("auth session revocation route", () => {
+  it("revokes a refresh token so it can no longer rotate", async () => {
+    const { app } = createTestApp({ withAuth: true });
+    const challengeResponse = await request(app)
+      .post("/v1/auth/challenges")
+      .send({
+        wallet: OWNER_WALLET,
+        network: NETWORK,
+        purpose: "merchant-session"
+      })
+      .expect(201);
+    const signature = signEd25519Message(
+      new TextEncoder().encode(
+        challengeResponse.body.challenge.message as string
+      ),
+      OWNER_SEED
+    ).signature;
+    const sessionResponse = await request(app)
+      .post("/v1/auth/sessions")
+      .send({
+        challengeId: challengeResponse.body.challenge.challengeId,
+        signature,
+        publicKey: OWNER_WALLET
+      })
+      .expect(201);
+    const refreshToken = sessionResponse.body.session.refreshToken as string;
+
+    const revokeResponse = await request(app)
+      .post("/v1/auth/sessions/revoke")
+      .send({ refreshToken })
+      .expect(200);
+    expect(revokeResponse.body.revocation).toEqual({
+      revoked: true,
+      alreadyRevoked: false,
+      wallet: OWNER_WALLET
+    });
+
+    await request(app)
+      .post("/v1/auth/sessions/refresh")
+      .send({ refreshToken })
+      .expect(401);
+    const repeated = await request(app)
+      .post("/v1/auth/sessions/revoke")
+      .send({ refreshToken })
+      .expect(200);
+    expect(repeated.body.revocation.alreadyRevoked).toBe(true);
+    await request(app)
+      .post("/v1/auth/sessions/revoke")
+      .send({ refreshToken: "unknown-refresh-token" })
+      .expect(401);
+    await request(app).post("/v1/auth/sessions/revoke").send({}).expect(400);
+  });
+});
+
 describe("dead-letter webhook requeue route", () => {
   it("requeues a merchant's dead-letter webhook event and rejects other states", async () => {
     const bundle = createSampleProtocolArtifacts();
