@@ -1771,6 +1771,76 @@ describe("control-plane HTTP API", () => {
   });
 });
 
+describe("merchant campaign listing route", () => {
+  it("lists a merchant's campaigns with status filtering", async () => {
+    const { app, merchantRegistry } = createTestApp({
+      withMerchantRegistry: true,
+      withCampaignRegistry: true
+    });
+    await createActiveCampaign({ app, merchantRegistry });
+    const bundle = createSampleProtocolArtifacts();
+    const merchantId = bundle.artifacts.receipt.merchantId;
+    const campaignId = bundle.artifacts.receipt.campaignId;
+
+    const listed = await request(app)
+      .get(`/v1/merchants/${merchantId}/campaigns`)
+      .expect(200);
+    expect(listed.body.campaigns).toHaveLength(1);
+    expect(listed.body.campaigns[0].id).toBe(campaignId);
+    expect(listed.body.campaigns[0].status).toBe("active");
+
+    await request(app).post(`/v1/campaigns/${campaignId}/pause`).expect(200);
+
+    const paused = await request(app)
+      .get(`/v1/merchants/${merchantId}/campaigns`)
+      .query({ status: "paused" })
+      .expect(200);
+    expect(paused.body.campaigns).toHaveLength(1);
+    expect(paused.body.campaigns[0].status).toBe("paused");
+
+    const active = await request(app)
+      .get(`/v1/merchants/${merchantId}/campaigns`)
+      .query({ status: "active" })
+      .expect(200);
+    expect(active.body.campaigns).toHaveLength(0);
+
+    await request(app)
+      .get(`/v1/merchants/${merchantId}/campaigns`)
+      .query({ status: "bogus" })
+      .expect(400);
+  });
+
+  it("requires the merchant owner when auth is enabled", async () => {
+    const { app, merchantRegistry } = createTestApp({
+      withMerchantRegistry: true,
+      withCampaignRegistry: true,
+      withAuth: true
+    });
+    const ownerToken = await createAccessToken(app, OWNER_SEED, OWNER_WALLET);
+    await createActiveCampaign({ app, merchantRegistry, ownerToken });
+    const bundle = createSampleProtocolArtifacts();
+    const merchantId = bundle.artifacts.receipt.merchantId;
+
+    await request(app).get(`/v1/merchants/${merchantId}/campaigns`).expect(401);
+
+    const otherToken = await createAccessToken(
+      app,
+      OTHER_OWNER_SEED,
+      OTHER_OWNER_WALLET
+    );
+    await request(app)
+      .get(`/v1/merchants/${merchantId}/campaigns`)
+      .set("authorization", `Bearer ${otherToken}`)
+      .expect(403);
+
+    const listed = await request(app)
+      .get(`/v1/merchants/${merchantId}/campaigns`)
+      .set("authorization", `Bearer ${ownerToken}`)
+      .expect(200);
+    expect(listed.body.campaigns).toHaveLength(1);
+  });
+});
+
 describe("campaign lifecycle status routes", () => {
   it("pauses, resumes, and closes an activated campaign", async () => {
     const { app, merchantRegistry } = createTestApp({

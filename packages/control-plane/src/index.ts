@@ -28,6 +28,7 @@ import {
   type CampaignOperation,
   type CampaignProfile,
   type CampaignRegistry,
+  type CampaignStatus,
   type CampaignStatusTransition,
   type CampaignTermsInput
 } from "./campaigns.js";
@@ -2659,6 +2660,36 @@ export function createCampaignRegistryRouter(
     }
   });
 
+  router.get("/v1/merchants/:merchantId/campaigns", async (req, res, next) => {
+    try {
+      const merchantId = readRouteParam(req.params.merchantId, "merchantId");
+      const session = await requireMerchantOwnerForMerchantId(
+        req,
+        res,
+        options,
+        merchantId
+      );
+      if (session === undefined && isMerchantAuthRequired(options)) {
+        return;
+      }
+      const status = readOptionalCampaignStatusFilter(req.query.status);
+      const limit = readOptionalPositiveIntegerQuery(req.query.limit, "limit");
+      const campaigns = await campaignRegistry.listMerchantCampaigns({
+        merchantId,
+        ...(status === undefined ? {} : { status }),
+        ...(limit === undefined ? {} : { limit })
+      });
+      res.json({ campaigns });
+    } catch (error) {
+      if (
+        !sendCampaignRegistryError(res, error) &&
+        !sendMerchantRegistryError(res, error)
+      ) {
+        next(error);
+      }
+    }
+  });
+
   router.post("/v1/campaigns/:campaignId/pause", async (req, res, next) => {
     await handleCampaignStatusTransition(req, res, next, options, campaignRegistry, "paused");
   });
@@ -3205,6 +3236,25 @@ function readOptionalMerchantKeyPurpose(
   }
   throw new MerchantRegistryValidationError(
     "purpose must be offer_receipt or webhook"
+  );
+}
+
+function readOptionalCampaignStatusFilter(
+  value: unknown
+): CampaignStatus | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (
+    value === "draft" ||
+    value === "active" ||
+    value === "paused" ||
+    value === "closed"
+  ) {
+    return value;
+  }
+  throw new CampaignRegistryValidationError(
+    "status must be draft, active, paused, or closed"
   );
 }
 
