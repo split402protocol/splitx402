@@ -10,6 +10,7 @@ import {
 import express from "express";
 import type { NextFunction, Request, Response, Router } from "express";
 import { rateLimit } from "express-rate-limit";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { Pool, type PoolConfig } from "pg";
 
 import {
@@ -46,7 +47,9 @@ import {
   type MerchantOriginVerificationMethod,
   type MerchantPayoutWalletRecord,
   type MerchantPayoutWalletStatus,
-  type MerchantRegistry
+  type MerchantRegistry,
+  type MerchantOriginStatusTransition,
+  type MerchantStatusTransition
 } from "./merchants.js";
 import {
   RouteRegistryValidationError,
@@ -1346,6 +1349,7 @@ export interface ControlPlaneAppOptions {
   webhookEventManagementStore?: WebhookEventManagementStore;
   payoutFinalityMonitor?: PayoutFinalityMonitor;
   auth?: ControlPlaneAuthOptions;
+  operator?: ControlPlaneOperatorOptions;
   jsonLimit?: string;
   rateLimitWindowMs?: number;
   rateLimitMaxRequests?: number;
@@ -1394,6 +1398,10 @@ export interface ControlPlaneAuthOptions {
   requireMerchantAuth?: boolean;
 }
 
+export interface ControlPlaneOperatorOptions {
+  accessTokens: string[];
+}
+
 export type ControlPlaneRuntimeAuthPolicy = "disabled" | "optional" | "required";
 
 export interface CreateControlPlaneRuntimeOptions {
@@ -1403,6 +1411,7 @@ export interface CreateControlPlaneRuntimeOptions {
   jsonLimit?: string;
   rateLimitWindowMs?: number;
   rateLimitMaxRequests?: number;
+  operatorAccessTokens?: string[];
   merchantFundingBalanceProvider?: MerchantFundingBalanceProvider;
   payoutFinalityMonitor?: PayoutFinalityMonitor;
   walletAuth?: WalletAuthenticatorOptions;
@@ -1486,6 +1495,15 @@ export function createControlPlaneRuntime(
             authenticator,
             requireMerchantAuth: authPolicy === "required"
           }
+        }),
+    ...(readOperatorAccessTokens(options.operatorAccessTokens) === undefined
+      ? {}
+      : {
+          operator: {
+            accessTokens: readOperatorAccessTokens(
+              options.operatorAccessTokens
+            ) as string[]
+          }
         })
   });
 
@@ -1525,6 +1543,12 @@ export function createControlPlaneRuntimeFromEnv(
       return provider === undefined ? {} : { merchantFundingBalanceProvider: provider };
     })(),
     payoutFinalityMonitor: createRuntimePayoutFinalityMonitor(env),
+    ...(() => {
+      const tokens = readOperatorAccessTokens(
+        env.SPLIT402_CONTROL_PLANE_OPERATOR_TOKENS?.split(",")
+      );
+      return tokens === undefined ? {} : { operatorAccessTokens: tokens };
+    })(),
     walletAuth: {
       ...readWalletAuthEnvOptions(env),
       ...options.walletAuth
@@ -2199,6 +2223,7 @@ export function createMerchantRegistryRouter(
     | "auth"
     | "campaignRegistry"
     | "jsonLimit"
+    | "operator"
     | "routeRegistry"
     | "webhookEventManagementStore"
   > = {}
@@ -2481,6 +2506,32 @@ export function createMerchantRegistryRouter(
       }
     }
   });
+
+  router.post("/v1/operator/merchants/:merchantId/approve", async (req, res, next) => {
+    await handleOperatorMerchantStatus(req, res, next, options, merchantRegistry, "active");
+  });
+
+  router.post("/v1/operator/merchants/:merchantId/suspend", async (req, res, next) => {
+    await handleOperatorMerchantStatus(req, res, next, options, merchantRegistry, "suspended");
+  });
+
+  router.post("/v1/operator/merchants/:merchantId/close", async (req, res, next) => {
+    await handleOperatorMerchantStatus(req, res, next, options, merchantRegistry, "closed");
+  });
+
+  router.post(
+    "/v1/operator/merchants/:merchantId/origins/verify",
+    async (req, res, next) => {
+      await handleOperatorOriginStatus(req, res, next, options, merchantRegistry, "verified");
+    }
+  );
+
+  router.post(
+    "/v1/operator/merchants/:merchantId/origins/revoke",
+    async (req, res, next) => {
+      await handleOperatorOriginStatus(req, res, next, options, merchantRegistry, "revoked");
+    }
+  );
 
   router.post("/v1/merchants/:merchantId/payout-wallets", async (req, res, next) => {
     try {
@@ -3937,6 +3988,15 @@ async function closeRuntimePool(pool: PostgresPool): Promise<void> {
   await closable.end?.();
 }
 
+function readOperatorAccessTokens(
+  values: string[] | undefined
+): string[] | undefined {
+  const tokens = (values ?? [])
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0);
+  return tokens.length === 0 ? undefined : tokens;
+}
+
 function readRuntimeAuthPolicy(value: string): ControlPlaneRuntimeAuthPolicy {
   if (value === "disabled" || value === "optional" || value === "required") {
     return value;
@@ -4034,6 +4094,115 @@ function isMerchantAuthRequired(
   options: Pick<ControlPlaneAppOptions, "auth">
 ): boolean {
   return options.auth?.requireMerchantAuth ?? options.auth !== undefined;
+}
+
+async function handleOperatorMerchantStatus(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+  options: Pick<ControlPlaneAppOptions, "operator">,
+  merchantRegistry: MerchantRegistry,
+  status: MerchantStatusTransition
+): Promise<void> {
+  try {
+    if (!requireOperatorAccess(req, res, options)) {
+      return;
+    }
+    const merchantId = req.params.merchantId;
+    if (typeof merchantId !== "string") {
+      res.status(404).json({ error: "merchant_not_found" });
+      return;
+    }
+    const merchant = await merchantRegistry.updateMerchantStatus({
+      merchantId,
+      status
+    });
+    if (merchant === undefined) {
+      res.status(404).json({ error: "merchant_not_found" });
+      return;
+    }
+    res.json({ merchant });
+  } catch (error) {
+    if (!sendMerchantRegistryError(res, error)) {
+      next(error);
+    }
+  }
+}
+
+async function handleOperatorOriginStatus(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+  options: Pick<ControlPlaneAppOptions, "operator">,
+  merchantRegistry: MerchantRegistry,
+  status: MerchantOriginStatusTransition
+): Promise<void> {
+  try {
+    if (!requireOperatorAccess(req, res, options)) {
+      return;
+    }
+    const merchantId = req.params.merchantId;
+    if (typeof merchantId !== "string") {
+      res.status(404).json({ error: "merchant_not_found" });
+      return;
+    }
+    const body = requireJsonObject(req.body);
+    const verifiedAt = readOptionalString(body.verifiedAt, "verifiedAt");
+    const origin = await merchantRegistry.updateOriginStatus({
+      merchantId,
+      origin: readRequiredString(body.origin, "origin"),
+      status,
+      ...(verifiedAt === undefined ? {} : { verifiedAt })
+    });
+    if (origin === undefined) {
+      res.status(404).json({ error: "merchant_origin_not_found" });
+      return;
+    }
+    res.json({ origin });
+  } catch (error) {
+    if (!sendMerchantRegistryError(res, error)) {
+      next(error);
+    }
+  }
+}
+
+function requireOperatorAccess(
+  req: Request,
+  res: Response,
+  options: Pick<ControlPlaneAppOptions, "operator">
+): boolean {
+  const configuredTokens = (options.operator?.accessTokens ?? [])
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0);
+  if (configuredTokens.length === 0) {
+    res.status(403).json({
+      error: "operator_disabled",
+      message:
+        "operator approval endpoints are disabled; configure operator access tokens to enable them"
+    });
+    return false;
+  }
+
+  const presentedToken = readBearerAccessToken(req);
+  if (presentedToken === undefined) {
+    res.status(401).json({
+      error: "unauthorized",
+      message: "operator bearer access token required"
+    });
+    return false;
+  }
+  const presentedDigest = createHash("sha256").update(presentedToken).digest();
+  const matched = configuredTokens.some((token) =>
+    timingSafeEqual(createHash("sha256").update(token).digest(), presentedDigest)
+  );
+  if (!matched) {
+    res.status(401).json({
+      error: "unauthorized",
+      message: "invalid operator access token"
+    });
+    return false;
+  }
+  return true;
 }
 
 async function readMerchantMutationSession(
