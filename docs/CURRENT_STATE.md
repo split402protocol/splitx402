@@ -90,7 +90,12 @@ metadata.
   `corepack pnpm product:mainnet-canary --brief --workspace split402-launch-evidence`
   and [Mainnet canary runbook](runbooks/mainnet-canary.md) as fail-closed
   operator guardrails for the first tiny allowlisted mainnet test after all
-  launch gates pass.
+  launch gates pass. The demo merchant and demo agent are network-selectable
+  through `SPLIT402_DEMO_NETWORK` (Devnet default); `solana:mainnet` is
+  fail-closed behind the canary confirmation, an allowlisted payer wallet, a
+  non-demo service seed, an explicit pay-to wallet, and the canary amount cap,
+  so canary dry-runs can exercise the exact mainnet configuration without
+  weakening the Devnet demo path.
 
 ## Current Direction
 
