@@ -143,6 +143,17 @@ export interface MarkPayoutTransactionFinalityInput {
   status: PayoutTransactionFinalityStatus;
   observedAt?: string;
   error?: Record<string, unknown>;
+  /**
+   * Optional compare-and-set guard: when provided, the finality write only
+   * applies while the stored transaction still has this status, and the
+   * store returns undefined without writing when the status changed
+   * concurrently.
+   */
+  expectedStatus?: PayoutTransactionStatus;
+}
+
+export interface ListPayoutTransactionsPendingFinalityInput {
+  limit?: number;
 }
 
 export interface PayoutTransactionStore {
@@ -151,6 +162,9 @@ export interface PayoutTransactionStore {
   ): Promise<PayoutTransactionRecord[]> | PayoutTransactionRecord[];
   listPayoutTransactions(
     payoutBatchId: string
+  ): Promise<PayoutTransactionRecord[]> | PayoutTransactionRecord[];
+  listPayoutTransactionsPendingFinality(
+    input?: ListPayoutTransactionsPendingFinalityInput
   ): Promise<PayoutTransactionRecord[]> | PayoutTransactionRecord[];
   markPayoutTransactionSubmitted(
     input: MarkPayoutTransactionSubmittedInput
@@ -1188,6 +1202,54 @@ export function isPayoutTransactionOutcomeUnknown(
   return (
     transaction.status === "outcome_unknown" ||
     transaction.status === "expired"
+  );
+}
+
+export function isPayoutTransactionPendingFinality(
+  transaction: PayoutTransactionRecord
+): boolean {
+  // Only transactions with an expected signature are chain-monitorable;
+  // signature-less rows would fail signature assertion on every sweep and
+  // permanently occupy sweep-window slots, so they stay with operator flows.
+  return (
+    (transaction.status === "submitted" ||
+      transaction.status === "confirmed") &&
+    transaction.expectedSignature !== undefined &&
+    transaction.expectedSignature.length > 0
+  );
+}
+
+export function normalizePayoutPendingFinalityLimit(
+  limit: number | undefined
+): number {
+  if (limit === undefined) {
+    return 25;
+  }
+  if (!Number.isInteger(limit) || limit < 1) {
+    throw new PayoutBatchValidationError(
+      "pending finality limit must be a positive integer"
+    );
+  }
+  return Math.min(limit, 100);
+}
+
+export function comparePayoutTransactionsPendingFinality(
+  left: PayoutTransactionRecord,
+  right: PayoutTransactionRecord
+): number {
+  const leftSubmittedAt = left.submittedAt ?? "";
+  const rightSubmittedAt = right.submittedAt ?? "";
+  if (leftSubmittedAt !== rightSubmittedAt) {
+    if (leftSubmittedAt.length === 0) {
+      return 1;
+    }
+    if (rightSubmittedAt.length === 0) {
+      return -1;
+    }
+    return leftSubmittedAt.localeCompare(rightSubmittedAt);
+  }
+  return (
+    left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id)
   );
 }
 

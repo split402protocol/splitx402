@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   attachPayoutTransactionItemMappings,
+  comparePayoutTransactionsPendingFinality,
   createPayoutBatchPlan,
   createPayoutFinalizationLedgerTransaction,
   createMerchantObligationSummary,
@@ -10,6 +11,8 @@ import {
   createReferrerPayoutHistoryItems,
   createSignedPayoutTransactionRecords,
   filterPayoutEligibleAccruals,
+  isPayoutTransactionPendingFinality,
+  normalizePayoutPendingFinalityLimit,
   releasePayoutBatchAllocationsForBatch,
   summarizePayoutBatchTransactionItemFinality,
   summarizePayoutBatchFinality,
@@ -19,6 +22,98 @@ import {
 } from "../src/index.js";
 
 const NOW = "2026-06-24T00:10:00.000Z";
+
+describe("payout pending finality helpers", () => {
+  it("treats only submitted and confirmed transactions as pending finality", () => {
+    const statuses: Array<[PayoutTransactionRecord["status"], boolean]> = [
+      ["planned", false],
+      ["signed", false],
+      ["submitted", true],
+      ["confirmed", true],
+      ["finalized", false],
+      ["expired", false],
+      ["failed", false],
+      ["outcome_unknown", false]
+    ];
+    for (const [status, expected] of statuses) {
+      expect(
+        isPayoutTransactionPendingFinality(
+          createFinalityTransaction({ id: `ptx_${status}`, status })
+        )
+      ).toBe(expected);
+    }
+  });
+
+  it("excludes signature-less transactions from pending finality", () => {
+    const unsigned = createFinalityTransaction({ id: "ptx_unsigned" });
+    delete unsigned.expectedSignature;
+    expect(isPayoutTransactionPendingFinality(unsigned)).toBe(false);
+
+    const emptySignature = createFinalityTransaction({
+      id: "ptx_empty",
+      expectedSignature: ""
+    });
+    expect(isPayoutTransactionPendingFinality(emptySignature)).toBe(false);
+  });
+
+  it("orders pending transactions by submission time with unsubmitted last", () => {
+    const early = createFinalityTransaction({
+      id: "ptx_early",
+      submittedAt: "2026-06-24T00:01:00.000Z"
+    });
+    const late = createFinalityTransaction({
+      id: "ptx_late",
+      submittedAt: "2026-06-24T00:02:00.000Z"
+    });
+    const unsubmitted = createFinalityTransaction({ id: "ptx_none" });
+    delete unsubmitted.submittedAt;
+    const tieBreakByCreation = createFinalityTransaction({
+      id: "ptx_tie",
+      submittedAt: "2026-06-24T00:01:00.000Z",
+      createdAt: "2026-06-24T00:00:30.000Z"
+    });
+
+    const sorted = [unsubmitted, late, early, tieBreakByCreation].sort(
+      comparePayoutTransactionsPendingFinality
+    );
+
+    expect(sorted.map((transaction) => transaction.id)).toEqual([
+      "ptx_tie",
+      "ptx_early",
+      "ptx_late",
+      "ptx_none"
+    ]);
+  });
+
+  it("normalizes the pending finality limit fail-closed", () => {
+    expect(normalizePayoutPendingFinalityLimit(undefined)).toBe(25);
+    expect(normalizePayoutPendingFinalityLimit(10)).toBe(10);
+    expect(normalizePayoutPendingFinalityLimit(500)).toBe(100);
+    expect(() => normalizePayoutPendingFinalityLimit(0)).toThrowError(
+      "pending finality limit must be a positive integer"
+    );
+    expect(() => normalizePayoutPendingFinalityLimit(1.5)).toThrowError(
+      "pending finality limit must be a positive integer"
+    );
+  });
+});
+
+function createFinalityTransaction(
+  overrides: Partial<PayoutTransactionRecord> = {}
+): PayoutTransactionRecord {
+  return {
+    id: "ptx_default",
+    payoutBatchId: "pbt_default",
+    sequence: 0,
+    attempt: 1,
+    expectedSignature: "sig_default",
+    status: "submitted",
+    submittedAt: "2026-06-24T00:01:00.000Z",
+    createdAt: "2026-06-24T00:01:00.000Z",
+    items: [],
+    ...overrides
+  };
+}
 
 describe("payout preview planner", () => {
   it("groups eligible accruals by asset and destination wallet", () => {

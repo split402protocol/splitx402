@@ -332,6 +332,10 @@ Current slice:
 - payout transaction-to-item mapping for per-item finality;
 - Solana payout transaction finality monitor with retry and outcome-unknown
   classification;
+- background payout finality worker (`corepack pnpm worker:payout-finality`)
+  that sweeps submitted and confirmed payout transactions, persists
+  chain-observed outcomes, and never signs, broadcasts, or replaces
+  transaction bytes;
 - finalized payout transfer-content verification before ledger closure;
 - payout batch and item status rollup from transaction finality;
 - safe payout allocation release for draft, planned, signing, failed, and

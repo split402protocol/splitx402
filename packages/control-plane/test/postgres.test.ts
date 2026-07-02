@@ -744,6 +744,65 @@ describe("PostgresReceiptIngestionStore", () => {
     ).rejects.toBeInstanceOf(PayoutBatchConflictError);
   });
 
+  it("lists payout transactions pending finality until they reach a terminal state", async () => {
+    const fixture = await createPostgresPayoutTransactionFixture();
+
+    await expect(
+      fixture.store.listPayoutTransactionsPendingFinality()
+    ).resolves.toEqual([]);
+
+    await fixture.store.markPayoutTransactionSubmitted({
+      id: fixture.transaction.id,
+      submittedAt: "2026-06-24T00:07:00Z",
+      expectedSignature: "expected_sig_0"
+    });
+
+    const pendingSubmitted =
+      await fixture.store.listPayoutTransactionsPendingFinality();
+    expect(pendingSubmitted.map((transaction) => transaction.id)).toEqual([
+      fixture.transaction.id
+    ]);
+    expect(pendingSubmitted[0]?.status).toBe("submitted");
+    expect(pendingSubmitted[0]?.items).toHaveLength(1);
+
+    await fixture.store.markPayoutTransactionFinality({
+      id: fixture.transaction.id,
+      status: "confirmed",
+      observedAt: "2026-06-24T00:08:00Z"
+    });
+    const pendingConfirmed =
+      await fixture.store.listPayoutTransactionsPendingFinality({ limit: 1 });
+    expect(pendingConfirmed.map((transaction) => transaction.status)).toEqual([
+      "confirmed"
+    ]);
+
+    const staleWrite = await fixture.store.markPayoutTransactionFinality({
+      id: fixture.transaction.id,
+      status: "finalized",
+      observedAt: "2026-06-24T00:09:00Z",
+      expectedStatus: "submitted"
+    });
+    expect(staleWrite).toBeUndefined();
+    await expect(
+      fixture.store.listPayoutTransactionsPendingFinality({ limit: 1 })
+    ).resolves.toEqual([
+      expect.objectContaining({ status: "confirmed" })
+    ]);
+
+    const guardedWrite = await fixture.store.markPayoutTransactionFinality({
+      id: fixture.transaction.id,
+      status: "finalized",
+      observedAt: "2026-06-24T00:09:00Z",
+      expectedStatus: "confirmed"
+    });
+    expect(guardedWrite).toEqual(
+      expect.objectContaining({ status: "finalized" })
+    );
+    await expect(
+      fixture.store.listPayoutTransactionsPendingFinality()
+    ).resolves.toEqual([]);
+  });
+
   it("releases planned payout allocations back to available", async () => {
     const fixture = await createPostgresPayoutTransactionFixture();
 
@@ -2776,8 +2835,13 @@ class FakePostgresDatabase {
     const confirmedAt = readNullableString(values[2]);
     const finalizedAt = readNullableString(values[3]);
     const errorJson = readNullableString(values[4]);
+    const expectedStatus =
+      values.length > 5 ? readString(values[5]) : undefined;
     const transaction = this.payoutTransactions.find((row) => row.id === id);
     if (transaction === undefined) {
+      return [];
+    }
+    if (expectedStatus !== undefined && transaction.status !== expectedStatus) {
       return [];
     }
     transaction.status = status;
@@ -2952,6 +3016,31 @@ class FakePostgresDatabase {
     if (normalizedSql.includes("where id = $1")) {
       const id = readString(values[0]);
       return this.payoutTransactions.filter((row) => row.id === id);
+    }
+    if (normalizedSql.includes("where status in ('submitted', 'confirmed')")) {
+      const limit = readNumber(values[0]);
+      return this.payoutTransactions
+        .filter(
+          (row) =>
+            (row.status === "submitted" || row.status === "confirmed") &&
+            row.expected_signature !== null
+        )
+        .sort((left, right) => {
+          if (left.submitted_at !== right.submitted_at) {
+            if (left.submitted_at === null) {
+              return 1;
+            }
+            if (right.submitted_at === null) {
+              return -1;
+            }
+            return left.submitted_at.localeCompare(right.submitted_at);
+          }
+          return (
+            left.created_at.localeCompare(right.created_at) ||
+            left.id.localeCompare(right.id)
+          );
+        })
+        .slice(0, limit);
     }
     const batchId = readString(values[0]);
     return this.payoutTransactions

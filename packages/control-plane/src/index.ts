@@ -90,6 +90,9 @@ import {
   attachPayoutTransactionItemMappings,
   filterPayoutEligibleAccruals,
   isPayoutTransactionOutcomeUnknown,
+  isPayoutTransactionPendingFinality,
+  comparePayoutTransactionsPendingFinality,
+  normalizePayoutPendingFinalityLimit,
   releasePayoutBatchAllocationsForBatch,
   summarizePayoutBatchTransactionItemFinality,
   verifyPayoutFinalizedTransfersBeforeLedgerClosure,
@@ -98,6 +101,7 @@ import {
   isPayoutPreviewValidationError,
   type CreatePayoutBatchFromAvailableAccrualsInput,
   type ListPayoutEligibleAccrualsInput,
+  type ListPayoutTransactionsPendingFinalityInput,
   type PayoutAccrualStore,
   type PayoutBatchRecord,
   type PayoutBatchStore,
@@ -667,6 +671,16 @@ export class InMemoryReceiptIngestionStore
       .sort(comparePayoutTransactions);
   }
 
+  listPayoutTransactionsPendingFinality(
+    input: ListPayoutTransactionsPendingFinalityInput = {}
+  ): PayoutTransactionRecord[] {
+    const limit = normalizePayoutPendingFinalityLimit(input.limit);
+    return Array.from(this.payoutTransactionsById.values())
+      .filter(isPayoutTransactionPendingFinality)
+      .sort(comparePayoutTransactionsPendingFinality)
+      .slice(0, limit);
+  }
+
   listPayoutReconciliationItems(
     input: Parameters<PayoutReconciliationStore["listPayoutReconciliationItems"]>[0]
   ) {
@@ -755,6 +769,12 @@ export class InMemoryReceiptIngestionStore
   ): PayoutTransactionRecord | undefined {
     const existing = this.payoutTransactionsById.get(input.id);
     if (existing === undefined) {
+      return undefined;
+    }
+    if (
+      input.expectedStatus !== undefined &&
+      existing.status !== input.expectedStatus
+    ) {
       return undefined;
     }
     const observedAt = normalizeOptionalTimestamp(input.observedAt);
@@ -3600,12 +3620,22 @@ function normalizeOptionalTimestamp(value: string | undefined): string {
   return date.toISOString();
 }
 
+export function createPayoutFinalityMonitorFromEnv(
+  env: NodeJS.ProcessEnv = process.env
+): PayoutFinalityMonitor {
+  return createRuntimePayoutFinalityMonitor(env);
+}
+
 function createRuntimePayoutFinalityMonitor(
   env: NodeJS.ProcessEnv
 ): PayoutFinalityMonitor {
+  // Empty env values (common with docker compose env_file templates that
+  // ship `VAR=` lines) must behave exactly like unset values, otherwise an
+  // empty payout-finality variable silently defeats the documented
+  // chain-worker fallback or crashes startup on integer parsing.
   const rpcUrls = readOptionalRpcUrlList(
-    env.SPLIT402_PAYOUT_FINALITY_SOLANA_RPC_URLS ??
-      env.SPLIT402_CHAIN_WORKER_SOLANA_RPC_URLS
+    readOptionalNonEmptyEnv(env.SPLIT402_PAYOUT_FINALITY_SOLANA_RPC_URLS) ??
+      readOptionalNonEmptyEnv(env.SPLIT402_CHAIN_WORKER_SOLANA_RPC_URLS)
   );
   const rpcUrl =
     readOptionalNonEmptyEnv(
@@ -3615,12 +3645,14 @@ function createRuntimePayoutFinalityMonitor(
     rpcUrls[0] ??
     "https://api.devnet.solana.com";
   const retryDelayMs = readOptionalPositiveInteger(
-    env.SPLIT402_PAYOUT_FINALITY_RETRY_DELAY_MS,
+    readOptionalNonEmptyEnv(env.SPLIT402_PAYOUT_FINALITY_RETRY_DELAY_MS),
     "SPLIT402_PAYOUT_FINALITY_RETRY_DELAY_MS"
   );
   const unknownOutcomeAfterMs =
     readOptionalPositiveInteger(
-      env.SPLIT402_PAYOUT_FINALITY_UNKNOWN_OUTCOME_AFTER_MS,
+      readOptionalNonEmptyEnv(
+        env.SPLIT402_PAYOUT_FINALITY_UNKNOWN_OUTCOME_AFTER_MS
+      ),
       "SPLIT402_PAYOUT_FINALITY_UNKNOWN_OUTCOME_AFTER_MS"
     ) ?? 300_000;
   const network = readRuntimeSolanaNetwork(

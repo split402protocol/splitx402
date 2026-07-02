@@ -77,6 +77,7 @@
     "demo:mcp-gateway": "corepack pnpm --filter @split402/mcp-demo gateway",
     "demo:mcp-gateway:smoke": "corepack pnpm --filter @split402/mcp-demo gateway:smoke",
     "worker:chain": "corepack pnpm --filter @split402/control-plane worker:chain",
+    "worker:payout-finality": "corepack pnpm --filter @split402/control-plane worker:payout-finality",
     "worker:webhook": "corepack pnpm --filter @split402/control-plane worker:webhook",
     "payout:finality:failover-drill": "corepack pnpm --filter @split402/control-plane payout:finality:failover-drill",
     "signer:payout": "corepack pnpm --filter @split402/payout-signer dev",

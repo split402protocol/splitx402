@@ -135,5 +135,24 @@ services:
     volumes:
       - ../..:/workspace
 
+  payout-finality-worker:
+    profiles: ["workers"]
+    image: node:22-slim
+    working_dir: /workspace
+    command: >
+      sh -lc "corepack enable &&
+      corepack pnpm install --frozen-lockfile &&
+      corepack pnpm worker:payout-finality"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - phase7-staging.env
+    environment:
+      SPLIT402_DATABASE_URL: postgresql://split402:split402@postgres:5432/split402
+      SPLIT402_DATABASE_SSL: "false"
+    volumes:
+      - ../..:/workspace
+
 volumes:
   split402-phase7-postgres:
