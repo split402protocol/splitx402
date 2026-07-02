@@ -29,6 +29,7 @@ import {
   type CampaignOperation,
   type CampaignProfile,
   type CampaignRegistry,
+  type CampaignStatusTransition,
   type CampaignTermsInput
 } from "./campaigns.js";
 import { isReceiptIngestionPersistenceConflict } from "./errors.js";
@@ -2734,6 +2735,18 @@ export function createCampaignRegistryRouter(
     }
   });
 
+  router.post("/v1/campaigns/:campaignId/pause", async (req, res, next) => {
+    await handleCampaignStatusTransition(req, res, next, options, campaignRegistry, "paused");
+  });
+
+  router.post("/v1/campaigns/:campaignId/resume", async (req, res, next) => {
+    await handleCampaignStatusTransition(req, res, next, options, campaignRegistry, "active");
+  });
+
+  router.post("/v1/campaigns/:campaignId/close", async (req, res, next) => {
+    await handleCampaignStatusTransition(req, res, next, options, campaignRegistry, "closed");
+  });
+
   router.get(
     "/v1/campaigns/:campaignId/versions/:version",
     async (req, res, next) => {
@@ -4153,6 +4166,46 @@ async function handleMerchantPayoutWalletStatus(
     res.json({ payoutWallet });
   } catch (error) {
     if (!sendMerchantRegistryError(res, error)) {
+      next(error);
+    }
+  }
+}
+
+async function handleCampaignStatusTransition(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+  options: Pick<ControlPlaneAppOptions, "auth" | "merchantRegistry">,
+  campaignRegistry: CampaignRegistry,
+  status: CampaignStatusTransition
+): Promise<void> {
+  try {
+    const campaignId = readRouteParam(req.params.campaignId, "campaignId");
+    const campaign = await campaignRegistry.getCampaign(campaignId);
+    if (campaign === undefined) {
+      res.status(404).json({ error: "campaign_not_found" });
+      return;
+    }
+    const session = await requireMerchantOwnerForMerchantId(
+      req,
+      res,
+      options,
+      campaign.merchantId
+    );
+    if (session === undefined && isMerchantAuthRequired(options)) {
+      return;
+    }
+    const updated = await campaignRegistry.updateCampaignStatus({
+      campaignId,
+      status
+    });
+    if (updated === undefined) {
+      res.status(404).json({ error: "campaign_not_found" });
+      return;
+    }
+    res.json({ campaign: updated });
+  } catch (error) {
+    if (!sendCampaignRegistryError(res, error)) {
       next(error);
     }
   }
