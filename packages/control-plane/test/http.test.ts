@@ -2311,6 +2311,58 @@ describe("control-plane operator approval endpoints", () => {
       .expect(400);
   });
 
+  it("checks a registered origin's well-known document without changing state", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const merchantId = bundle.artifacts.receipt.merchantId;
+    const origin = bundle.artifacts.receipt.merchantOrigin;
+    const requestedUrls: string[] = [];
+    const { app, merchantRegistry } = createTestApp({
+      withMerchantRegistry: true,
+      operatorTokens: ["operator-secret-1"],
+      operatorWellKnownFetch: (input) => {
+        requestedUrls.push(String(input));
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              protocol: "split402",
+              merchantId,
+              servicePublicKey: bundle.keys.merchantPublicKey
+            }),
+            { status: 200 }
+          )
+        );
+      }
+    });
+    seedMerchantFixture(merchantRegistry, {
+      merchantStatus: "pending",
+      originStatus: "pending"
+    });
+
+    const response = await request(app)
+      .post(`/v1/operator/merchants/${merchantId}/origins/check`)
+      .set("authorization", "Bearer operator-secret-1")
+      .send({ origin })
+      .expect(200);
+    expect(response.body.check.ok).toBe(true);
+    expect(response.body.check.discovered.merchantId).toBe(merchantId);
+    expect(requestedUrls).toEqual([`${origin}/.well-known/split402.json`]);
+    expect(
+      merchantRegistry
+        ?.getMerchantProfile(merchantId)
+        ?.origins.find((candidate) => candidate.origin === origin)?.status
+    ).toBe("pending");
+
+    await request(app)
+      .post(`/v1/operator/merchants/${merchantId}/origins/check`)
+      .set("authorization", "Bearer operator-secret-1")
+      .send({ origin: "https://unregistered.example" })
+      .expect(404);
+    await request(app)
+      .post(`/v1/operator/merchants/${merchantId}/origins/check`)
+      .send({ origin })
+      .expect(401);
+  });
+
   it("lets an operator-approved merchant pass campaign activation checks", async () => {
     const { app, merchantRegistry } = createTestApp({
       withMerchantRegistry: true,
@@ -2368,6 +2420,7 @@ function createTestApp(
     rateLimitWindowMs?: number;
     rateLimitMaxRequests?: number;
     operatorTokens?: string[];
+    operatorWellKnownFetch?: typeof fetch;
   } = {}
 ) {
   const bundle = createSampleProtocolArtifacts();
@@ -2436,7 +2489,14 @@ function createTestApp(
         : { rateLimitMaxRequests: options.rateLimitMaxRequests }),
       ...(options.operatorTokens === undefined
         ? {}
-        : { operator: { accessTokens: options.operatorTokens } })
+        : {
+            operator: {
+              accessTokens: options.operatorTokens,
+              ...(options.operatorWellKnownFetch === undefined
+                ? {}
+                : { wellKnownFetch: options.operatorWellKnownFetch })
+            }
+          })
     }),
     merchantRegistry,
     store,

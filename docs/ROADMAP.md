@@ -377,6 +377,10 @@ Current hardening:
   endpoints stay disabled until `SPLIT402_CONTROL_PLANE_OPERATOR_TOKENS` is
   configured, keeping public registration pending-only while giving operators a
   non-database approval path.
+- an operator-gated, non-mutating origin well-known check fetches the
+  registered origin's `/.well-known/split402.json` (redirects disabled, size
+  and timeout capped) and reports protocol/merchantId/servicePublicKey
+  evidence before the operator records origin verification.
 - chain-verification rejection moves pending accruals to `rejected`.
 - finalized payout ledger closure moves allocated accruals to `paid`.
 - allocation release cancels only safe pre-submission/problem batches and moves

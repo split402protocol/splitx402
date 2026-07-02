@@ -80,8 +80,11 @@ metadata.
 - Public merchant/origin approval workflows are not production admin workflows
   yet; public registration creates pending state only. The control plane now
   exposes operator-token-gated approval endpoints
-  (`POST /v1/operator/merchants/:merchantId/approve|suspend|close` and
-  `POST /v1/operator/merchants/:merchantId/origins/verify|revoke`) that stay
+  (`POST /v1/operator/merchants/:merchantId/approve|suspend|close`,
+  `POST /v1/operator/merchants/:merchantId/origins/verify|revoke`, and a
+  non-mutating `POST /v1/operator/merchants/:merchantId/origins/check` that
+  fetches and validates the origin's `/.well-known/split402.json` before an
+  operator verifies it) that stay
   disabled (fail-closed) until `SPLIT402_CONTROL_PLANE_OPERATOR_TOKENS` is
   configured, so operators can activate an allowlisted merchant without manual
   database work. This is an operator boundary, not a public self-approval

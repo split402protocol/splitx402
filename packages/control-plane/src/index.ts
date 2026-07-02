@@ -33,6 +33,7 @@ import {
   type CampaignTermsInput
 } from "./campaigns.js";
 import { isReceiptIngestionPersistenceConflict } from "./errors.js";
+import { checkMerchantOriginWellKnown } from "./origin-verification.js";
 import {
   createMerchantDashboardSummary,
   createMerchantReliabilityProfile,
@@ -1401,6 +1402,8 @@ export interface ControlPlaneAuthOptions {
 
 export interface ControlPlaneOperatorOptions {
   accessTokens: string[];
+  wellKnownFetch?: typeof fetch;
+  wellKnownTimeoutMs?: number;
 }
 
 export type ControlPlaneRuntimeAuthPolicy = "disabled" | "optional" | "required";
@@ -2531,6 +2534,51 @@ export function createMerchantRegistryRouter(
     "/v1/operator/merchants/:merchantId/origins/revoke",
     async (req, res, next) => {
       await handleOperatorOriginStatus(req, res, next, options, merchantRegistry, "revoked");
+    }
+  );
+
+  router.post(
+    "/v1/operator/merchants/:merchantId/origins/check",
+    async (req, res, next) => {
+      try {
+        if (!requireOperatorAccess(req, res, options)) {
+          return;
+        }
+        const merchantId = req.params.merchantId;
+        if (typeof merchantId !== "string") {
+          res.status(404).json({ error: "merchant_not_found" });
+          return;
+        }
+        const body = requireJsonObject(req.body);
+        const originValue = readRequiredString(body.origin, "origin");
+        const profile = await merchantRegistry.getMerchantProfile(merchantId);
+        if (profile === undefined) {
+          res.status(404).json({ error: "merchant_not_found" });
+          return;
+        }
+        const originRecord = profile.origins.find(
+          (candidate) => candidate.origin === originValue
+        );
+        if (originRecord === undefined) {
+          res.status(404).json({ error: "merchant_origin_not_found" });
+          return;
+        }
+        const check = await checkMerchantOriginWellKnown({
+          origin: originRecord.origin,
+          merchantId,
+          ...(options.operator?.wellKnownFetch === undefined
+            ? {}
+            : { fetchImpl: options.operator.wellKnownFetch }),
+          ...(options.operator?.wellKnownTimeoutMs === undefined
+            ? {}
+            : { timeoutMs: options.operator.wellKnownTimeoutMs })
+        });
+        res.json({ check });
+      } catch (error) {
+        if (!sendMerchantRegistryError(res, error)) {
+          next(error);
+        }
+      }
     }
   );
 
@@ -4117,6 +4165,7 @@ export * from "./campaigns.js";
 export * from "./discovery.js";
 export * from "./merchants.js";
 export * from "./migrations.js";
+export * from "./origin-verification.js";
 export * from "./payouts.js";
 export * from "./postgres.js";
 export * from "./routes.js";
