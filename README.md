@@ -262,6 +262,7 @@ GET  /v1/routes/:routeId/versions
 GET  /v1/routes/:routeId
 POST /v1/merchants/:merchantId/payouts/preview
 GET  /v1/merchants/:merchantId/payouts/reconciliation
+GET  /v1/payout-batches/:batchId
 POST /v1/payout-batches/:batchId/reconcile
 POST /v1/merchants/:merchantId/payout-batches
 POST /v1/payout-batches/:batchId/release-allocations

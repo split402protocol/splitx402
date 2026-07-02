@@ -404,6 +404,7 @@ Current slice:
 - expose `POST /v1/merchants/:merchantId/payout-wallets`;
 - expose `POST /v1/merchants/:merchantId/payouts/preview`;
 - expose `GET /v1/merchants/:merchantId/payouts/reconciliation`;
+- expose `GET /v1/payout-batches/:batchId`;
 - expose `POST /v1/payout-batches/:batchId/reconcile`;
 - expose `POST /v1/payout-batches/:batchId/release-allocations`;
 - expose `POST /v1/merchants/:merchantId/payout-batches`.

@@ -703,6 +703,99 @@ describe("control-plane HTTP API", () => {
     expect(monitor.transactions).toEqual([transaction.id]);
   });
 
+  it("returns a payout batch with its transactions", async () => {
+    const { app, store, receipt, merchantRegistry } = createTestApp({
+      withMerchantRegistry: true,
+      withPayouts: true
+    });
+    if (merchantRegistry === undefined) {
+      throw new Error("expected merchant registry");
+    }
+    await request(app)
+      .post("/v1/merchants")
+      .send({
+        id: receipt.merchantId,
+        slug: "payout-batch-read-merchant",
+        displayName: "Payout Batch Read Merchant",
+        ownerWallet: receipt.payerWallet
+      })
+      .expect(201);
+    await request(app).post("/v1/receipts").send({ receipt }).expect(201);
+    const snapshot = store.getByReceiptId(receipt.receiptId);
+    if (snapshot?.accrual === undefined) {
+      throw new Error("expected receipt accrual");
+    }
+    store.save({
+      ...snapshot,
+      receipt: {
+        ...snapshot.receipt,
+        verificationState: "signature_verified"
+      },
+      accrual: {
+        ...snapshot.accrual,
+        status: "available",
+        availableAt: "2026-06-24T00:04:00.000Z"
+      }
+    });
+    const availableAccrual = store.getByReceiptId(receipt.receiptId)?.accrual;
+    if (availableAccrual === undefined) {
+      throw new Error("expected available accrual");
+    }
+    const batch = store.createPayoutBatch({
+      merchantId: receipt.merchantId,
+      payoutWalletId: "mpw_ffffffffffffffffffffffffffffffff",
+      network: receipt.network,
+      asset: receipt.asset,
+      accruals: [availableAccrual],
+      now: "2026-06-24T00:05:00Z"
+    });
+    const [transaction] = store.saveSignedPayoutTransactions({
+      payoutBatchId: batch.id,
+      now: "2026-06-24T00:06:00Z",
+      transactions: [
+        {
+          sequence: 0,
+          signedTransactionBase64: "AQID",
+          expectedSignature: "expected_sig_0"
+        }
+      ]
+    });
+    if (transaction === undefined) {
+      throw new Error("expected payout transaction");
+    }
+    store.markPayoutTransactionSubmitted({
+      id: transaction.id,
+      submittedAt: "2026-06-24T00:07:00Z",
+      expectedSignature: "expected_sig_0"
+    });
+
+    const response = await request(app)
+      .get(`/v1/payout-batches/${batch.id}`)
+      .expect(200);
+
+    expect(response.body.batch).toEqual(
+      expect.objectContaining({
+        id: batch.id,
+        merchantId: receipt.merchantId,
+        status: "planned",
+        itemCount: 1,
+        accrualCount: 1
+      })
+    );
+    expect(response.body.transactions).toEqual([
+      expect.objectContaining({
+        id: transaction.id,
+        status: "submitted",
+        expectedSignature: "expected_sig_0",
+        submittedAt: "2026-06-24T00:07:00.000Z"
+      })
+    ]);
+
+    await request(app)
+      .get("/v1/payout-batches/pbt_00000000000000000000000000000000")
+      .expect(404);
+  });
+
   it("shows referrer balances and payout history", async () => {
     const { app, store, receipt, merchantRegistry } = createTestApp({
       withMerchantRegistry: true,

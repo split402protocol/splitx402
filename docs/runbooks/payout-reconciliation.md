@@ -49,6 +49,13 @@ curl -s \
   "$SPLIT402_CONTROL_PLANE_URL/v1/merchants/$MERCHANT_ID/payouts/reconciliation"
 ```
 
+Inspect a single batch and its transactions before acting on it:
+
+```bash
+curl -s \
+  "$SPLIT402_CONTROL_PLANE_URL/v1/payout-batches/$PAYOUT_BATCH_ID"
+```
+
 2. Reconcile one batch:
 
 ```bash

@@ -352,6 +352,7 @@ Current slice:
 - `POST /v1/merchants/:merchantId/payout-wallets`;
 - `POST /v1/merchants/:merchantId/payouts/preview`;
 - `GET /v1/merchants/:merchantId/payouts/reconciliation`;
+- `GET /v1/payout-batches/:batchId`;
 - `POST /v1/payout-batches/:batchId/reconcile`;
 - `POST /v1/payout-batches/:batchId/release-allocations`;
 - `POST /v1/merchants/:merchantId/payout-batches`;
