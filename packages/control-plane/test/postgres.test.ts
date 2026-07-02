@@ -335,6 +335,66 @@ describe("PostgresReceiptIngestionStore", () => {
     ).toBeUndefined();
   });
 
+  it("requeues a merchant's dead-letter webhook event back to pending", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const fakePool = new FakePostgresPool();
+    const receiptStore = new PostgresReceiptIngestionStore(fakePool);
+    const outboxStore = new PostgresOutboxEventStore(fakePool);
+    const ingestor = new ReceiptIngestor(receiptStore, {
+      resolveMerchantPublicKey: () => bundle.keys.merchantPublicKey,
+      now: () => new Date("2026-06-24T00:02:00Z")
+    });
+    await ingestor.ingest({ receipt: bundle.artifacts.receipt, source: "merchant" });
+    const claimed = await outboxStore.claimNext({
+      now: "2026-06-24T00:03:00Z",
+      eventTypes: ["webhook.receipt.accepted.v1"]
+    });
+    if (claimed === undefined) {
+      throw new Error("expected claimed webhook outbox event");
+    }
+    await outboxStore.markFailed({
+      eventId: claimed.id,
+      lastError: "receiver returned 500",
+      availableAt: "2026-06-24T00:03:00Z",
+      deadLetter: true
+    });
+
+    await expect(
+      outboxStore.requeueDeadLetterWebhookEvent({
+        merchantId: "mrc_ffffffffffffffffffffffffffffffff",
+        eventId: claimed.id
+      })
+    ).resolves.toBeUndefined();
+
+    const requeued = await outboxStore.requeueDeadLetterWebhookEvent({
+      merchantId: bundle.artifacts.receipt.merchantId,
+      eventId: claimed.id,
+      now: "2026-06-24T00:10:00Z"
+    });
+    expect(requeued).toEqual(
+      expect.objectContaining({
+        id: claimed.id,
+        status: "pending",
+        attempts: 0,
+        availableAt: "2026-06-24T00:10:00Z"
+      })
+    );
+    expect(requeued?.lastError).toBeUndefined();
+
+    await expect(
+      outboxStore.requeueDeadLetterWebhookEvent({
+        merchantId: bundle.artifacts.receipt.merchantId,
+        eventId: claimed.id
+      })
+    ).rejects.toThrow(/only dead_letter events can be requeued/u);
+
+    const reclaimed = await outboxStore.claimNext({
+      now: "2026-06-24T00:11:00Z",
+      eventTypes: ["webhook.receipt.accepted.v1"]
+    });
+    expect(reclaimed?.id).toBe(claimed.id);
+  });
+
   it("marks chain-verified receipts and accruals available", async () => {
     const bundle = createSampleProtocolArtifacts();
     const fakePool = new FakePostgresPool();
@@ -2271,6 +2331,14 @@ class FakePostgresClient implements PostgresTransactionClient {
     }
     if (
       normalized.startsWith("update outbox_events") &&
+      normalized.includes("attempts = 0")
+    ) {
+      return result(
+        this.database.requeueDeadLetterOutboxEvent(values) as unknown as Row[]
+      );
+    }
+    if (
+      normalized.startsWith("update outbox_events") &&
       normalized.includes("attempts = attempts + 1")
     ) {
       return result(
@@ -2564,6 +2632,29 @@ class FakePostgresDatabase {
     return [event];
   }
 
+  requeueDeadLetterOutboxEvent(
+    values: readonly unknown[]
+  ): StoredOutboxEventRow[] {
+    const eventId = readString(values[0]);
+    const merchantId = readString(values[1]);
+    const availableAt = readString(values[2]);
+    const row = this.outboxEvents.find(
+      (candidate) =>
+        candidate.id === eventId &&
+        readJsonPayload(candidate.payload)?.merchantId === merchantId &&
+        candidate.status === "dead_letter"
+    );
+    if (row === undefined) {
+      return [];
+    }
+    row.status = "pending";
+    row.attempts = 0;
+    row.available_at = availableAt;
+    row.locked_at = null;
+    row.last_error = null;
+    return [row];
+  }
+
   selectOutboxEvent(
     normalizedSql: string,
     values: readonly unknown[]
@@ -2584,6 +2675,16 @@ class FakePostgresDatabase {
             right.id.localeCompare(left.id)
         )
         .slice(0, limit);
+    }
+    if (normalizedSql.includes("payload ->> 'merchantid' = $2")) {
+      const eventId = readString(values[0]);
+      const merchantId = readString(values[1]);
+      const event = this.outboxEvents.find(
+        (row) =>
+          row.id === eventId &&
+          readJsonPayload(row.payload)?.merchantId === merchantId
+      );
+      return event === undefined ? [] : [event];
     }
     const eventId = readString(values[0]);
     const event = this.outboxEvents.find((row) => row.id === eventId);

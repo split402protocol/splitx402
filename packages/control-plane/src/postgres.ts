@@ -34,7 +34,10 @@ import {
   type CreateCampaignVersionInput,
   type ListMerchantCampaignsInput
 } from "./campaigns.js";
-import { ReceiptIngestionPersistenceConflictError } from "./errors.js";
+import {
+  ReceiptIngestionPersistenceConflictError,
+  WebhookEventRequeueConflictError
+} from "./errors.js";
 import {
   MerchantRegistryConflictError,
   MerchantRegistryValidationError,
@@ -102,6 +105,7 @@ import type {
   MarkReceiptChainVerifiedInput,
   ReceiptRecord,
   ReceiptVerificationState,
+  RequeueDeadLetterWebhookEventInput,
   WebhookEventManagementStore
 } from "./index.js";
 import type {
@@ -1310,6 +1314,49 @@ export class PostgresOutboxEventStore
       values
     );
     return result.rows.map(mapOutboxEvent);
+  }
+
+  async requeueDeadLetterWebhookEvent(
+    input: RequeueDeadLetterWebhookEventInput
+  ): Promise<OutboxEventRecord | undefined> {
+    const merchantId = assertNonEmptyString(input.merchantId, "merchantId");
+    const eventId = assertNonEmptyString(input.eventId, "eventId");
+    const now = input.now ?? this.now();
+    const result = await this.db.query<OutboxEventRow>(
+      `update outbox_events
+          set status = 'pending',
+              attempts = 0,
+              available_at = $3,
+              locked_at = null,
+              last_error = null
+        where id = $1
+          and payload ->> 'merchantId' = $2
+          and status = 'dead_letter'
+        returning id, event_type, aggregate_type, aggregate_id, payload, status,
+                  attempts, available_at, locked_at, last_error, created_at`,
+      [eventId, merchantId, now]
+    );
+    const row = result.rows[0];
+    if (row !== undefined) {
+      return mapOutboxEvent(row);
+    }
+
+    const existing = await this.db.query<OutboxEventRow>(
+      `select id, event_type, aggregate_type, aggregate_id, payload, status,
+              attempts, available_at, locked_at, last_error, created_at
+         from outbox_events
+        where id = $1
+          and payload ->> 'merchantId' = $2
+        limit 1`,
+      [eventId, merchantId]
+    );
+    const existingRow = existing.rows[0];
+    if (existingRow === undefined) {
+      return undefined;
+    }
+    throw new WebhookEventRequeueConflictError(
+      `webhook event is ${existingRow.status}; only dead_letter events can be requeued`
+    );
   }
 
   async claimNext(
