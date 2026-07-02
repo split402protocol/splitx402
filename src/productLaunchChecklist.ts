@@ -152,6 +152,7 @@ function createPublicPrivateLicenseSection(
       "Keep hosted operations, provider strategy, custody evidence, private URLs, live transaction bytes, and partner-identifying details private unless intentionally sanitized.",
       "Do not reintroduce MIT in README, package metadata, GitHub About text, release notes, or package manifests.",
       "The GitHub settings review can be generated from the live GitHub API, but approval still requires human review of security advisories, issue intake, packages, releases, and screenshots/evidence.",
+      "If the GitHub package API is unreadable, confirm no packages are published in the GitHub UI, then rerun with SPLIT402_GITHUB_SETTINGS_PACKAGES_UNPUBLISHED_CONFIRMED=yes; this does not approve the review by itself.",
       ...reviewStatus.notes,
     ],
   };
@@ -252,6 +253,7 @@ function createPhase7Section(
       "SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 corepack pnpm phase7:staging:collect-mcp-gateway --evidence-env-file split402-launch-evidence/phase7-staging.env",
       "corepack pnpm demo:mcp-gateway:smoke",
       "corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log",
+      "corepack pnpm phase7:staging:commands-status --brief split402-launch-evidence/phase7-staging-evidence/commands.log",
       "corepack pnpm demo:mcp-bundle split402-launch-evidence/phase7-staging-evidence/mcp-bundle.json",
       "corepack pnpm demo:paid-suite split402-launch-evidence/phase7-staging-evidence/paid-suite.log",
       "corepack pnpm phase7:staging:derive-receipt-verification --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-evidence/paid-suite.log split402-launch-evidence/phase7-staging-evidence/receipt-verification.json",

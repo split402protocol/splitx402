@@ -427,6 +427,11 @@ checks, force-push/deletion blocks, blank issue intake, releases, and package
 visibility where the GitHub token can read it. Human review must still confirm
 security advisories and any UI-only evidence before changing the record to
 approved.
+If the GitHub token cannot read organization packages, first confirm in GitHub
+Packages that no npm or container packages are published, then rerun with
+`SPLIT402_GITHUB_SETTINGS_PACKAGES_UNPUBLISHED_CONFIRMED=yes`; this only clears
+the package-count portion of the no-go API snapshot when releases are still
+zero and does not approve the review.
 Use `--output` instead of shell redirection so Windows PowerShell does not write
 the evidence file in an incompatible encoding. An approved review must include
 real reviewer, `SPLIT402_GITHUB_SETTINGS_REVIEW_METHOD`, and
@@ -638,6 +643,7 @@ SPLIT402_MCP_SVM_PRIVATE_KEY=<funded-buyer-key-base58> \
 corepack pnpm phase7:staging:collect-mcp-gateway --evidence-env-file split402-launch-evidence/phase7-staging.env
 corepack pnpm demo:mcp-gateway:smoke
 corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log
+corepack pnpm phase7:staging:commands-status --brief split402-launch-evidence/phase7-staging-evidence/commands.log
 corepack pnpm demo:mcp-bundle split402-launch-evidence/phase7-staging-evidence/mcp-bundle.json
 corepack pnpm demo:paid-suite split402-launch-evidence/phase7-staging-evidence/paid-suite.log
 corepack pnpm phase7:staging:derive-receipt-verification --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-evidence/paid-suite.log split402-launch-evidence/phase7-staging-evidence/receipt-verification.json

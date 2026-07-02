@@ -157,6 +157,30 @@ approval_decision: no-go
     );
   });
 
+  it("accepts attached artifact paths that already include the launch workspace", () => {
+    const report = createPhase6EvidenceStatusReport(
+      `review_id: pending
+source_commit: f932ddb
+key_custody_record: attached: split402-launch-evidence/key-custody-review-001.md
+approval_decision: no-go
+`,
+      {
+        artifactBaseDir: "split402-launch-evidence",
+        artifactExists: (path) =>
+          path === "split402-launch-evidence/key-custody-review-001.md",
+        currentSourceCommit: "f932ddb000000000000000000000000000000000",
+      },
+    );
+
+    expect(report.attachmentStatus).toMatchObject({
+      status: "valid",
+      checkedArtifacts: [
+        "split402-launch-evidence/key-custody-review-001.md",
+      ],
+      missingArtifacts: [],
+    });
+  });
+
   it("blocks approved Phase 6 custody evidence when attached artifacts are missing", () => {
     const report = createPhase6EvidenceStatusReport(APPROVED_EVIDENCE, {
       artifactBaseDir: "split402-launch-evidence",

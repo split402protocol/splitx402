@@ -16,6 +16,9 @@ import {
   verifyGitHubRepositorySettingsReviewRecord,
 } from "./githubRepositorySettingsReview.js";
 
+const GITHUB_SETTINGS_REVIEW_HUMAN_APPROVAL_BLOCKER =
+  "github settings review decision is not approved; keep launch no-go until live public/private/license review is complete";
+
 export interface Split402ProductReadinessInput {
   currentSourceCommit?: string;
   currentWorktreeDirty?: boolean;
@@ -266,13 +269,14 @@ function createProductNextActions(
   if (!githubSettingsReview.ready) {
     leadActions.push(
       githubSettingsReview.checked
-        ? "Fix GitHub public/private/license review blockers, then regenerate split402-launch-evidence/github-settings-review.txt with corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt."
+        ? createGitHubSettingsReviewNextAction(githubSettingsReview)
         : "Run corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt to generate the live no-go GitHub API snapshot; use --template only for a blank manual form.",
     );
     if (githubSettingsReview.checked) {
       leadActions.push(...githubSettingsReview.blockers);
-    }
   }
+}
+
   if (
     hasStaleSourceCommit(phase7.sourceCommitStatus) ||
     hasStaleSourceCommit(phase6.sourceCommitStatus) ||
@@ -322,6 +326,18 @@ function createProductNextActions(
       ...interleaveActions(phase7DetailActions, phase6DetailActions),
     ]),
   ];
+}
+
+function createGitHubSettingsReviewNextAction(
+  githubSettingsReview: Split402GitHubSettingsReviewStatus,
+): string {
+  if (
+    githubSettingsReview.blockers.length === 1 &&
+    githubSettingsReview.blockers[0] === GITHUB_SETTINGS_REVIEW_HUMAN_APPROVAL_BLOCKER
+  ) {
+    return "Complete the human GitHub public/private/license review, then set split402-launch-evidence/github-settings-review.txt review_decision to approved only when the live review is complete.";
+  }
+  return "Fix GitHub public/private/license review blockers, then regenerate split402-launch-evidence/github-settings-review.txt with corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt.";
 }
 
 function createLocalProofStatus(input: {
@@ -441,9 +457,7 @@ function createGitHubSettingsReviewStatus(input: {
   const blockers = [...verification.errors];
   const reviewDecision = parseRecordField(reviewText, "review_decision");
   if (verification.ok && reviewDecision !== "approved") {
-    blockers.push(
-      "github settings review decision is not approved; keep launch no-go until live public/private/license review is complete",
-    );
+    blockers.push(GITHUB_SETTINGS_REVIEW_HUMAN_APPROVAL_BLOCKER);
   }
   const sourceCommit = parseRecordField(reviewText, "source_commit");
   const currentSourceCommit = input.currentSourceCommit?.trim();

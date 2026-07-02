@@ -96,6 +96,20 @@ placeholder reviewers/evidence plus `review_decision: no-go` until a human
 reviewer confirms UI-only settings such as security advisories and attached
 evidence.
 
+If the GitHub token cannot read organization packages, first confirm in the
+GitHub Packages UI that no npm or container packages are published, then run:
+
+```bash
+SPLIT402_GITHUB_SETTINGS_PACKAGES_UNPUBLISHED_CONFIRMED=yes \
+corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt
+```
+
+This confirmation only fills the package portion of the no-go API snapshot when
+the releases API still reports zero releases. It does not approve the review by
+itself; a human reviewer must still replace placeholder reviewer/evidence fields
+and set `review_decision: approved` only after the full public/private/license
+review is complete.
+
 After fixing live GitHub blockers, regenerate the API review record with:
 
 ```bash

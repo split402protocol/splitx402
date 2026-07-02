@@ -27,8 +27,6 @@ const report = createPhase6EvidenceStatusReport(evidenceText, {
     : {
         artifactBaseDir: dirname(resolve(evidencePath)),
         artifactExists: existsSync,
-        resolveArtifactPath: (artifactPath, baseDir) =>
-          resolve(baseDir, artifactPath),
       }),
   currentSourceCommit: readCurrentGitCommit(),
 });

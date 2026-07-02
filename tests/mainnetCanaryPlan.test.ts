@@ -155,6 +155,12 @@ describe("Split402 mainnet canary plan", () => {
           "SPLIT402_MAINNET_CANARY_DRY_RUN_EVIDENCE: dry_run_status must be passed",
         ],
       });
+    expect(report.nextActions).toContain(
+      "Fix SPLIT402_MAINNET_CANARY_DRY_RUN_EVIDENCE dry-run artifact: resolve dry_run_status must be passed.",
+    );
+    expect(report.nextActions).not.toContain(
+      "SPLIT402_MAINNET_CANARY_DRY_RUN_EVIDENCE: dry_run_status must be passed",
+    );
   });
 
   it("requires acknowledgement that mainnet canary is not atomic splitting", () => {
