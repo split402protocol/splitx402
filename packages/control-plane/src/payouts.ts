@@ -143,6 +143,13 @@ export interface MarkPayoutTransactionFinalityInput {
   status: PayoutTransactionFinalityStatus;
   observedAt?: string;
   error?: Record<string, unknown>;
+  /**
+   * Optional compare-and-set guard: when provided, the finality write only
+   * applies while the stored transaction still has this status, and the
+   * store returns undefined without writing when the status changed
+   * concurrently.
+   */
+  expectedStatus?: PayoutTransactionStatus;
 }
 
 export interface ListPayoutTransactionsPendingFinalityInput {
@@ -1201,8 +1208,14 @@ export function isPayoutTransactionOutcomeUnknown(
 export function isPayoutTransactionPendingFinality(
   transaction: PayoutTransactionRecord
 ): boolean {
+  // Only transactions with an expected signature are chain-monitorable;
+  // signature-less rows would fail signature assertion on every sweep and
+  // permanently occupy sweep-window slots, so they stay with operator flows.
   return (
-    transaction.status === "submitted" || transaction.status === "confirmed"
+    (transaction.status === "submitted" ||
+      transaction.status === "confirmed") &&
+    transaction.expectedSignature !== undefined &&
+    transaction.expectedSignature.length > 0
   );
 }
 

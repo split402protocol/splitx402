@@ -274,15 +274,18 @@ export class PayoutFinalityWorker implements PayoutFinalityProcessor {
             id: transaction.id,
             status: result.status,
             observedAt,
+            // Compare-and-set against the listed status so a concurrent
+            // sweep replica or an operator reconcile decision is never
+            // overwritten with a stale chain observation.
+            expectedStatus: transaction.status,
             ...(result.error === undefined
               ? {}
               : { error: createPayoutFinalitySweepErrorDetail(result) })
           });
         if (updated === undefined) {
-          errors.push({
-            transactionId: transaction.id,
-            error: "payout transaction disappeared during finality sweep"
-          });
+          // The transaction disappeared or its status changed concurrently;
+          // leave it for the next sweep instead of forcing a stale write.
+          pendingTransactionIds.push(transaction.id);
           continue;
         }
         updatedTransactions.push(updated);
@@ -311,11 +314,13 @@ export class PayoutFinalityWorker implements PayoutFinalityProcessor {
 function createPayoutFinalitySweepErrorDetail(
   result: PayoutReconciliationFinalityResult
 ): Record<string, unknown> {
+  // rpcUrl is intentionally omitted: RPC URLs can embed provider API keys
+  // and this detail is persisted and surfaced through merchant-facing
+  // reconciliation responses.
   return {
     message: result.error,
     status: result.status,
-    ...(result.signature === undefined ? {} : { signature: result.signature }),
-    ...(result.rpcUrl === undefined ? {} : { rpcUrl: result.rpcUrl })
+    ...(result.signature === undefined ? {} : { signature: result.signature })
   };
 }
 
@@ -330,14 +335,20 @@ export async function runPayoutFinalityWorkerLoop(
   worker: PayoutFinalityProcessor,
   options: PayoutFinalityWorkerLoopOptions = {}
 ): Promise<PayoutFinalityWorkerLoopSummary> {
-  return runWorkerLoop(worker, options);
+  // The sweep worker re-checks the same pending set each iteration, so it
+  // must pace on the poll interval after every sweep — unlike the queue
+  // workers, an immediate re-poll after a non-idle result would busy-spin
+  // against Solana RPC and PostgreSQL for the whole confirmation window.
+  return runWorkerLoop(worker, options, () => true);
 }
 
 async function runWorkerLoop<TResult extends { status: string }>(
   worker: {
     processNext(): Promise<TResult> | TResult;
   },
-  options: WorkerLoopOptions<TResult>
+  options: WorkerLoopOptions<TResult>,
+  shouldSleepAfter: (result: TResult) => boolean = (result) =>
+    result.status === "idle"
 ): Promise<WorkerLoopSummary> {
   assertValidMaxIterations(options.maxIterations);
   let iterations = 0;
@@ -352,7 +363,7 @@ async function runWorkerLoop<TResult extends { status: string }>(
       iterations += 1;
       await options.onResult?.(result);
 
-      if (result.status === "idle" && !shouldStop(iterations, options)) {
+      if (shouldSleepAfter(result) && !shouldStop(iterations, options)) {
         await sleep(options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS, options);
       }
     } catch (error) {

@@ -776,11 +776,28 @@ describe("PostgresReceiptIngestionStore", () => {
       "confirmed"
     ]);
 
-    await fixture.store.markPayoutTransactionFinality({
+    const staleWrite = await fixture.store.markPayoutTransactionFinality({
       id: fixture.transaction.id,
       status: "finalized",
-      observedAt: "2026-06-24T00:09:00Z"
+      observedAt: "2026-06-24T00:09:00Z",
+      expectedStatus: "submitted"
     });
+    expect(staleWrite).toBeUndefined();
+    await expect(
+      fixture.store.listPayoutTransactionsPendingFinality({ limit: 1 })
+    ).resolves.toEqual([
+      expect.objectContaining({ status: "confirmed" })
+    ]);
+
+    const guardedWrite = await fixture.store.markPayoutTransactionFinality({
+      id: fixture.transaction.id,
+      status: "finalized",
+      observedAt: "2026-06-24T00:09:00Z",
+      expectedStatus: "confirmed"
+    });
+    expect(guardedWrite).toEqual(
+      expect.objectContaining({ status: "finalized" })
+    );
     await expect(
       fixture.store.listPayoutTransactionsPendingFinality()
     ).resolves.toEqual([]);
@@ -2818,8 +2835,13 @@ class FakePostgresDatabase {
     const confirmedAt = readNullableString(values[2]);
     const finalizedAt = readNullableString(values[3]);
     const errorJson = readNullableString(values[4]);
+    const expectedStatus =
+      values.length > 5 ? readString(values[5]) : undefined;
     const transaction = this.payoutTransactions.find((row) => row.id === id);
     if (transaction === undefined) {
+      return [];
+    }
+    if (expectedStatus !== undefined && transaction.status !== expectedStatus) {
       return [];
     }
     transaction.status = status;
@@ -2999,7 +3021,9 @@ class FakePostgresDatabase {
       const limit = readNumber(values[0]);
       return this.payoutTransactions
         .filter(
-          (row) => row.status === "submitted" || row.status === "confirmed"
+          (row) =>
+            (row.status === "submitted" || row.status === "confirmed") &&
+            row.expected_signature !== null
         )
         .sort((left, right) => {
           if (left.submitted_at !== right.submitted_at) {

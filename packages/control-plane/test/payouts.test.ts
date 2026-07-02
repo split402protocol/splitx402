@@ -44,6 +44,18 @@ describe("payout pending finality helpers", () => {
     }
   });
 
+  it("excludes signature-less transactions from pending finality", () => {
+    const unsigned = createFinalityTransaction({ id: "ptx_unsigned" });
+    delete unsigned.expectedSignature;
+    expect(isPayoutTransactionPendingFinality(unsigned)).toBe(false);
+
+    const emptySignature = createFinalityTransaction({
+      id: "ptx_empty",
+      expectedSignature: ""
+    });
+    expect(isPayoutTransactionPendingFinality(emptySignature)).toBe(false);
+  });
+
   it("orders pending transactions by submission time with unsubmitted last", () => {
     const early = createFinalityTransaction({
       id: "ptx_early",
@@ -94,6 +106,7 @@ function createFinalityTransaction(
     payoutBatchId: "pbt_default",
     sequence: 0,
     attempt: 1,
+    expectedSignature: "sig_default",
     status: "submitted",
     submittedAt: "2026-06-24T00:01:00.000Z",
     createdAt: "2026-06-24T00:01:00.000Z",
