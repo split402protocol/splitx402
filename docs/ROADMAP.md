@@ -381,6 +381,24 @@ Current hardening:
   registered origin's `/.well-known/split402.json` (redirects disabled, size
   and timeout capped) and reports protocol/merchantId/servicePublicKey
   evidence before the operator records origin verification.
+- suspended routes can be resumed through `POST /v1/routes/:routeId/resume`
+  with the same merchant-owner authorization as suspension, so the route
+  stop-loss is reversible without database access.
+- merchants can enumerate their campaigns through
+  `GET /v1/merchants/:merchantId/campaigns` with status filtering, so paused
+  and closed campaign ids stay discoverable for lifecycle transitions.
+- payout batches stay observable after creation through
+  `GET /v1/payout-batches/:batchId` and
+  `GET /v1/merchants/:merchantId/payout-batches`, and
+  `POST /v1/payout-batches/:batchId/close-ledger` closes finalized batches to
+  paid accruals behind finalized transfer-content verification configured via
+  `SPLIT402_PAYOUT_LEDGER_CLOSURE_FUNDING_WALLET` and
+  `SPLIT402_PAYOUT_LEDGER_CLOSURE_SOURCE_TOKEN_ACCOUNT`.
+- dead-letter webhook events can be requeued to pending through
+  `POST /v1/merchants/:merchantId/webhook-events/:eventId/requeue` after a
+  merchant fixes their receiver, instead of manual outbox updates.
+- refresh tokens can be revoked (logout / incident response) through
+  `POST /v1/auth/sessions/revoke`.
 - chain-verification rejection moves pending accruals to `rejected`.
 - finalized payout ledger closure moves allocated accruals to `paid`.
 - allocation release cancels only safe pre-submission/problem batches and moves

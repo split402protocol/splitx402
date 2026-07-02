@@ -69,6 +69,39 @@ describe("wallet authentication", () => {
     ).resolves.toEqual(expect.objectContaining({ wallet: OWNER_WALLET }));
   });
 
+  it("revokes refresh tokens so they can no longer rotate", async () => {
+    const authenticator = createAuthenticator();
+    const challenge = await authenticator.createChallenge({
+      wallet: OWNER_WALLET,
+      network: NETWORK
+    });
+    const session = await authenticator.createSession({
+      challengeId: challenge.challengeId,
+      signature: signChallenge(challenge.message)
+    });
+
+    const revocation = await authenticator.revokeSession({
+      refreshToken: session.refreshToken
+    });
+    expect(revocation).toEqual({
+      revoked: true,
+      alreadyRevoked: false,
+      wallet: OWNER_WALLET
+    });
+
+    const repeated = await authenticator.revokeSession({
+      refreshToken: session.refreshToken
+    });
+    expect(repeated.alreadyRevoked).toBe(true);
+
+    await expect(
+      authenticator.refreshSession({ refreshToken: session.refreshToken })
+    ).rejects.toBeInstanceOf(WalletAuthRejectedError);
+    await expect(
+      authenticator.revokeSession({ refreshToken: "unknown-refresh-token" })
+    ).rejects.toBeInstanceOf(WalletAuthRejectedError);
+  });
+
   it("rejects replayed challenges", async () => {
     const authenticator = createAuthenticator();
     const challenge = await authenticator.createChallenge({

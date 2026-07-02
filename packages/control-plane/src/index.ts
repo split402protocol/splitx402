@@ -1734,6 +1734,20 @@ export function createWalletAuthRouter(
     }
   });
 
+  router.post("/v1/auth/sessions/revoke", async (req, res, next) => {
+    try {
+      const body = requireJsonObject(req.body);
+      const revocation = await authenticator.revokeSession({
+        refreshToken: readRequiredString(body.refreshToken, "refreshToken")
+      });
+      res.json({ revocation });
+    } catch (error) {
+      if (!sendWalletAuthError(res, error) && !sendMerchantRegistryError(res, error)) {
+        next(error);
+      }
+    }
+  });
+
   router.use(jsonErrorHandler);
 
   return router;
