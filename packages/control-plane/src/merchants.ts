@@ -125,6 +125,12 @@ export interface UpdateMerchantOriginStatusInput {
   verifiedAt?: string;
 }
 
+export interface UpdateMerchantPayoutWalletStatusInput {
+  merchantId: string;
+  payoutWalletId: string;
+  status: MerchantPayoutWalletStatus;
+}
+
 export interface ResolveMerchantKeyInput {
   merchantId: string;
   kid: string;
@@ -156,6 +162,12 @@ export interface MerchantRegistry {
   updateOriginStatus(
     input: UpdateMerchantOriginStatusInput
   ): Promise<MerchantOriginRecord | undefined> | MerchantOriginRecord | undefined;
+  updatePayoutWalletStatus(
+    input: UpdateMerchantPayoutWalletStatusInput
+  ):
+    | Promise<MerchantPayoutWalletRecord | undefined>
+    | MerchantPayoutWalletRecord
+    | undefined;
 }
 
 export interface InMemoryMerchantRegistryOptions {
@@ -409,6 +421,24 @@ export class InMemoryMerchantRegistry implements MerchantRegistry {
     return cloneOrigin(updated);
   }
 
+  updatePayoutWalletStatus(
+    input: UpdateMerchantPayoutWalletStatusInput
+  ): MerchantPayoutWalletRecord | undefined {
+    assertMerchantPayoutWalletStatus(input.status);
+    const existing = this.payoutWalletsById.get(input.payoutWalletId);
+    if (existing === undefined || existing.merchantId !== input.merchantId) {
+      return undefined;
+    }
+    assertPayoutWalletStatusTransition(existing.status, input.status);
+
+    const updated: MerchantPayoutWalletRecord = {
+      ...existing,
+      status: input.status
+    };
+    this.payoutWalletsById.set(updated.id, updated);
+    return clonePayoutWallet(updated);
+  }
+
   private assertMerchantExists(merchantId: string): void {
     if (!this.merchants.has(merchantId)) {
       throw new MerchantRegistryValidationError(`unknown merchant: ${merchantId}`);
@@ -554,6 +584,17 @@ export function assertMerchantOriginStatusTransition(
     );
   }
   return value;
+}
+
+export function assertPayoutWalletStatusTransition(
+  current: MerchantPayoutWalletStatus,
+  next: MerchantPayoutWalletStatus
+): void {
+  if (current === "retired" && next !== "retired") {
+    throw new MerchantRegistryConflictError(
+      "retired merchant payout wallets cannot be reactivated"
+    );
+  }
 }
 
 export function readOriginVerifiedAt(
