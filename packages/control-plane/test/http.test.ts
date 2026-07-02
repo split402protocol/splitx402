@@ -1754,6 +1754,90 @@ describe("control-plane HTTP API", () => {
   });
 });
 
+describe("merchant payout wallet status routes", () => {
+  it("pauses, resumes, and retires payout wallets through the API", async () => {
+    const { app, merchantRegistry } = createTestApp({ withMerchantRegistry: true });
+    seedMerchantFixture(merchantRegistry, {
+      merchantStatus: "active",
+      originStatus: "verified"
+    });
+    const bundle = createSampleProtocolArtifacts();
+    const merchantId = bundle.artifacts.receipt.merchantId;
+    const wallet = merchantRegistry?.addPayoutWallet({
+      id: "mpw_ffffffffffffffffffffffffffffffff",
+      merchantId,
+      network: bundle.artifacts.receipt.network,
+      wallet: bundle.keys.payToWallet,
+      asset: bundle.artifacts.receipt.asset,
+      signerReference: "kms:split402-devnet-payout"
+    });
+
+    const paused = await request(app)
+      .post(`/v1/merchants/${merchantId}/payout-wallets/${wallet?.id}/pause`)
+      .expect(200);
+    expect(paused.body.payoutWallet.status).toBe("paused");
+
+    const resumed = await request(app)
+      .post(`/v1/merchants/${merchantId}/payout-wallets/${wallet?.id}/resume`)
+      .expect(200);
+    expect(resumed.body.payoutWallet.status).toBe("active");
+
+    const retired = await request(app)
+      .post(`/v1/merchants/${merchantId}/payout-wallets/${wallet?.id}/retire`)
+      .expect(200);
+    expect(retired.body.payoutWallet.status).toBe("retired");
+
+    const conflict = await request(app)
+      .post(`/v1/merchants/${merchantId}/payout-wallets/${wallet?.id}/resume`)
+      .expect(409);
+    expect(conflict.body.error).toBe("conflict");
+
+    await request(app)
+      .post(
+        `/v1/merchants/${merchantId}/payout-wallets/mpw_00000000000000000000000000000099/pause`
+      )
+      .expect(404);
+  });
+
+  it("requires the merchant owner wallet when auth is enabled", async () => {
+    const { app, merchantRegistry } = createTestApp({
+      withMerchantRegistry: true,
+      withAuth: true
+    });
+    seedMerchantFixture(merchantRegistry, {
+      merchantStatus: "active",
+      originStatus: "verified"
+    });
+    const bundle = createSampleProtocolArtifacts();
+    const merchantId = bundle.artifacts.receipt.merchantId;
+    const wallet = merchantRegistry?.addPayoutWallet({
+      id: "mpw_ffffffffffffffffffffffffffffffff",
+      merchantId,
+      network: bundle.artifacts.receipt.network,
+      wallet: bundle.keys.payToWallet,
+      asset: bundle.artifacts.receipt.asset,
+      signerReference: "kms:split402-devnet-payout"
+    });
+
+    await request(app)
+      .post(`/v1/merchants/${merchantId}/payout-wallets/${wallet?.id}/pause`)
+      .expect(401);
+
+    const ownerToken = await createAccessToken(app, OWNER_SEED, OWNER_WALLET);
+    const paused = await request(app)
+      .post(`/v1/merchants/${merchantId}/payout-wallets/${wallet?.id}/pause`)
+      .set("authorization", `Bearer ${ownerToken}`)
+      .expect(200);
+    expect(paused.body.payoutWallet.status).toBe("paused");
+
+    const otherToken = await createAccessToken(app, OTHER_OWNER_SEED, OTHER_OWNER_WALLET);
+    await request(app)
+      .post(`/v1/merchants/${merchantId}/payout-wallets/${wallet?.id}/resume`)
+      .set("authorization", `Bearer ${otherToken}`)
+      .expect(403);
+  });
+});
+
 describe("control-plane operator approval endpoints", () => {
   it("fails closed when no operator tokens are configured", async () => {
     const { app, merchantRegistry } = createTestApp({ withMerchantRegistry: true });

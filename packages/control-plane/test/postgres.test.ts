@@ -1180,6 +1180,62 @@ describe("PostgresMerchantRegistry", () => {
     ).toBeUndefined();
   });
 
+  it("pauses, resumes, and retires payout wallets with a terminal retire state", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const fakePool = new FakePostgresPool();
+    const registry = createPostgresRegistry(fakePool);
+    const merchant = await registry.createMerchant({
+      id: bundle.artifacts.receipt.merchantId,
+      slug: "demo-merchant",
+      displayName: "Demo Merchant",
+      ownerWallet: bundle.keys.payerWallet
+    });
+    const wallet = await registry.addPayoutWallet({
+      id: "mpw_ffffffffffffffffffffffffffffffff",
+      merchantId: merchant.id,
+      network: bundle.artifacts.receipt.network,
+      wallet: bundle.keys.payToWallet,
+      asset: bundle.artifacts.receipt.asset,
+      signerReference: "kms:split402-devnet-payout"
+    });
+
+    const paused = await registry.updatePayoutWalletStatus({
+      merchantId: merchant.id,
+      payoutWalletId: wallet.id,
+      status: "paused"
+    });
+    expect(paused?.status).toBe("paused");
+
+    const resumed = await registry.updatePayoutWalletStatus({
+      merchantId: merchant.id,
+      payoutWalletId: wallet.id,
+      status: "active"
+    });
+    expect(resumed?.status).toBe("active");
+
+    const retired = await registry.updatePayoutWalletStatus({
+      merchantId: merchant.id,
+      payoutWalletId: wallet.id,
+      status: "retired"
+    });
+    expect(retired?.status).toBe("retired");
+
+    await expect(
+      registry.updatePayoutWalletStatus({
+        merchantId: merchant.id,
+        payoutWalletId: wallet.id,
+        status: "active"
+      })
+    ).rejects.toBeInstanceOf(MerchantRegistryConflictError);
+    expect(
+      await registry.updatePayoutWalletStatus({
+        merchantId: merchant.id,
+        payoutWalletId: "mpw_00000000000000000000000000000099",
+        status: "paused"
+      })
+    ).toBeUndefined();
+  });
+
   it("resolves active service keys and respects revocation windows", async () => {
     const bundle = createSampleProtocolArtifacts();
     const fakePool = new FakePostgresPool();
@@ -1975,6 +2031,11 @@ class FakePostgresClient implements PostgresTransactionClient {
     if (normalized.startsWith("update merchant_origins")) {
       return result(
         this.database.updateMerchantOriginStatus(values) as unknown as Row[]
+      );
+    }
+    if (normalized.startsWith("update merchant_payout_wallets")) {
+      return result(
+        this.database.updateMerchantPayoutWalletStatus(values) as unknown as Row[]
       );
     }
     if (normalized.startsWith("update campaign_versions")) {
@@ -2894,6 +2955,23 @@ class FakePostgresDatabase {
     }
     row.status = status;
     row.verified_at = verifiedAt;
+    return [row];
+  }
+
+  updateMerchantPayoutWalletStatus(
+    values: readonly unknown[]
+  ): StoredMerchantPayoutWalletRow[] {
+    const merchantId = readString(values[0]);
+    const payoutWalletId = readString(values[1]);
+    const status = readString(values[2]);
+    const row = this.merchantPayoutWallets.find(
+      (existing) =>
+        existing.merchant_id === merchantId && existing.id === payoutWalletId
+    );
+    if (row === undefined || (row.status === "retired" && status !== "retired")) {
+      return [];
+    }
+    row.status = status;
     return [row];
   }
 

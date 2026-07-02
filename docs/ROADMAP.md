@@ -346,6 +346,9 @@ Current slice:
 - payout finality RPC failover drill and structured review record for custody
   evidence;
 - `POST /v1/merchants/:merchantId/payout-wallets`;
+- owner-authorized payout-wallet pause/resume/retire status transitions with a
+  terminal retired state, so merchants can stop new payout batches from a
+  funding wallet without database access;
 - `POST /v1/merchants/:merchantId/payouts/preview`;
 - `GET /v1/merchants/:merchantId/payouts/reconciliation`;
 - `POST /v1/payout-batches/:batchId/reconcile`;

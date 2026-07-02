@@ -201,6 +201,60 @@ describe("merchant registry", () => {
     ).toThrow(/must be active, suspended, or closed/u);
   });
 
+  it("pauses, resumes, and retires payout wallets with a terminal retire state", () => {
+    const bundle = createSampleProtocolArtifacts();
+    const registry = createRegistry();
+    const merchant = registry.createMerchant({
+      id: bundle.artifacts.receipt.merchantId,
+      slug: "demo-merchant",
+      displayName: "Demo Merchant",
+      ownerWallet: bundle.keys.payerWallet
+    });
+    const wallet = registry.addPayoutWallet({
+      merchantId: merchant.id,
+      network: bundle.artifacts.receipt.network,
+      wallet: bundle.keys.payToWallet,
+      asset: bundle.artifacts.receipt.asset,
+      signerReference: "kms:split402-devnet-payout"
+    });
+
+    const paused = registry.updatePayoutWalletStatus({
+      merchantId: merchant.id,
+      payoutWalletId: wallet.id,
+      status: "paused"
+    });
+    expect(paused?.status).toBe("paused");
+
+    const resumed = registry.updatePayoutWalletStatus({
+      merchantId: merchant.id,
+      payoutWalletId: wallet.id,
+      status: "active"
+    });
+    expect(resumed?.status).toBe("active");
+
+    const retired = registry.updatePayoutWalletStatus({
+      merchantId: merchant.id,
+      payoutWalletId: wallet.id,
+      status: "retired"
+    });
+    expect(retired?.status).toBe("retired");
+
+    expect(() =>
+      registry.updatePayoutWalletStatus({
+        merchantId: merchant.id,
+        payoutWalletId: wallet.id,
+        status: "active"
+      })
+    ).toThrow(MerchantRegistryConflictError);
+    expect(
+      registry.updatePayoutWalletStatus({
+        merchantId: "mrc_00000000000000000000000000000099",
+        payoutWalletId: wallet.id,
+        status: "paused"
+      })
+    ).toBeUndefined();
+  });
+
   it("updates origin status and manages verifiedAt", () => {
     const bundle = createSampleProtocolArtifacts();
     const registry = createRegistry();

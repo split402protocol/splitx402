@@ -2443,6 +2443,27 @@ export function createMerchantRegistryRouter(
     }
   });
 
+  router.post(
+    "/v1/merchants/:merchantId/payout-wallets/:payoutWalletId/pause",
+    async (req, res, next) => {
+      await handleMerchantPayoutWalletStatus(req, res, next, options, merchantRegistry, "paused");
+    }
+  );
+
+  router.post(
+    "/v1/merchants/:merchantId/payout-wallets/:payoutWalletId/resume",
+    async (req, res, next) => {
+      await handleMerchantPayoutWalletStatus(req, res, next, options, merchantRegistry, "active");
+    }
+  );
+
+  router.post(
+    "/v1/merchants/:merchantId/payout-wallets/:payoutWalletId/retire",
+    async (req, res, next) => {
+      await handleMerchantPayoutWalletStatus(req, res, next, options, merchantRegistry, "retired");
+    }
+  );
+
   router.use(jsonErrorHandler);
 
   return router;
@@ -3839,6 +3860,47 @@ function isMerchantAuthRequired(
   options: Pick<ControlPlaneAppOptions, "auth">
 ): boolean {
   return options.auth?.requireMerchantAuth ?? options.auth !== undefined;
+}
+
+async function handleMerchantPayoutWalletStatus(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+  options: Pick<ControlPlaneAppOptions, "auth">,
+  merchantRegistry: MerchantRegistry,
+  status: MerchantPayoutWalletStatus
+): Promise<void> {
+  try {
+    const session = await requireMerchantOwnerSession(
+      req,
+      res,
+      options,
+      merchantRegistry
+    );
+    if (session === undefined && isMerchantAuthRequired(options)) {
+      return;
+    }
+    const merchantId = req.params.merchantId;
+    const payoutWalletId = req.params.payoutWalletId;
+    if (typeof merchantId !== "string" || typeof payoutWalletId !== "string") {
+      res.status(404).json({ error: "merchant_payout_wallet_not_found" });
+      return;
+    }
+    const payoutWallet = await merchantRegistry.updatePayoutWalletStatus({
+      merchantId,
+      payoutWalletId,
+      status
+    });
+    if (payoutWallet === undefined) {
+      res.status(404).json({ error: "merchant_payout_wallet_not_found" });
+      return;
+    }
+    res.json({ payoutWallet });
+  } catch (error) {
+    if (!sendMerchantRegistryError(res, error)) {
+      next(error);
+    }
+  }
 }
 
 async function handleOperatorMerchantStatus(

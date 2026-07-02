@@ -38,6 +38,7 @@ import {
   MerchantRegistryValidationError,
   assertMerchantOriginStatusTransition,
   assertMerchantStatusTransition,
+  assertPayoutWalletStatusTransition,
   readOriginVerifiedAt,
   type AddMerchantPayoutWalletInput,
   type AddMerchantKeyInput,
@@ -58,6 +59,7 @@ import {
   type ResolveMerchantKeyInput,
   type RevokeMerchantKeyInput,
   type UpdateMerchantOriginStatusInput,
+  type UpdateMerchantPayoutWalletStatusInput,
   type UpdateMerchantStatusInput
 } from "./merchants.js";
 import {
@@ -2259,6 +2261,46 @@ export class PostgresMerchantRegistry implements MerchantRegistry {
     );
     const row = result.rows[0];
     return row === undefined ? undefined : mapMerchantOrigin(row);
+  }
+
+  async updatePayoutWalletStatus(
+    input: UpdateMerchantPayoutWalletStatusInput
+  ): Promise<MerchantPayoutWalletRecord | undefined> {
+    assertMerchantPayoutWalletStatus(input.status);
+    const result = await this.db.query<MerchantPayoutWalletRow>(
+      `update merchant_payout_wallets
+          set status = $3
+        where merchant_id = $1
+          and id = $2
+          and (status <> 'retired' or $3 = 'retired')
+        returning id, merchant_id, network, wallet, asset_mint, signer_reference,
+                  status, created_at`,
+      [input.merchantId, input.payoutWalletId, input.status]
+    );
+    const row = result.rows[0];
+    if (row !== undefined) {
+      return mapMerchantPayoutWallet(row);
+    }
+
+    const existing = await this.db.query<MerchantPayoutWalletRow>(
+      `select id, merchant_id, network, wallet, asset_mint, signer_reference,
+              status, created_at
+         from merchant_payout_wallets
+        where merchant_id = $1
+        order by created_at, id`,
+      [input.merchantId]
+    );
+    const wallet = existing.rows.find(
+      (candidate) => candidate.id === input.payoutWalletId
+    );
+    if (wallet === undefined) {
+      return undefined;
+    }
+    assertPayoutWalletStatusTransition(
+      wallet.status as MerchantPayoutWalletRecord["status"],
+      input.status
+    );
+    return mapMerchantPayoutWallet(wallet);
   }
 
   private async assertMerchantExists(merchantId: string): Promise<void> {
