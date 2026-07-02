@@ -194,8 +194,7 @@ function readDemoMerchantConfig(
     merchantOrigin:
       overrides.merchantOrigin ??
       readMerchantOrigin(),
-    paymentAsset:
-      overrides.paymentAsset ?? process.env.SPLIT402_ASSET ?? network.usdcMint,
+    paymentAsset: readPaymentAsset(network, overrides.paymentAsset),
     requiredAmountAtomic:
       overrides.requiredAmountAtomic ??
       process.env.SPLIT402_REQUIRED_AMOUNT_ATOMIC ??
@@ -216,6 +215,19 @@ function readDemoMerchantConfig(
       "https://x402.org/facilitator",
     receipts: overrides.receipts ?? []
   };
+}
+
+function readPaymentAsset(
+  network: SolanaNetworkDescriptor,
+  override: string | undefined
+): string {
+  if (override !== undefined) {
+    return override;
+  }
+  if (network.cluster === "mainnet") {
+    return network.usdcMint;
+  }
+  return process.env.SPLIT402_ASSET ?? network.usdcMint;
 }
 
 function readDemoNetwork(
