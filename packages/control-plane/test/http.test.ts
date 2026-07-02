@@ -2036,6 +2036,23 @@ describe("control-plane HTTP API", () => {
     expect(suspendedResponse.body.route.status).toBe("suspended");
     expect(duplicateResponse.body.route.status).toBe("suspended");
     expect(loadedResponse.body.route.status).toBe("suspended");
+
+    await request(app)
+      .post(`/v1/routes/${draft.routeId}/resume`)
+      .expect(401);
+    await request(app)
+      .post(`/v1/routes/${draft.routeId}/resume`)
+      .set("authorization", `Bearer ${otherOwnerToken}`)
+      .expect(403);
+    const resumedResponse = await request(app)
+      .post(`/v1/routes/${draft.routeId}/resume`)
+      .set("authorization", `Bearer ${ownerToken}`)
+      .expect(200);
+    expect(resumedResponse.body.route.status).toBe("active");
+    await request(app)
+      .post("/v1/routes/rte_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbc/resume")
+      .set("authorization", `Bearer ${ownerToken}`)
+      .expect(404);
   });
 });
 

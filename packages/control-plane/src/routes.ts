@@ -50,6 +50,10 @@ export interface SuspendRouteInput {
   routeId: string;
 }
 
+export interface ResumeRouteInput {
+  routeId: string;
+}
+
 export interface SearchRoutesInput {
   campaignId?: string;
   referrerWallet?: string;
@@ -112,6 +116,7 @@ export interface RouteRegistry {
   listRouteVersions(routeId: string): Promise<RouteVersionRecord[]> | RouteVersionRecord[];
   rotateRoutePayout(input: RotateRoutePayoutInput): Promise<RouteRecord> | RouteRecord;
   suspendRoute(input: SuspendRouteInput): Promise<RouteRecord | undefined> | RouteRecord | undefined;
+  resumeRoute(input: ResumeRouteInput): Promise<RouteRecord | undefined> | RouteRecord | undefined;
   searchRoutes(input?: SearchRoutesInput): Promise<RouteRecord[]> | RouteRecord[];
 }
 
@@ -334,6 +339,27 @@ export class InMemoryRouteRegistry implements RouteRegistry {
     };
     this.routesById.set(suspended.id, suspended);
     return cloneRoute(suspended);
+  }
+
+  resumeRoute(input: ResumeRouteInput): RouteRecord | undefined {
+    const route = this.routesById.get(assertSplit402Id(input.routeId, "route id"));
+    if (route === undefined) {
+      return undefined;
+    }
+    if (route.status === "active") {
+      return cloneRoute(route);
+    }
+    if (route.status !== "suspended") {
+      throw new RouteRegistryValidationError(
+        `route must be suspended to resume; current status is ${route.status}`
+      );
+    }
+    const resumed: RouteRecord = {
+      ...route,
+      status: "active"
+    };
+    this.routesById.set(resumed.id, resumed);
+    return cloneRoute(resumed);
   }
 
   searchRoutes(input: SearchRoutesInput = {}): RouteRecord[] {

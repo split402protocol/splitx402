@@ -80,6 +80,7 @@ import {
   type RotateRoutePayoutInput,
   type SearchRoutesInput,
   type RouteStatus,
+  type ResumeRouteInput,
   type SuspendRouteInput
 } from "./routes.js";
 import type {
@@ -1954,6 +1955,48 @@ export class PostgresRouteRegistry implements RouteRegistry {
     }
     throw new RouteRegistryValidationError(
       `route must be active to suspend; current status is ${current.status}`
+    );
+  }
+
+  async resumeRoute(input: ResumeRouteInput): Promise<RouteRecord | undefined> {
+    const existing = await this.getRoute(input.routeId);
+    if (existing === undefined) {
+      return undefined;
+    }
+    if (existing.status === "active") {
+      return existing;
+    }
+    if (existing.status !== "suspended") {
+      throw new RouteRegistryValidationError(
+        `route must be suspended to resume; current status is ${existing.status}`
+      );
+    }
+
+    const result = await this.db.query<RouteRow>(
+      `update routes
+          set status = 'active'
+        where id = $1
+          and status = 'suspended'
+        returning id, current_version, campaign_id, campaign_version_min, referrer_wallet,
+                  payout_wallet, resource_origin, operation_ids, claim_hash,
+                  claim_json, signing_bytes_hex, status, issued_at, expires_at,
+                  nonce, metadata_hash, created_at, activated_at`,
+      [input.routeId]
+    );
+    const row = result.rows[0];
+    if (row !== undefined) {
+      return mapRoute(row);
+    }
+
+    const current = await this.getRoute(input.routeId);
+    if (current?.status === "active") {
+      return current;
+    }
+    if (current === undefined) {
+      return undefined;
+    }
+    throw new RouteRegistryValidationError(
+      `route must be suspended to resume; current status is ${current.status}`
     );
   }
 
