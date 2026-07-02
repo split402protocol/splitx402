@@ -9,9 +9,11 @@ import {
   type Split402OfferV1
 } from "@split402/protocol";
 
+import { checkMainnetPaymentGuards, readDemoNetwork } from "./network.js";
 import { DEVNET_USDC, getSolLamports, getTokenAccountSummary } from "./solana-rpc.js";
 import { createSvmSignerFromBase58 } from "./svm-key.js";
 
+const NETWORK = readDemoNetwork();
 const MERCHANT_ORIGIN = process.env.SPLIT402_MERCHANT_ORIGIN ?? "http://localhost:4021";
 const MERCHANT_PUBLIC_KEY =
   process.env.SPLIT402_MERCHANT_PUBLIC_KEY ??
@@ -26,22 +28,34 @@ async function main(): Promise<void> {
   const buyer = await inspectBuyer(offerInspection.offer);
   const merchantSettlement = await inspectMerchantSettlement(offerInspection.offer);
   const funding = fundingInstructions(offerInspection.offer, merchantSettlement, buyer);
+  const buyerAddress = getString(buyer.address);
+  const mainnetGuard = checkMainnetPaymentGuards({
+    network: NETWORK,
+    ...(buyerAddress === undefined ? {} : { buyerWallet: buyerAddress }),
+    ...(offerInspection.offer === undefined
+      ? {}
+      : { requiredAmountAtomic: offerInspection.offer.requiredAmountAtomic })
+  });
   const readyForPaidRun =
     health.ok &&
     offerInspection.verified &&
     buyer.privateKeyValid &&
     buyer.hasRequiredPaymentToken === true &&
-    merchantSettlement.canReceivePaymentToken === true;
+    merchantSettlement.canReceivePaymentToken === true &&
+    mainnetGuard.ok;
 
   console.log(
     JSON.stringify(
       {
         readyForPaidRun,
+        network: NETWORK.networkId,
+        networkLabel: NETWORK.label,
         merchant: health,
         x402: offerInspection.summary,
         merchantSettlement,
         buyer,
-        funding
+        funding,
+        mainnetGuard
       },
       null,
       2
@@ -60,8 +74,11 @@ function fundingInstructions(
 ): Record<string, unknown> {
   const instructions: string[] = [];
   const buyerAddress = getString(buyer.address);
-  const mint = offer?.asset ?? DEVNET_USDC;
-  const assetLabel = mint === DEVNET_USDC ? "Devnet USDC" : "the configured SPL token";
+  const mint = offer?.asset ?? NETWORK.usdcMint;
+  const assetLabel =
+    mint === NETWORK.usdcMint
+      ? `${NETWORK.label} USDC`
+      : "the configured SPL token";
   if (buyer.hasRequiredPaymentToken !== true && buyerAddress !== undefined) {
     instructions.push(
       `fund buyer ${buyerAddress} with ${assetLabel} mint ${mint}`
@@ -80,10 +97,13 @@ function fundingInstructions(
 
   return {
     ready: instructions.length === 0,
-    network: "Solana Devnet",
+    network: NETWORK.label,
     asset: assetLabel,
     mint,
-    canonicalUsdcFaucet: mint === DEVNET_USDC ? "https://faucet.circle.com/" : undefined,
+    canonicalUsdcFaucet:
+      NETWORK.cluster === "devnet" && mint === DEVNET_USDC
+        ? "https://faucet.circle.com/"
+        : undefined,
     instructions
   };
 }
@@ -211,7 +231,7 @@ async function inspectBuyer(
     return {
       privateKeyPresent: false,
       privateKeyValid: false,
-      next: "set SVM_PRIVATE_KEY to a funded Solana Devnet buyer secret key"
+      next: `set SVM_PRIVATE_KEY to a funded ${NETWORK.label} buyer secret key`
     };
   }
 
@@ -220,10 +240,10 @@ async function inspectBuyer(
     const address = signer.address.toString();
     const [solLamports, usdcSummary] = await Promise.all([
       getSolLamports(address),
-      getTokenAccountSummary(address, offer?.asset ?? DEVNET_USDC)
+      getTokenAccountSummary(address, offer?.asset ?? NETWORK.usdcMint)
     ]);
     const requiredAmount = offer?.requiredAmountAtomic ?? "0";
-    const paymentAsset = offer?.asset ?? DEVNET_USDC;
+    const paymentAsset = offer?.asset ?? NETWORK.usdcMint;
 
     return {
       privateKeyPresent: true,
