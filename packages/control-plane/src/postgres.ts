@@ -36,6 +36,9 @@ import { ReceiptIngestionPersistenceConflictError } from "./errors.js";
 import {
   MerchantRegistryConflictError,
   MerchantRegistryValidationError,
+  assertMerchantOriginStatusTransition,
+  assertMerchantStatusTransition,
+  readOriginVerifiedAt,
   type AddMerchantPayoutWalletInput,
   type AddMerchantKeyInput,
   type AddMerchantOriginInput,
@@ -53,7 +56,9 @@ import {
   type MerchantRegistry,
   type MerchantStatus,
   type ResolveMerchantKeyInput,
-  type RevokeMerchantKeyInput
+  type RevokeMerchantKeyInput,
+  type UpdateMerchantOriginStatusInput,
+  type UpdateMerchantStatusInput
 } from "./merchants.js";
 import {
   InMemoryRouteRegistry,
@@ -2220,6 +2225,40 @@ export class PostgresMerchantRegistry implements MerchantRegistry {
     );
     const row = result.rows[0];
     return row === undefined ? undefined : mapMerchantKey(row);
+  }
+
+  async updateMerchantStatus(
+    input: UpdateMerchantStatusInput
+  ): Promise<MerchantRecord | undefined> {
+    assertMerchantStatusTransition(input.status);
+    const result = await this.db.query<MerchantRow>(
+      `update merchants
+          set status = $2,
+              updated_at = $3
+        where id = $1
+        returning id, slug, display_name, owner_wallet, status, created_at, updated_at`,
+      [input.merchantId, input.status, this.now()]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapMerchant(row);
+  }
+
+  async updateOriginStatus(
+    input: UpdateMerchantOriginStatusInput
+  ): Promise<MerchantOriginRecord | undefined> {
+    assertMerchantOriginStatusTransition(input.status);
+    const verifiedAt = readOriginVerifiedAt(input, () => this.now());
+    const result = await this.db.query<MerchantOriginRow>(
+      `update merchant_origins
+          set status = $3,
+              verified_at = $4
+        where merchant_id = $1
+          and origin = $2
+        returning merchant_id, origin, verification_method, status, verified_at, created_at`,
+      [input.merchantId, input.origin, input.status, verifiedAt ?? null]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapMerchantOrigin(row);
   }
 
   private async assertMerchantExists(merchantId: string): Promise<void> {

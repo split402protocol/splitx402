@@ -1136,6 +1136,50 @@ describe("PostgresMerchantRegistry", () => {
     ).rejects.toBeInstanceOf(MerchantRegistryConflictError);
   });
 
+  it("updates merchant and origin status through operator transitions", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const fakePool = new FakePostgresPool();
+    const registry = createPostgresRegistry(fakePool);
+    const merchant = await registry.createMerchant({
+      id: bundle.artifacts.receipt.merchantId,
+      slug: "demo-merchant",
+      displayName: "Demo Merchant",
+      ownerWallet: bundle.keys.payerWallet
+    });
+    const origin = await registry.addOrigin({
+      merchantId: merchant.id,
+      origin: bundle.artifacts.receipt.merchantOrigin
+    });
+
+    const approved = await registry.updateMerchantStatus({
+      merchantId: merchant.id,
+      status: "active"
+    });
+    const verified = await registry.updateOriginStatus({
+      merchantId: merchant.id,
+      origin: origin.origin,
+      status: "verified",
+      verifiedAt: "2026-06-24T00:05:00Z"
+    });
+    const revoked = await registry.updateOriginStatus({
+      merchantId: merchant.id,
+      origin: origin.origin,
+      status: "revoked"
+    });
+
+    expect(approved?.status).toBe("active");
+    expect(verified?.status).toBe("verified");
+    expect(verified?.verifiedAt).toBe("2026-06-24T00:05:00Z");
+    expect(revoked?.status).toBe("revoked");
+    expect(revoked?.verifiedAt).toBeUndefined();
+    expect(
+      await registry.updateMerchantStatus({
+        merchantId: "mrc_00000000000000000000000000000099",
+        status: "active"
+      })
+    ).toBeUndefined();
+  });
+
   it("resolves active service keys and respects revocation windows", async () => {
     const bundle = createSampleProtocolArtifacts();
     const fakePool = new FakePostgresPool();
@@ -1924,6 +1968,14 @@ class FakePostgresClient implements PostgresTransactionClient {
     }
     if (normalized.startsWith("update merchant_keys")) {
       return result(this.database.revokeMerchantKey(values) as unknown as Row[]);
+    }
+    if (normalized.startsWith("update merchants")) {
+      return result(this.database.updateMerchantStatus(values) as unknown as Row[]);
+    }
+    if (normalized.startsWith("update merchant_origins")) {
+      return result(
+        this.database.updateMerchantOriginStatus(values) as unknown as Row[]
+      );
     }
     if (normalized.startsWith("update campaign_versions")) {
       return commandResult(this.database.activateCampaignVersion(values));
@@ -2811,6 +2863,38 @@ class FakePostgresDatabase {
         item.status = status;
       }
     }
+  }
+
+  updateMerchantStatus(values: readonly unknown[]): StoredMerchantRow[] {
+    const merchantId = readString(values[0]);
+    const status = readString(values[1]);
+    const updatedAt = readString(values[2]);
+    const merchant = this.merchants.find((row) => row.id === merchantId);
+    if (merchant === undefined) {
+      return [];
+    }
+    merchant.status = status;
+    merchant.updated_at = updatedAt;
+    return [merchant];
+  }
+
+  updateMerchantOriginStatus(
+    values: readonly unknown[]
+  ): StoredMerchantOriginRow[] {
+    const merchantId = readString(values[0]);
+    const origin = readString(values[1]);
+    const status = readString(values[2]);
+    const verifiedAt = readNullableString(values[3]);
+    const row = this.merchantOrigins.find(
+      (existing) =>
+        existing.merchant_id === merchantId && existing.origin === origin
+    );
+    if (row === undefined) {
+      return [];
+    }
+    row.status = status;
+    row.verified_at = verifiedAt;
+    return [row];
   }
 
   revokeMerchantKey(values: readonly unknown[]): StoredMerchantKeyRow[] {
