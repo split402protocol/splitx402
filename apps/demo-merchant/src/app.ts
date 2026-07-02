@@ -7,10 +7,15 @@ import { paymentMiddleware, x402ResourceServer } from "@x402/express";
 import { ExactSvmScheme } from "@x402/svm/exact/server";
 import { split402RequestContext } from "@split402/express";
 import {
+  SOLANA_DEVNET_NETWORK_ID,
+  SOLANA_DEVNET_USDC_MINT,
+  SOLANA_MAINNET_DEMO_MAX_GROSS_AMOUNT_ATOMIC,
   base58Encode,
   deriveEd25519PublicKey,
   hashProtocolObject,
   hexToBytes,
+  resolveSolanaNetwork,
+  type SolanaNetworkDescriptor,
   type Split402ReceiptV1
 } from "@split402/protocol";
 import {
@@ -19,19 +24,21 @@ import {
   type Split402CampaignConfig
 } from "@split402/x402-extension";
 
-export const SOLANA_DEVNET = "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
-export const DEFAULT_DEVNET_USDC = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
+export const SOLANA_DEVNET = SOLANA_DEVNET_NETWORK_ID;
+export const DEFAULT_DEVNET_USDC = SOLANA_DEVNET_USDC_MINT;
 export const DEFAULT_SERVICE_SEED_HEX =
   "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
 export const DEFAULT_PAY_TO = base58Encode(
   hexToBytes("808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f")
 );
+export const MAINNET_DEMO_CONFIRMATION = "split402-mainnet-canary";
 
 export const MERCHANT_ID = "mrc_00000000000000000000000000000001";
 export const CAMPAIGN_ID = "cmp_00000000000000000000000000000002";
 export const OPERATION_ID = "wallet-risk-score";
 
 export interface DemoMerchantConfig {
+  network: SolanaNetworkDescriptor;
   merchantOrigin: string;
   paymentAsset: string;
   requiredAmountAtomic: string;
@@ -50,7 +57,11 @@ export interface DemoMerchantRuntime {
   merchantPayTo: string;
 }
 
-export interface DemoMerchantOptions extends Partial<DemoMerchantConfig> {
+export interface DemoMerchantOptions
+  extends Omit<Partial<DemoMerchantConfig>, "network"> {
+  network?: string | SolanaNetworkDescriptor;
+  merchantPayTo?: string;
+  mainnetCanaryConfirmation?: string;
   facilitatorClient?: FacilitatorClient;
 }
 
@@ -59,7 +70,8 @@ export function createDemoMerchantApp(
 ): DemoMerchantRuntime {
   const config = readDemoMerchantConfig(overrides);
   const servicePublicKey = deriveEd25519PublicKey(config.serviceSeed);
-  const merchantPayTo = readMerchantPayTo();
+  const merchantPayTo = readMerchantPayTo(overrides);
+  assertMainnetDemoGuards(config, merchantPayTo, overrides);
   const campaign = createCampaign(config, merchantPayTo);
   const routes = createRoutes(config, merchantPayTo);
   const facilitator =
@@ -78,7 +90,7 @@ export function createDemoMerchantApp(
     }
   });
   const x402Server = new x402ResourceServer(facilitator)
-    .register(SOLANA_DEVNET, new ExactSvmScheme())
+    .register(config.network.networkId, new ExactSvmScheme())
     .registerExtension(split402Extension);
 
   const app = express();
@@ -99,6 +111,8 @@ export function createDemoMerchantApp(
       ok: true,
       merchantId: MERCHANT_ID,
       merchantOrigin: config.merchantOrigin,
+      network: config.network.networkId,
+      networkLabel: config.network.label,
       merchantPayTo,
       paymentAsset: config.paymentAsset,
       requiredAmountAtomic: config.requiredAmountAtomic,
@@ -123,7 +137,7 @@ export function createDemoMerchantApp(
           operationId: OPERATION_ID,
           campaignId: CAMPAIGN_ID,
           campaignVersion: 1,
-          network: SOLANA_DEVNET,
+          network: config.network.networkId,
           asset: config.paymentAsset,
           requiredAmountAtomic: config.requiredAmountAtomic,
           commissionBps: config.commissionBps,
@@ -169,17 +183,18 @@ export function readDemoMerchantPort(): number {
 }
 
 function readDemoMerchantConfig(
-  overrides: Partial<DemoMerchantConfig>
+  overrides: DemoMerchantOptions
 ): DemoMerchantConfig {
+  const network = readDemoNetwork(overrides.network);
   const serviceSeed =
     overrides.serviceSeed ??
     hexToBytes(process.env.SPLIT402_SERVICE_SEED_HEX ?? DEFAULT_SERVICE_SEED_HEX);
   return {
+    network,
     merchantOrigin:
       overrides.merchantOrigin ??
       readMerchantOrigin(),
-    paymentAsset:
-      overrides.paymentAsset ?? process.env.SPLIT402_ASSET ?? DEFAULT_DEVNET_USDC,
+    paymentAsset: readPaymentAsset(network, overrides.paymentAsset),
     requiredAmountAtomic:
       overrides.requiredAmountAtomic ??
       process.env.SPLIT402_REQUIRED_AMOUNT_ATOMIC ??
@@ -200,6 +215,79 @@ function readDemoMerchantConfig(
       "https://x402.org/facilitator",
     receipts: overrides.receipts ?? []
   };
+}
+
+function readPaymentAsset(
+  network: SolanaNetworkDescriptor,
+  override: string | undefined
+): string {
+  if (override !== undefined) {
+    return override;
+  }
+  if (network.cluster === "mainnet") {
+    return network.usdcMint;
+  }
+  return process.env.SPLIT402_ASSET ?? network.usdcMint;
+}
+
+function readDemoNetwork(
+  override: string | SolanaNetworkDescriptor | undefined
+): SolanaNetworkDescriptor {
+  if (typeof override === "object") {
+    return override;
+  }
+  return resolveSolanaNetwork(
+    override ?? process.env.SPLIT402_DEMO_NETWORK ?? "solana:devnet"
+  );
+}
+
+function assertMainnetDemoGuards(
+  config: DemoMerchantConfig,
+  merchantPayTo: string,
+  overrides: DemoMerchantOptions
+): void {
+  if (config.network.cluster !== "mainnet") {
+    return;
+  }
+
+  const problems: string[] = [];
+  const confirmation =
+    overrides.mainnetCanaryConfirmation ??
+    process.env.SPLIT402_MAINNET_CANARY_CONFIRM;
+  if (confirmation !== MAINNET_DEMO_CONFIRMATION) {
+    problems.push(
+      `set SPLIT402_MAINNET_CANARY_CONFIRM=${MAINNET_DEMO_CONFIRMATION} to acknowledge a mainnet canary run`
+    );
+  }
+  if (bytesToHex(config.serviceSeed) === DEFAULT_SERVICE_SEED_HEX) {
+    problems.push(
+      "set SPLIT402_SERVICE_SEED_HEX to a dedicated non-demo service key seed"
+    );
+  }
+  if (merchantPayTo === DEFAULT_PAY_TO) {
+    problems.push(
+      "set SPLIT402_MERCHANT_PAY_TO to the approved mainnet merchant settlement wallet"
+    );
+  }
+  if (
+    !/^[1-9][0-9]*$/u.test(config.requiredAmountAtomic) ||
+    BigInt(config.requiredAmountAtomic) >
+      BigInt(SOLANA_MAINNET_DEMO_MAX_GROSS_AMOUNT_ATOMIC)
+  ) {
+    problems.push(
+      `set SPLIT402_REQUIRED_AMOUNT_ATOMIC to a positive integer no greater than the ${SOLANA_MAINNET_DEMO_MAX_GROSS_AMOUNT_ATOMIC} atomic canary cap`
+    );
+  }
+
+  if (problems.length > 0) {
+    throw new Error(
+      `refusing to start the demo merchant on Solana Mainnet: ${problems.join("; ")}`
+    );
+  }
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function readMerchantOrigin(): string {
@@ -229,7 +317,7 @@ function createCampaign(
       merchantId: MERCHANT_ID,
       resourceOrigin: config.merchantOrigin,
       operationIds: [OPERATION_ID],
-      network: SOLANA_DEVNET,
+      network: config.network.networkId,
       asset: config.paymentAsset,
       requiredAmountAtomic: config.requiredAmountAtomic,
       payToWallet: merchantPayTo,
@@ -254,7 +342,7 @@ function createRoutes(
       accepts: [
         {
           scheme: "exact",
-          network: SOLANA_DEVNET,
+          network: config.network.networkId,
           price: {
             asset: config.paymentAsset,
             amount: config.requiredAmountAtomic
@@ -272,8 +360,12 @@ function createRoutes(
   };
 }
 
-function readMerchantPayTo(): string {
-  return process.env.SPLIT402_MERCHANT_PAY_TO ?? DEFAULT_PAY_TO;
+function readMerchantPayTo(overrides: DemoMerchantOptions): string {
+  return (
+    overrides.merchantPayTo ??
+    process.env.SPLIT402_MERCHANT_PAY_TO ??
+    DEFAULT_PAY_TO
+  );
 }
 
 function readCommissionBps(value: string): number {

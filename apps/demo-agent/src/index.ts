@@ -8,6 +8,8 @@ import {
 } from "@split402/agent-sdk";
 import { deriveEd25519PublicKey, hexToBytes } from "@split402/protocol";
 
+import { checkMainnetPaymentGuards, readDemoNetwork } from "./network.js";
+
 const MERCHANT_ORIGIN = process.env.SPLIT402_MERCHANT_ORIGIN ?? "http://localhost:4021";
 const MERCHANT_PUBLIC_KEY =
   process.env.SPLIT402_MERCHANT_PUBLIC_KEY ??
@@ -29,19 +31,45 @@ const OPERATION_ID = "wallet-risk-score";
 await main();
 
 async function main(): Promise<void> {
+  const network = readDemoNetwork();
   const signer = await createSignerFromEnv();
   const buyerWallet = signer.address.toString();
   const body = { wallet: buyerWallet };
+  const useInvalidClaim = process.env.SPLIT402_USE_INVALID_CLAIM === "true";
   const claim = createDemoReferralClaim();
-  const referralClaim =
-    process.env.SPLIT402_USE_INVALID_CLAIM === "true"
-      ? corruptReferralClaimSignature(claim)
-      : claim;
+  const referralClaim = useInvalidClaim
+    ? corruptReferralClaimSignature(claim)
+    : claim;
   const client = new Split402AgentClient({
     merchantOrigin: MERCHANT_ORIGIN,
     merchantPublicKey: MERCHANT_PUBLIC_KEY,
-    signer
+    signer,
+    network: network.networkId
   });
+
+  if (network.cluster === "mainnet") {
+    if (useInvalidClaim) {
+      throw new Error(
+        "refusing the invalid-claim demo payment on Solana Mainnet; the canary allows one valid paid request only"
+      );
+    }
+    const inspection = await client.inspectOffer({
+      path: "/v1/risk",
+      method: "POST",
+      body
+    });
+    const guard = checkMainnetPaymentGuards({
+      network,
+      buyerWallet,
+      requiredAmountAtomic: inspection.offer.requiredAmountAtomic
+    });
+    if (!guard.ok) {
+      throw new Error(
+        `refusing the mainnet paid request: ${guard.problems.join("; ")}`
+      );
+    }
+  }
+
   const result = await client.postJson({
     path: "/v1/risk",
     pathTemplate: "/v1/risk",

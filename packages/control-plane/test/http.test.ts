@@ -29,7 +29,9 @@ import {
   type PayoutReconciliationFinalityResult,
   type RouteDraft,
   type UnsignedReferralClaim,
-  type WebhookEventManagementStore
+  type RequeueDeadLetterWebhookEventInput,
+  type WebhookEventManagementStore,
+  WebhookEventRequeueConflictError
 } from "../src/index.js";
 
 const OWNER_SEED = hexToBytes(
@@ -2036,6 +2038,700 @@ describe("control-plane HTTP API", () => {
     expect(suspendedResponse.body.route.status).toBe("suspended");
     expect(duplicateResponse.body.route.status).toBe("suspended");
     expect(loadedResponse.body.route.status).toBe("suspended");
+
+    await request(app)
+      .post(`/v1/routes/${draft.routeId}/resume`)
+      .expect(401);
+    await request(app)
+      .post(`/v1/routes/${draft.routeId}/resume`)
+      .set("authorization", `Bearer ${otherOwnerToken}`)
+      .expect(403);
+    const resumedResponse = await request(app)
+      .post(`/v1/routes/${draft.routeId}/resume`)
+      .set("authorization", `Bearer ${ownerToken}`)
+      .expect(200);
+    expect(resumedResponse.body.route.status).toBe("active");
+    await request(app)
+      .post("/v1/routes/rte_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbc/resume")
+      .set("authorization", `Bearer ${ownerToken}`)
+      .expect(404);
+  });
+});
+
+describe("merchant campaign listing route", () => {
+  it("lists a merchant's campaigns with status filtering", async () => {
+    const { app, merchantRegistry } = createTestApp({
+      withMerchantRegistry: true,
+      withCampaignRegistry: true
+    });
+    await createActiveCampaign({ app, merchantRegistry });
+    const bundle = createSampleProtocolArtifacts();
+    const merchantId = bundle.artifacts.receipt.merchantId;
+    const campaignId = bundle.artifacts.receipt.campaignId;
+
+    const listed = await request(app)
+      .get(`/v1/merchants/${merchantId}/campaigns`)
+      .expect(200);
+    expect(listed.body.campaigns).toHaveLength(1);
+    expect(listed.body.campaigns[0].id).toBe(campaignId);
+    expect(listed.body.campaigns[0].status).toBe("active");
+
+    await request(app).post(`/v1/campaigns/${campaignId}/pause`).expect(200);
+
+    const paused = await request(app)
+      .get(`/v1/merchants/${merchantId}/campaigns`)
+      .query({ status: "paused" })
+      .expect(200);
+    expect(paused.body.campaigns).toHaveLength(1);
+    expect(paused.body.campaigns[0].status).toBe("paused");
+
+    const active = await request(app)
+      .get(`/v1/merchants/${merchantId}/campaigns`)
+      .query({ status: "active" })
+      .expect(200);
+    expect(active.body.campaigns).toHaveLength(0);
+
+    await request(app)
+      .get(`/v1/merchants/${merchantId}/campaigns`)
+      .query({ status: "bogus" })
+      .expect(400);
+  });
+
+  it("requires the merchant owner when auth is enabled", async () => {
+    const { app, merchantRegistry } = createTestApp({
+      withMerchantRegistry: true,
+      withCampaignRegistry: true,
+      withAuth: true
+    });
+    const ownerToken = await createAccessToken(app, OWNER_SEED, OWNER_WALLET);
+    await createActiveCampaign({ app, merchantRegistry, ownerToken });
+    const bundle = createSampleProtocolArtifacts();
+    const merchantId = bundle.artifacts.receipt.merchantId;
+
+    await request(app).get(`/v1/merchants/${merchantId}/campaigns`).expect(401);
+
+    const otherToken = await createAccessToken(
+      app,
+      OTHER_OWNER_SEED,
+      OTHER_OWNER_WALLET
+    );
+    await request(app)
+      .get(`/v1/merchants/${merchantId}/campaigns`)
+      .set("authorization", `Bearer ${otherToken}`)
+      .expect(403);
+
+    const listed = await request(app)
+      .get(`/v1/merchants/${merchantId}/campaigns`)
+      .set("authorization", `Bearer ${ownerToken}`)
+      .expect(200);
+    expect(listed.body.campaigns).toHaveLength(1);
+  });
+});
+
+describe("campaign lifecycle status routes", () => {
+  it("pauses, resumes, and closes an activated campaign", async () => {
+    const { app, merchantRegistry } = createTestApp({
+      withMerchantRegistry: true,
+      withCampaignRegistry: true
+    });
+    await createActiveCampaign({ app, merchantRegistry });
+    const bundle = createSampleProtocolArtifacts();
+    const campaignId = bundle.artifacts.receipt.campaignId;
+
+    const paused = await request(app)
+      .post(`/v1/campaigns/${campaignId}/pause`)
+      .expect(200);
+    expect(paused.body.campaign.status).toBe("paused");
+
+    const doublePause = await request(app)
+      .post(`/v1/campaigns/${campaignId}/pause`)
+      .expect(400);
+    expect(doublePause.body.message).toMatch(/only active campaigns/u);
+
+    const resumed = await request(app)
+      .post(`/v1/campaigns/${campaignId}/resume`)
+      .expect(200);
+    expect(resumed.body.campaign.status).toBe("active");
+
+    const closed = await request(app)
+      .post(`/v1/campaigns/${campaignId}/close`)
+      .expect(200);
+    expect(closed.body.campaign.status).toBe("closed");
+
+    await request(app)
+      .post(`/v1/campaigns/${campaignId}/resume`)
+      .expect(400);
+    await request(app)
+      .post("/v1/campaigns/cmp_00000000000000000000000000000099/pause")
+      .expect(404);
+  });
+
+  it("requires the campaign merchant owner when auth is enabled", async () => {
+    const { app, merchantRegistry } = createTestApp({
+      withMerchantRegistry: true,
+      withCampaignRegistry: true,
+      withAuth: true
+    });
+    const ownerToken = await createAccessToken(app, OWNER_SEED, OWNER_WALLET);
+    await createActiveCampaign({ app, merchantRegistry, ownerToken });
+    const bundle = createSampleProtocolArtifacts();
+    const campaignId = bundle.artifacts.receipt.campaignId;
+
+    await request(app).post(`/v1/campaigns/${campaignId}/pause`).expect(401);
+
+    const otherToken = await createAccessToken(
+      app,
+      OTHER_OWNER_SEED,
+      OTHER_OWNER_WALLET
+    );
+    await request(app)
+      .post(`/v1/campaigns/${campaignId}/pause`)
+      .set("authorization", `Bearer ${otherToken}`)
+      .expect(403);
+
+    const paused = await request(app)
+      .post(`/v1/campaigns/${campaignId}/pause`)
+      .set("authorization", `Bearer ${ownerToken}`)
+      .expect(200);
+    expect(paused.body.campaign.status).toBe("paused");
+  });
+});
+
+describe("auth session revocation route", () => {
+  it("revokes a refresh token so it can no longer rotate", async () => {
+    const { app } = createTestApp({ withAuth: true });
+    const challengeResponse = await request(app)
+      .post("/v1/auth/challenges")
+      .send({
+        wallet: OWNER_WALLET,
+        network: NETWORK,
+        purpose: "merchant-session"
+      })
+      .expect(201);
+    const signature = signEd25519Message(
+      new TextEncoder().encode(
+        challengeResponse.body.challenge.message as string
+      ),
+      OWNER_SEED
+    ).signature;
+    const sessionResponse = await request(app)
+      .post("/v1/auth/sessions")
+      .send({
+        challengeId: challengeResponse.body.challenge.challengeId,
+        signature,
+        publicKey: OWNER_WALLET
+      })
+      .expect(201);
+    const refreshToken = sessionResponse.body.session.refreshToken as string;
+
+    const revokeResponse = await request(app)
+      .post("/v1/auth/sessions/revoke")
+      .send({ refreshToken })
+      .expect(200);
+    expect(revokeResponse.body.revocation).toEqual({
+      revoked: true,
+      alreadyRevoked: false,
+      wallet: OWNER_WALLET
+    });
+
+    await request(app)
+      .post("/v1/auth/sessions/refresh")
+      .send({ refreshToken })
+      .expect(401);
+    const repeated = await request(app)
+      .post("/v1/auth/sessions/revoke")
+      .send({ refreshToken })
+      .expect(200);
+    expect(repeated.body.revocation.alreadyRevoked).toBe(true);
+    await request(app)
+      .post("/v1/auth/sessions/revoke")
+      .send({ refreshToken: "unknown-refresh-token" })
+      .expect(401);
+    await request(app).post("/v1/auth/sessions/revoke").send({}).expect(400);
+  });
+});
+
+describe("dead-letter webhook requeue route", () => {
+  it("requeues a merchant's dead-letter webhook event and rejects other states", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const merchantId = bundle.artifacts.receipt.merchantId;
+    const webhookStore = new FakeWebhookEventManagementStore([
+      createWebhookEvent({
+        id: "55555555-5555-4555-8555-555555555555",
+        merchantId,
+        status: "dead_letter",
+        eventType: "webhook.receipt.accepted.v1"
+      }),
+      createWebhookEvent({
+        id: "66666666-6666-4666-8666-666666666666",
+        merchantId,
+        status: "delivered",
+        eventType: "webhook.payout.finalized.v1"
+      }),
+      createWebhookEvent({
+        id: "77777777-7777-4777-8777-777777777777",
+        merchantId: "mrc_ffffffffffffffffffffffffffffffff",
+        status: "dead_letter",
+        eventType: "webhook.receipt.accepted.v1"
+      })
+    ]);
+    const { app } = createTestApp({
+      withMerchantRegistry: true,
+      webhookEventManagementStore: webhookStore
+    });
+    await request(app)
+      .post("/v1/merchants")
+      .send({
+        id: merchantId,
+        slug: "requeue-merchant",
+        displayName: "Requeue Merchant",
+        ownerWallet: bundle.keys.payerWallet
+      })
+      .expect(201);
+
+    const requeued = await request(app)
+      .post(
+        `/v1/merchants/${merchantId}/webhook-events/55555555-5555-4555-8555-555555555555/requeue`
+      )
+      .expect(200);
+    expect(requeued.body.event.status).toBe("pending");
+    expect(requeued.body.event.attempts).toBe(0);
+    expect(requeued.body.event.lastError).toBeUndefined();
+
+    const conflict = await request(app)
+      .post(
+        `/v1/merchants/${merchantId}/webhook-events/66666666-6666-4666-8666-666666666666/requeue`
+      )
+      .expect(409);
+    expect(conflict.body.message).toMatch(/only dead_letter events/u);
+
+    await request(app)
+      .post(
+        `/v1/merchants/${merchantId}/webhook-events/77777777-7777-4777-8777-777777777777/requeue`
+      )
+      .expect(404);
+    await request(app)
+      .post(
+        "/v1/merchants/mrc_00000000000000000000000000000099/webhook-events/55555555-5555-4555-8555-555555555555/requeue"
+      )
+      .expect(404);
+  });
+});
+
+describe("payout batch read and ledger closure routes", () => {
+  it("reads, lists, and closes finalized payout batches", async () => {
+    const { app, store, receipt } = createTestApp({
+      withMerchantRegistry: true,
+      withPayouts: true
+    });
+    await request(app)
+      .post("/v1/merchants")
+      .send({
+        id: receipt.merchantId,
+        slug: "ledger-merchant",
+        displayName: "Ledger Merchant",
+        ownerWallet: receipt.payerWallet
+      })
+      .expect(201);
+    await request(app).post("/v1/receipts").send({ receipt }).expect(201);
+    const snapshot = store.getByReceiptId(receipt.receiptId);
+    if (snapshot?.accrual === undefined) {
+      throw new Error("expected receipt accrual");
+    }
+    store.save({
+      ...snapshot,
+      receipt: {
+        ...snapshot.receipt,
+        verificationState: "signature_verified"
+      },
+      accrual: {
+        ...snapshot.accrual,
+        status: "available",
+        availableAt: "2026-06-24T00:04:00.000Z"
+      }
+    });
+    const availableAccrual = store.getByReceiptId(receipt.receiptId)?.accrual;
+    if (availableAccrual === undefined) {
+      throw new Error("expected available accrual");
+    }
+    const batch = store.createPayoutBatch({
+      merchantId: receipt.merchantId,
+      payoutWalletId: "mpw_ffffffffffffffffffffffffffffffff",
+      network: receipt.network,
+      asset: receipt.asset,
+      accruals: [availableAccrual],
+      now: "2026-06-24T00:05:00Z"
+    });
+
+    const read = await request(app)
+      .get(`/v1/payout-batches/${batch.id}`)
+      .expect(200);
+    expect(read.body.batch.id).toBe(batch.id);
+    expect(read.body.batch.status).toBe("planned");
+
+    const listed = await request(app)
+      .get(`/v1/merchants/${receipt.merchantId}/payout-batches`)
+      .expect(200);
+    expect(listed.body.batches).toHaveLength(1);
+    expect(listed.body.batches[0].id).toBe(batch.id);
+
+    const filtered = await request(app)
+      .get(`/v1/merchants/${receipt.merchantId}/payout-batches`)
+      .query({ status: "finalized" })
+      .expect(200);
+    expect(filtered.body.batches).toHaveLength(0);
+    await request(app)
+      .get(`/v1/merchants/${receipt.merchantId}/payout-batches`)
+      .query({ status: "bogus" })
+      .expect(400);
+
+    const prematureClose = await request(app)
+      .post(`/v1/payout-batches/${batch.id}/close-ledger`)
+      .expect(400);
+    expect(prematureClose.body.message).toMatch(/must be finalized/u);
+
+    const saved = store.saveSignedPayoutTransactions({
+      payoutBatchId: batch.id,
+      now: "2026-06-24T00:06:00Z",
+      transactions: [
+        {
+          sequence: 0,
+          signedTransactionBase64: "AQID",
+          expectedSignature: "expected_sig_0"
+        }
+      ]
+    });
+    store.markPayoutTransactionSubmitted({
+      id: saved[0]?.id ?? "",
+      submittedAt: "2026-06-24T00:07:00Z",
+      expectedSignature: "expected_sig_0"
+    });
+    store.markPayoutTransactionFinality({
+      id: saved[0]?.id ?? "",
+      status: "finalized",
+      observedAt: "2026-06-24T00:08:00Z"
+    });
+
+    const closed = await request(app)
+      .post(`/v1/payout-batches/${batch.id}/close-ledger`)
+      .expect(200);
+    expect(closed.body.ledgerTransaction.entries.length).toBeGreaterThan(0);
+    expect(store.getByReceiptId(receipt.receiptId)?.accrual?.status).toBe(
+      "paid"
+    );
+
+    const repeated = await request(app)
+      .post(`/v1/payout-batches/${batch.id}/close-ledger`)
+      .expect(200);
+    expect(repeated.body.ledgerTransaction.transactionId).toBe(
+      closed.body.ledgerTransaction.transactionId
+    );
+
+    await request(app)
+      .get("/v1/payout-batches/pbt_00000000000000000000000000000099")
+      .expect(404);
+    await request(app)
+      .post("/v1/payout-batches/pbt_00000000000000000000000000000099/close-ledger")
+      .expect(404);
+  });
+});
+
+describe("merchant payout wallet status routes", () => {
+  it("pauses, resumes, and retires payout wallets through the API", async () => {
+    const { app, merchantRegistry } = createTestApp({ withMerchantRegistry: true });
+    seedMerchantFixture(merchantRegistry, {
+      merchantStatus: "active",
+      originStatus: "verified"
+    });
+    const bundle = createSampleProtocolArtifacts();
+    const merchantId = bundle.artifacts.receipt.merchantId;
+    const wallet = merchantRegistry?.addPayoutWallet({
+      id: "mpw_ffffffffffffffffffffffffffffffff",
+      merchantId,
+      network: bundle.artifacts.receipt.network,
+      wallet: bundle.keys.payToWallet,
+      asset: bundle.artifacts.receipt.asset,
+      signerReference: "kms:split402-devnet-payout"
+    });
+
+    const paused = await request(app)
+      .post(`/v1/merchants/${merchantId}/payout-wallets/${wallet?.id}/pause`)
+      .expect(200);
+    expect(paused.body.payoutWallet.status).toBe("paused");
+
+    const resumed = await request(app)
+      .post(`/v1/merchants/${merchantId}/payout-wallets/${wallet?.id}/resume`)
+      .expect(200);
+    expect(resumed.body.payoutWallet.status).toBe("active");
+
+    const retired = await request(app)
+      .post(`/v1/merchants/${merchantId}/payout-wallets/${wallet?.id}/retire`)
+      .expect(200);
+    expect(retired.body.payoutWallet.status).toBe("retired");
+
+    const conflict = await request(app)
+      .post(`/v1/merchants/${merchantId}/payout-wallets/${wallet?.id}/resume`)
+      .expect(409);
+    expect(conflict.body.error).toBe("conflict");
+
+    await request(app)
+      .post(
+        `/v1/merchants/${merchantId}/payout-wallets/mpw_00000000000000000000000000000099/pause`
+      )
+      .expect(404);
+  });
+
+  it("requires the merchant owner wallet when auth is enabled", async () => {
+    const { app, merchantRegistry } = createTestApp({
+      withMerchantRegistry: true,
+      withAuth: true
+    });
+    seedMerchantFixture(merchantRegistry, {
+      merchantStatus: "active",
+      originStatus: "verified"
+    });
+    const bundle = createSampleProtocolArtifacts();
+    const merchantId = bundle.artifacts.receipt.merchantId;
+    const wallet = merchantRegistry?.addPayoutWallet({
+      id: "mpw_ffffffffffffffffffffffffffffffff",
+      merchantId,
+      network: bundle.artifacts.receipt.network,
+      wallet: bundle.keys.payToWallet,
+      asset: bundle.artifacts.receipt.asset,
+      signerReference: "kms:split402-devnet-payout"
+    });
+
+    await request(app)
+      .post(`/v1/merchants/${merchantId}/payout-wallets/${wallet?.id}/pause`)
+      .expect(401);
+
+    const ownerToken = await createAccessToken(app, OWNER_SEED, OWNER_WALLET);
+    const paused = await request(app)
+      .post(`/v1/merchants/${merchantId}/payout-wallets/${wallet?.id}/pause`)
+      .set("authorization", `Bearer ${ownerToken}`)
+      .expect(200);
+    expect(paused.body.payoutWallet.status).toBe("paused");
+
+    const otherToken = await createAccessToken(app, OTHER_OWNER_SEED, OTHER_OWNER_WALLET);
+    await request(app)
+      .post(`/v1/merchants/${merchantId}/payout-wallets/${wallet?.id}/resume`)
+      .set("authorization", `Bearer ${otherToken}`)
+      .expect(403);
+  });
+});
+
+describe("control-plane operator approval endpoints", () => {
+  it("fails closed when no operator tokens are configured", async () => {
+    const { app, merchantRegistry } = createTestApp({ withMerchantRegistry: true });
+    seedMerchantFixture(merchantRegistry, {
+      merchantStatus: "pending",
+      originStatus: "pending"
+    });
+    const bundle = createSampleProtocolArtifacts();
+
+    const response = await request(app)
+      .post(`/v1/operator/merchants/${bundle.artifacts.receipt.merchantId}/approve`)
+      .set("authorization", "Bearer any-token")
+      .expect(403);
+    expect(response.body.error).toBe("operator_disabled");
+    expect(
+      merchantRegistry?.getMerchantProfile(bundle.artifacts.receipt.merchantId)?.status
+    ).toBe("pending");
+  });
+
+  it("rejects missing and invalid operator tokens", async () => {
+    const { app, merchantRegistry } = createTestApp({
+      withMerchantRegistry: true,
+      operatorTokens: ["operator-secret-1"]
+    });
+    seedMerchantFixture(merchantRegistry, {
+      merchantStatus: "pending",
+      originStatus: "pending"
+    });
+    const bundle = createSampleProtocolArtifacts();
+
+    await request(app)
+      .post(`/v1/operator/merchants/${bundle.artifacts.receipt.merchantId}/approve`)
+      .expect(401);
+    await request(app)
+      .post(`/v1/operator/merchants/${bundle.artifacts.receipt.merchantId}/approve`)
+      .set("authorization", "Bearer wrong-token")
+      .expect(401);
+    expect(
+      merchantRegistry?.getMerchantProfile(bundle.artifacts.receipt.merchantId)?.status
+    ).toBe("pending");
+  });
+
+  it("approves, suspends, and closes merchants with an operator token", async () => {
+    const { app, merchantRegistry } = createTestApp({
+      withMerchantRegistry: true,
+      operatorTokens: ["operator-secret-1", "operator-secret-2"]
+    });
+    seedMerchantFixture(merchantRegistry, {
+      merchantStatus: "pending",
+      originStatus: "pending"
+    });
+    const bundle = createSampleProtocolArtifacts();
+    const merchantId = bundle.artifacts.receipt.merchantId;
+
+    const approved = await request(app)
+      .post(`/v1/operator/merchants/${merchantId}/approve`)
+      .set("authorization", "Bearer operator-secret-2")
+      .expect(200);
+    expect(approved.body.merchant.status).toBe("active");
+
+    const suspended = await request(app)
+      .post(`/v1/operator/merchants/${merchantId}/suspend`)
+      .set("authorization", "Bearer operator-secret-1")
+      .expect(200);
+    expect(suspended.body.merchant.status).toBe("suspended");
+
+    const closed = await request(app)
+      .post(`/v1/operator/merchants/${merchantId}/close`)
+      .set("authorization", "Bearer operator-secret-1")
+      .expect(200);
+    expect(closed.body.merchant.status).toBe("closed");
+
+    await request(app)
+      .post("/v1/operator/merchants/mrc_00000000000000000000000000000099/approve")
+      .set("authorization", "Bearer operator-secret-1")
+      .expect(404);
+  });
+
+  it("verifies and revokes merchant origins with an operator token", async () => {
+    const { app, merchantRegistry } = createTestApp({
+      withMerchantRegistry: true,
+      operatorTokens: ["operator-secret-1"]
+    });
+    seedMerchantFixture(merchantRegistry, {
+      merchantStatus: "pending",
+      originStatus: "pending"
+    });
+    const bundle = createSampleProtocolArtifacts();
+    const merchantId = bundle.artifacts.receipt.merchantId;
+    const origin = bundle.artifacts.receipt.merchantOrigin;
+
+    const verified = await request(app)
+      .post(`/v1/operator/merchants/${merchantId}/origins/verify`)
+      .set("authorization", "Bearer operator-secret-1")
+      .send({ origin, verifiedAt: "2026-06-24T00:05:00Z" })
+      .expect(200);
+    expect(verified.body.origin.status).toBe("verified");
+    expect(verified.body.origin.verifiedAt).toBe("2026-06-24T00:05:00Z");
+
+    const revoked = await request(app)
+      .post(`/v1/operator/merchants/${merchantId}/origins/revoke`)
+      .set("authorization", "Bearer operator-secret-1")
+      .send({ origin })
+      .expect(200);
+    expect(revoked.body.origin.status).toBe("revoked");
+    expect(revoked.body.origin.verifiedAt).toBeUndefined();
+
+    await request(app)
+      .post(`/v1/operator/merchants/${merchantId}/origins/verify`)
+      .set("authorization", "Bearer operator-secret-1")
+      .send({ origin: "https://unknown.example" })
+      .expect(404);
+    await request(app)
+      .post(`/v1/operator/merchants/${merchantId}/origins/verify`)
+      .set("authorization", "Bearer operator-secret-1")
+      .send({})
+      .expect(400);
+  });
+
+  it("checks a registered origin's well-known document without changing state", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const merchantId = bundle.artifacts.receipt.merchantId;
+    const origin = bundle.artifacts.receipt.merchantOrigin;
+    const requestedUrls: string[] = [];
+    const { app, merchantRegistry } = createTestApp({
+      withMerchantRegistry: true,
+      operatorTokens: ["operator-secret-1"],
+      operatorWellKnownFetch: (input) => {
+        requestedUrls.push(String(input));
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              protocol: "split402",
+              merchantId,
+              servicePublicKey: bundle.keys.merchantPublicKey
+            }),
+            { status: 200 }
+          )
+        );
+      }
+    });
+    seedMerchantFixture(merchantRegistry, {
+      merchantStatus: "pending",
+      originStatus: "pending"
+    });
+
+    const response = await request(app)
+      .post(`/v1/operator/merchants/${merchantId}/origins/check`)
+      .set("authorization", "Bearer operator-secret-1")
+      .send({ origin })
+      .expect(200);
+    expect(response.body.check.ok).toBe(true);
+    expect(response.body.check.discovered.merchantId).toBe(merchantId);
+    expect(requestedUrls).toEqual([`${origin}/.well-known/split402.json`]);
+    expect(
+      merchantRegistry
+        ?.getMerchantProfile(merchantId)
+        ?.origins.find((candidate) => candidate.origin === origin)?.status
+    ).toBe("pending");
+
+    await request(app)
+      .post(`/v1/operator/merchants/${merchantId}/origins/check`)
+      .set("authorization", "Bearer operator-secret-1")
+      .send({ origin: "https://unregistered.example" })
+      .expect(404);
+    await request(app)
+      .post(`/v1/operator/merchants/${merchantId}/origins/check`)
+      .send({ origin })
+      .expect(401);
+  });
+
+  it("lets an operator-approved merchant pass campaign activation checks", async () => {
+    const { app, merchantRegistry } = createTestApp({
+      withMerchantRegistry: true,
+      withCampaignRegistry: true,
+      operatorTokens: ["operator-secret-1"]
+    });
+    seedMerchantFixture(merchantRegistry, {
+      merchantStatus: "pending",
+      originStatus: "pending"
+    });
+    const bundle = createSampleProtocolArtifacts();
+    const merchantId = bundle.artifacts.receipt.merchantId;
+
+    await request(app)
+      .post(`/v1/operator/merchants/${merchantId}/approve`)
+      .set("authorization", "Bearer operator-secret-1")
+      .expect(200);
+    await request(app)
+      .post(`/v1/operator/merchants/${merchantId}/origins/verify`)
+      .set("authorization", "Bearer operator-secret-1")
+      .send({ origin: bundle.artifacts.receipt.merchantOrigin })
+      .expect(200);
+
+    const campaignResponse = await request(app)
+      .post("/v1/campaigns")
+      .send({
+        id: bundle.artifacts.receipt.campaignId,
+        merchantId,
+        ...createCampaignBody()
+      })
+      .expect(201);
+    const currentVersion = campaignResponse.body.campaign
+      .current as CampaignVersionRecord;
+
+    await request(app)
+      .post(`/v1/campaigns/${bundle.artifacts.receipt.campaignId}/activate`)
+      .send({
+        kid: bundle.artifacts.receipt.kid,
+        signature: signCampaignTerms(currentVersion)
+      })
+      .expect(200);
   });
 });
 
@@ -2051,6 +2747,8 @@ function createTestApp(
     withRouteRegistry?: boolean;
     rateLimitWindowMs?: number;
     rateLimitMaxRequests?: number;
+    operatorTokens?: string[];
+    operatorWellKnownFetch?: typeof fetch;
   } = {}
 ) {
   const bundle = createSampleProtocolArtifacts();
@@ -2100,6 +2798,10 @@ function createTestApp(
                     options.merchantFundingBalanceProvider
                 }),
             referrerPayoutViewStore: store,
+            payoutLedgerClosureStore: store,
+            payoutFinalizedTransferVerifier: {
+              verifyFinalizedPayout: () => ({ ok: true, errors: [] })
+            },
             ...(options.payoutFinalityMonitor === undefined
               ? {}
               : { payoutFinalityMonitor: options.payoutFinalityMonitor })
@@ -2116,7 +2818,17 @@ function createTestApp(
         : { rateLimitWindowMs: options.rateLimitWindowMs }),
       ...(options.rateLimitMaxRequests === undefined
         ? {}
-        : { rateLimitMaxRequests: options.rateLimitMaxRequests })
+        : { rateLimitMaxRequests: options.rateLimitMaxRequests }),
+      ...(options.operatorTokens === undefined
+        ? {}
+        : {
+            operator: {
+              accessTokens: options.operatorTokens,
+              ...(options.operatorWellKnownFetch === undefined
+                ? {}
+                : { wellKnownFetch: options.operatorWellKnownFetch })
+            }
+          })
     }),
     merchantRegistry,
     store,
@@ -2198,8 +2910,11 @@ async function createMaybeBroadcastPayoutBatchFixture(
 
 class FakeWebhookEventManagementStore implements WebhookEventManagementStore {
   readonly inputs: Parameters<WebhookEventManagementStore["listWebhookEvents"]>[0][] = [];
+  readonly events: OutboxEventRecord[];
 
-  constructor(private readonly events: readonly OutboxEventRecord[]) {}
+  constructor(events: readonly OutboxEventRecord[]) {
+    this.events = events.map((event) => ({ ...event }));
+  }
 
   listWebhookEvents(
     input: Parameters<WebhookEventManagementStore["listWebhookEvents"]>[0]
@@ -2213,6 +2928,29 @@ class FakeWebhookEventManagementStore implements WebhookEventManagementStore {
       )
       .filter((event) => input.status === undefined || event.status === input.status)
       .slice(0, input.limit ?? 50);
+  }
+
+  requeueDeadLetterWebhookEvent(
+    input: RequeueDeadLetterWebhookEventInput
+  ): OutboxEventRecord | undefined {
+    const event = this.events.find(
+      (candidate) =>
+        candidate.id === input.eventId &&
+        candidate.payload.merchantId === input.merchantId
+    );
+    if (event === undefined) {
+      return undefined;
+    }
+    if (event.status !== "dead_letter") {
+      throw new WebhookEventRequeueConflictError(
+        `webhook event is ${event.status}; only dead_letter events can be requeued`
+      );
+    }
+    event.status = "pending";
+    event.attempts = 0;
+    delete event.lastError;
+    delete event.lockedAt;
+    return { ...event };
   }
 }
 

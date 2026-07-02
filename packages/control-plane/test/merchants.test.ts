@@ -162,6 +162,145 @@ describe("merchant registry", () => {
       ]
     });
   });
+
+  it("updates merchant status through operator transitions", () => {
+    const bundle = createSampleProtocolArtifacts();
+    const registry = createRegistry();
+    const merchant = registry.createMerchant({
+      id: bundle.artifacts.receipt.merchantId,
+      slug: "demo-merchant",
+      displayName: "Demo Merchant",
+      ownerWallet: bundle.keys.payerWallet
+    });
+
+    const approved = registry.updateMerchantStatus({
+      merchantId: merchant.id,
+      status: "active"
+    });
+    expect(approved?.status).toBe("active");
+    expect(registry.getMerchantProfile(merchant.id)?.status).toBe("active");
+
+    const suspended = registry.updateMerchantStatus({
+      merchantId: merchant.id,
+      status: "suspended"
+    });
+    expect(suspended?.status).toBe("suspended");
+
+    expect(
+      registry.updateMerchantStatus({
+        merchantId: "mrc_00000000000000000000000000000099",
+        status: "active"
+      })
+    ).toBeUndefined();
+    expect(() =>
+      registry.updateMerchantStatus({
+        merchantId: merchant.id,
+        // @ts-expect-error pending is not an operator transition
+        status: "pending"
+      })
+    ).toThrow(/must be active, suspended, or closed/u);
+  });
+
+  it("pauses, resumes, and retires payout wallets with a terminal retire state", () => {
+    const bundle = createSampleProtocolArtifacts();
+    const registry = createRegistry();
+    const merchant = registry.createMerchant({
+      id: bundle.artifacts.receipt.merchantId,
+      slug: "demo-merchant",
+      displayName: "Demo Merchant",
+      ownerWallet: bundle.keys.payerWallet
+    });
+    const wallet = registry.addPayoutWallet({
+      merchantId: merchant.id,
+      network: bundle.artifacts.receipt.network,
+      wallet: bundle.keys.payToWallet,
+      asset: bundle.artifacts.receipt.asset,
+      signerReference: "kms:split402-devnet-payout"
+    });
+
+    const paused = registry.updatePayoutWalletStatus({
+      merchantId: merchant.id,
+      payoutWalletId: wallet.id,
+      status: "paused"
+    });
+    expect(paused?.status).toBe("paused");
+
+    const resumed = registry.updatePayoutWalletStatus({
+      merchantId: merchant.id,
+      payoutWalletId: wallet.id,
+      status: "active"
+    });
+    expect(resumed?.status).toBe("active");
+
+    const retired = registry.updatePayoutWalletStatus({
+      merchantId: merchant.id,
+      payoutWalletId: wallet.id,
+      status: "retired"
+    });
+    expect(retired?.status).toBe("retired");
+
+    expect(() =>
+      registry.updatePayoutWalletStatus({
+        merchantId: merchant.id,
+        payoutWalletId: wallet.id,
+        status: "active"
+      })
+    ).toThrow(MerchantRegistryConflictError);
+    expect(
+      registry.updatePayoutWalletStatus({
+        merchantId: "mrc_00000000000000000000000000000099",
+        payoutWalletId: wallet.id,
+        status: "paused"
+      })
+    ).toBeUndefined();
+  });
+
+  it("updates origin status and manages verifiedAt", () => {
+    const bundle = createSampleProtocolArtifacts();
+    const registry = createRegistry();
+    const merchant = registry.createMerchant({
+      id: bundle.artifacts.receipt.merchantId,
+      slug: "demo-merchant",
+      displayName: "Demo Merchant",
+      ownerWallet: bundle.keys.payerWallet
+    });
+    const origin = registry.addOrigin({
+      merchantId: merchant.id,
+      origin: bundle.artifacts.receipt.merchantOrigin
+    });
+
+    const verified = registry.updateOriginStatus({
+      merchantId: merchant.id,
+      origin: origin.origin,
+      status: "verified"
+    });
+    expect(verified?.status).toBe("verified");
+    expect(verified?.verifiedAt).toBe(FIXED_NOW.toISOString());
+
+    const revoked = registry.updateOriginStatus({
+      merchantId: merchant.id,
+      origin: origin.origin,
+      status: "revoked"
+    });
+    expect(revoked?.status).toBe("revoked");
+    expect(revoked?.verifiedAt).toBeUndefined();
+
+    expect(
+      registry.updateOriginStatus({
+        merchantId: merchant.id,
+        origin: "https://unknown.example",
+        status: "verified"
+      })
+    ).toBeUndefined();
+    expect(() =>
+      registry.updateOriginStatus({
+        merchantId: merchant.id,
+        origin: origin.origin,
+        // @ts-expect-error pending is not an operator transition
+        status: "pending"
+      })
+    ).toThrow(/must be verified, failed, or revoked/u);
+  });
 });
 
 function createRegistry(): InMemoryMerchantRegistry {

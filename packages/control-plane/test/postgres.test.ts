@@ -336,6 +336,66 @@ describe("PostgresReceiptIngestionStore", () => {
     ).toBeUndefined();
   });
 
+  it("requeues a merchant's dead-letter webhook event back to pending", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const fakePool = new FakePostgresPool();
+    const receiptStore = new PostgresReceiptIngestionStore(fakePool);
+    const outboxStore = new PostgresOutboxEventStore(fakePool);
+    const ingestor = new ReceiptIngestor(receiptStore, {
+      resolveMerchantPublicKey: () => bundle.keys.merchantPublicKey,
+      now: () => new Date("2026-06-24T00:02:00Z")
+    });
+    await ingestor.ingest({ receipt: bundle.artifacts.receipt, source: "merchant" });
+    const claimed = await outboxStore.claimNext({
+      now: "2026-06-24T00:03:00Z",
+      eventTypes: ["webhook.receipt.accepted.v1"]
+    });
+    if (claimed === undefined) {
+      throw new Error("expected claimed webhook outbox event");
+    }
+    await outboxStore.markFailed({
+      eventId: claimed.id,
+      lastError: "receiver returned 500",
+      availableAt: "2026-06-24T00:03:00Z",
+      deadLetter: true
+    });
+
+    await expect(
+      outboxStore.requeueDeadLetterWebhookEvent({
+        merchantId: "mrc_ffffffffffffffffffffffffffffffff",
+        eventId: claimed.id
+      })
+    ).resolves.toBeUndefined();
+
+    const requeued = await outboxStore.requeueDeadLetterWebhookEvent({
+      merchantId: bundle.artifacts.receipt.merchantId,
+      eventId: claimed.id,
+      now: "2026-06-24T00:10:00Z"
+    });
+    expect(requeued).toEqual(
+      expect.objectContaining({
+        id: claimed.id,
+        status: "pending",
+        attempts: 0,
+        availableAt: "2026-06-24T00:10:00Z"
+      })
+    );
+    expect(requeued?.lastError).toBeUndefined();
+
+    await expect(
+      outboxStore.requeueDeadLetterWebhookEvent({
+        merchantId: bundle.artifacts.receipt.merchantId,
+        eventId: claimed.id
+      })
+    ).rejects.toThrow(/only dead_letter events can be requeued/u);
+
+    const reclaimed = await outboxStore.claimNext({
+      now: "2026-06-24T00:11:00Z",
+      eventTypes: ["webhook.receipt.accepted.v1"]
+    });
+    expect(reclaimed?.id).toBe(claimed.id);
+  });
+
   it("marks chain-verified receipts and accruals available", async () => {
     const bundle = createSampleProtocolArtifacts();
     const fakePool = new FakePostgresPool();
@@ -499,6 +559,57 @@ describe("PostgresReceiptIngestionStore", () => {
     expect(fakePool.client.commands).toContainEqual(
       expect.stringContaining("limit $4 for update skip locked")
     );
+  });
+
+  it("lists merchant payout batches newest first with status filtering", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const fakePool = new FakePostgresPool();
+    const store = new PostgresReceiptIngestionStore(fakePool);
+    const ingestor = new ReceiptIngestor(store, {
+      resolveMerchantPublicKey: () => bundle.keys.merchantPublicKey,
+      now: () => new Date("2026-06-24T00:02:00Z")
+    });
+    await ingestor.ingest({ receipt: bundle.artifacts.receipt, source: "merchant" });
+    const verified = await store.markReceiptChainVerified({
+      receiptId: bundle.artifacts.receipt.receiptId,
+      verifiedAt: "2026-06-24T00:04:00Z"
+    });
+    if (verified?.accrual === undefined) {
+      throw new Error("expected verified accrual");
+    }
+    const batch = await store.createPayoutBatch({
+      merchantId: bundle.artifacts.receipt.merchantId,
+      payoutWalletId: "mpw_ffffffffffffffffffffffffffffffff",
+      network: bundle.artifacts.receipt.network,
+      asset: bundle.artifacts.receipt.asset,
+      accruals: [verified.accrual],
+      batchId: "pbt_ffffffffffffffffffffffffffffffff",
+      itemIdFactory: () => "pit_ffffffffffffffffffffffffffffffff",
+      now: "2026-06-24T00:05:00Z"
+    });
+
+    const listed = await store.listMerchantPayoutBatches({
+      merchantId: bundle.artifacts.receipt.merchantId
+    });
+    const planned = await store.listMerchantPayoutBatches({
+      merchantId: bundle.artifacts.receipt.merchantId,
+      status: "planned"
+    });
+    const finalized = await store.listMerchantPayoutBatches({
+      merchantId: bundle.artifacts.receipt.merchantId,
+      status: "finalized"
+    });
+
+    expect(listed.map((row) => row.id)).toEqual([batch.id]);
+    expect(listed[0]?.items).toHaveLength(1);
+    expect(planned.map((row) => row.id)).toEqual([batch.id]);
+    expect(finalized).toEqual([]);
+    await expect(
+      store.listMerchantPayoutBatches({
+        merchantId: bundle.artifacts.receipt.merchantId,
+        limit: 0
+      })
+    ).rejects.toThrow(/limit must be an integer from 1 to 100/u);
   });
 
   it("persists signed payout transactions before submission", async () => {
@@ -1229,6 +1340,106 @@ describe("PostgresMerchantRegistry", () => {
     ).rejects.toBeInstanceOf(MerchantRegistryConflictError);
   });
 
+  it("updates merchant and origin status through operator transitions", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const fakePool = new FakePostgresPool();
+    const registry = createPostgresRegistry(fakePool);
+    const merchant = await registry.createMerchant({
+      id: bundle.artifacts.receipt.merchantId,
+      slug: "demo-merchant",
+      displayName: "Demo Merchant",
+      ownerWallet: bundle.keys.payerWallet
+    });
+    const origin = await registry.addOrigin({
+      merchantId: merchant.id,
+      origin: bundle.artifacts.receipt.merchantOrigin
+    });
+
+    const approved = await registry.updateMerchantStatus({
+      merchantId: merchant.id,
+      status: "active"
+    });
+    const verified = await registry.updateOriginStatus({
+      merchantId: merchant.id,
+      origin: origin.origin,
+      status: "verified",
+      verifiedAt: "2026-06-24T00:05:00Z"
+    });
+    const revoked = await registry.updateOriginStatus({
+      merchantId: merchant.id,
+      origin: origin.origin,
+      status: "revoked"
+    });
+
+    expect(approved?.status).toBe("active");
+    expect(verified?.status).toBe("verified");
+    expect(verified?.verifiedAt).toBe("2026-06-24T00:05:00Z");
+    expect(revoked?.status).toBe("revoked");
+    expect(revoked?.verifiedAt).toBeUndefined();
+    expect(
+      await registry.updateMerchantStatus({
+        merchantId: "mrc_00000000000000000000000000000099",
+        status: "active"
+      })
+    ).toBeUndefined();
+  });
+
+  it("pauses, resumes, and retires payout wallets with a terminal retire state", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const fakePool = new FakePostgresPool();
+    const registry = createPostgresRegistry(fakePool);
+    const merchant = await registry.createMerchant({
+      id: bundle.artifacts.receipt.merchantId,
+      slug: "demo-merchant",
+      displayName: "Demo Merchant",
+      ownerWallet: bundle.keys.payerWallet
+    });
+    const wallet = await registry.addPayoutWallet({
+      id: "mpw_ffffffffffffffffffffffffffffffff",
+      merchantId: merchant.id,
+      network: bundle.artifacts.receipt.network,
+      wallet: bundle.keys.payToWallet,
+      asset: bundle.artifacts.receipt.asset,
+      signerReference: "kms:split402-devnet-payout"
+    });
+
+    const paused = await registry.updatePayoutWalletStatus({
+      merchantId: merchant.id,
+      payoutWalletId: wallet.id,
+      status: "paused"
+    });
+    expect(paused?.status).toBe("paused");
+
+    const resumed = await registry.updatePayoutWalletStatus({
+      merchantId: merchant.id,
+      payoutWalletId: wallet.id,
+      status: "active"
+    });
+    expect(resumed?.status).toBe("active");
+
+    const retired = await registry.updatePayoutWalletStatus({
+      merchantId: merchant.id,
+      payoutWalletId: wallet.id,
+      status: "retired"
+    });
+    expect(retired?.status).toBe("retired");
+
+    await expect(
+      registry.updatePayoutWalletStatus({
+        merchantId: merchant.id,
+        payoutWalletId: wallet.id,
+        status: "active"
+      })
+    ).rejects.toBeInstanceOf(MerchantRegistryConflictError);
+    expect(
+      await registry.updatePayoutWalletStatus({
+        merchantId: merchant.id,
+        payoutWalletId: "mpw_00000000000000000000000000000099",
+        status: "paused"
+      })
+    ).toBeUndefined();
+  });
+
   it("resolves active service keys and respects revocation windows", async () => {
     const bundle = createSampleProtocolArtifacts();
     const fakePool = new FakePostgresPool();
@@ -1363,6 +1574,51 @@ describe("PostgresCampaignRegistry", () => {
         merchantSignature: "different-signature"
       })
     ).rejects.toBeInstanceOf(CampaignRegistryConflictError);
+  });
+
+  it("pauses, resumes, and closes campaigns through guarded SQL transitions", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const fakePool = new FakePostgresPool();
+    const registry = createPostgresCampaignRegistry(fakePool);
+    const campaign = await registry.createCampaign({
+      id: bundle.artifacts.receipt.campaignId,
+      merchantId: bundle.artifacts.receipt.merchantId,
+      ...createCampaignTerms()
+    });
+    await expect(
+      registry.updateCampaignStatus({ campaignId: campaign.id, status: "paused" })
+    ).rejects.toThrow("only active campaigns can be paused");
+
+    await registry.activateCampaignVersion({
+      campaignId: campaign.id,
+      merchantKid: bundle.artifacts.receipt.kid,
+      merchantPublicKey: bundle.keys.merchantPublicKey,
+      merchantSignature: signCampaignTerms(campaign.current)
+    });
+
+    const paused = await registry.updateCampaignStatus({
+      campaignId: campaign.id,
+      status: "paused"
+    });
+    expect(paused?.status).toBe("paused");
+
+    const resumed = await registry.updateCampaignStatus({
+      campaignId: campaign.id,
+      status: "active"
+    });
+    expect(resumed?.status).toBe("active");
+
+    const closed = await registry.updateCampaignStatus({
+      campaignId: campaign.id,
+      status: "closed"
+    });
+    expect(closed?.status).toBe("closed");
+    expect(
+      await registry.updateCampaignStatus({
+        campaignId: "cmp_00000000000000000000000000000099",
+        status: "closed"
+      })
+    ).toBeUndefined();
   });
 
   it("lists merchant campaigns from PostgreSQL rows", async () => {
@@ -1518,6 +1774,28 @@ describe("PostgresRouteRegistry", () => {
     expect(fakePool.database.routes[0]?.status).toBe("suspended");
     await expect(
       registry.suspendRoute({ routeId: "rte_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" })
+    ).resolves.toBeUndefined();
+  });
+
+  it("resumes suspended routes idempotently", async () => {
+    const fakePool = new FakePostgresPool();
+    const registry = createPostgresRouteRegistry(fakePool);
+    const claim = signRouteDraft(
+      registry.createRouteDraft(createRouteDraftInput())
+    );
+    const route = await registry.activateRoute({ claim });
+    await registry.suspendRoute({ routeId: route.id });
+
+    const resumed = await registry.resumeRoute({ routeId: route.id });
+    const duplicate = await registry.resumeRoute({ routeId: route.id });
+    const loaded = await registry.getRoute(route.id);
+
+    expect(resumed?.status).toBe("active");
+    expect(duplicate?.status).toBe("active");
+    expect(loaded?.status).toBe("active");
+    expect(fakePool.database.routes[0]?.status).toBe("active");
+    await expect(
+      registry.resumeRoute({ routeId: "rte_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" })
     ).resolves.toBeUndefined();
   });
 
@@ -2018,6 +2296,19 @@ class FakePostgresClient implements PostgresTransactionClient {
     if (normalized.startsWith("update merchant_keys")) {
       return result(this.database.revokeMerchantKey(values) as unknown as Row[]);
     }
+    if (normalized.startsWith("update merchants")) {
+      return result(this.database.updateMerchantStatus(values) as unknown as Row[]);
+    }
+    if (normalized.startsWith("update merchant_origins")) {
+      return result(
+        this.database.updateMerchantOriginStatus(values) as unknown as Row[]
+      );
+    }
+    if (normalized.startsWith("update merchant_payout_wallets")) {
+      return result(
+        this.database.updateMerchantPayoutWalletStatus(values) as unknown as Row[]
+      );
+    }
     if (normalized.startsWith("update campaign_versions")) {
       return commandResult(this.database.activateCampaignVersion(values));
     }
@@ -2029,8 +2320,20 @@ class FakePostgresClient implements PostgresTransactionClient {
         this.database.updateRouteCurrentVersion(values) as unknown as Row[]
       );
     }
+    if (
+      normalized.startsWith("update routes") &&
+      normalized.includes("set status = 'active'")
+    ) {
+      return result(this.database.resumeRoute(values) as unknown as Row[]);
+    }
     if (normalized.startsWith("update routes")) {
       return result(this.database.suspendRoute(values) as unknown as Row[]);
+    }
+    if (
+      normalized.startsWith("update campaigns") &&
+      normalized.includes("status = $2")
+    ) {
+      return commandResult(this.database.updateCampaignStatus(values));
     }
     if (normalized.startsWith("update campaigns")) {
       this.database.updateCampaign(normalized, values);
@@ -2118,6 +2421,14 @@ class FakePostgresClient implements PostgresTransactionClient {
     if (normalized.startsWith("update commission_accruals")) {
       this.database.markAccrualChainVerified(values);
       return result([]);
+    }
+    if (
+      normalized.startsWith("update outbox_events") &&
+      normalized.includes("attempts = 0")
+    ) {
+      return result(
+        this.database.requeueDeadLetterOutboxEvent(values) as unknown as Row[]
+      );
     }
     if (
       normalized.startsWith("update outbox_events") &&
@@ -2414,6 +2725,29 @@ class FakePostgresDatabase {
     return [event];
   }
 
+  requeueDeadLetterOutboxEvent(
+    values: readonly unknown[]
+  ): StoredOutboxEventRow[] {
+    const eventId = readString(values[0]);
+    const merchantId = readString(values[1]);
+    const availableAt = readString(values[2]);
+    const row = this.outboxEvents.find(
+      (candidate) =>
+        candidate.id === eventId &&
+        readJsonPayload(candidate.payload)?.merchantId === merchantId &&
+        candidate.status === "dead_letter"
+    );
+    if (row === undefined) {
+      return [];
+    }
+    row.status = "pending";
+    row.attempts = 0;
+    row.available_at = availableAt;
+    row.locked_at = null;
+    row.last_error = null;
+    return [row];
+  }
+
   selectOutboxEvent(
     normalizedSql: string,
     values: readonly unknown[]
@@ -2434,6 +2768,16 @@ class FakePostgresDatabase {
             right.id.localeCompare(left.id)
         )
         .slice(0, limit);
+    }
+    if (normalizedSql.includes("payload ->> 'merchantid' = $2")) {
+      const eventId = readString(values[0]);
+      const merchantId = readString(values[1]);
+      const event = this.outboxEvents.find(
+        (row) =>
+          row.id === eventId &&
+          readJsonPayload(row.payload)?.merchantId === merchantId
+      );
+      return event === undefined ? [] : [event];
     }
     const eventId = readString(values[0]);
     const event = this.outboxEvents.find((row) => row.id === eventId);
@@ -2906,6 +3250,55 @@ class FakePostgresDatabase {
     }
   }
 
+  updateMerchantStatus(values: readonly unknown[]): StoredMerchantRow[] {
+    const merchantId = readString(values[0]);
+    const status = readString(values[1]);
+    const updatedAt = readString(values[2]);
+    const merchant = this.merchants.find((row) => row.id === merchantId);
+    if (merchant === undefined) {
+      return [];
+    }
+    merchant.status = status;
+    merchant.updated_at = updatedAt;
+    return [merchant];
+  }
+
+  updateMerchantOriginStatus(
+    values: readonly unknown[]
+  ): StoredMerchantOriginRow[] {
+    const merchantId = readString(values[0]);
+    const origin = readString(values[1]);
+    const status = readString(values[2]);
+    const verifiedAt = readNullableString(values[3]);
+    const row = this.merchantOrigins.find(
+      (existing) =>
+        existing.merchant_id === merchantId && existing.origin === origin
+    );
+    if (row === undefined) {
+      return [];
+    }
+    row.status = status;
+    row.verified_at = verifiedAt;
+    return [row];
+  }
+
+  updateMerchantPayoutWalletStatus(
+    values: readonly unknown[]
+  ): StoredMerchantPayoutWalletRow[] {
+    const merchantId = readString(values[0]);
+    const payoutWalletId = readString(values[1]);
+    const status = readString(values[2]);
+    const row = this.merchantPayoutWallets.find(
+      (existing) =>
+        existing.merchant_id === merchantId && existing.id === payoutWalletId
+    );
+    if (row === undefined || (row.status === "retired" && status !== "retired")) {
+      return [];
+    }
+    row.status = status;
+    return [row];
+  }
+
   revokeMerchantKey(values: readonly unknown[]): StoredMerchantKeyRow[] {
     const merchantId = readString(values[0]);
     const kid = readString(values[1]);
@@ -3000,6 +3393,21 @@ class FakePostgresDatabase {
             right.updated_at.localeCompare(left.updated_at) ||
             left.id.localeCompare(right.id)
         )
+        .map((row) => ({ id: row.id }) as StoredPayoutBatchRow);
+    }
+    if (normalizedSql.includes("order by created_at desc")) {
+      const merchantId = readString(values[0]);
+      const limit = readNumber(values[1]);
+      const status = values.length > 2 ? readString(values[2]) : undefined;
+      return this.payoutBatches
+        .filter((row) => row.merchant_id === merchantId)
+        .filter((row) => status === undefined || row.status === status)
+        .sort(
+          (left, right) =>
+            right.created_at.localeCompare(left.created_at) ||
+            right.id.localeCompare(left.id)
+        )
+        .slice(0, limit)
         .map((row) => ({ id: row.id }) as StoredPayoutBatchRow);
     }
     if (normalizedSql.includes("where merchant_id = $1")) {
@@ -3162,6 +3570,22 @@ class FakePostgresDatabase {
       throw Object.assign(new Error("duplicate key"), { code: "23505" });
     }
     this.campaignOperations.push(row);
+  }
+
+  updateCampaignStatus(values: readonly unknown[]): number {
+    const campaignId = readString(values[0]);
+    const status = readString(values[1]);
+    const updatedAt = readString(values[2]);
+    const expectedStatus = readString(values[3]);
+    const campaign = this.campaigns.find(
+      (row) => row.id === campaignId && row.status === expectedStatus
+    );
+    if (campaign === undefined) {
+      return 0;
+    }
+    campaign.status = status;
+    campaign.updated_at = updatedAt;
+    return 1;
   }
 
   updateCampaign(normalizedSql: string, values: readonly unknown[]): void {
@@ -3386,6 +3810,15 @@ class FakePostgresDatabase {
     route.expires_at = readString(values[8]);
     route.nonce = readString(values[9]);
     route.metadata_hash = readNullableString(values[10]) as `sha256:${string}` | null;
+    return [route];
+  }
+
+  resumeRoute(values: readonly unknown[]): StoredRouteRow[] {
+    const route = this.routes.find((row) => row.id === readString(values[0]));
+    if (route === undefined || route.status !== "suspended") {
+      return [];
+    }
+    route.status = "active";
     return [route];
   }
 

@@ -1,6 +1,10 @@
-export const DEVNET_USDC = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
+import { SOLANA_DEVNET_USDC_MINT } from "@split402/protocol";
+
+import { readDemoNetwork } from "./network.js";
+
+export const DEVNET_USDC = SOLANA_DEVNET_USDC_MINT;
 export const SOLANA_RPC_URL =
-  process.env.SPLIT402_SOLANA_RPC_URL ?? "https://api.devnet.solana.com";
+  process.env.SPLIT402_SOLANA_RPC_URL ?? readDemoNetwork().defaultRpcUrl;
 
 export async function getSolLamports(address: string): Promise<string> {
   const result = asRecord(await solanaRpc("getBalance", [address]));

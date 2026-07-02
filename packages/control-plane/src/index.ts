@@ -10,6 +10,7 @@ import {
 import express from "express";
 import type { NextFunction, Request, Response, Router } from "express";
 import { rateLimit } from "express-rate-limit";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { Pool, type PoolConfig } from "pg";
 
 import {
@@ -28,9 +29,15 @@ import {
   type CampaignOperation,
   type CampaignProfile,
   type CampaignRegistry,
+  type CampaignStatus,
+  type CampaignStatusTransition,
   type CampaignTermsInput
 } from "./campaigns.js";
-import { isReceiptIngestionPersistenceConflict } from "./errors.js";
+import {
+  WebhookEventRequeueConflictError,
+  isReceiptIngestionPersistenceConflict
+} from "./errors.js";
+import { checkMerchantOriginWellKnown } from "./origin-verification.js";
 import {
   createMerchantDashboardSummary,
   createMerchantReliabilityProfile,
@@ -46,7 +53,9 @@ import {
   type MerchantOriginVerificationMethod,
   type MerchantPayoutWalletRecord,
   type MerchantPayoutWalletStatus,
-  type MerchantRegistry
+  type MerchantRegistry,
+  type MerchantOriginStatusTransition,
+  type MerchantStatusTransition
 } from "./merchants.js";
 import {
   RouteRegistryValidationError,
@@ -57,6 +66,7 @@ import {
   type RouteStatus
 } from "./routes.js";
 import {
+  SolanaRpcPayoutFinalizedTransferVerifier,
   SolanaRpcMerchantFundingBalanceProvider,
   SolanaRpcPayoutTransactionFinalityMonitor
 } from "./solana.js";
@@ -103,12 +113,16 @@ import {
   isPayoutBatchConflictError,
   isPayoutBatchReleaseBlockedError,
   isPayoutBatchValidationError,
+  PayoutBatchValidationError,
   isPayoutPreviewValidationError,
   type CreatePayoutBatchFromAvailableAccrualsInput,
   type ListPayoutEligibleAccrualsInput,
   type ListPayoutTransactionsPendingFinalityInput,
   type PayoutAccrualStore,
   type PayoutBatchRecord,
+  normalizeListMerchantPayoutBatchesLimit,
+  type ListMerchantPayoutBatchesInput,
+  type PayoutBatchStatus,
   type PayoutBatchStore,
   type PayoutFundingBalance,
   type PayoutTransactionRecord,
@@ -118,6 +132,7 @@ import {
   type MarkPayoutTransactionFinalityInput,
   type ClosePayoutBatchLedgerInput,
   type PayoutLedgerClosureStore,
+  type PayoutFinalizedTransferVerifier,
   type PayoutReconciliationStore,
   type MerchantObligationViewStore,
   type PayoutBatchAllocationReleaseOverride,
@@ -165,6 +180,15 @@ const WEBHOOK_MANAGEMENT_EVENT_TYPES = [
   WEBHOOK_PAYOUT_FAILED_EVENT_TYPE,
   WEBHOOK_PAYOUT_OUTCOME_UNKNOWN_EVENT_TYPE
 ];
+
+function createAuthenticatedRouteRateLimit() {
+  return rateLimit({
+    windowMs: 60_000,
+    limit: 1_000,
+    standardHeaders: true,
+    legacyHeaders: false
+  });
+}
 
 export interface ReceiptRecord {
   id: string;
@@ -266,6 +290,15 @@ export interface WebhookEventManagementStore {
   listWebhookEvents(
     input: ListWebhookEventsInput
   ): Promise<OutboxEventRecord[]> | OutboxEventRecord[];
+  requeueDeadLetterWebhookEvent(
+    input: RequeueDeadLetterWebhookEventInput
+  ): Promise<OutboxEventRecord | undefined> | OutboxEventRecord | undefined;
+}
+
+export interface RequeueDeadLetterWebhookEventInput {
+  merchantId: string;
+  eventId: string;
+  now?: string;
 }
 
 export interface MerchantFundingBalanceProvider {
@@ -584,6 +617,23 @@ export class InMemoryReceiptIngestionStore
 
   getPayoutBatch(batchId: string): PayoutBatchRecord | undefined {
     return this.payoutBatchesById.get(batchId);
+  }
+
+  listMerchantPayoutBatches(
+    input: ListMerchantPayoutBatchesInput
+  ): PayoutBatchRecord[] {
+    const limit = normalizeListMerchantPayoutBatchesLimit(input.limit);
+    return Array.from(this.payoutBatchesById.values())
+      .filter((batch) => batch.merchantId === input.merchantId)
+      .filter(
+        (batch) => input.status === undefined || batch.status === input.status
+      )
+      .sort(
+        (left, right) =>
+          right.createdAt.localeCompare(left.createdAt) ||
+          right.id.localeCompare(left.id)
+      )
+      .slice(0, limit);
   }
 
   releasePayoutBatchAllocations(
@@ -1345,7 +1395,10 @@ export interface ControlPlaneAppOptions {
   referrerPayoutViewStore?: ReferrerPayoutViewStore;
   webhookEventManagementStore?: WebhookEventManagementStore;
   payoutFinalityMonitor?: PayoutFinalityMonitor;
+  payoutLedgerClosureStore?: PayoutLedgerClosureStore;
+  payoutFinalizedTransferVerifier?: PayoutFinalizedTransferVerifier;
   auth?: ControlPlaneAuthOptions;
+  operator?: ControlPlaneOperatorOptions;
   jsonLimit?: string;
   rateLimitWindowMs?: number;
   rateLimitMaxRequests?: number;
@@ -1394,6 +1447,12 @@ export interface ControlPlaneAuthOptions {
   requireMerchantAuth?: boolean;
 }
 
+export interface ControlPlaneOperatorOptions {
+  accessTokens: string[];
+  wellKnownFetch?: typeof fetch;
+  wellKnownTimeoutMs?: number;
+}
+
 export type ControlPlaneRuntimeAuthPolicy = "disabled" | "optional" | "required";
 
 export interface CreateControlPlaneRuntimeOptions {
@@ -1403,6 +1462,8 @@ export interface CreateControlPlaneRuntimeOptions {
   jsonLimit?: string;
   rateLimitWindowMs?: number;
   rateLimitMaxRequests?: number;
+  operatorAccessTokens?: string[];
+  payoutFinalizedTransferVerifier?: PayoutFinalizedTransferVerifier;
   merchantFundingBalanceProvider?: MerchantFundingBalanceProvider;
   payoutFinalityMonitor?: PayoutFinalityMonitor;
   walletAuth?: WalletAuthenticatorOptions;
@@ -1468,6 +1529,12 @@ export function createControlPlaneRuntime(
           merchantFundingBalanceProvider: options.merchantFundingBalanceProvider
         }),
     referrerPayoutViewStore: receiptStore,
+    payoutLedgerClosureStore: receiptStore,
+    ...(options.payoutFinalizedTransferVerifier === undefined
+      ? {}
+      : {
+          payoutFinalizedTransferVerifier: options.payoutFinalizedTransferVerifier
+        }),
     webhookEventManagementStore: outboxStore,
     ...(options.payoutFinalityMonitor === undefined
       ? {}
@@ -1485,6 +1552,15 @@ export function createControlPlaneRuntime(
           auth: {
             authenticator,
             requireMerchantAuth: authPolicy === "required"
+          }
+        }),
+    ...(readOperatorAccessTokens(options.operatorAccessTokens) === undefined
+      ? {}
+      : {
+          operator: {
+            accessTokens: readOperatorAccessTokens(
+              options.operatorAccessTokens
+            ) as string[]
           }
         })
   });
@@ -1525,6 +1601,18 @@ export function createControlPlaneRuntimeFromEnv(
       return provider === undefined ? {} : { merchantFundingBalanceProvider: provider };
     })(),
     payoutFinalityMonitor: createRuntimePayoutFinalityMonitor(env),
+    ...(() => {
+      const verifier = createRuntimePayoutFinalizedTransferVerifier(env);
+      return verifier === undefined
+        ? {}
+        : { payoutFinalizedTransferVerifier: verifier };
+    })(),
+    ...(() => {
+      const tokens = readOperatorAccessTokens(
+        env.SPLIT402_CONTROL_PLANE_OPERATOR_TOKENS?.split(",")
+      );
+      return tokens === undefined ? {} : { operatorAccessTokens: tokens };
+    })(),
     walletAuth: {
       ...readWalletAuthEnvOptions(env),
       ...options.walletAuth
@@ -1606,6 +1694,7 @@ export function createWalletAuthRouter(
 ): Router {
   const router = express.Router();
   router.use(express.json({ limit: options.jsonLimit ?? "128kb" }));
+  router.use(createAuthenticatedRouteRateLimit());
 
   router.post("/v1/auth/challenges", async (req, res, next) => {
     try {
@@ -1655,6 +1744,20 @@ export function createWalletAuthRouter(
     }
   });
 
+  router.post("/v1/auth/sessions/revoke", async (req, res, next) => {
+    try {
+      const body = requireJsonObject(req.body);
+      const revocation = await authenticator.revokeSession({
+        refreshToken: readRequiredString(body.refreshToken, "refreshToken")
+      });
+      res.json({ revocation });
+    } catch (error) {
+      if (!sendWalletAuthError(res, error) && !sendMerchantRegistryError(res, error)) {
+        next(error);
+      }
+    }
+  });
+
   router.use(jsonErrorHandler);
 
   return router;
@@ -1665,6 +1768,7 @@ export function createReceiptIngestionRouter(
 ): Router {
   const router = express.Router();
   router.use(express.json({ limit: options.jsonLimit ?? "128kb" }));
+  router.use(createAuthenticatedRouteRateLimit());
 
   router.post("/v1/receipts", async (req, res, next) => {
     try {
@@ -1713,6 +1817,8 @@ export function createPayoutRouter(
     | "payoutBatchStore"
     | "payoutTransactionStore"
     | "payoutReconciliationStore"
+    | "payoutLedgerClosureStore"
+    | "payoutFinalizedTransferVerifier"
     | "merchantObligationViewStore"
     | "merchantFundingBalanceProvider"
     | "referrerPayoutViewStore"
@@ -1721,6 +1827,7 @@ export function createPayoutRouter(
 ): Router {
   const router = express.Router();
   router.use(express.json({ limit: options.jsonLimit ?? "128kb" }));
+  router.use(createAuthenticatedRouteRateLimit());
 
   router.post("/v1/merchants/:merchantId/payouts/preview", async (req, res, next) => {
     try {
@@ -1991,11 +2098,112 @@ export function createPayoutRouter(
         await options.payoutTransactionStore.listPayoutTransactions(batch.id);
       res.json({ batch, transactions });
     } catch (error) {
-      if (!sendMerchantRegistryError(res, error)) {
+      if (!sendPayoutBatchError(res, error) && !sendMerchantRegistryError(res, error)) {
         next(error);
       }
     }
   });
+
+  router.get(
+    "/v1/merchants/:merchantId/payout-batches",
+    async (req, res, next) => {
+      try {
+        if (options.payoutBatchStore === undefined) {
+          res.status(500).json({
+            error: "internal_server_error",
+            message: "payout batch store is required"
+          });
+          return;
+        }
+        const merchantId = readRouteParam(req.params.merchantId, "merchantId");
+        const session = await requireMerchantOwnerForMerchantId(
+          req,
+          res,
+          options,
+          merchantId
+        );
+        if (session === undefined && isMerchantAuthRequired(options)) {
+          return;
+        }
+        const status = readOptionalPayoutBatchStatusFilter(req.query.status);
+        const limit = readOptionalPositiveIntegerQuery(req.query.limit, "limit");
+        const batches = await options.payoutBatchStore.listMerchantPayoutBatches({
+          merchantId,
+          ...(status === undefined ? {} : { status }),
+          ...(limit === undefined ? {} : { limit })
+        });
+        res.json({ batches });
+      } catch (error) {
+        if (!sendPayoutBatchError(res, error) && !sendMerchantRegistryError(res, error)) {
+          next(error);
+        }
+      }
+    }
+  );
+
+  router.post(
+    "/v1/payout-batches/:batchId/close-ledger",
+    async (req, res, next) => {
+      try {
+        if (options.payoutBatchStore === undefined) {
+          res.status(500).json({
+            error: "internal_server_error",
+            message: "payout batch store is required"
+          });
+          return;
+        }
+        if (
+          options.payoutLedgerClosureStore === undefined ||
+          options.payoutFinalizedTransferVerifier === undefined
+        ) {
+          res.status(500).json({
+            error: "internal_server_error",
+            message:
+              "payout ledger closure store and finalized transfer verifier are required"
+          });
+          return;
+        }
+        const batchId = readRouteParam(req.params.batchId, "batchId");
+        const batch = await options.payoutBatchStore.getPayoutBatch(batchId);
+        if (batch === undefined) {
+          res.status(404).json({
+            error: "not_found",
+            message: "payout batch was not found"
+          });
+          return;
+        }
+        const session = await requireMerchantOwnerForMerchantId(
+          req,
+          res,
+          options,
+          batch.merchantId
+        );
+        if (session === undefined && isMerchantAuthRequired(options)) {
+          return;
+        }
+        const ledgerTransaction =
+          await options.payoutLedgerClosureStore.closeFinalizedPayoutBatchLedger({
+            payoutBatchId: batchId,
+            finalizedTransferVerifier: options.payoutFinalizedTransferVerifier
+          });
+        if (ledgerTransaction === undefined) {
+          res.status(404).json({
+            error: "not_found",
+            message: "payout batch was not found"
+          });
+          return;
+        }
+        res.json({ ledgerTransaction });
+      } catch (error) {
+        if (
+          !sendPayoutBatchError(res, error) &&
+          !sendMerchantRegistryError(res, error)
+        ) {
+          next(error);
+        }
+      }
+    }
+  );
 
   router.post("/v1/payout-batches/:batchId/reconcile", async (req, res, next) => {
     try {
@@ -2199,12 +2407,14 @@ export function createMerchantRegistryRouter(
     | "auth"
     | "campaignRegistry"
     | "jsonLimit"
+    | "operator"
     | "routeRegistry"
     | "webhookEventManagementStore"
   > = {}
 ): Router {
   const router = express.Router();
   router.use(express.json({ limit: options.jsonLimit ?? "128kb" }));
+  router.use(createAuthenticatedRouteRateLimit());
 
   router.post("/v1/merchants", async (req, res, next) => {
     try {
@@ -2387,6 +2597,51 @@ export function createMerchantRegistryRouter(
     }
   );
 
+  router.post(
+    "/v1/merchants/:merchantId/webhook-events/:eventId/requeue",
+    async (req, res, next) => {
+      try {
+        if (options.webhookEventManagementStore === undefined) {
+          res.status(500).json({
+            error: "internal_server_error",
+            message: "webhook event management store is required"
+          });
+          return;
+        }
+        const merchantId = readRouteParam(req.params.merchantId, "merchantId");
+        const eventId = readRouteParam(req.params.eventId, "eventId");
+        const merchant = await merchantRegistry.getMerchantProfile(merchantId);
+        if (merchant === undefined) {
+          res.status(404).json({ error: "merchant_not_found" });
+          return;
+        }
+        const session = await requireMerchantOwnerSession(
+          req,
+          res,
+          options,
+          merchantRegistry
+        );
+        if (session === undefined && isMerchantAuthRequired(options)) {
+          return;
+        }
+        const event =
+          await options.webhookEventManagementStore.requeueDeadLetterWebhookEvent({
+            merchantId,
+            eventId
+          });
+        if (event === undefined) {
+          res.status(404).json({ error: "webhook_event_not_found" });
+          return;
+        }
+        res.json({ event });
+      } catch (error) {
+        if (!sendWebhookEventRequeueError(res, error)) {
+          next(error);
+        }
+      }
+    }
+  );
+
   router.post("/v1/merchants/:merchantId/origins", async (req, res, next) => {
     try {
       const session = await requireMerchantOwnerSession(
@@ -2482,6 +2737,77 @@ export function createMerchantRegistryRouter(
     }
   });
 
+  router.post("/v1/operator/merchants/:merchantId/approve", async (req, res, next) => {
+    await handleOperatorMerchantStatus(req, res, next, options, merchantRegistry, "active");
+  });
+
+  router.post("/v1/operator/merchants/:merchantId/suspend", async (req, res, next) => {
+    await handleOperatorMerchantStatus(req, res, next, options, merchantRegistry, "suspended");
+  });
+
+  router.post("/v1/operator/merchants/:merchantId/close", async (req, res, next) => {
+    await handleOperatorMerchantStatus(req, res, next, options, merchantRegistry, "closed");
+  });
+
+  router.post(
+    "/v1/operator/merchants/:merchantId/origins/verify",
+    async (req, res, next) => {
+      await handleOperatorOriginStatus(req, res, next, options, merchantRegistry, "verified");
+    }
+  );
+
+  router.post(
+    "/v1/operator/merchants/:merchantId/origins/revoke",
+    async (req, res, next) => {
+      await handleOperatorOriginStatus(req, res, next, options, merchantRegistry, "revoked");
+    }
+  );
+
+  router.post(
+    "/v1/operator/merchants/:merchantId/origins/check",
+    async (req, res, next) => {
+      try {
+        if (!requireOperatorAccess(req, res, options)) {
+          return;
+        }
+        const merchantId = req.params.merchantId;
+        if (typeof merchantId !== "string") {
+          res.status(404).json({ error: "merchant_not_found" });
+          return;
+        }
+        const body = requireJsonObject(req.body);
+        const originValue = readRequiredString(body.origin, "origin");
+        const profile = await merchantRegistry.getMerchantProfile(merchantId);
+        if (profile === undefined) {
+          res.status(404).json({ error: "merchant_not_found" });
+          return;
+        }
+        const originRecord = profile.origins.find(
+          (candidate) => candidate.origin === originValue
+        );
+        if (originRecord === undefined) {
+          res.status(404).json({ error: "merchant_origin_not_found" });
+          return;
+        }
+        const check = await checkMerchantOriginWellKnown({
+          origin: originRecord.origin,
+          merchantId,
+          ...(options.operator?.wellKnownFetch === undefined
+            ? {}
+            : { fetchImpl: options.operator.wellKnownFetch }),
+          ...(options.operator?.wellKnownTimeoutMs === undefined
+            ? {}
+            : { timeoutMs: options.operator.wellKnownTimeoutMs })
+        });
+        res.json({ check });
+      } catch (error) {
+        if (!sendMerchantRegistryError(res, error)) {
+          next(error);
+        }
+      }
+    }
+  );
+
   router.post("/v1/merchants/:merchantId/payout-wallets", async (req, res, next) => {
     try {
       const session = await requireMerchantOwnerSession(
@@ -2516,6 +2842,27 @@ export function createMerchantRegistryRouter(
     }
   });
 
+  router.post(
+    "/v1/merchants/:merchantId/payout-wallets/:payoutWalletId/pause",
+    async (req, res, next) => {
+      await handleMerchantPayoutWalletStatus(req, res, next, options, merchantRegistry, "paused");
+    }
+  );
+
+  router.post(
+    "/v1/merchants/:merchantId/payout-wallets/:payoutWalletId/resume",
+    async (req, res, next) => {
+      await handleMerchantPayoutWalletStatus(req, res, next, options, merchantRegistry, "active");
+    }
+  );
+
+  router.post(
+    "/v1/merchants/:merchantId/payout-wallets/:payoutWalletId/retire",
+    async (req, res, next) => {
+      await handleMerchantPayoutWalletStatus(req, res, next, options, merchantRegistry, "retired");
+    }
+  );
+
   router.use(jsonErrorHandler);
 
   return router;
@@ -2530,6 +2877,7 @@ export function createCampaignRegistryRouter(
 ): Router {
   const router = express.Router();
   router.use(express.json({ limit: options.jsonLimit ?? "128kb" }));
+  router.use(createAuthenticatedRouteRateLimit());
 
   router.post("/v1/campaigns", async (req, res, next) => {
     try {
@@ -2660,6 +3008,48 @@ export function createCampaignRegistryRouter(
         next(error);
       }
     }
+  });
+
+  router.get("/v1/merchants/:merchantId/campaigns", async (req, res, next) => {
+    try {
+      const merchantId = readRouteParam(req.params.merchantId, "merchantId");
+      const session = await requireMerchantOwnerForMerchantId(
+        req,
+        res,
+        options,
+        merchantId
+      );
+      if (session === undefined && isMerchantAuthRequired(options)) {
+        return;
+      }
+      const status = readOptionalCampaignStatusFilter(req.query.status);
+      const limit = readOptionalPositiveIntegerQuery(req.query.limit, "limit");
+      const campaigns = await campaignRegistry.listMerchantCampaigns({
+        merchantId,
+        ...(status === undefined ? {} : { status }),
+        ...(limit === undefined ? {} : { limit })
+      });
+      res.json({ campaigns });
+    } catch (error) {
+      if (
+        !sendCampaignRegistryError(res, error) &&
+        !sendMerchantRegistryError(res, error)
+      ) {
+        next(error);
+      }
+    }
+  });
+
+  router.post("/v1/campaigns/:campaignId/pause", async (req, res, next) => {
+    await handleCampaignStatusTransition(req, res, next, options, campaignRegistry, "paused");
+  });
+
+  router.post("/v1/campaigns/:campaignId/resume", async (req, res, next) => {
+    await handleCampaignStatusTransition(req, res, next, options, campaignRegistry, "active");
+  });
+
+  router.post("/v1/campaigns/:campaignId/close", async (req, res, next) => {
+    await handleCampaignStatusTransition(req, res, next, options, campaignRegistry, "closed");
   });
 
   router.get(
@@ -2853,6 +3243,50 @@ export function createRouteRegistryRouter(
         return;
       }
       res.json({ route: suspended });
+    } catch (error) {
+      if (
+        !sendRouteRegistryError(res, error) &&
+        !sendCampaignRegistryError(res, error) &&
+        !sendMerchantRegistryError(res, error)
+      ) {
+        next(error);
+      }
+    }
+  });
+
+  router.post("/v1/routes/:routeId/resume", async (req, res, next) => {
+    try {
+      const routeId = readRouteParam(req.params.routeId, "routeId");
+      const route = await routeRegistry.getRoute(routeId);
+      if (route === undefined) {
+        res.status(404).json({ error: "route_not_found" });
+        return;
+      }
+
+      if (isMerchantAuthRequired(options)) {
+        const campaignRegistry = requireRouteCampaignRegistry(options);
+        const campaign = await campaignRegistry.getCampaign(route.campaignId);
+        if (campaign === undefined) {
+          res.status(404).json({ error: "campaign_not_found" });
+          return;
+        }
+        const session = await requireMerchantOwnerForMerchantId(
+          req,
+          res,
+          options,
+          campaign.merchantId
+        );
+        if (session === undefined) {
+          return;
+        }
+      }
+
+      const resumed = await routeRegistry.resumeRoute({ routeId });
+      if (resumed === undefined) {
+        res.status(404).json({ error: "route_not_found" });
+        return;
+      }
+      res.json({ route: resumed });
     } catch (error) {
       if (
         !sendRouteRegistryError(res, error) &&
@@ -3152,6 +3586,49 @@ function readOptionalMerchantKeyPurpose(
   }
   throw new MerchantRegistryValidationError(
     "purpose must be offer_receipt or webhook"
+  );
+}
+
+function readOptionalPayoutBatchStatusFilter(
+  value: unknown
+): PayoutBatchStatus | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (
+    value === "draft" ||
+    value === "planned" ||
+    value === "signing" ||
+    value === "submitted" ||
+    value === "confirmed" ||
+    value === "finalized" ||
+    value === "failed" ||
+    value === "cancelled" ||
+    value === "outcome_unknown"
+  ) {
+    return value;
+  }
+  throw new PayoutBatchValidationError(
+    "status must be a valid payout batch status"
+  );
+}
+
+function readOptionalCampaignStatusFilter(
+  value: unknown
+): CampaignStatus | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (
+    value === "draft" ||
+    value === "active" ||
+    value === "paused" ||
+    value === "closed"
+  ) {
+    return value;
+  }
+  throw new CampaignRegistryValidationError(
+    "status must be draft, active, paused, or closed"
   );
 }
 
@@ -3849,6 +4326,46 @@ function createRuntimePayoutFinalityMonitor(
   });
 }
 
+function createRuntimePayoutFinalizedTransferVerifier(
+  env: NodeJS.ProcessEnv
+): PayoutFinalizedTransferVerifier | undefined {
+  const fundingWallet = readOptionalNonEmptyEnv(
+    env.SPLIT402_PAYOUT_LEDGER_CLOSURE_FUNDING_WALLET
+  );
+  const sourceTokenAccount = readOptionalNonEmptyEnv(
+    env.SPLIT402_PAYOUT_LEDGER_CLOSURE_SOURCE_TOKEN_ACCOUNT
+  );
+  if (fundingWallet === undefined || sourceTokenAccount === undefined) {
+    return undefined;
+  }
+  const rpcUrls = readOptionalRpcUrlList(
+    env.SPLIT402_PAYOUT_FINALITY_SOLANA_RPC_URLS ??
+      env.SPLIT402_CHAIN_WORKER_SOLANA_RPC_URLS
+  );
+  const rpcUrl =
+    readOptionalNonEmptyEnv(env.SPLIT402_PAYOUT_FINALITY_SOLANA_RPC_URL) ??
+    readOptionalNonEmptyEnv(env.SPLIT402_CHAIN_WORKER_SOLANA_RPC_URL) ??
+    rpcUrls[0] ??
+    "https://api.devnet.solana.com";
+  const network = readRuntimeSolanaNetwork(
+    readOptionalNonEmptyEnv(env.SPLIT402_PAYOUT_FINALITY_NETWORK) ??
+      readOptionalNonEmptyEnv(env.SPLIT402_CHAIN_WORKER_NETWORK) ??
+      "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+    "SPLIT402_PAYOUT_FINALITY_NETWORK"
+  );
+  const tokenProgramId = readOptionalNonEmptyEnv(
+    env.SPLIT402_PAYOUT_LEDGER_CLOSURE_TOKEN_PROGRAM_ID
+  );
+  return new SolanaRpcPayoutFinalizedTransferVerifier({
+    rpcUrl,
+    ...(rpcUrls.length === 0 ? {} : { rpcUrls }),
+    network,
+    fundingWallet,
+    sourceTokenAccount,
+    ...(tokenProgramId === undefined ? {} : { tokenProgramId })
+  });
+}
+
 function createRuntimeMerchantFundingBalanceProvider(
   env: NodeJS.ProcessEnv
 ): MerchantFundingBalanceProvider | undefined {
@@ -3937,6 +4454,15 @@ async function closeRuntimePool(pool: PostgresPool): Promise<void> {
   await closable.end?.();
 }
 
+function readOperatorAccessTokens(
+  values: string[] | undefined
+): string[] | undefined {
+  const tokens = (values ?? [])
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0);
+  return tokens.length === 0 ? undefined : tokens;
+}
+
 function readRuntimeAuthPolicy(value: string): ControlPlaneRuntimeAuthPolicy {
   if (value === "disabled" || value === "optional" || value === "required") {
     return value;
@@ -4023,6 +4549,7 @@ export * from "./campaigns.js";
 export * from "./discovery.js";
 export * from "./merchants.js";
 export * from "./migrations.js";
+export * from "./origin-verification.js";
 export * from "./payouts.js";
 export * from "./postgres.js";
 export * from "./routes.js";
@@ -4034,6 +4561,196 @@ function isMerchantAuthRequired(
   options: Pick<ControlPlaneAppOptions, "auth">
 ): boolean {
   return options.auth?.requireMerchantAuth ?? options.auth !== undefined;
+}
+
+async function handleMerchantPayoutWalletStatus(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+  options: Pick<ControlPlaneAppOptions, "auth">,
+  merchantRegistry: MerchantRegistry,
+  status: MerchantPayoutWalletStatus
+): Promise<void> {
+  try {
+    const session = await requireMerchantOwnerSession(
+      req,
+      res,
+      options,
+      merchantRegistry
+    );
+    if (session === undefined && isMerchantAuthRequired(options)) {
+      return;
+    }
+    const merchantId = req.params.merchantId;
+    const payoutWalletId = req.params.payoutWalletId;
+    if (typeof merchantId !== "string" || typeof payoutWalletId !== "string") {
+      res.status(404).json({ error: "merchant_payout_wallet_not_found" });
+      return;
+    }
+    const payoutWallet = await merchantRegistry.updatePayoutWalletStatus({
+      merchantId,
+      payoutWalletId,
+      status
+    });
+    if (payoutWallet === undefined) {
+      res.status(404).json({ error: "merchant_payout_wallet_not_found" });
+      return;
+    }
+    res.json({ payoutWallet });
+  } catch (error) {
+    if (!sendMerchantRegistryError(res, error)) {
+      next(error);
+    }
+  }
+}
+
+async function handleCampaignStatusTransition(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+  options: Pick<ControlPlaneAppOptions, "auth" | "merchantRegistry">,
+  campaignRegistry: CampaignRegistry,
+  status: CampaignStatusTransition
+): Promise<void> {
+  try {
+    const campaignId = readRouteParam(req.params.campaignId, "campaignId");
+    const campaign = await campaignRegistry.getCampaign(campaignId);
+    if (campaign === undefined) {
+      res.status(404).json({ error: "campaign_not_found" });
+      return;
+    }
+    const session = await requireMerchantOwnerForMerchantId(
+      req,
+      res,
+      options,
+      campaign.merchantId
+    );
+    if (session === undefined && isMerchantAuthRequired(options)) {
+      return;
+    }
+    const updated = await campaignRegistry.updateCampaignStatus({
+      campaignId,
+      status
+    });
+    if (updated === undefined) {
+      res.status(404).json({ error: "campaign_not_found" });
+      return;
+    }
+    res.json({ campaign: updated });
+  } catch (error) {
+    if (!sendCampaignRegistryError(res, error)) {
+      next(error);
+    }
+  }
+}
+
+async function handleOperatorMerchantStatus(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+  options: Pick<ControlPlaneAppOptions, "operator">,
+  merchantRegistry: MerchantRegistry,
+  status: MerchantStatusTransition
+): Promise<void> {
+  try {
+    if (!requireOperatorAccess(req, res, options)) {
+      return;
+    }
+    const merchantId = req.params.merchantId;
+    if (typeof merchantId !== "string") {
+      res.status(404).json({ error: "merchant_not_found" });
+      return;
+    }
+    const merchant = await merchantRegistry.updateMerchantStatus({
+      merchantId,
+      status
+    });
+    if (merchant === undefined) {
+      res.status(404).json({ error: "merchant_not_found" });
+      return;
+    }
+    res.json({ merchant });
+  } catch (error) {
+    if (!sendMerchantRegistryError(res, error)) {
+      next(error);
+    }
+  }
+}
+
+async function handleOperatorOriginStatus(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+  options: Pick<ControlPlaneAppOptions, "operator">,
+  merchantRegistry: MerchantRegistry,
+  status: MerchantOriginStatusTransition
+): Promise<void> {
+  try {
+    if (!requireOperatorAccess(req, res, options)) {
+      return;
+    }
+    const merchantId = req.params.merchantId;
+    if (typeof merchantId !== "string") {
+      res.status(404).json({ error: "merchant_not_found" });
+      return;
+    }
+    const body = requireJsonObject(req.body);
+    const verifiedAt = readOptionalString(body.verifiedAt, "verifiedAt");
+    const origin = await merchantRegistry.updateOriginStatus({
+      merchantId,
+      origin: readRequiredString(body.origin, "origin"),
+      status,
+      ...(verifiedAt === undefined ? {} : { verifiedAt })
+    });
+    if (origin === undefined) {
+      res.status(404).json({ error: "merchant_origin_not_found" });
+      return;
+    }
+    res.json({ origin });
+  } catch (error) {
+    if (!sendMerchantRegistryError(res, error)) {
+      next(error);
+    }
+  }
+}
+
+function requireOperatorAccess(
+  req: Request,
+  res: Response,
+  options: Pick<ControlPlaneAppOptions, "operator">
+): boolean {
+  const configuredTokens = (options.operator?.accessTokens ?? [])
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0);
+  if (configuredTokens.length === 0) {
+    res.status(403).json({
+      error: "operator_disabled",
+      message:
+        "operator approval endpoints are disabled; configure operator access tokens to enable them"
+    });
+    return false;
+  }
+
+  const presentedToken = readBearerAccessToken(req);
+  if (presentedToken === undefined) {
+    res.status(401).json({
+      error: "unauthorized",
+      message: "operator bearer access token required"
+    });
+    return false;
+  }
+  const presentedDigest = createHash("sha256").update(presentedToken).digest();
+  const matched = configuredTokens.some((token) =>
+    timingSafeEqual(createHash("sha256").update(token).digest(), presentedDigest)
+  );
+  if (!matched) {
+    res.status(401).json({
+      error: "unauthorized",
+      message: "invalid operator access token"
+    });
+    return false;
+  }
+  return true;
 }
 
 async function readMerchantMutationSession(
@@ -4168,6 +4885,14 @@ function readBearerAccessToken(req: Request): string | undefined {
   }
   const token = parts[1];
   return token === undefined || token.trim().length === 0 ? undefined : token;
+}
+
+function sendWebhookEventRequeueError(res: Response, error: unknown): boolean {
+  if (error instanceof WebhookEventRequeueConflictError) {
+    res.status(409).json({ error: "conflict", message: error.message });
+    return true;
+  }
+  return false;
 }
 
 function sendMerchantRegistryError(res: Response, error: unknown): boolean {

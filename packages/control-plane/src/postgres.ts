@@ -18,6 +18,7 @@ import type {
 import {
   CampaignRegistryConflictError,
   CampaignRegistryValidationError,
+  assertCampaignStatusTransition,
   createCampaignVersionRecord,
   verifyCampaignTermsSignature,
   type ActivateCampaignVersionInput,
@@ -29,13 +30,21 @@ import {
   type CampaignTerms,
   type CampaignVersionRecord,
   type CreateCampaignInput,
+  type UpdateCampaignStatusInput,
   type CreateCampaignVersionInput,
   type ListMerchantCampaignsInput
 } from "./campaigns.js";
-import { ReceiptIngestionPersistenceConflictError } from "./errors.js";
+import {
+  ReceiptIngestionPersistenceConflictError,
+  WebhookEventRequeueConflictError
+} from "./errors.js";
 import {
   MerchantRegistryConflictError,
   MerchantRegistryValidationError,
+  assertMerchantOriginStatusTransition,
+  assertMerchantStatusTransition,
+  assertPayoutWalletStatusTransition,
+  readOriginVerifiedAt,
   type AddMerchantPayoutWalletInput,
   type AddMerchantKeyInput,
   type AddMerchantOriginInput,
@@ -53,7 +62,10 @@ import {
   type MerchantRegistry,
   type MerchantStatus,
   type ResolveMerchantKeyInput,
-  type RevokeMerchantKeyInput
+  type RevokeMerchantKeyInput,
+  type UpdateMerchantOriginStatusInput,
+  type UpdateMerchantPayoutWalletStatusInput,
+  type UpdateMerchantStatusInput
 } from "./merchants.js";
 import {
   InMemoryRouteRegistry,
@@ -71,6 +83,7 @@ import {
   type RotateRoutePayoutInput,
   type SearchRoutesInput,
   type RouteStatus,
+  type ResumeRouteInput,
   type SuspendRouteInput
 } from "./routes.js";
 import type {
@@ -92,11 +105,13 @@ import type {
   MarkReceiptChainVerifiedInput,
   ReceiptRecord,
   ReceiptVerificationState,
+  RequeueDeadLetterWebhookEventInput,
   WebhookEventManagementStore
 } from "./index.js";
 import type {
   CreatePayoutBatchFromAvailableAccrualsInput,
   CreatePayoutBatchInput,
+  ListMerchantPayoutBatchesInput,
   ListPayoutEligibleAccrualsInput,
   PayoutAccrualStore,
   PayoutAllocationRecord,
@@ -132,6 +147,7 @@ import {
   PayoutBatchConflictError,
   assertPayoutBatchAllocationsReleasable,
   attachPayoutTransactionItemMappings,
+  normalizeListMerchantPayoutBatchesLimit,
   createMerchantObligationSummary,
   createPayoutFinalizationLedgerTransaction,
   createPayoutBatchPlan,
@@ -609,6 +625,34 @@ export class PostgresReceiptIngestionStore
 
   async getPayoutBatch(batchId: string): Promise<PayoutBatchRecord | undefined> {
     return loadPayoutBatch(this.db, batchId);
+  }
+
+  async listMerchantPayoutBatches(
+    input: ListMerchantPayoutBatchesInput
+  ): Promise<PayoutBatchRecord[]> {
+    const limit = normalizeListMerchantPayoutBatchesLimit(input.limit);
+    const values: unknown[] = [input.merchantId, limit];
+    let statusClause = "";
+    if (input.status !== undefined) {
+      values.push(input.status);
+      statusClause = "\n          and status = $3";
+    }
+    const result = await this.db.query<Pick<PayoutBatchRow, "id">>(
+      `select id
+         from payout_batches
+        where merchant_id = $1${statusClause}
+        order by created_at desc, id desc
+        limit $2`,
+      values
+    );
+    const batches: PayoutBatchRecord[] = [];
+    for (const row of result.rows) {
+      const batch = await loadPayoutBatch(this.db, row.id);
+      if (batch !== undefined) {
+        batches.push(batch);
+      }
+    }
+    return batches;
   }
 
   async releasePayoutBatchAllocations(
@@ -1324,6 +1368,49 @@ export class PostgresOutboxEventStore
     return result.rows.map(mapOutboxEvent);
   }
 
+  async requeueDeadLetterWebhookEvent(
+    input: RequeueDeadLetterWebhookEventInput
+  ): Promise<OutboxEventRecord | undefined> {
+    const merchantId = assertNonEmptyString(input.merchantId, "merchantId");
+    const eventId = assertNonEmptyString(input.eventId, "eventId");
+    const now = input.now ?? this.now();
+    const result = await this.db.query<OutboxEventRow>(
+      `update outbox_events
+          set status = 'pending',
+              attempts = 0,
+              available_at = $3,
+              locked_at = null,
+              last_error = null
+        where id = $1
+          and payload ->> 'merchantId' = $2
+          and status = 'dead_letter'
+        returning id, event_type, aggregate_type, aggregate_id, payload, status,
+                  attempts, available_at, locked_at, last_error, created_at`,
+      [eventId, merchantId, now]
+    );
+    const row = result.rows[0];
+    if (row !== undefined) {
+      return mapOutboxEvent(row);
+    }
+
+    const existing = await this.db.query<OutboxEventRow>(
+      `select id, event_type, aggregate_type, aggregate_id, payload, status,
+              attempts, available_at, locked_at, last_error, created_at
+         from outbox_events
+        where id = $1
+          and payload ->> 'merchantId' = $2
+        limit 1`,
+      [eventId, merchantId]
+    );
+    const existingRow = existing.rows[0];
+    if (existingRow === undefined) {
+      return undefined;
+    }
+    throw new WebhookEventRequeueConflictError(
+      `webhook event is ${existingRow.status}; only dead_letter events can be requeued`
+    );
+  }
+
   async claimNext(
     input: { eventTypes?: string[]; now?: string } = {}
   ): Promise<OutboxEventRecord | undefined> {
@@ -1680,6 +1767,37 @@ export class PostgresCampaignRegistry implements CampaignRegistry {
     );
   }
 
+  async updateCampaignStatus(
+    input: UpdateCampaignStatusInput
+  ): Promise<CampaignProfile | undefined> {
+    const campaign = await this.loadCampaign(input.campaignId);
+    if (campaign === undefined) {
+      return undefined;
+    }
+    assertCampaignStatusTransition(campaign.status, input.status);
+
+    const result = await this.db.query(
+      `update campaigns
+          set status = $2,
+              updated_at = $3
+        where id = $1
+          and status = $4`,
+      [campaign.id, input.status, this.now(), campaign.status]
+    );
+    if (result.rowCount !== 1) {
+      const latest = await this.loadCampaign(input.campaignId);
+      if (latest === undefined) {
+        return undefined;
+      }
+      if (latest.status !== input.status) {
+        throw new CampaignRegistryConflictError(
+          "campaign status changed concurrently; retry the transition"
+        );
+      }
+    }
+    return await this.getCampaign(campaign.id);
+  }
+
   private async loadCampaign(campaignId: string): Promise<CampaignRecord | undefined> {
     const result = await this.db.query<CampaignRow>(
       `select id, merchant_id, resource_origin, status, current_version,
@@ -1914,6 +2032,48 @@ export class PostgresRouteRegistry implements RouteRegistry {
     }
     throw new RouteRegistryValidationError(
       `route must be active to suspend; current status is ${current.status}`
+    );
+  }
+
+  async resumeRoute(input: ResumeRouteInput): Promise<RouteRecord | undefined> {
+    const existing = await this.getRoute(input.routeId);
+    if (existing === undefined) {
+      return undefined;
+    }
+    if (existing.status === "active") {
+      return existing;
+    }
+    if (existing.status !== "suspended") {
+      throw new RouteRegistryValidationError(
+        `route must be suspended to resume; current status is ${existing.status}`
+      );
+    }
+
+    const result = await this.db.query<RouteRow>(
+      `update routes
+          set status = 'active'
+        where id = $1
+          and status = 'suspended'
+        returning id, current_version, campaign_id, campaign_version_min, referrer_wallet,
+                  payout_wallet, resource_origin, operation_ids, claim_hash,
+                  claim_json, signing_bytes_hex, status, issued_at, expires_at,
+                  nonce, metadata_hash, created_at, activated_at`,
+      [input.routeId]
+    );
+    const row = result.rows[0];
+    if (row !== undefined) {
+      return mapRoute(row);
+    }
+
+    const current = await this.getRoute(input.routeId);
+    if (current?.status === "active") {
+      return current;
+    }
+    if (current === undefined) {
+      return undefined;
+    }
+    throw new RouteRegistryValidationError(
+      `route must be suspended to resume; current status is ${current.status}`
     );
   }
 
@@ -2272,6 +2432,80 @@ export class PostgresMerchantRegistry implements MerchantRegistry {
     );
     const row = result.rows[0];
     return row === undefined ? undefined : mapMerchantKey(row);
+  }
+
+  async updateMerchantStatus(
+    input: UpdateMerchantStatusInput
+  ): Promise<MerchantRecord | undefined> {
+    assertMerchantStatusTransition(input.status);
+    const result = await this.db.query<MerchantRow>(
+      `update merchants
+          set status = $2,
+              updated_at = $3
+        where id = $1
+        returning id, slug, display_name, owner_wallet, status, created_at, updated_at`,
+      [input.merchantId, input.status, this.now()]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapMerchant(row);
+  }
+
+  async updateOriginStatus(
+    input: UpdateMerchantOriginStatusInput
+  ): Promise<MerchantOriginRecord | undefined> {
+    assertMerchantOriginStatusTransition(input.status);
+    const verifiedAt = readOriginVerifiedAt(input, () => this.now());
+    const result = await this.db.query<MerchantOriginRow>(
+      `update merchant_origins
+          set status = $3,
+              verified_at = $4
+        where merchant_id = $1
+          and origin = $2
+        returning merchant_id, origin, verification_method, status, verified_at, created_at`,
+      [input.merchantId, input.origin, input.status, verifiedAt ?? null]
+    );
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapMerchantOrigin(row);
+  }
+
+  async updatePayoutWalletStatus(
+    input: UpdateMerchantPayoutWalletStatusInput
+  ): Promise<MerchantPayoutWalletRecord | undefined> {
+    assertMerchantPayoutWalletStatus(input.status);
+    const result = await this.db.query<MerchantPayoutWalletRow>(
+      `update merchant_payout_wallets
+          set status = $3
+        where merchant_id = $1
+          and id = $2
+          and (status <> 'retired' or $3 = 'retired')
+        returning id, merchant_id, network, wallet, asset_mint, signer_reference,
+                  status, created_at`,
+      [input.merchantId, input.payoutWalletId, input.status]
+    );
+    const row = result.rows[0];
+    if (row !== undefined) {
+      return mapMerchantPayoutWallet(row);
+    }
+
+    const existing = await this.db.query<MerchantPayoutWalletRow>(
+      `select id, merchant_id, network, wallet, asset_mint, signer_reference,
+              status, created_at
+         from merchant_payout_wallets
+        where merchant_id = $1
+        order by created_at, id`,
+      [input.merchantId]
+    );
+    const wallet = existing.rows.find(
+      (candidate) => candidate.id === input.payoutWalletId
+    );
+    if (wallet === undefined) {
+      return undefined;
+    }
+    assertPayoutWalletStatusTransition(
+      wallet.status as MerchantPayoutWalletRecord["status"],
+      input.status
+    );
+    return mapMerchantPayoutWallet(wallet);
   }
 
   private async assertMerchantExists(merchantId: string): Promise<void> {

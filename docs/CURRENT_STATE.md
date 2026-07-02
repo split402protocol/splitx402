@@ -78,7 +78,17 @@ metadata.
   viewer gate and expiring sessions, not a production mainnet dashboard service
   yet.
 - Public merchant/origin approval workflows are not production admin workflows
-  yet; public registration creates pending state only.
+  yet; public registration creates pending state only. The control plane now
+  exposes operator-token-gated approval endpoints
+  (`POST /v1/operator/merchants/:merchantId/approve|suspend|close`,
+  `POST /v1/operator/merchants/:merchantId/origins/verify|revoke`, and a
+  non-mutating `POST /v1/operator/merchants/:merchantId/origins/check` that
+  fetches and validates the origin's `/.well-known/split402.json` before an
+  operator verifies it) that stay
+  disabled (fail-closed) until `SPLIT402_CONTROL_PLANE_OPERATOR_TOKENS` is
+  configured, so operators can activate an allowlisted merchant without manual
+  database work. This is an operator boundary, not a public self-approval
+  workflow.
 - Mainnet production operation is not approved.
 - Customer-facing commercial terms are not approved; public-alpha disclosures in
   [Commercial readiness](COMMERCIAL_READINESS.md) must remain true until a real
@@ -90,7 +100,12 @@ metadata.
   `corepack pnpm product:mainnet-canary --brief --workspace split402-launch-evidence`
   and [Mainnet canary runbook](runbooks/mainnet-canary.md) as fail-closed
   operator guardrails for the first tiny allowlisted mainnet test after all
-  launch gates pass.
+  launch gates pass. The demo merchant and demo agent are network-selectable
+  through `SPLIT402_DEMO_NETWORK` (Devnet default); `solana:mainnet` is
+  fail-closed behind the canary confirmation, an allowlisted payer wallet, a
+  non-demo service seed, an explicit pay-to wallet, and the canary amount cap,
+  so canary dry-runs can exercise the exact mainnet configuration without
+  weakening the Devnet demo path.
 
 ## Current Direction
 

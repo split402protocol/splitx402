@@ -28,6 +28,7 @@ import {
 import { base58Encode, hexToBytes } from "@split402/protocol";
 
 import { WORKSPACE_ENV_PATH } from "./env.js";
+import { readDemoNetwork } from "./network.js";
 import { getSolLamports, getTokenAccountSummary, SOLANA_RPC_URL } from "./solana-rpc.js";
 import { createSvmSignerFromBase58, createSvmSignerFromEnv } from "./svm-key.js";
 
@@ -52,6 +53,12 @@ try {
 }
 
 async function main(): Promise<void> {
+  const network = readDemoNetwork();
+  if (network.cluster === "mainnet") {
+    throw new Error(
+      "demo mint setup is Devnet-only; refusing to create a demo SPL mint on Solana Mainnet"
+    );
+  }
   const serviceSeed = hexToBytes(
     process.env.SPLIT402_SERVICE_SEED_HEX ?? DEFAULT_SERVICE_SEED_HEX
   );
