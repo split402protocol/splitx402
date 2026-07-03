@@ -499,7 +499,7 @@ Windows PowerShell.
 Launch the staging stack:
 
 ```bash
-cp deploy/phase7-staging/phase7-staging.env.example deploy/phase7-staging/phase7-staging.env
+corepack pnpm phase7:docker:env:init
 docker compose -f deploy/phase7-staging/compose.yaml up postgres control-plane dashboard
 ```
 
@@ -530,7 +530,8 @@ Prepare and check the Phase 7 staging proof:
 ```bash
 corepack pnpm phase7:staging:init
 corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json
-# Fill deploy/phase7-staging/phase7-staging.env from its example for Docker runtime values.
+corepack pnpm phase7:docker:env:init
+# Fill deploy/phase7-staging/phase7-staging.env with private Docker runtime values.
 corepack pnpm phase7:docker:doctor --brief
 SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed
 corepack pnpm phase7:staging-proof --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-proof.txt

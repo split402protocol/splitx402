@@ -100,7 +100,7 @@ describe("Phase 7 Docker doctor", () => {
       "Install Docker Engine or Docker Desktop on the host that will run Phase 7 staging.",
     );
     expect(report.nextActions).toContain(
-      "Copy deploy/phase7-staging/phase7-staging.env.example to deploy/phase7-staging/phase7-staging.env and fill the private staging values on the host.",
+      "Run corepack pnpm phase7:docker:env:init, then fill deploy/phase7-staging/phase7-staging.env with private staging values on the host.",
     );
   });
 

@@ -142,7 +142,10 @@ describe("Phase 7 staging evidence workspace", () => {
       "corepack pnpm phase7:docker:doctor --brief",
     );
     expect(workspace.readmeText).toContain(
-      "Fill deploy/phase7-staging/phase7-staging.env from its example for Docker runtime values.",
+      "corepack pnpm phase7:docker:env:init",
+    );
+    expect(workspace.readmeText).toContain(
+      "Fill deploy/phase7-staging/phase7-staging.env with private Docker runtime values.",
     );
     expect(workspace.readmeText).toContain(
       "Split402 Phase 7 Docker doctor: ready",

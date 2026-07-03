@@ -31,7 +31,7 @@ flowchart LR
 Create the staging environment file:
 
 ```bash
-cp deploy/phase7-staging/phase7-staging.env.example deploy/phase7-staging/phase7-staging.env
+corepack pnpm phase7:docker:env:init
 ```
 
 Fill the viewer token, webhook target, Devnet wallets, and demo merchant signing
@@ -132,7 +132,8 @@ git rev-parse HEAD
 git status --short --branch
 corepack pnpm product:evidence:init --missing
 corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence
-# Fill deploy/phase7-staging/phase7-staging.env from its example for Docker runtime values.
+corepack pnpm phase7:docker:env:init
+# Fill deploy/phase7-staging/phase7-staging.env with private Docker runtime values.
 corepack pnpm phase7:docker:doctor --brief
 SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed
 corepack pnpm phase7:staging-proof --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-proof.txt

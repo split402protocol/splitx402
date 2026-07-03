@@ -342,7 +342,10 @@ describe("repository presentation", () => {
         "corepack pnpm phase7:docker:doctor --brief",
       );
       expect(text, filePath).toContain(
-        "Fill deploy/phase7-staging/phase7-staging.env from its example for Docker runtime values.",
+        "corepack pnpm phase7:docker:env:init",
+      );
+      expect(text, filePath).toContain(
+        "Fill deploy/phase7-staging/phase7-staging.env with private Docker runtime values.",
       );
       expect(text, filePath).not.toMatch(
         /--evidence-env-file phase7-staging-evidence\//u,
