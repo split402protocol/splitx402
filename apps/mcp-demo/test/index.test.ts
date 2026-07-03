@@ -1,6 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { Readable, Writable } from "node:stream";
 
 import { describe, expect, it } from "vitest";
 import {
@@ -31,7 +32,8 @@ import {
   createMcpGatewayContextFromEnv,
   createWalletRiskToolResult,
   handleMcpGatewayLine,
-  handleMcpGatewayLineAsync
+  handleMcpGatewayLineAsync,
+  runMcpGateway
 } from "../src/gateway.js";
 import {
   discoverExternalX402Onboarding,
@@ -1853,6 +1855,7 @@ describe("MCP demo gateway", () => {
       merchantOrigin: "https://merchant.example",
       generatedAt: "2026-06-26T00:00:00.000Z"
     });
+    const calls: string[] = [];
 
     await expect(
       createMcpGatewayContextFromEnv({
@@ -1862,12 +1865,36 @@ describe("MCP demo gateway", () => {
           SPLIT402_MCP_CONTROL_PLANE_TOKEN: "control-token",
           SPLIT402_MCP_CAPABILITY: "solana.wallet-risk"
         },
-        fetch: mcpControlPlaneFetch([], bundle),
+        fetch: mcpControlPlaneFetch(calls, bundle),
         requireSigner: true
       })
     ).rejects.toThrow(
       "SPLIT402_MCP_SVM_PRIVATE_KEY or SVM_PRIVATE_KEY is required for live MCP gateway execution"
     );
+    expect(calls).toEqual([]);
+  });
+
+  it("requires a signer for the live gateway CLI before control-plane discovery", async () => {
+    const bundle = createMcpDemoBundle({
+      merchantOrigin: "https://merchant.example",
+      generatedAt: "2026-06-26T00:00:00.000Z"
+    });
+    const calls: string[] = [];
+
+    await expect(
+      runMcpGateway(Readable.from([]), createWritableSink(), {
+        bundle,
+        env: {
+          SPLIT402_MCP_CONTROL_PLANE_URL: "https://control.example",
+          SPLIT402_MCP_CONTROL_PLANE_TOKEN: "control-token",
+          SPLIT402_MCP_CAPABILITY: "solana.wallet-risk"
+        },
+        fetch: mcpControlPlaneFetch(calls, bundle)
+      })
+    ).rejects.toThrow(
+      "SPLIT402_MCP_SVM_PRIVATE_KEY or SVM_PRIVATE_KEY is required for live MCP gateway execution"
+    );
+    expect(calls).toEqual([]);
   });
 
   it("executes through the router gateway and stores receipts for lookup", async () => {
@@ -2531,6 +2558,14 @@ describe("MCP demo gateway", () => {
     });
   });
 });
+
+function createWritableSink(): Writable {
+  return new Writable({
+    write(_chunk, _encoding, callback) {
+      callback();
+    }
+  });
+}
 
 function mcpControlPlaneFetch(
   calls: string[],
