@@ -12,3 +12,12 @@ export function isReceiptIngestionPersistenceConflict(
 ): error is ReceiptIngestionPersistenceConflictError {
   return error instanceof ReceiptIngestionPersistenceConflictError;
 }
+
+export class WebhookEventRequeueConflictError extends Error {
+  readonly code = "webhook_event_requeue_conflict";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "WebhookEventRequeueConflictError";
+  }
+}

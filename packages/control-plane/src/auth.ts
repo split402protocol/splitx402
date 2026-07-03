@@ -66,6 +66,16 @@ export interface CreateWalletAuthSessionInput {
   publicKey?: string;
 }
 
+export interface RevokeWalletAuthSessionInput {
+  refreshToken: string;
+}
+
+export interface WalletAuthRevocationResult {
+  revoked: true;
+  alreadyRevoked: boolean;
+  wallet: string;
+}
+
 export interface RefreshWalletAuthSessionInput {
   refreshToken: string;
 }
@@ -312,6 +322,30 @@ export class WalletAuthenticator {
       challengeId: record.challengeId,
       issuedAt: now
     });
+  }
+
+  async revokeSession(
+    input: RevokeWalletAuthSessionInput
+  ): Promise<WalletAuthRevocationResult> {
+    const now = this.now();
+    const refreshToken = assertNonEmptyString(
+      input.refreshToken,
+      "refreshToken"
+    );
+    const refreshTokenHash = hashToken(refreshToken);
+    const record = await this.store.getRefreshToken(refreshTokenHash);
+    if (record === undefined) {
+      throw new WalletAuthRejectedError("unknown refresh token");
+    }
+    if (record.revokedAt !== undefined) {
+      return { revoked: true, alreadyRevoked: true, wallet: record.wallet };
+    }
+    const revoked = await this.store.revokeRefreshToken(refreshTokenHash, now);
+    return {
+      revoked: true,
+      alreadyRevoked: !revoked,
+      wallet: record.wallet
+    };
   }
 
   async authenticateAccessToken(

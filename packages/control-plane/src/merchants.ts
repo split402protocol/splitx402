@@ -107,6 +107,30 @@ export interface RevokeMerchantKeyInput {
   reason?: string;
 }
 
+export type MerchantStatusTransition = Exclude<MerchantStatus, "pending">;
+export type MerchantOriginStatusTransition = Exclude<
+  MerchantOriginStatus,
+  "pending"
+>;
+
+export interface UpdateMerchantStatusInput {
+  merchantId: string;
+  status: MerchantStatusTransition;
+}
+
+export interface UpdateMerchantOriginStatusInput {
+  merchantId: string;
+  origin: string;
+  status: MerchantOriginStatusTransition;
+  verifiedAt?: string;
+}
+
+export interface UpdateMerchantPayoutWalletStatusInput {
+  merchantId: string;
+  payoutWalletId: string;
+  status: MerchantPayoutWalletStatus;
+}
+
 export interface ResolveMerchantKeyInput {
   merchantId: string;
   kid: string;
@@ -132,6 +156,18 @@ export interface MerchantRegistry {
   resolveKey(
     input: ResolveMerchantKeyInput
   ): Promise<MerchantKeyRecord | undefined> | MerchantKeyRecord | undefined;
+  updateMerchantStatus(
+    input: UpdateMerchantStatusInput
+  ): Promise<MerchantRecord | undefined> | MerchantRecord | undefined;
+  updateOriginStatus(
+    input: UpdateMerchantOriginStatusInput
+  ): Promise<MerchantOriginRecord | undefined> | MerchantOriginRecord | undefined;
+  updatePayoutWalletStatus(
+    input: UpdateMerchantPayoutWalletStatusInput
+  ):
+    | Promise<MerchantPayoutWalletRecord | undefined>
+    | MerchantPayoutWalletRecord
+    | undefined;
 }
 
 export interface InMemoryMerchantRegistryOptions {
@@ -344,6 +380,65 @@ export class InMemoryMerchantRegistry implements MerchantRegistry {
     return cloneKey(key);
   }
 
+  updateMerchantStatus(
+    input: UpdateMerchantStatusInput
+  ): MerchantRecord | undefined {
+    assertMerchantStatusTransition(input.status);
+    const existing = this.merchants.get(input.merchantId);
+    if (existing === undefined) {
+      return undefined;
+    }
+
+    const updated: MerchantRecord = {
+      ...existing,
+      status: input.status,
+      updatedAt: this.now()
+    };
+    this.merchants.set(updated.id, updated);
+    return cloneMerchant(updated);
+  }
+
+  updateOriginStatus(
+    input: UpdateMerchantOriginStatusInput
+  ): MerchantOriginRecord | undefined {
+    assertMerchantOriginStatusTransition(input.status);
+    const origins = this.originsByMerchantId.get(input.merchantId);
+    const existing = origins?.get(input.origin);
+    if (origins === undefined || existing === undefined) {
+      return undefined;
+    }
+
+    const verifiedAt = readOriginVerifiedAt(input, () => this.now());
+    const updated: MerchantOriginRecord = {
+      ...existing,
+      status: input.status,
+      ...(verifiedAt === undefined ? {} : { verifiedAt })
+    };
+    if (verifiedAt === undefined) {
+      delete updated.verifiedAt;
+    }
+    origins.set(input.origin, updated);
+    return cloneOrigin(updated);
+  }
+
+  updatePayoutWalletStatus(
+    input: UpdateMerchantPayoutWalletStatusInput
+  ): MerchantPayoutWalletRecord | undefined {
+    assertMerchantPayoutWalletStatus(input.status);
+    const existing = this.payoutWalletsById.get(input.payoutWalletId);
+    if (existing === undefined || existing.merchantId !== input.merchantId) {
+      return undefined;
+    }
+    assertPayoutWalletStatusTransition(existing.status, input.status);
+
+    const updated: MerchantPayoutWalletRecord = {
+      ...existing,
+      status: input.status
+    };
+    this.payoutWalletsById.set(updated.id, updated);
+    return clonePayoutWallet(updated);
+  }
+
   private assertMerchantExists(merchantId: string): void {
     if (!this.merchants.has(merchantId)) {
       throw new MerchantRegistryValidationError(`unknown merchant: ${merchantId}`);
@@ -467,6 +562,49 @@ function assertMerchantOriginStatus(value: MerchantOriginStatus): void {
   if (!["pending", "verified", "failed", "revoked"].includes(value)) {
     throw new MerchantRegistryValidationError("invalid merchant origin status");
   }
+}
+
+export function assertMerchantStatusTransition(
+  value: MerchantStatusTransition
+): MerchantStatusTransition {
+  if (!["active", "suspended", "closed"].includes(value)) {
+    throw new MerchantRegistryValidationError(
+      "merchant status transition must be active, suspended, or closed"
+    );
+  }
+  return value;
+}
+
+export function assertMerchantOriginStatusTransition(
+  value: MerchantOriginStatusTransition
+): MerchantOriginStatusTransition {
+  if (!["verified", "failed", "revoked"].includes(value)) {
+    throw new MerchantRegistryValidationError(
+      "origin status transition must be verified, failed, or revoked"
+    );
+  }
+  return value;
+}
+
+export function assertPayoutWalletStatusTransition(
+  current: MerchantPayoutWalletStatus,
+  next: MerchantPayoutWalletStatus
+): void {
+  if (current === "retired" && next !== "retired") {
+    throw new MerchantRegistryConflictError(
+      "retired merchant payout wallets cannot be reactivated"
+    );
+  }
+}
+
+export function readOriginVerifiedAt(
+  input: Pick<UpdateMerchantOriginStatusInput, "status" | "verifiedAt">,
+  now: () => string
+): string | undefined {
+  if (input.status !== "verified") {
+    return undefined;
+  }
+  return assertUtcTimestamp(input.verifiedAt ?? now());
 }
 
 function assertMerchantKeyAlgorithm(value: MerchantKeyAlgorithm): void {

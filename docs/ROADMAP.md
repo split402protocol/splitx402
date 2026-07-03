@@ -350,6 +350,12 @@ Current slice:
 - payout finality RPC failover drill and structured review record for custody
   evidence;
 - `POST /v1/merchants/:merchantId/payout-wallets`;
+- owner-authorized payout-wallet pause/resume/retire status transitions with a
+  terminal retired state, so merchants can stop new payout batches from a
+  funding wallet without database access;
+- owner-authorized campaign pause/resume/close lifecycle transitions, so
+  merchants can stop new commission accrual for a campaign without database
+  access while keeping activation signature requirements intact;
 - `POST /v1/merchants/:merchantId/payouts/preview`;
 - `GET /v1/merchants/:merchantId/payouts/reconciliation`;
 - `GET /v1/payout-batches/:batchId`;
@@ -367,6 +373,32 @@ Current hardening:
   and verification timestamps and creates pending origins;
 - receipt ingestion can run a control-plane policy verifier before accrual
   creation.
+- operator-token-gated merchant approve/suspend/close and origin verify/revoke
+  endpoints stay disabled until `SPLIT402_CONTROL_PLANE_OPERATOR_TOKENS` is
+  configured, keeping public registration pending-only while giving operators a
+  non-database approval path.
+- an operator-gated, non-mutating origin well-known check fetches the
+  registered origin's `/.well-known/split402.json` (redirects disabled, size
+  and timeout capped) and reports protocol/merchantId/servicePublicKey
+  evidence before the operator records origin verification.
+- suspended routes can be resumed through `POST /v1/routes/:routeId/resume`
+  with the same merchant-owner authorization as suspension, so the route
+  stop-loss is reversible without database access.
+- merchants can enumerate their campaigns through
+  `GET /v1/merchants/:merchantId/campaigns` with status filtering, so paused
+  and closed campaign ids stay discoverable for lifecycle transitions.
+- payout batches stay observable after creation through
+  `GET /v1/payout-batches/:batchId` and
+  `GET /v1/merchants/:merchantId/payout-batches`, and
+  `POST /v1/payout-batches/:batchId/close-ledger` closes finalized batches to
+  paid accruals behind finalized transfer-content verification configured via
+  `SPLIT402_PAYOUT_LEDGER_CLOSURE_FUNDING_WALLET` and
+  `SPLIT402_PAYOUT_LEDGER_CLOSURE_SOURCE_TOKEN_ACCOUNT`.
+- dead-letter webhook events can be requeued to pending through
+  `POST /v1/merchants/:merchantId/webhook-events/:eventId/requeue` after a
+  merchant fixes their receiver, instead of manual outbox updates.
+- refresh tokens can be revoked (logout / incident response) through
+  `POST /v1/auth/sessions/revoke`.
 - chain-verification rejection moves pending accruals to `rejected`.
 - finalized payout ledger closure moves allocated accruals to `paid`.
 - allocation release cancels only safe pre-submission/problem batches and moves
