@@ -99,6 +99,17 @@ describe("Phase 7 command evidence", () => {
       "commands_run Docker doctor output must be ready",
     );
   });
+
+  it("rejects profile Docker doctor output that does not prove selected profiles", () => {
+    const validation = validatePhase7CommandEvidence(
+      createCompleteCommandsLog().replace("Profiles: demo, workers", "Profiles: base"),
+    );
+
+    expect(validation.ok).toBe(false);
+    expect(validation.errors).toContain(
+      "commands_run profile Docker doctor output must include selected demo and workers profiles",
+    );
+  });
 });
 
 function createCompleteCommandsLog(): string {
@@ -119,7 +130,13 @@ function readCommandOutput(command: string): string {
     return "\nSplit402 launch preflight: ready";
   }
   if (command === "corepack pnpm phase7:docker:doctor --brief") {
-    return "\nSplit402 Phase 7 Docker doctor: ready";
+    return "\nSplit402 Phase 7 Docker doctor: ready\nProfiles: base";
+  }
+  if (
+    command ===
+    "corepack pnpm phase7:docker:doctor --brief --profile demo --profile workers"
+  ) {
+    return "\nSplit402 Phase 7 Docker doctor: ready\nProfiles: demo, workers";
   }
   if (command === "corepack pnpm product:public-surface-check --brief") {
     return "\nSplit402 public surface check: passed";

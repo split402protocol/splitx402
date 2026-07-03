@@ -250,6 +250,7 @@ function createPhase7Section(
       "corepack pnpm phase7:docker:env:init",
       "Fill deploy/phase7-staging/phase7-staging.env with private Docker runtime values.",
       "corepack pnpm phase7:docker:doctor --brief",
+      "corepack pnpm phase7:docker:doctor --brief --profile demo --profile workers",
       "SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",
       "corepack pnpm phase7:hosted:preflight --evidence-env-file split402-launch-evidence/phase7-staging.env",
       "corepack pnpm phase7:staging:collect-reads --evidence-env-file split402-launch-evidence/phase7-staging.env",
