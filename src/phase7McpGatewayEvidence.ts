@@ -97,6 +97,7 @@ export async function collectPhase7McpGatewayEvidence(
   const context = await createMcpGatewayContextFromEnv({
     env,
     ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+    requireControlPlaneToken: shouldRequireHostedControlPlaneToken(env),
     requireSigner: shouldRequireHostedExecutionSigner(env),
   });
   const requests: JsonRpcRequest[] = [
@@ -455,6 +456,10 @@ function shouldRequireHostedExecutionSigner(env: NodeJS.ProcessEnv): boolean {
       (readOptionalEnv(env.SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE) ?? "").toLowerCase(),
     )
   );
+}
+
+function shouldRequireHostedControlPlaneToken(env: NodeJS.ProcessEnv): boolean {
+  return readOptionalEnv(env.SPLIT402_MCP_CONTROL_PLANE_URL) !== undefined;
 }
 
 interface McpGatewayExecutionSummary {
