@@ -77,6 +77,80 @@ describe("Phase 7 Docker doctor", () => {
     );
   });
 
+  it("passes selected profiles into compose config validation", () => {
+    const commands: string[] = [];
+    const report = runPhase7DockerDoctor({
+      profiles: ["demo", "workers"],
+      exists: (path) =>
+        path === "deploy/phase7-staging/compose.yaml" ||
+        path === "deploy/phase7-staging/phase7-staging.env",
+      readText: () => filledDockerEnvWithProfiles(),
+      execFile: (file, args) => {
+        commands.push([file, ...args].join(" "));
+        if (args.join(" ") === "--version") {
+          return "Docker version 27.0.0";
+        }
+        if (args.join(" ") === "compose version") {
+          return "Docker Compose version v2.29.1";
+        }
+        if (
+          args.join(" ") ===
+          "compose --env-file deploy/phase7-staging/phase7-staging.env -f deploy/phase7-staging/compose.yaml --profile demo --profile workers config --quiet"
+        ) {
+          return "";
+        }
+        throw new Error(`unexpected command ${file} ${args.join(" ")}`);
+      },
+    });
+
+    expect(report.ready).toBe(true);
+    expect(report.profiles).toEqual(["demo", "workers"]);
+    expect(commands).toContain(
+      "docker compose --env-file deploy/phase7-staging/phase7-staging.env -f deploy/phase7-staging/compose.yaml --profile demo --profile workers config --quiet",
+    );
+    expect(formatPhase7DockerDoctorBrief(report)).toContain(
+      "Profiles: demo, workers",
+    );
+    expect(report.nextActions).toContain(
+      "Run `docker compose -f deploy/phase7-staging/compose.yaml --profile demo --profile workers up -d postgres control-plane dashboard demo-merchant chain-worker webhook-worker payout-finality-worker`, then wait for healthy services.",
+    );
+  });
+
+  it("fails closed when selected profile values are missing", () => {
+    const report = runPhase7DockerDoctor({
+      profiles: ["demo", "workers"],
+      exists: (path) =>
+        path === "deploy/phase7-staging/compose.yaml" ||
+        path === "deploy/phase7-staging/phase7-staging.env",
+      readText: () => filledDockerEnv(),
+      execFile: (file, args) => {
+        if (args.join(" ") === "--version") {
+          return "Docker version 27.0.0";
+        }
+        if (args.join(" ") === "compose version") {
+          return "Docker Compose version v2.29.1";
+        }
+        if (
+          args.join(" ") ===
+          "compose --env-file deploy/phase7-staging/phase7-staging.env -f deploy/phase7-staging/compose.yaml --profile demo --profile workers config --quiet"
+        ) {
+          return "";
+        }
+        throw new Error(`unexpected command ${file} ${args.join(" ")}`);
+      },
+    });
+
+    expect(report.ready).toBe(false);
+    expect(report.checks).toContainEqual(
+      expect.objectContaining({
+        name: "compose_env_values",
+        ok: false,
+        detail:
+          "deploy/phase7-staging/phase7-staging.env is not ready (missing required values: SPLIT402_MERCHANT_PAY_TO, SPLIT402_SERVICE_SEED_HEX, SPLIT402_WEBHOOK_WORKER_URL).",
+      }),
+    );
+  });
+
   it("fails closed and gives setup actions when Docker is missing", () => {
     const report = runPhase7DockerDoctor({
       exists: (path) => path === "deploy/phase7-staging/compose.yaml",
@@ -181,5 +255,14 @@ function filledDockerEnv(): string {
     "SPLIT402_DASHBOARD_VIEWER_TOKEN=viewer-token",
     "SPLIT402_DASHBOARD_CONTROL_PLANE_TOKEN=control-plane-token",
     "SPLIT402_WEBHOOK_WORKER_SECRET=webhook-secret",
+  ].join("\n");
+}
+
+function filledDockerEnvWithProfiles(): string {
+  return [
+    filledDockerEnv(),
+    "SPLIT402_MERCHANT_PAY_TO=merchant-pay-to",
+    "SPLIT402_SERVICE_SEED_HEX=abcdef1234567890",
+    "SPLIT402_WEBHOOK_WORKER_URL=https://webhook.example",
   ].join("\n");
 }

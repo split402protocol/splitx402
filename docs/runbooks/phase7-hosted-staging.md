@@ -68,6 +68,7 @@ Add the demo merchant and workers when the staging wallets and webhook receiver
 are ready:
 
 ```bash
+corepack pnpm phase7:docker:doctor --brief --profile demo --profile workers
 docker compose -f deploy/phase7-staging/compose.yaml --profile demo --profile workers up
 ```
 

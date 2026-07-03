@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 export interface Phase7DockerDoctorInput {
   composeFile?: string;
   envFile?: string;
+  profiles?: readonly Phase7DockerProfile[];
   execFile: (
     file: string,
     args: readonly string[],
@@ -32,9 +33,12 @@ export interface Phase7DockerDoctorReport {
   ready: boolean;
   composeFile: string;
   envFile: string;
+  profiles: Phase7DockerProfile[];
   checks: Phase7DockerDoctorCheck[];
   nextActions: string[];
 }
+
+export type Phase7DockerProfile = "demo" | "workers";
 
 const defaultComposeFile = "deploy/phase7-staging/compose.yaml";
 const defaultEnvFile = "deploy/phase7-staging/phase7-staging.env";
@@ -42,12 +46,23 @@ const requiredBaseEnvKeys = [
   "SPLIT402_DASHBOARD_VIEWER_TOKEN",
   "SPLIT402_DASHBOARD_CONTROL_PLANE_TOKEN",
 ] as const;
+const requiredProfileEnvKeys: Record<Phase7DockerProfile, readonly string[]> = {
+  demo: [
+    "SPLIT402_MERCHANT_PAY_TO",
+    "SPLIT402_SERVICE_SEED_HEX",
+  ],
+  workers: [
+    "SPLIT402_WEBHOOK_WORKER_URL",
+    "SPLIT402_WEBHOOK_WORKER_SECRET",
+  ],
+};
 
 export function runPhase7DockerDoctor(
   input: Phase7DockerDoctorInput,
 ): Phase7DockerDoctorReport {
   const composeFile = input.composeFile ?? defaultComposeFile;
   const envFile = input.envFile ?? defaultEnvFile;
+  const profiles = dedupeProfiles(input.profiles ?? []);
   const checks: Phase7DockerDoctorCheck[] = [];
 
   const dockerVersion = runCommand(input, "docker", ["--version"]);
@@ -104,7 +119,7 @@ export function runPhase7DockerDoctor(
   });
 
   const envValues = envFileExists
-    ? validateEnvValues(input, envFile)
+    ? validateEnvValues(input, envFile, profiles)
     : {
         ok: false,
         detail: `Skipped until ${envFile} exists.`,
@@ -119,7 +134,11 @@ export function runPhase7DockerDoctor(
   const shouldValidateComposeConfig =
     dockerVersion.ok && composeVersion.ok && composeFileExists && envFileExists;
   const composeConfig = shouldValidateComposeConfig
-    ? runCommand(input, "docker", createComposeConfigArgs(composeFile, envFile))
+    ? runCommand(
+        input,
+        "docker",
+        createComposeConfigArgs(composeFile, envFile, profiles),
+      )
     : {
         ok: false as const,
         output: "",
@@ -129,7 +148,7 @@ export function runPhase7DockerDoctor(
     name: "compose_config",
     ok: composeConfig.ok,
     required: true,
-    command: `docker ${createComposeConfigArgs(composeFile, envFile).join(" ")}`,
+    command: `docker ${createComposeConfigArgs(composeFile, envFile, profiles).join(" ")}`,
     detail: composeConfig.ok
       ? "Compose configuration is valid."
       : formatCommandFailure(
@@ -144,14 +163,16 @@ export function runPhase7DockerDoctor(
     ready,
     composeFile,
     envFile,
+    profiles,
     checks,
-    nextActions: createNextActions(checks, composeFile, envFile),
+    nextActions: createNextActions(checks, composeFile, envFile, profiles),
   };
 }
 
 function createComposeConfigArgs(
   composeFile: string,
   envFile: string,
+  profiles: readonly Phase7DockerProfile[],
 ): string[] {
   return [
     "compose",
@@ -159,6 +180,7 @@ function createComposeConfigArgs(
     envFile,
     "-f",
     composeFile,
+    ...profiles.flatMap((profile) => ["--profile", profile]),
     "config",
     "--quiet",
   ];
@@ -171,6 +193,7 @@ export function formatPhase7DockerDoctorBrief(
     `Split402 Phase 7 Docker doctor: ${report.ready ? "ready" : "not ready"}`,
     `Compose file: ${report.composeFile}`,
     `Env file: ${report.envFile}`,
+    `Profiles: ${report.profiles.length === 0 ? "base" : report.profiles.join(", ")}`,
     "",
     "Checks:",
     ...report.checks.map(
@@ -218,6 +241,7 @@ function createNextActions(
   checks: readonly Phase7DockerDoctorCheck[],
   composeFile: string,
   envFile: string,
+  profiles: readonly Phase7DockerProfile[],
 ): string[] {
   const failed = new Set(
     checks.filter((check) => check.required && !check.ok).map((check) => check.name),
@@ -244,12 +268,12 @@ function createNextActions(
   }
   if (failed.has("compose_config")) {
     actions.push(
-      `Rerun \`docker ${createComposeConfigArgs(composeFile, envFile).join(" ")}\` after Docker and ${envFile} are ready.`,
+      `Rerun \`docker ${createComposeConfigArgs(composeFile, envFile, profiles).join(" ")}\` after Docker and ${envFile} are ready.`,
     );
   }
   if (actions.length === 0) {
     actions.push(
-      `Run \`docker compose -f ${composeFile} up -d postgres control-plane dashboard\`, then wait for healthy services.`,
+      `Run \`${createComposeUpCommand(composeFile, profiles)}\`, then wait for healthy services.`,
     );
   }
 
@@ -264,6 +288,7 @@ interface EnvValidationResult {
 function validateEnvValues(
   input: Phase7DockerDoctorInput,
   envFile: string,
+  profiles: readonly Phase7DockerProfile[],
 ): EnvValidationResult {
   if (input.readText === undefined) {
     return {
@@ -284,7 +309,11 @@ function validateEnvValues(
     };
   }
 
-  const missingRequired = requiredBaseEnvKeys.filter(
+  const requiredKeys = [
+    ...requiredBaseEnvKeys,
+    ...profiles.flatMap((profile) => requiredProfileEnvKeys[profile]),
+  ];
+  const missingRequired = requiredKeys.filter(
     (key) => !hasConfiguredEnvValue(parsed[key]),
   );
   const placeholderKeys = Object.entries(parsed)
@@ -309,8 +338,39 @@ function validateEnvValues(
 
   return {
     ok: true,
-    detail: `${envFile} has required base runtime values and no obvious template placeholders.`,
+    detail: `${envFile} has required ${describeProfileSet(profiles)} runtime values and no obvious template placeholders.`,
   };
+}
+
+function dedupeProfiles(
+  profiles: readonly Phase7DockerProfile[],
+): Phase7DockerProfile[] {
+  return [...new Set(profiles)];
+}
+
+function createComposeUpCommand(
+  composeFile: string,
+  profiles: readonly Phase7DockerProfile[],
+): string {
+  const profileArgs = profiles
+    .map((profile) => `--profile ${profile}`)
+    .join(" ");
+  const services = [
+    "postgres",
+    "control-plane",
+    "dashboard",
+    ...(profiles.includes("demo") ? ["demo-merchant"] : []),
+    ...(profiles.includes("workers")
+      ? ["chain-worker", "webhook-worker", "payout-finality-worker"]
+      : []),
+  ].join(" ");
+  return `docker compose -f ${composeFile}${
+    profileArgs.length === 0 ? "" : ` ${profileArgs}`
+  } up -d ${services}`;
+}
+
+function describeProfileSet(profiles: readonly Phase7DockerProfile[]): string {
+  return profiles.length === 0 ? "base" : `base+${profiles.join("+")}`;
 }
 
 function hasConfiguredEnvValue(value: string | undefined): boolean {
