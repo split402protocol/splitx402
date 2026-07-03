@@ -144,6 +144,14 @@ describe("Split402 launch preflight", () => {
         (check) => check.id === "phase7_attachment_env_mappings",
       ),
     ).toMatchObject({ ok: true });
+    expect(
+      report.checks.find((check) => check.id === "phase7_docker_runtime_env"),
+    ).toMatchObject({
+      ok: true,
+      details: [
+        "deploy/phase7-staging/phase7-staging.env exists for Docker Compose runtime values.",
+      ],
+    });
     expect(report.checks.find((check) => check.id === "phase6_evidence_env_values"))
       .toMatchObject({ ok: false });
     expect(report.checks.find((check) => check.id === "phase6_redacted_env_summary"))
@@ -179,6 +187,55 @@ describe("Split402 launch preflight", () => {
     );
     expect(report.checks.find((check) => check.id === "phase7_hosted_env_values"))
       .toMatchObject({ ok: false });
+  });
+
+  it("requires the private Phase 7 Docker runtime env file before evidence collection", () => {
+    const workspace = createSplit402ProductEvidenceWorkspace({
+      sourceCommit: "abc1234",
+    });
+    const files = createWorkspaceFileMap(
+      [
+        workspace.phase7.envText,
+        "SPLIT402_PHASE7_PROOF_ID=phase7-staging-2026-06-29",
+        "SPLIT402_PHASE7_PROOF_REVIEWERS=Split402 operators",
+        "SPLIT402_PHASE7_STAGING_ENVIRONMENT=hosted-devnet-public-alpha",
+        "SPLIT402_PHASE7_CONTROL_PLANE_URL=https://control.staging.example",
+        "SPLIT402_PHASE7_DASHBOARD_URL=https://dashboard.staging.example",
+        "SPLIT402_PHASE7_DEMO_MERCHANT_URL=https://merchant.staging.example",
+        "SPLIT402_PHASE7_WEBHOOK_RECEIVER_URL=https://webhook.staging.example",
+        "SPLIT402_PHASE7_CONTROL_PLANE_TOKEN=merchant-session-token",
+        "SPLIT402_PHASE7_MERCHANT_ID=mrc_123",
+        "SPLIT402_PHASE7_REFERRER_WALLET=referrer-wallet",
+        "SPLIT402_MCP_CONTROL_PLANE_URL=https://control.staging.example",
+        "SPLIT402_MCP_CONTROL_PLANE_TOKEN=merchant-session-token",
+        "SPLIT402_MCP_CAPABILITY=solana.wallet-risk",
+        "SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1",
+        "SPLIT402_MCP_SVM_PRIVATE_KEY=funded-devnet-buyer-key",
+      ].join("\n"),
+      createFilledPhase6EnvText(workspace.phase6EnvText),
+      workspace,
+    );
+    files.delete("deploy/phase7-staging/phase7-staging.env");
+
+    const report = createSplit402LaunchPreflightReport({
+      currentSourceCommit: "abc1234",
+      exists: (path) => files.has(path),
+      readText: (path) => files.get(path) ?? "",
+    });
+
+    expect(report.readyToCollectEvidence).toBe(false);
+    expect(
+      report.checks.find((check) => check.id === "phase7_docker_runtime_env"),
+    ).toMatchObject({
+      ok: false,
+      severity: "required",
+      details: [
+        "Copy deploy/phase7-staging/phase7-staging.env.example to deploy/phase7-staging/phase7-staging.env and fill Docker runtime values before running phase7:docker:doctor.",
+      ],
+    });
+    expect(report.nextActions).toContain(
+      "Copy deploy/phase7-staging/phase7-staging.env.example to deploy/phase7-staging/phase7-staging.env and fill Docker runtime values before running phase7:docker:doctor.",
+    );
   });
 
   it("surfaces stale mainnet canary env wiring as advisory preflight guidance", () => {
@@ -1006,6 +1063,10 @@ function createWorkspaceFileMap(
   workspace = createSplit402ProductEvidenceWorkspace(),
 ): Map<string, string> {
   return new Map([
+    [
+      "deploy/phase7-staging/phase7-staging.env",
+      "SPLIT402_PHASE7_DOCKER_RUNTIME_ENV=present",
+    ],
     [join(workspace.directory, workspace.readmeFileName), workspace.readmeText],
     [
       join(workspace.directory, workspace.githubSettingsReviewFileName),
