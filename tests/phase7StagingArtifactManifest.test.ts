@@ -50,6 +50,40 @@ describe("Phase 7 staging artifact manifest", () => {
     );
   });
 
+  it("hashes attached artifacts that already include the launch workspace path by default", () => {
+    const manifest = createPhase7StagingArtifactManifest(
+      createPhase7StagingProofRecord({
+        paid_request_evidence:
+          "attached: split402-launch-evidence/phase7-staging-evidence/paid-suite.log",
+        artifact_manifest_evidence:
+          "attached: split402-launch-evidence/phase7-staging-evidence/artifact-manifest.json",
+      }),
+      {
+        artifactBaseDir: "split402-launch-evidence",
+        readArtifact: (path) => {
+          if (
+            path !==
+            "split402-launch-evidence/phase7-staging-evidence/paid-suite.log"
+          ) {
+            throw new Error(`unexpected artifact path ${path}`);
+          }
+          return new TextEncoder().encode("paid proof\n");
+        },
+      },
+    );
+
+    expect(manifest.artifacts).toContainEqual({
+      evidenceField: "paid_request_evidence",
+      reference:
+        "attached: split402-launch-evidence/phase7-staging-evidence/paid-suite.log",
+      kind: "local",
+      artifactPath:
+        "split402-launch-evidence/phase7-staging-evidence/paid-suite.log",
+      sizeBytes: 11,
+      sha256: "1ba45a5375f1fb67d0920c315250c625521f9171bb169d164e36e57b7408fa70",
+    });
+  });
+
   it("rejects remote references for proof artifacts that must be local", () => {
     expect(() =>
       createPhase7StagingArtifactManifest(

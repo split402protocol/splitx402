@@ -1,3 +1,5 @@
+import { isAbsolute, join } from "node:path";
+
 import {
   PHASE6_CUSTODY_ATTACHMENT_FIELDS,
   type Phase6CustodyRequiredField,
@@ -331,9 +333,11 @@ function createAttachmentStatus(
   const fields = parseRecordFields(evidenceText);
   const checkedArtifacts: string[] = [];
   const missingArtifacts: string[] = [];
+  const artifactExists = options.artifactExists;
   const resolveArtifactPath =
     options.resolveArtifactPath ??
-    ((artifactPath: string, baseDir: string) => `${baseDir}/${artifactPath}`);
+    ((artifactPath: string, baseDir: string) =>
+      resolveDefaultArtifactPath(artifactPath, baseDir, artifactExists));
 
   for (const field of PHASE6_CUSTODY_ATTACHMENT_FIELDS) {
     const value = fields.get(field);
@@ -362,6 +366,17 @@ function createAttachmentStatus(
       (path) => `Phase 6 attached artifact is missing: ${path}`,
     ),
   };
+}
+
+function resolveDefaultArtifactPath(
+  artifactPath: string,
+  baseDir: string,
+  artifactExists: (path: string) => boolean,
+): string {
+  if (isAbsolute(artifactPath) || artifactExists(artifactPath)) {
+    return artifactPath;
+  }
+  return join(baseDir, artifactPath);
 }
 
 function createMissingFieldActions(

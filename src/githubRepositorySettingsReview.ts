@@ -62,6 +62,7 @@ export interface GitHubRepositorySettingsLiveReviewInput {
   branchProtection?: LiveGitHubBranchProtection;
   evidenceSource: string;
   packageCount?: number;
+  packagesUnpublishedConfirmed?: boolean;
   privateVulnerabilityReportingEnabled?: boolean;
   repositoryMetadata: LiveGitHubRepositoryMetadata;
   releaseCount?: number;
@@ -243,6 +244,11 @@ export function createGitHubRepositorySettingsReviewRecordFromLiveGitHub(
   const actualRequiredChecks = readRequiredStatusCheckNames(input.branchProtection);
   const packageCount = input.packageCount;
   const releaseCount = input.releaseCount;
+  const packagesAndReleasesUnpublished =
+    releaseCount === 0 &&
+    (packageCount === 0 ||
+      (packageCount === undefined &&
+        input.packagesUnpublishedConfirmed === true));
   return createGitHubRepositorySettingsReviewRecord({
     reviewId: input.reviewId,
     reviewDate: input.reviewDate,
@@ -285,21 +291,21 @@ export function createGitHubRepositorySettingsReviewRecordFromLiveGitHub(
     securityAdvisoriesEnabled: yesNo(
       input.privateVulnerabilityReportingEnabled === true,
     ),
-    packagesAndReleasesUnpublished: yesNo(
-      packageCount !== undefined &&
-        releaseCount !== undefined &&
-        packageCount === 0 &&
-        releaseCount === 0,
-    ),
+    packagesAndReleasesUnpublished: yesNo(packagesAndReleasesUnpublished),
     reviewDecision: "no-go",
     reviewNotes:
       input.reviewNotes ??
       [
         `generated from live GitHub API; releases=${releaseCount ?? "unverified"}; packages=${packageCount ?? "unverified"}`,
+        packageCount === undefined && input.packagesUnpublishedConfirmed === true
+          ? "package publication status manually confirmed unpublished because GitHub package API was unreadable"
+          : undefined,
         input.privateVulnerabilityReportingEnabled === true
           ? "private vulnerability reporting enabled via GitHub API"
           : "security advisories must be confirmed in GitHub UI before approval",
-      ].join("; "),
+      ]
+        .filter((note): note is string => note !== undefined)
+        .join("; "),
   });
 }
 
@@ -411,6 +417,7 @@ export function githubRepositorySettingsReviewOptionalEnv(): string[] {
     "SPLIT402_GITHUB_SETTINGS_REPOSITORY",
     "SPLIT402_GITHUB_SETTINGS_SOURCE_COMMIT",
     "SPLIT402_GITHUB_SETTINGS_BRANCH",
+    "SPLIT402_GITHUB_SETTINGS_PACKAGES_UNPUBLISHED_CONFIRMED",
     "SPLIT402_GITHUB_SETTINGS_REVIEW_DECISION",
     "SPLIT402_GITHUB_SETTINGS_REVIEW_NOTES",
   ];
