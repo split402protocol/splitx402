@@ -251,6 +251,7 @@ function createNextCommands(input: {
     `Generate Phase 6 custody records at the paths listed in ${phase6EnvFile}.`,
     `Fill ${input.directory}/${input.phase6EvidenceFileName} with generated Phase 6 custody records.`,
     "corepack pnpm phase7:docker:doctor --brief",
+    "corepack pnpm phase7:docker:doctor --brief --profile demo --profile workers",
     "SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",
     `Review ${input.directory}/${input.phase7ProofFileName} and fill direct hosted proof fields.`,
     `corepack pnpm phase7:hosted:preflight ${phase7EnvOption}`,

@@ -4,6 +4,7 @@ export const PHASE7_REQUIRED_COMMAND_EVIDENCE = [
   "corepack pnpm phase7:staging:init",
   "corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence",
   "corepack pnpm phase7:docker:doctor --brief",
+  "corepack pnpm phase7:docker:doctor --brief --profile demo --profile workers",
   "corepack pnpm phase7:staging:seed",
   "corepack pnpm phase7:staging-proof",
   "corepack pnpm phase7:hosted:preflight",
@@ -153,26 +154,36 @@ function validateDockerDoctorCommandOutput(
   text: string,
   errors: string[],
 ): void {
-  const dockerDoctorBlock = extractCommandEvidenceBlocks(text).find((block) =>
+  const dockerDoctorBlocks = extractCommandEvidenceBlocks(text).filter((block) =>
     block.command.includes("corepack pnpm phase7:docker:doctor"),
   );
-  if (dockerDoctorBlock === undefined) {
+  if (dockerDoctorBlocks.length === 0) {
     return;
   }
 
-  const outputLines = dockerDoctorBlock.outputLines
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-  if (outputLines.length === 0) {
-    errors.push("commands_run Docker doctor output is missing");
-    return;
-  }
-  if (
-    !outputLines.some(
-      (line) => line === "Split402 Phase 7 Docker doctor: ready",
-    )
-  ) {
-    errors.push("commands_run Docker doctor output must be ready");
+  for (const block of dockerDoctorBlocks) {
+    const outputLines = block.outputLines
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+    if (outputLines.length === 0) {
+      errors.push(`commands_run Docker doctor output is missing for ${block.command}`);
+      continue;
+    }
+    if (
+      !outputLines.some(
+        (line) => line === "Split402 Phase 7 Docker doctor: ready",
+      )
+    ) {
+      errors.push("commands_run Docker doctor output must be ready");
+    }
+    if (
+      block.command.includes("--profile") &&
+      !outputLines.some((line) => line === "Profiles: demo, workers")
+    ) {
+      errors.push(
+        "commands_run profile Docker doctor output must include selected demo and workers profiles",
+      );
+    }
   }
 }
 

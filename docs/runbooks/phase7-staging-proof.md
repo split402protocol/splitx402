@@ -19,6 +19,7 @@ corepack pnpm product:launch-preflight --brief --workspace split402-launch-evide
 corepack pnpm phase7:docker:env:init
 # Fill deploy/phase7-staging/phase7-staging.env with private Docker runtime values.
 corepack pnpm phase7:docker:doctor --brief
+corepack pnpm phase7:docker:doctor --brief --profile demo --profile workers
 SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed
 corepack pnpm phase7:staging-proof --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-proof.txt
 corepack pnpm phase7:hosted:preflight --evidence-env-file split402-launch-evidence/phase7-staging.env
@@ -46,10 +47,12 @@ the hosted staging run.
 The `commands.log` transcript may use `corepack pnpm product:evidence:init` as
 the workspace-initialization command; the status checker treats it as equivalent
 to `corepack pnpm phase7:staging:init` for the combined launch workspace.
-Run `corepack pnpm phase7:docker:doctor --brief` on the host that will run the
-Phase 7 staging stack before seeding or collecting proof. The command transcript
-must include `Split402 Phase 7 Docker doctor: ready`; otherwise the final proof
-status remains no-go.
+Run `corepack pnpm phase7:docker:doctor --brief` and
+`corepack pnpm phase7:docker:doctor --brief --profile demo --profile workers`
+on the host that will run the Phase 7 staging stack before seeding or collecting
+proof. The command transcript must include `Split402 Phase 7 Docker doctor:
+ready`, and the profile run must show `Profiles: demo, workers`; otherwise the
+final proof status remains no-go.
 Run `corepack pnpm phase7:staging:commands-status --brief
 split402-launch-evidence/phase7-staging-evidence/commands.log` before assembly
 to catch missing command lines or placeholder output without rebuilding the full
@@ -244,6 +247,7 @@ The validator requires:
   `git rev-parse HEAD`, `git status --short --branch`,
   `corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence`,
   `corepack pnpm phase7:docker:doctor --brief`,
+  `corepack pnpm phase7:docker:doctor --brief --profile demo --profile workers`,
   `corepack pnpm lint`, `corepack pnpm product:public-surface-check --brief`,
   `corepack pnpm typecheck`, `corepack pnpm test`,
   `corepack pnpm build`, `corepack pnpm vectors:check`, and
@@ -251,7 +255,8 @@ The validator requires:
   `git status --short --branch` output must show only the branch/status header
   and no changed-file rows. The pasted launch-preflight output must include
   `Split402 launch preflight: ready`, the pasted Docker doctor output must
-  include `Split402 Phase 7 Docker doctor: ready`, and the pasted
+  include `Split402 Phase 7 Docker doctor: ready`, the pasted profile Docker
+  doctor output must include `Profiles: demo, workers`, and the pasted
   public-surface output must include `Split402 public surface check: passed`.
   Run `corepack pnpm phase7:staging:commands-status --brief <commands.log>`
   before proof assembly to validate this artifact directly.
