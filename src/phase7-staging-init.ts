@@ -49,6 +49,7 @@ function main(): void {
           "Fill direct SPLIT402_PHASE7_* proof fields.",
           `Use ${envFilePath} for SPLIT402_PHASE7_ASSEMBLE_* attachment paths.`,
           "Capture real staging outputs into the listed artifact files.",
+          "corepack pnpm phase7:docker:doctor --brief",
           "SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",
           `corepack pnpm phase7:staging-proof --evidence-env-file ${envFilePath} phase7-staging-proof.txt`,
           `corepack pnpm phase7:hosted:preflight --evidence-env-file ${envFilePath}`,

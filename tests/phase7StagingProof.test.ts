@@ -316,6 +316,9 @@ approval_decision: no-go
       "Create the evidence workspace with corepack pnpm phase7:staging:init.",
     );
     expect(report.nextActions).toContain(
+      "Run Docker readiness with corepack pnpm phase7:docker:doctor --brief from the hosted staging runtime.",
+    );
+    expect(report.nextActions).toContain(
       "Seed the hosted staging demo state with SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed.",
     );
     expect(report.nextActions).toContain(
