@@ -16,6 +16,7 @@ git rev-parse HEAD
 git status --short --branch
 corepack pnpm product:evidence:init --missing
 corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence
+corepack pnpm phase7:docker:doctor --brief
 SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed
 corepack pnpm phase7:staging-proof --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-proof.txt
 corepack pnpm phase7:hosted:preflight --evidence-env-file split402-launch-evidence/phase7-staging.env
@@ -43,6 +44,10 @@ the hosted staging run.
 The `commands.log` transcript may use `corepack pnpm product:evidence:init` as
 the workspace-initialization command; the status checker treats it as equivalent
 to `corepack pnpm phase7:staging:init` for the combined launch workspace.
+Run `corepack pnpm phase7:docker:doctor --brief` on the host that will run the
+Phase 7 staging stack before seeding or collecting proof. The command transcript
+must include `Split402 Phase 7 Docker doctor: ready`; otherwise the final proof
+status remains no-go.
 Run `corepack pnpm phase7:staging:commands-status --brief
 split402-launch-evidence/phase7-staging-evidence/commands.log` before assembly
 to catch missing command lines or placeholder output without rebuilding the full
@@ -236,14 +241,16 @@ The validator requires:
   and the validation commands:
   `git rev-parse HEAD`, `git status --short --branch`,
   `corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence`,
+  `corepack pnpm phase7:docker:doctor --brief`,
   `corepack pnpm lint`, `corepack pnpm product:public-surface-check --brief`,
   `corepack pnpm typecheck`, `corepack pnpm test`,
   `corepack pnpm build`, `corepack pnpm vectors:check`, and
   `corepack pnpm audit --audit-level high`. The pasted
   `git status --short --branch` output must show only the branch/status header
   and no changed-file rows. The pasted launch-preflight output must include
-  `Split402 launch preflight: ready`, and the pasted public-surface output must
-  include `Split402 public surface check: passed`.
+  `Split402 launch preflight: ready`, the pasted Docker doctor output must
+  include `Split402 Phase 7 Docker doctor: ready`, and the pasted
+  public-surface output must include `Split402 public surface check: passed`.
   Run `corepack pnpm phase7:staging:commands-status --brief <commands.log>`
   before proof assembly to validate this artifact directly.
 - `funding_balance_evidence` must be a local attached
