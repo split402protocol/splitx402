@@ -85,6 +85,20 @@ describe("Phase 7 command evidence", () => {
       "commands_run launch preflight output must be ready",
     );
   });
+
+  it("rejects non-ready Docker doctor output", () => {
+    const validation = validatePhase7CommandEvidence(
+      createCompleteCommandsLog().replace(
+        "Split402 Phase 7 Docker doctor: ready",
+        "Split402 Phase 7 Docker doctor: not ready",
+      ),
+    );
+
+    expect(validation.ok).toBe(false);
+    expect(validation.errors).toContain(
+      "commands_run Docker doctor output must be ready",
+    );
+  });
 });
 
 function createCompleteCommandsLog(): string {
@@ -103,6 +117,9 @@ function readCommandOutput(command: string): string {
     "corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence"
   ) {
     return "\nSplit402 launch preflight: ready";
+  }
+  if (command === "corepack pnpm phase7:docker:doctor --brief") {
+    return "\nSplit402 Phase 7 Docker doctor: ready";
   }
   if (command === "corepack pnpm product:public-surface-check --brief") {
     return "\nSplit402 public surface check: passed";

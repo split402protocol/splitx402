@@ -3,6 +3,7 @@ export const PHASE7_REQUIRED_COMMAND_EVIDENCE = [
   "git status --short --branch",
   "corepack pnpm phase7:staging:init",
   "corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence",
+  "corepack pnpm phase7:docker:doctor --brief",
   "corepack pnpm phase7:staging:seed",
   "corepack pnpm phase7:staging-proof",
   "corepack pnpm phase7:hosted:preflight",
@@ -94,6 +95,7 @@ export function validatePhase7CommandEvidence(
   }
   validateGitStatusCommandOutput(text, errors);
   validateLaunchPreflightCommandOutput(text, errors);
+  validateDockerDoctorCommandOutput(text, errors);
   validatePublicSurfaceCommandOutput(text, errors);
   return { ok: errors.length === 0, errors };
 }
@@ -144,6 +146,33 @@ function validateLaunchPreflightCommandOutput(
   }
   if (!outputLines.some((line) => line === "Split402 launch preflight: ready")) {
     errors.push("commands_run launch preflight output must be ready");
+  }
+}
+
+function validateDockerDoctorCommandOutput(
+  text: string,
+  errors: string[],
+): void {
+  const dockerDoctorBlock = extractCommandEvidenceBlocks(text).find((block) =>
+    block.command.includes("corepack pnpm phase7:docker:doctor"),
+  );
+  if (dockerDoctorBlock === undefined) {
+    return;
+  }
+
+  const outputLines = dockerDoctorBlock.outputLines
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  if (outputLines.length === 0) {
+    errors.push("commands_run Docker doctor output is missing");
+    return;
+  }
+  if (
+    !outputLines.some(
+      (line) => line === "Split402 Phase 7 Docker doctor: ready",
+    )
+  ) {
+    errors.push("commands_run Docker doctor output must be ready");
   }
 }
 
