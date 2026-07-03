@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 import {
   formatPhase7DockerDoctorBrief,
@@ -20,6 +20,7 @@ const report = runPhase7DockerDoctor({
   ...(args.envFile === undefined ? {} : { envFile: args.envFile }),
   cwd: process.cwd(),
   exists: existsSync,
+  readText: (path) => readFileSync(path, "utf8"),
   execFile: (file, commandArgs, options) =>
     execFileSync(file, [...commandArgs], {
       cwd: options?.cwd,

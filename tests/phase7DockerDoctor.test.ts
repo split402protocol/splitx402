@@ -12,6 +12,7 @@ describe("Phase 7 Docker doctor", () => {
       exists: (path) =>
         path === "deploy/phase7-staging/compose.yaml" ||
         path === "deploy/phase7-staging/phase7-staging.env",
+      readText: () => filledDockerEnv(),
       execFile: (file, args) => {
         commands.push([file, ...args].join(" "));
         if (args.join(" ") === "--version") {
@@ -50,6 +51,7 @@ describe("Phase 7 Docker doctor", () => {
       exists: (path) =>
         path === "deploy/phase7-staging/compose.yaml" ||
         path === "split402-launch-evidence/phase7-staging.env",
+      readText: () => filledDockerEnv(),
       execFile: (file, args) => {
         commands.push([file, ...args].join(" "));
         if (args.join(" ") === "--version") {
@@ -104,6 +106,47 @@ describe("Phase 7 Docker doctor", () => {
     );
   });
 
+  it("fails closed when the private env file still has template placeholders", () => {
+    const report = runPhase7DockerDoctor({
+      exists: (path) =>
+        path === "deploy/phase7-staging/compose.yaml" ||
+        path === "deploy/phase7-staging/phase7-staging.env",
+      readText: () => [
+        "SPLIT402_DASHBOARD_VIEWER_TOKEN=replace-with-staging-viewer-token",
+        "SPLIT402_DASHBOARD_CONTROL_PLANE_TOKEN=",
+        "SPLIT402_WEBHOOK_WORKER_SECRET=replace-with-staging-webhook-secret",
+      ].join("\n"),
+      execFile: (file, args) => {
+        if (args.join(" ") === "--version") {
+          return "Docker version 27.0.0";
+        }
+        if (args.join(" ") === "compose version") {
+          return "Docker Compose version v2.29.1";
+        }
+        if (
+          args.join(" ") ===
+          "compose --env-file deploy/phase7-staging/phase7-staging.env -f deploy/phase7-staging/compose.yaml config --quiet"
+        ) {
+          return "";
+        }
+        throw new Error(`unexpected command ${file} ${args.join(" ")}`);
+      },
+    });
+
+    expect(report.ready).toBe(false);
+    expect(report.checks).toContainEqual(
+      expect.objectContaining({
+        name: "compose_env_values",
+        ok: false,
+        detail:
+          "deploy/phase7-staging/phase7-staging.env is not ready (missing required values: SPLIT402_DASHBOARD_VIEWER_TOKEN, SPLIT402_DASHBOARD_CONTROL_PLANE_TOKEN; replace template placeholders: SPLIT402_DASHBOARD_VIEWER_TOKEN, SPLIT402_WEBHOOK_WORKER_SECRET).",
+      }),
+    );
+    expect(report.nextActions).toContain(
+      "Fill missing private runtime values and replace template placeholders in deploy/phase7-staging/phase7-staging.env; do not commit this file.",
+    );
+  });
+
   it("does not validate compose config until the private env file exists", () => {
     const commands: string[] = [];
     const report = runPhase7DockerDoctor({
@@ -132,3 +175,11 @@ describe("Phase 7 Docker doctor", () => {
     );
   });
 });
+
+function filledDockerEnv(): string {
+  return [
+    "SPLIT402_DASHBOARD_VIEWER_TOKEN=viewer-token",
+    "SPLIT402_DASHBOARD_CONTROL_PLANE_TOKEN=control-plane-token",
+    "SPLIT402_WEBHOOK_WORKER_SECRET=webhook-secret",
+  ].join("\n");
+}
