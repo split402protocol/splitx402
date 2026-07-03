@@ -34,6 +34,11 @@ export const PHASE7_STAGING_COMMANDS = [
     evidenceField: "commands_run",
   },
   {
+    gate: "docker_profile_stack_health",
+    command: "corepack pnpm phase7:docker:health --brief --profile demo --profile workers",
+    evidenceField: "commands_run",
+  },
+  {
     gate: "hosted_staging_seed",
     command: "corepack pnpm phase7:staging:seed",
     evidenceField: "commands_run",

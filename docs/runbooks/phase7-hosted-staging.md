@@ -64,12 +64,19 @@ their public health endpoints. Wait for `postgres`, `control-plane`, and
 corepack pnpm phase7:docker:compose ps --brief
 ```
 
+For machine-checkable evidence, use the Docker health gate:
+
+```bash
+corepack pnpm phase7:docker:health --brief
+```
+
 Add the demo merchant and workers when the staging wallets and webhook receiver
 are ready:
 
 ```bash
 corepack pnpm phase7:docker:doctor --brief --profile demo --profile workers
 corepack pnpm phase7:docker:compose up --brief --profile demo --profile workers
+corepack pnpm phase7:docker:health --brief --profile demo --profile workers
 ```
 
 The demo merchant also exposes a Docker healthcheck on `/health`, and it waits
