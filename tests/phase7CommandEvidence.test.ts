@@ -138,6 +138,12 @@ function readCommandOutput(command: string): string {
   ) {
     return "\nSplit402 Phase 7 Docker doctor: ready\nProfiles: demo, workers";
   }
+  if (
+    command ===
+    "corepack pnpm phase7:docker:compose up --brief --profile demo --profile workers"
+  ) {
+    return "\nSplit402 Phase 7 Docker compose up: ok\nCommand: docker compose --env-file deploy/phase7-staging/phase7-staging.env -f deploy/phase7-staging/compose.yaml --profile demo --profile workers up -d postgres control-plane dashboard demo-merchant chain-worker webhook-worker payout-finality-worker";
+  }
   if (command === "corepack pnpm product:public-surface-check --brief") {
     return "\nSplit402 public surface check: passed";
   }

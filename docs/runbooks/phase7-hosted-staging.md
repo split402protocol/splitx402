@@ -50,7 +50,7 @@ It checks Docker, Docker Compose v2, the staging compose file, the private
 Launch the control plane and dashboard:
 
 ```bash
-docker compose -f deploy/phase7-staging/compose.yaml up postgres control-plane dashboard
+corepack pnpm phase7:docker:compose up --brief
 ```
 
 The `migrate` service runs `corepack pnpm control-plane:migrate` once before the
@@ -61,7 +61,7 @@ their public health endpoints. Wait for `postgres`, `control-plane`, and
 `dashboard` to report healthy before collecting hosted proof artifacts:
 
 ```bash
-docker compose -f deploy/phase7-staging/compose.yaml ps
+corepack pnpm phase7:docker:compose ps --brief
 ```
 
 Add the demo merchant and workers when the staging wallets and webhook receiver
@@ -69,7 +69,7 @@ are ready:
 
 ```bash
 corepack pnpm phase7:docker:doctor --brief --profile demo --profile workers
-docker compose -f deploy/phase7-staging/compose.yaml --profile demo --profile workers up
+corepack pnpm phase7:docker:compose up --brief --profile demo --profile workers
 ```
 
 The demo merchant also exposes a Docker healthcheck on `/health`, and it waits
@@ -224,12 +224,12 @@ contract check alongside the hosted transcript.
 ## Shutdown
 
 ```bash
-docker compose -f deploy/phase7-staging/compose.yaml down
+corepack pnpm phase7:docker:compose down --brief
 ```
 
 Remove the staging database volume only after the proof artifacts have been
 captured:
 
 ```bash
-docker compose -f deploy/phase7-staging/compose.yaml down -v
+corepack pnpm phase7:docker:compose down --brief --volumes
 ```
