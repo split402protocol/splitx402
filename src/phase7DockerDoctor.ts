@@ -90,7 +90,9 @@ export function runPhase7DockerDoctor(
     required: true,
     detail: envFileExists
       ? `${envFile} exists.`
-      : `${envFile} is missing. Copy deploy/phase7-staging/phase7-staging.env.example to ${envFile} and fill staging values.`,
+      : `${envFile} is missing. Run corepack pnpm phase7:docker:env:init${
+          envFile === defaultEnvFile ? "" : ` --target ${envFile}`
+        }, then fill staging values.`,
   });
 
   const shouldValidateComposeConfig =
@@ -209,7 +211,9 @@ function createNextActions(
   }
   if (failed.has("compose_env_file")) {
     actions.push(
-      `Copy deploy/phase7-staging/phase7-staging.env.example to ${envFile} and fill the private staging values on the host.`,
+      `Run corepack pnpm phase7:docker:env:init${
+        envFile === defaultEnvFile ? "" : ` --target ${envFile}`
+      }, then fill ${envFile} with private staging values on the host.`,
     );
   }
   if (failed.has("compose_config")) {

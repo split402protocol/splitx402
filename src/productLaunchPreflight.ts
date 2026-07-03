@@ -160,8 +160,6 @@ const PRE_COLLECTION_APPROVAL_ENV_KEYS = [
 
 const PHASE7_DOCKER_RUNTIME_ENV_FILE =
   "deploy/phase7-staging/phase7-staging.env";
-const PHASE7_DOCKER_RUNTIME_ENV_EXAMPLE_FILE =
-  "deploy/phase7-staging/phase7-staging.env.example";
 
 export function createSplit402LaunchPreflightReport(
   input: Split402LaunchPreflightInput,
@@ -410,7 +408,7 @@ export function createSplit402LaunchPreflightReport(
             `${PHASE7_DOCKER_RUNTIME_ENV_FILE} exists for Docker Compose runtime values.`,
           ]
         : [
-            `Copy ${PHASE7_DOCKER_RUNTIME_ENV_EXAMPLE_FILE} to ${PHASE7_DOCKER_RUNTIME_ENV_FILE} and fill Docker runtime values before running phase7:docker:doctor.`,
+            `Run corepack pnpm phase7:docker:env:init, then fill ${PHASE7_DOCKER_RUNTIME_ENV_FILE} with private Docker runtime values before running phase7:docker:doctor.`,
           ],
     },
     {
@@ -576,7 +574,6 @@ function createNextActions(checks: readonly Split402LaunchPreflightCheck[]): str
         detail.startsWith("Run ") ||
         detail.startsWith("Fix ") ||
         detail.startsWith("Fill ") ||
-        detail.startsWith("Copy ") ||
         detail.startsWith("Set ") ||
         detail.startsWith("Regenerate "),
     );
