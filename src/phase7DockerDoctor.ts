@@ -1,3 +1,5 @@
+import dotenv from "dotenv";
+
 export interface Phase7DockerDoctorInput {
   composeFile?: string;
   envFile?: string;
@@ -7,6 +9,7 @@ export interface Phase7DockerDoctorInput {
     options?: { cwd?: string },
   ) => string;
   exists: (path: string) => boolean;
+  readText?: (path: string) => string;
   cwd?: string;
 }
 
@@ -16,6 +19,7 @@ export interface Phase7DockerDoctorCheck {
     | "docker_compose_plugin"
     | "compose_file"
     | "compose_env_file"
+    | "compose_env_values"
     | "compose_config";
   ok: boolean;
   required: boolean;
@@ -34,6 +38,10 @@ export interface Phase7DockerDoctorReport {
 
 const defaultComposeFile = "deploy/phase7-staging/compose.yaml";
 const defaultEnvFile = "deploy/phase7-staging/phase7-staging.env";
+const requiredBaseEnvKeys = [
+  "SPLIT402_DASHBOARD_VIEWER_TOKEN",
+  "SPLIT402_DASHBOARD_CONTROL_PLANE_TOKEN",
+] as const;
 
 export function runPhase7DockerDoctor(
   input: Phase7DockerDoctorInput,
@@ -93,6 +101,19 @@ export function runPhase7DockerDoctor(
       : `${envFile} is missing. Run corepack pnpm phase7:docker:env:init${
           envFile === defaultEnvFile ? "" : ` --target ${envFile}`
         }, then fill staging values.`,
+  });
+
+  const envValues = envFileExists
+    ? validateEnvValues(input, envFile)
+    : {
+        ok: false,
+        detail: `Skipped until ${envFile} exists.`,
+      };
+  checks.push({
+    name: "compose_env_values",
+    ok: envValues.ok,
+    required: true,
+    detail: envValues.detail,
   });
 
   const shouldValidateComposeConfig =
@@ -216,6 +237,11 @@ function createNextActions(
       }, then fill ${envFile} with private staging values on the host.`,
     );
   }
+  if (failed.has("compose_env_values")) {
+    actions.push(
+      `Fill missing private runtime values and replace template placeholders in ${envFile}; do not commit this file.`,
+    );
+  }
   if (failed.has("compose_config")) {
     actions.push(
       `Rerun \`docker ${createComposeConfigArgs(composeFile, envFile).join(" ")}\` after Docker and ${envFile} are ready.`,
@@ -228,4 +254,80 @@ function createNextActions(
   }
 
   return actions;
+}
+
+interface EnvValidationResult {
+  ok: boolean;
+  detail: string;
+}
+
+function validateEnvValues(
+  input: Phase7DockerDoctorInput,
+  envFile: string,
+): EnvValidationResult {
+  if (input.readText === undefined) {
+    return {
+      ok: false,
+      detail: `${envFile} exists, but env values could not be inspected by this runner.`,
+    };
+  }
+
+  let parsed: Record<string, string>;
+  try {
+    parsed = dotenv.parse(input.readText(envFile));
+  } catch (error) {
+    return {
+      ok: false,
+      detail: `${envFile} could not be read: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    };
+  }
+
+  const missingRequired = requiredBaseEnvKeys.filter(
+    (key) => !hasConfiguredEnvValue(parsed[key]),
+  );
+  const placeholderKeys = Object.entries(parsed)
+    .filter(([, value]) => value.trim().length > 0 && isPlaceholderEnvValue(value))
+    .map(([key]) => key)
+    .sort();
+
+  if (missingRequired.length > 0 || placeholderKeys.length > 0) {
+    const details = [
+      ...(missingRequired.length === 0
+        ? []
+        : [`missing required values: ${missingRequired.join(", ")}`]),
+      ...(placeholderKeys.length === 0
+        ? []
+        : [`replace template placeholders: ${placeholderKeys.join(", ")}`]),
+    ];
+    return {
+      ok: false,
+      detail: `${envFile} is not ready (${details.join("; ")}).`,
+    };
+  }
+
+  return {
+    ok: true,
+    detail: `${envFile} has required base runtime values and no obvious template placeholders.`,
+  };
+}
+
+function hasConfiguredEnvValue(value: string | undefined): boolean {
+  return value !== undefined && !isPlaceholderEnvValue(value);
+}
+
+function isPlaceholderEnvValue(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized.length === 0 ||
+    normalized === "todo" ||
+    normalized === "tbd" ||
+    normalized === "pending" ||
+    normalized === "replace-me" ||
+    normalized.startsWith("<") ||
+    normalized.includes("...") ||
+    normalized.includes("replace-with") ||
+    normalized.includes("yyyy")
+  );
 }
