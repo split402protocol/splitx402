@@ -22,7 +22,7 @@ describe("Phase 7 Docker doctor", () => {
         }
         if (
           args.join(" ") ===
-          "compose -f deploy/phase7-staging/compose.yaml config --quiet"
+          "compose --env-file deploy/phase7-staging/phase7-staging.env -f deploy/phase7-staging/compose.yaml config --quiet"
         ) {
           return "";
         }
@@ -35,10 +35,43 @@ describe("Phase 7 Docker doctor", () => {
     expect(commands).toEqual([
       "docker --version",
       "docker compose version",
-      "docker compose -f deploy/phase7-staging/compose.yaml config --quiet",
+      "docker compose --env-file deploy/phase7-staging/phase7-staging.env -f deploy/phase7-staging/compose.yaml config --quiet",
     ]);
     expect(formatPhase7DockerDoctorBrief(report)).toContain(
       "Split402 Phase 7 Docker doctor: ready",
+    );
+  });
+
+  it("passes custom env file paths into compose config validation", () => {
+    const commands: string[] = [];
+    const report = runPhase7DockerDoctor({
+      composeFile: "deploy/phase7-staging/compose.yaml",
+      envFile: "split402-launch-evidence/phase7-staging.env",
+      exists: (path) =>
+        path === "deploy/phase7-staging/compose.yaml" ||
+        path === "split402-launch-evidence/phase7-staging.env",
+      execFile: (file, args) => {
+        commands.push([file, ...args].join(" "));
+        if (args.join(" ") === "--version") {
+          return "Docker version 27.0.0";
+        }
+        if (args.join(" ") === "compose version") {
+          return "Docker Compose version v2.29.1";
+        }
+        if (
+          args.join(" ") ===
+          "compose --env-file split402-launch-evidence/phase7-staging.env -f deploy/phase7-staging/compose.yaml config --quiet"
+        ) {
+          return "";
+        }
+        throw new Error(`unexpected command ${file} ${args.join(" ")}`);
+      },
+    });
+
+    expect(report.ready).toBe(true);
+    expect(report.envFile).toBe("split402-launch-evidence/phase7-staging.env");
+    expect(commands).toContain(
+      "docker compose --env-file split402-launch-evidence/phase7-staging.env -f deploy/phase7-staging/compose.yaml config --quiet",
     );
   });
 

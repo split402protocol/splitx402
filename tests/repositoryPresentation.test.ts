@@ -341,6 +341,9 @@ describe("repository presentation", () => {
       expect(text, filePath).toContain(
         "corepack pnpm phase7:docker:doctor --brief",
       );
+      expect(text, filePath).toContain(
+        "Fill deploy/phase7-staging/phase7-staging.env from its example for Docker runtime values.",
+      );
       expect(text, filePath).not.toMatch(
         /--evidence-env-file phase7-staging-evidence\//u,
       );

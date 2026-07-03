@@ -73,6 +73,9 @@ describe("Split402 launch checklist", () => {
       "Fill split402-launch-evidence/phase7-staging.env with hosted staging values reported by launch preflight.",
     );
     expect(checklist.sections[3]?.commands[2]).toBe(
+      "Fill deploy/phase7-staging/phase7-staging.env from deploy/phase7-staging/phase7-staging.env.example with Docker runtime values.",
+    );
+    expect(checklist.sections[3]?.commands[3]).toBe(
       "corepack pnpm phase7:docker:doctor --brief",
     );
     expect(checklist.sections[3]?.commands).toContain(

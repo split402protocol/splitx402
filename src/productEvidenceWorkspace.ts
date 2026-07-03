@@ -245,6 +245,7 @@ function createNextCommands(input: {
     "Use corepack pnpm product:github-settings-review --template only when you need a blank manual GitHub review form; keep the live snapshot no-go until human review approves the settings evidence.",
     launchPreflightCommand,
     `Fill ${phase7EnvFile} with hosted staging values reported by launch preflight.`,
+    "Fill deploy/phase7-staging/phase7-staging.env from deploy/phase7-staging/phase7-staging.env.example with Docker runtime values.",
     `Review generated ${phase6EnvFile} before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template ${input.directory} ${phase6EnvFile}`,
     `Generate Phase 6 custody records at the paths listed in ${phase6EnvFile}.`,
     `Fill ${input.directory}/${input.phase6EvidenceFileName} with generated Phase 6 custody records.`,
