@@ -1874,6 +1874,53 @@ describe("MCP demo gateway", () => {
     expect(calls).toEqual([]);
   });
 
+  it("rejects missing live control-plane token when required", async () => {
+    const bundle = createMcpDemoBundle({
+      merchantOrigin: "https://merchant.example",
+      generatedAt: "2026-06-26T00:00:00.000Z"
+    });
+    const calls: string[] = [];
+
+    await expect(
+      createMcpGatewayContextFromEnv({
+        bundle,
+        env: {
+          SPLIT402_MCP_CONTROL_PLANE_URL: "https://control.example",
+          SPLIT402_MCP_CAPABILITY: "solana.wallet-risk",
+          SPLIT402_MCP_SVM_PRIVATE_KEY: sampleSvmPrivateKey()
+        },
+        fetch: mcpControlPlaneFetch(calls, bundle),
+        requireControlPlaneToken: true
+      })
+    ).rejects.toThrow(
+      "SPLIT402_MCP_CONTROL_PLANE_TOKEN is required for live MCP gateway discovery"
+    );
+    expect(calls).toEqual([]);
+  });
+
+  it("requires a control-plane token for the live gateway CLI before discovery", async () => {
+    const bundle = createMcpDemoBundle({
+      merchantOrigin: "https://merchant.example",
+      generatedAt: "2026-06-26T00:00:00.000Z"
+    });
+    const calls: string[] = [];
+
+    await expect(
+      runMcpGateway(Readable.from([]), createWritableSink(), {
+        bundle,
+        env: {
+          SPLIT402_MCP_CONTROL_PLANE_URL: "https://control.example",
+          SPLIT402_MCP_CAPABILITY: "solana.wallet-risk",
+          SPLIT402_MCP_SVM_PRIVATE_KEY: sampleSvmPrivateKey()
+        },
+        fetch: mcpControlPlaneFetch(calls, bundle)
+      })
+    ).rejects.toThrow(
+      "SPLIT402_MCP_CONTROL_PLANE_TOKEN is required for live MCP gateway discovery"
+    );
+    expect(calls).toEqual([]);
+  });
+
   it("requires a signer for the live gateway CLI before control-plane discovery", async () => {
     const bundle = createMcpDemoBundle({
       merchantOrigin: "https://merchant.example",
@@ -2565,6 +2612,10 @@ function createWritableSink(): Writable {
       callback();
     }
   });
+}
+
+function sampleSvmPrivateKey(): string {
+  return "2FrrUyzJ3TeEeDSCywX2uDDc9rY3QuRQzQTNweAW89cu";
 }
 
 function mcpControlPlaneFetch(

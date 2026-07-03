@@ -88,6 +88,7 @@ export interface McpGatewayRuntimeOptions {
   bundle?: McpDemoBundle;
   env?: NodeJS.ProcessEnv;
   fetch?: Split402DiscoveryFetch & Split402ExternalX402DiscoveryFetch;
+  requireControlPlaneToken?: boolean;
   requireSigner?: boolean;
 }
 
@@ -150,6 +151,11 @@ export async function createMcpGatewayContextFromEnv(
 
   const capabilityOverride = readOptionalEnvString(env.SPLIT402_MCP_CAPABILITY);
   const bearerToken = readOptionalEnvString(env.SPLIT402_MCP_CONTROL_PLANE_TOKEN);
+  if (options.requireControlPlaneToken === true && bearerToken === undefined) {
+    throw new Error(
+      "SPLIT402_MCP_CONTROL_PLANE_TOKEN is required for live MCP gateway discovery"
+    );
+  }
   const discovery = new Split402ControlPlaneDiscoveryClient({
     controlPlaneUrl,
     ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
@@ -250,6 +256,7 @@ export async function runMcpGateway(
 ): Promise<void> {
   const context = await createMcpGatewayContextFromEnv({
     ...options,
+    requireControlPlaneToken: options.requireControlPlaneToken ?? true,
     requireSigner: options.requireSigner ?? true
   });
   const reader = createInterface({

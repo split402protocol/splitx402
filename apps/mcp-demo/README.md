@@ -372,9 +372,10 @@ agent SDK executor and therefore still requires the surrounding live x402 buyer
 configuration to be valid. Set `SPLIT402_MCP_SVM_PRIVATE_KEY` to a funded
 Solana buyer key encoded as base58 bytes, or use the existing demo-agent
 `SVM_PRIVATE_KEY` environment variable. The CLI gateway refuses to start in
-control-plane discovery mode until one of those signer variables is present, so
-live execution cannot accidentally run without a buyer payment signer. This
-remains a public-alpha gateway path, not a production hosted MCP service.
+control-plane discovery mode until `SPLIT402_MCP_CONTROL_PLANE_TOKEN` and one
+of those signer variables are present, so live execution cannot accidentally run
+without authenticated discovery and a buyer payment signer. This remains a
+public-alpha gateway path, not a production hosted MCP service.
 
 ## Proof Commands
 
