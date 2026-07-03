@@ -177,6 +177,29 @@ describe("Phase 7 MCP gateway evidence collector", () => {
     );
   });
 
+  it("requires a control-plane token before hosted discovery collection", async () => {
+    const bundle = createMcpDemoBundle({
+      merchantOrigin: "https://merchant.example",
+      generatedAt: "2026-06-26T00:00:00.000Z",
+    });
+    const calls: string[] = [];
+
+    await expect(
+      collectPhase7McpGatewayEvidence({
+        outputDir: "evidence",
+        env: {
+          SPLIT402_MCP_CONTROL_PLANE_URL: "https://control.example",
+          SPLIT402_MCP_CAPABILITY: "solana.wallet-risk",
+        },
+        fetch: gatewayFetch(calls, bundle),
+        writeArtifact: () => undefined,
+      }),
+    ).rejects.toThrow(
+      "SPLIT402_MCP_CONTROL_PLANE_TOKEN is required for live MCP gateway discovery",
+    );
+    expect(calls).toEqual([]);
+  });
+
   it("rejects malformed MCP max budget before discovery or execution", async () => {
     const bundle = createMcpDemoBundle({
       merchantOrigin: "https://merchant.example",
