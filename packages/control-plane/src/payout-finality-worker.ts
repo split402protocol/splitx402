@@ -212,11 +212,17 @@ function createLoopOptions(
 function printHelp(): void {
   console.log(`Usage: split402-payout-finality-worker
 
-Runs the Split402 payout finality worker loop. The worker observes
-submitted and confirmed payout transactions against Solana RPC and
-persists chain-observed finality outcomes. It never signs, broadcasts,
-or replaces transaction bytes, and it leaves outcome-unknown
+Runs the Split402 payout finality worker loop. The worker sweeps
+submitted and confirmed payout transactions that carry an expected
+signature, observes them against Solana RPC, and persists chain-observed
+finality outcomes with a compare-and-set guard so concurrent sweeps or
+operator reconcile decisions are never overwritten. It never signs,
+broadcasts, or replaces transaction bytes, and it leaves outcome-unknown
 reconciliation to the operator reconcile flow.
+
+The loop runs one sweep per poll interval (default 5000ms) and each
+sweep checks at most the sweep limit of transactions (default 25,
+clamped to 100).
 
 Required environment:
   SPLIT402_DATABASE_URL
@@ -233,7 +239,8 @@ Optional environment:
   SPLIT402_PAYOUT_FINALITY_WORKER_STOP_ON_ERROR=true|false
 
 Falls back to SPLIT402_CHAIN_WORKER_SOLANA_RPC_URL(S) and
-SPLIT402_CHAIN_WORKER_NETWORK when payout finality RPC values are unset.`);
+SPLIT402_CHAIN_WORKER_NETWORK when payout finality RPC values are unset
+or empty.`);
 }
 
 function readOptionalPositiveInteger(
