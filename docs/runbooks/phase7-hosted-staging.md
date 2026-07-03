@@ -37,6 +37,16 @@ cp deploy/phase7-staging/phase7-staging.env.example deploy/phase7-staging/phase7
 Fill the viewer token, webhook target, Devnet wallets, and demo merchant signing
 settings in `deploy/phase7-staging/phase7-staging.env`.
 
+Before starting services on a local machine or VPS, run the Docker doctor:
+
+```bash
+corepack pnpm phase7:docker:doctor --brief
+```
+
+It checks Docker, Docker Compose v2, the staging compose file, the private
+`phase7-staging.env`, and `docker compose config --quiet`. If it reports
+`not ready`, fix those host/setup issues before collecting Phase 7 evidence.
+
 Launch the control plane and dashboard:
 
 ```bash
