@@ -4,6 +4,7 @@ import {
 } from "./phase6CustodyBundle.js";
 
 export interface Phase6EvidenceAssemblyInput {
+  currentSourceCommit?: string;
   values?: Phase6CustodyEvidenceBundleValues;
   records?: {
     imageProvenance?: string;
@@ -35,6 +36,12 @@ export function assemblePhase6CustodyEvidenceBundle(
     ...deriveAttachmentValues(input.attachments ?? {}),
     ...(input.values ?? {}),
   };
+  if (
+    input.currentSourceCommit !== undefined &&
+    (values.source_commit === undefined || values.source_commit.trim().length === 0)
+  ) {
+    values.source_commit = input.currentSourceCommit;
+  }
 
   return createPhase6CustodyEvidenceBundle(values);
 }

@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
 import {
@@ -27,6 +28,7 @@ try {
   });
   const values = readDirectValues();
   const input: Phase6EvidenceAssemblyInput = {
+    currentSourceCommit: readCurrentGitCommit(),
     values,
     records: {
       imageProvenance: readOptionalFile(
@@ -53,6 +55,7 @@ try {
       "  SPLIT402_ENV_FILE=<path> (optional; uses platform path separator for multiple files)",
       "Direct field override environment:",
       "  SPLIT402_PHASE6_EVIDENCE_<FIELD_NAME>",
+      "  SPLIT402_PHASE6_EVIDENCE_SOURCE_COMMIT (optional; defaults to git rev-parse HEAD)",
       "Record extraction environment:",
       ...PHASE6_RECORD_EXTRACTION_ENV.map((envName) => `  ${envName}`),
       "Attachment path environment:",
@@ -95,4 +98,11 @@ function readOptionalEnv(envName: string): string | undefined {
     return undefined;
   }
   return value.trim();
+}
+
+function readCurrentGitCommit(): string {
+  return execFileSync("git", ["rev-parse", "HEAD"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  }).trim();
 }
