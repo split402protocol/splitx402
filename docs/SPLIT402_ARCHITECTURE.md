@@ -20,7 +20,6 @@ The MVP does not change x402 settlement semantics:
 
 ## What Is Not In The Critical Path
 
-- `$SPLIT` route bonding;
 - Anchor programs;
 - custom facilitators;
 - atomic split settlement;
@@ -39,5 +38,4 @@ events, local-dev signer wiring, remote signer client wiring, signer deployment
 artifacts, machine-checkable custody review gates, an unknown-outcome
 reconciliation queue, referrer payout views, Phase 7 dashboard/discovery
 surfaces, hosted-staging proof tooling, and dashboard viewer-session gating for
-evidence capture. `$SPLIT` route bonding and `split-exact` atomic settlement
-remain later milestones.
+evidence capture. `split-exact` atomic settlement remains a later milestone.

@@ -472,24 +472,7 @@ Exit criteria:
   database work;
 - merchant can inspect and fund all outstanding obligations.
 
-## Architecture Milestone 6: `$SPLIT` Route Bonding
-
-Deliverables:
-
-- standard SPL token integration;
-- Anchor route-bond program;
-- bond indexing;
-- objective challenge/slash process;
-- ranking signals that cap stake influence;
-- governance-controlled parameters.
-
-Exit criteria:
-
-- core USDC payments still work without `$SPLIT`;
-- bonded routes are discoverable;
-- no subjective slash can execute without the defined evidence and authority path.
-
-## Architecture Milestone 7: Atomic Settlement Research
+## Architecture Milestone 6: Atomic Settlement Research
 
 Deliverables:
 

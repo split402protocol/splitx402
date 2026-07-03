@@ -4,7 +4,6 @@
 **Status:** Build specification for MVP  
 **Prepared:** 2026-06-24  
 **Primary stack:** TypeScript, Node.js, x402 v2, Solana, USDC, PostgreSQL  
-**Protocol token:** `$SPLIT` is optional and outside the critical payment path in the MVP
 
 ---
 
@@ -52,14 +51,11 @@ The terms **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**, and **MAY** are re
 - Idempotent commission accrual.
 - Merchant-funded batched USDC payouts.
 - Discovery metadata and route search.
-- Optional `$SPLIT` route bonding after the payment product works.
 
 ### 3.2 Explicitly out of scope for the MVP
 
 - Atomic payment splitting.
 - Custody of buyer funds.
-- Paying for APIs in `$SPLIT` by default.
-- Unbounded token emissions based on request volume.
 - Subjective slashing decisions.
 - Cross-chain settlement.
 - Fiat payout rails.
@@ -258,8 +254,6 @@ Campaign versions are immutable. Editing terms creates `version + 1`. Pausing a 
    - agent configuration snippet;
    - optional referral URL carrying the claim;
    - optional MCP tool metadata.
-
-A route MAY be registered without a token bond during MVP. When route bonding is enabled, activation additionally requires a confirmed `$SPLIT` bond account.
 
 ## 8.4 Paid request with attribution
 
@@ -1772,13 +1766,6 @@ Before mainnet:
 - restore test from database backup;
 - mainnet RPC failover test.
 
-Before token bonding:
-
-- Anchor program audit;
-- formal specification of slashable conditions;
-- governance and upgrade-authority review;
-- token-mint authority review.
-
 ---
 
 ## 14. Availability and failure policy
@@ -2061,8 +2048,6 @@ split402/
 │   ├── config/                    # Typed configuration
 │   ├── observability/             # Logging, metrics, tracing
 │   └── test-vectors/              # Cross-package protocol fixtures
-├── programs/
-│   └── route-bond/                # Later Anchor `$SPLIT` bonding program
 ├── infra/
 │   ├── docker/
 │   ├── migrations/
@@ -2423,24 +2408,7 @@ Exit criteria:
 - an agent can discover a route, pay an API, and verify earnings without manual database work;
 - merchant can inspect and fund all outstanding obligations.
 
-## Milestone 6 — `$SPLIT` route bonding
-
-Deliverables:
-
-- standard SPL token integration;
-- Anchor route-bond program;
-- bond indexing;
-- objective challenge/slash process;
-- ranking signals that cap stake influence;
-- governance-controlled parameters.
-
-Exit criteria:
-
-- core USDC payments still work without `$SPLIT`;
-- bonded routes are discoverable;
-- no subjective slash can execute without the defined evidence and authority path.
-
-## Milestone 7 — Atomic settlement research and prototype
+## Milestone 6 — Atomic settlement research and prototype
 
 Deliverables:
 
@@ -2502,9 +2470,9 @@ All amounts are determined before the buyer signs. The facilitator MUST NOT modi
 
 Program accounts:
 
-- `ProtocolConfig` PDA: governance authority, allowed mints, fee limits, pause state.
+- `ProtocolConfig` PDA: admin authority, allowed mints, fee limits, pause state.
 - `CampaignConfig` PDA: merchant, asset, commission policy, version/hash.
-- `RouteConfig` PDA: referrer and payout wallet, route state, optional bond reference.
+- `RouteConfig` PDA: referrer and payout wallet, route state.
 - Merchant and referrer associated token accounts.
 - Optional treasury token account.
 
@@ -2585,138 +2553,9 @@ The client chooses only schemes allowed by its spend policy. The server MUST not
 
 ---
 
-## 21. `$SPLIT` token architecture
+## 21. Public-alpha non-goal: token bonding
 
-## 21.1 Role of the token
-
-`$SPLIT` secures and curates the referral graph. It is not the default payment currency for API calls.
-
-Initial protocol utilities:
-
-- route bonding;
-- campaign publishing bonds for high-reach discovery listings;
-- objective anti-spam penalties;
-- discounted registry or campaign fees;
-- governance over bond sizes, caps, and treasury budgets;
-- capped ranking signal.
-
-The token MUST NOT be necessary for a buyer to make a normal USDC x402 payment.
-
-## 21.2 Mint recommendation
-
-For initial compatibility, use the standard SPL Token Program unless a concrete Token-2022 feature is required before mint creation.
-
-Avoid initially:
-
-- transfer-fee extensions;
-- permanent delegate;
-- non-transferable behavior;
-- interest-bearing or scaled UI semantics;
-- confidential-transfer complexity.
-
-Many Token-2022 extensions must be selected at mint initialization and some combinations are incompatible. Token design should be finalized before mint creation if Token-2022 is chosen.
-
-## 21.3 Route-bond program
-
-Suggested PDAs:
-
-```text
-ProtocolConfig = PDA("config")
-RouteBond      = PDA("route-bond", sha256(routeId))
-Challenge      = PDA("challenge", sha256(routeId), challengeId)
-Treasury       = PDA("treasury")
-```
-
-Suggested instructions:
-
-- `initialize_protocol`;
-- `update_parameters`;
-- `bond_route`;
-- `increase_bond`;
-- `request_unbond`;
-- `complete_unbond` after cooldown;
-- `open_challenge`;
-- `resolve_challenge`;
-- `slash_route` only through the defined resolution authority;
-- `pause_program`.
-
-`RouteBond` state:
-
-```rust
-pub struct RouteBond {
-    pub route_hash: [u8; 32],
-    pub owner: Pubkey,
-    pub amount: u64,
-    pub status: u8,
-    pub bonded_at: i64,
-    pub unbond_available_at: i64,
-    pub bump: u8,
-}
-```
-
-## 21.4 Objective slash conditions
-
-Start with conditions that can be demonstrated from signed or onchain artifacts:
-
-- route owner signed a claim for a payout wallet it later denies;
-- route is cryptographically linked to malicious payload substitution under a formally defined proof;
-- route remains registered after an objective ownership/key revocation condition and ignores a required remediation window;
-- duplicate route identity used to evade a previously finalized protocol penalty, when the linkage proof is deterministic.
-
-Do not slash merely because:
-
-- an API had temporary downtime;
-- a referrer generated low conversion;
-- a merchant disputes marketing quality;
-- governance dislikes content without a precise, predeclared rule.
-
-For the earliest version, route suspension without slashing is safer than broad subjective penalties.
-
-## 21.5 Ranking model
-
-Stake should be a bounded signal, not the dominant ranking factor.
-
-Example normalized score:
-
-```text
-score =
-  0.35 * verified_unique_payers
-+ 0.25 * settled_attributed_usdc
-+ 0.15 * merchant_diversity
-+ 0.10 * route_uptime
-+ 0.10 * payout_reliability
-+ 0.05 * bounded_bond_score
-- abuse_penalties
-```
-
-Exact weights are governance parameters. Use logarithmic or capped transforms so wealthy stakers cannot purchase the entire discovery surface.
-
-## 21.6 Token incentive safety
-
-Any token reward program SHOULD be based on multiple sybil-resistant signals:
-
-- unique funded payer wallets;
-- minimum payment value;
-- merchant diversity;
-- retention across time windows;
-- capped contribution per payer/referrer/merchant;
-- exclusion of self-referrals and related wallets;
-- payout reliability.
-
-Do not mint rewards linearly for raw requests or gross volume. That is easily wash-traded.
-
-## 21.7 Governance boundaries
-
-Governance MAY control:
-
-- route bond minimum and cooldown;
-- objective challenge parameters;
-- protocol fee ceiling;
-- discovery ranking weights within bounded ranges;
-- treasury grants;
-- program upgrades through an explicit timelock/multisig process.
-
-Governance SHOULD NOT be able to alter historical receipts, reassign accrued commissions, or seize buyer funds.
+Token bonding is out of scope and not planned for public alpha.
 
 ---
 

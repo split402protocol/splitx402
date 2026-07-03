@@ -24,7 +24,7 @@ The canonical project direction is Split402:
 - idempotent commission accrual;
 - PostgreSQL as the MVP source of truth;
 - merchant-funded batched USDC payouts;
-- `$SPLIT` route bonding and atomic `split-exact` settlement later.
+- atomic `split-exact` settlement later.
 
 ## Phase 0 Exit Criteria
 
