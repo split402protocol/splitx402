@@ -1264,6 +1264,119 @@ describe("SolanaRpcPayoutTransactionFinalityMonitor", () => {
     );
   });
 
+  it("reports expired when the blockhash passed lastValidBlockHeight without landing", async () => {
+    const requests: unknown[] = [];
+    const monitor = new SolanaRpcPayoutTransactionFinalityMonitor({
+      rpcUrl: "https://api.devnet.solana.com",
+      network: "solana:devnet",
+      fetch: createFetchSequence(
+        [signatureStatusesBody(null), blockHeightBody(151)],
+        requests
+      )
+    });
+
+    await expect(
+      monitor.monitor({
+        transaction: payoutTransaction({
+          status: "submitted",
+          submittedAt: "2026-06-24T00:00:00Z",
+          lastValidBlockHeight: 150
+        })
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        status: "expired",
+        signature: "sig_0",
+        error: expect.stringContaining("blockhash expired")
+      })
+    );
+    expect(requests[1]).toEqual(
+      expect.objectContaining({
+        method: "getBlockHeight",
+        params: [{ commitment: "finalized" }]
+      })
+    );
+  });
+
+  it("keeps retrying while the blockhash has not expired", async () => {
+    const monitor = new SolanaRpcPayoutTransactionFinalityMonitor({
+      rpcUrl: "https://api.devnet.solana.com",
+      network: "solana:devnet",
+      fetch: createFetchSequence([
+        signatureStatusesBody(null),
+        blockHeightBody(150)
+      ])
+    });
+
+    await expect(
+      monitor.monitor({
+        transaction: payoutTransaction({
+          status: "submitted",
+          submittedAt: "2026-06-24T00:00:00Z",
+          lastValidBlockHeight: 150
+        })
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        status: "retry",
+        error: expect.stringContaining("signature not found")
+      })
+    );
+  });
+
+  it("fails closed to retry when the finalized block height cannot be read", async () => {
+    const monitor = new SolanaRpcPayoutTransactionFinalityMonitor({
+      rpcUrl: "https://api.devnet.solana.com",
+      network: "solana:devnet",
+      fetch: createFetchSequence([
+        signatureStatusesBody(null),
+        {
+          jsonrpc: "2.0",
+          id: "split402-payout-block-height",
+          error: { code: -32000, message: "node is behind" }
+        }
+      ])
+    });
+
+    await expect(
+      monitor.monitor({
+        transaction: payoutTransaction({
+          status: "submitted",
+          submittedAt: "2026-06-24T00:00:00Z",
+          lastValidBlockHeight: 150
+        })
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        status: "retry",
+        error: expect.stringContaining("signature not found")
+      })
+    );
+  });
+
+  it("monitors signed transactions with expected signatures for release checks", async () => {
+    const monitor = new SolanaRpcPayoutTransactionFinalityMonitor({
+      rpcUrl: "https://api.devnet.solana.com",
+      network: "solana:devnet",
+      fetch: createFetch(
+        signatureStatusesBody({
+          err: null,
+          confirmationStatus: "finalized",
+          confirmations: null
+        })
+      )
+    });
+
+    await expect(
+      monitor.monitor({ transaction: payoutTransaction({ status: "signed" }) })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        status: "finalized",
+        signature: "sig_0"
+      })
+    );
+  });
+
   it("rejects transactions that are not submitted for monitoring", async () => {
     const monitor = new SolanaRpcPayoutTransactionFinalityMonitor({
       rpcUrl: "https://api.devnet.solana.com",
@@ -1272,7 +1385,7 @@ describe("SolanaRpcPayoutTransactionFinalityMonitor", () => {
     });
 
     await expect(
-      monitor.monitor({ transaction: payoutTransaction({ status: "signed" }) })
+      monitor.monitor({ transaction: payoutTransaction({ status: "planned" }) })
     ).rejects.toThrow("must be submitted before finality monitoring");
   });
 });
@@ -1740,6 +1853,14 @@ function signatureStatusesBody(
       context: { slot: 1 },
       value: [status]
     }
+  };
+}
+
+function blockHeightBody(blockHeight: number): Record<string, unknown> {
+  return {
+    jsonrpc: "2.0",
+    id: "split402-payout-block-height",
+    result: blockHeight
   };
 }
 
