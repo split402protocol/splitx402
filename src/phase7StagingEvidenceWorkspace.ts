@@ -193,6 +193,7 @@ function createReadmeText(input: {
     "# Fill deploy/phase7-staging/phase7-staging.env with private Docker runtime values.",
     "corepack pnpm phase7:docker:doctor --brief",
     "corepack pnpm phase7:docker:doctor --brief --profile demo --profile workers",
+    "corepack pnpm phase7:docker:compose up --brief --profile demo --profile workers",
     "SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",
     `corepack pnpm phase7:staging-proof ${envOption} phase7-staging-proof.txt`,
     `corepack pnpm phase7:hosted:preflight ${envOption}`,

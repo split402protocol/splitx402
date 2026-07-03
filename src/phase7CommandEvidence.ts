@@ -5,6 +5,7 @@ export const PHASE7_REQUIRED_COMMAND_EVIDENCE = [
   "corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence",
   "corepack pnpm phase7:docker:doctor --brief",
   "corepack pnpm phase7:docker:doctor --brief --profile demo --profile workers",
+  "corepack pnpm phase7:docker:compose up --brief --profile demo --profile workers",
   "corepack pnpm phase7:staging:seed",
   "corepack pnpm phase7:staging-proof",
   "corepack pnpm phase7:hosted:preflight",
@@ -97,6 +98,7 @@ export function validatePhase7CommandEvidence(
   validateGitStatusCommandOutput(text, errors);
   validateLaunchPreflightCommandOutput(text, errors);
   validateDockerDoctorCommandOutput(text, errors);
+  validateDockerComposeCommandOutput(text, errors);
   validatePublicSurfaceCommandOutput(text, errors);
   return { ok: errors.length === 0, errors };
 }
@@ -209,6 +211,47 @@ function validatePublicSurfaceCommandOutput(
     !outputLines.some((line) => line === "Split402 public surface check: passed")
   ) {
     errors.push("commands_run public surface check output must pass");
+  }
+}
+
+function validateDockerComposeCommandOutput(
+  text: string,
+  errors: string[],
+): void {
+  const dockerComposeBlocks = extractCommandEvidenceBlocks(text).filter((block) =>
+    block.command.includes("corepack pnpm phase7:docker:compose up"),
+  );
+  if (dockerComposeBlocks.length === 0) {
+    return;
+  }
+
+  for (const block of dockerComposeBlocks) {
+    const outputLines = block.outputLines
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+    if (outputLines.length === 0) {
+      errors.push(
+        `commands_run Docker compose output is missing for ${block.command}`,
+      );
+      continue;
+    }
+    if (
+      !outputLines.some(
+        (line) => line === "Split402 Phase 7 Docker compose up: ok",
+      )
+    ) {
+      errors.push("commands_run Docker compose up output must be ok");
+    }
+    if (
+      block.command.includes("--profile") &&
+      !outputLines.some((line) =>
+        line.includes("--profile demo --profile workers up -d"),
+      )
+    ) {
+      errors.push(
+        "commands_run profile Docker compose output must include selected demo and workers profiles",
+      );
+    }
   }
 }
 
