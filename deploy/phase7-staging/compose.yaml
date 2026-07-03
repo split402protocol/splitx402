@@ -36,6 +36,16 @@ services:
       SPLIT402_CONTROL_PLANE_AUTH_POLICY: required
     ports:
       - "${SPLIT402_PHASE7_CONTROL_PLANE_PORT:-4021}:4021"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:4021/v1/health').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))\""
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
     volumes:
       - ../..:/workspace
 
@@ -65,7 +75,8 @@ services:
       corepack pnpm install --frozen-lockfile &&
       corepack pnpm dashboard"
     depends_on:
-      - control-plane
+      control-plane:
+        condition: service_healthy
     env_file:
       - phase7-staging.env
     environment:
@@ -74,6 +85,16 @@ services:
       SPLIT402_DASHBOARD_SESSION_COOKIE_SECURE: "false"
     ports:
       - "${SPLIT402_PHASE7_DASHBOARD_PORT:-4027}:4027"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:4027/health').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))\""
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
     volumes:
       - ../..:/workspace
 
@@ -86,7 +107,8 @@ services:
       corepack pnpm install --frozen-lockfile &&
       corepack pnpm demo:merchant"
     depends_on:
-      - control-plane
+      control-plane:
+        condition: service_healthy
     env_file:
       - phase7-staging.env
     environment:
@@ -94,6 +116,16 @@ services:
       PORT: "4023"
     ports:
       - "${SPLIT402_PHASE7_DEMO_MERCHANT_PORT:-4023}:4023"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:4023/health').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))\""
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
     volumes:
       - ../..:/workspace
 
