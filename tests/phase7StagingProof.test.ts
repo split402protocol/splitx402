@@ -487,6 +487,33 @@ funding_balance_evidence: funding.json
     );
   });
 
+  it("keeps already workspace-prefixed attached artifact paths unchanged by default", () => {
+    const report = createPhase7StagingStatusReport(
+      createPhase7StagingProofRecord({
+        proof_id: "phase7-staging-2026-06-26",
+        proof_date: "2026-06-26",
+        paid_request_evidence:
+          "attached: split402-launch-evidence/phase7-staging-evidence/paid-suite.log",
+        approval_decision: "no-go",
+      }),
+      {
+        artifactBaseDir: "split402-launch-evidence",
+        artifactExists: (path) =>
+          path === "split402-launch-evidence/phase7-staging-evidence/paid-suite.log",
+      },
+    );
+
+    expect(report.artifactStatuses).toContainEqual({
+      evidenceField: "paid_request_evidence",
+      reference:
+        "attached: split402-launch-evidence/phase7-staging-evidence/paid-suite.log",
+      artifactPath:
+        "split402-launch-evidence/phase7-staging-evidence/paid-suite.log",
+      status: "present",
+      blockers: [],
+    });
+  });
+
   it("groups missing control-plane read artifacts into one capture action", () => {
     const proofText = createManifestProof();
     const artifacts = createManifestArtifacts(proofText);

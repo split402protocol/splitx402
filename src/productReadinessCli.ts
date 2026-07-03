@@ -112,8 +112,6 @@ export function readSplit402ProductReadinessCliInput(
           : {
               artifactBaseDir: phase6ArtifactBaseDir,
               artifactExists: existsSync,
-              resolveArtifactPath: (artifactPath, baseDir) =>
-                resolve(baseDir, artifactPath),
             }),
       },
       phase7ProofText,
@@ -127,7 +125,7 @@ export function readSplit402ProductReadinessCliInput(
               artifactExists: existsSync,
               readArtifact: (artifactPath) => readFileSync(artifactPath),
               resolveArtifactPath: (artifactPath, baseDir) =>
-                isAbsolute(artifactPath)
+                isAbsolute(artifactPath) || existsSync(artifactPath)
                   ? artifactPath
                   : resolve(baseDir, artifactPath),
             }),

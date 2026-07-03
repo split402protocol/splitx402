@@ -345,10 +345,69 @@ function createNextActions(
     ];
   }
   return [
-    ...failedRequired.flatMap((check) => check.details),
+    ...failedRequired.map(createNextAction),
     "Do not broadcast mainnet payment or payout transactions until every required canary check passes.",
     `Required environment:\n${REQUIRED_ENV_SUMMARY.map((line) => `  ${line}`).join("\n")}`,
   ];
+}
+
+function createNextAction(check: Split402MainnetCanaryCheck): string {
+  if (check.id === "dry_run_evidence") {
+    return createEvidenceNextAction(
+      check,
+      "SPLIT402_MAINNET_CANARY_DRY_RUN_EVIDENCE",
+      "dry-run artifact",
+    );
+  }
+  if (check.id === "rollback_plan") {
+    return createEvidenceNextAction(
+      check,
+      "SPLIT402_MAINNET_CANARY_ROLLBACK_PLAN",
+      "rollback-plan artifact",
+    );
+  }
+  return check.details.join(" ");
+}
+
+function createEvidenceNextAction(
+  check: Split402MainnetCanaryCheck,
+  envName: string,
+  artifactLabel: string,
+): string {
+  if (check.details.length <= 1) {
+    const detail = check.details[0];
+    if (detail === undefined) {
+      return `Fix ${envName}.`;
+    }
+    if (detail.startsWith(`${envName}: `)) {
+      return `Fix ${envName} ${artifactLabel}: resolve ${detail.slice(
+        `${envName}: `.length,
+      )}.`;
+    }
+    return detail;
+  }
+
+  const details = check.details.map((detail) =>
+    detail.startsWith(`${envName}: `)
+      ? detail.slice(`${envName}: `.length)
+      : detail,
+  );
+  const missingFields = details
+    .filter((detail) => detail.endsWith(" must be filled"))
+    .map((detail) => detail.slice(0, -" must be filled".length));
+  const otherIssues = details.filter(
+    (detail) => !detail.endsWith(" must be filled"),
+  );
+  const clauses = [
+    ...(missingFields.length === 0
+      ? []
+      : [`fill ${missingFields.join(", ")}`]),
+    ...(otherIssues.length === 0
+      ? []
+      : [`resolve ${otherIssues.join("; ")}`]),
+  ];
+
+  return `Fix ${envName} ${artifactLabel}: ${clauses.join("; ")}.`;
 }
 
 function parsePositiveInteger(value: string | undefined): bigint | undefined {
