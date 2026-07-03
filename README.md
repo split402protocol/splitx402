@@ -316,14 +316,36 @@ flowchart LR
 
 ## Quick Start
 
-Use Node.js 22 and Corepack:
+Start here if you want to understand the repository and prove the local
+public-alpha path. Hosted staging, custody evidence, and mainnet canaries are
+operator workflows and stay behind the later sections.
+
+### 1. Install
 
 ```bash
 corepack enable
 corepack pnpm install
 ```
 
-Run the normal validation suite:
+### 2. Run The Local Public-Alpha Proof
+
+This is the fastest safe proof that the protocol surface, router, and MCP
+gateway smoke path work on your machine. It does not approve hosted staging,
+production custody, mainnet, or commercial operations.
+
+```bash
+corepack pnpm product:local-proof --help
+corepack pnpm product:local-proof --brief
+corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json
+corepack pnpm demo:mcp-gateway:smoke
+```
+
+`product:local-proof` is an adoption-layer smoke proof. The rule is simple:
+saved proof records the source commit, fails unless the source worktree is clean,
+and is treated as
+stale if the source worktree has uncommitted changes or the checkout changes.
+
+### 3. Run The Developer Validation Suite
 
 ```bash
 corepack pnpm lint
@@ -334,225 +356,25 @@ corepack pnpm vectors:check
 corepack pnpm audit --audit-level high
 ```
 
-Check the combined product readiness gates:
+### 4. Check Product Readiness
+
+Use this when you want to know where the project stands. It reports
+launch-gate percentages and keeps the launch decision `no-go` until every
+machine-checkable gate is satisfied. `product:status` remains `no-go` while
+hosted proof or custody evidence is missing.
 
 ```bash
-corepack pnpm product:evidence:init --help
-corepack pnpm product:evidence:init
-corepack pnpm product:evidence:init --missing
-corepack pnpm product:evidence:init --refresh-source
-corepack pnpm product:evidence:init --force
-corepack pnpm product:local-proof --help
-corepack pnpm product:local-proof --brief
-corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json
-corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt
-corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt
-corepack pnpm product:public-surface-check --brief
-corepack pnpm product:launch-preflight --help
-corepack pnpm product:launch-preflight --brief
-corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence
-corepack pnpm product:launch-checklist --help
-corepack pnpm product:launch-checklist --brief
-corepack pnpm product:launch-checklist --brief --workspace split402-launch-evidence
-corepack pnpm product:launch-checklist --brief <phase6-custody-evidence.txt> <phase7-staging-proof.txt>
 corepack pnpm product:status --help
 corepack pnpm product:status
 corepack pnpm product:status --brief
 corepack pnpm product:status --brief --workspace split402-launch-evidence
 corepack pnpm product:status <phase6-custody-evidence.txt> <phase7-staging-proof.txt>
-corepack pnpm product:mainnet-canary --brief --workspace split402-launch-evidence
 ```
 
-`product:evidence:init` creates a local evidence workspace for the remaining
-Phase 7 hosted proof and Phase 6 custody bundle, including local env templates
-for attachment paths. It refuses to overwrite existing scaffold files; use
-`--missing` to create only absent scaffold files in a partial workspace,
-`--refresh-source` to update only stale scaffold `source_commit` values before
-evidence collection, and rerun with `--force` only when intentionally replacing
-local scaffold content.
-`--refresh-source` never rewrites `source_commit` under filled or missing
-evidence files: it refreshes the remaining scaffold-only files and reports each
-skipped file in `skippedEvidenceFiles` with the exact recollect or `--missing`
-command to run instead.
-`product:launch-preflight --brief --workspace split402-launch-evidence` checks
-whether the local launch workspace, scaffold `source_commit` values, Phase 6
-custody evidence env paths, and required Phase 7 hosted proof identity,
-environment, webhook, and collector values are ready before collection starts.
-It also confirms the guarded mainnet canary env points at the private dry-run
-and rollback evidence templates, while keeping mainnet approval outside the
-local preflight.
-The Phase 6 launch evidence workspace is devnet-only until separate mainnet
-approval, so preflight requires
-`SPLIT402_PHASE6_EVIDENCE_NETWORK=solana:devnet`.
-It also verifies that hosted proof and MCP live execution URLs are valid
-http(s) URLs and that MCP live execution uses the same hosted control-plane URL
-and token as the Phase 7 proof. For the public-alpha proof, MCP live execution
-must target `SPLIT402_MCP_CAPABILITY=solana.wallet-risk` so evidence matches the
-documented router/MCP demo. The brief output includes redacted summaries of the
-Phase 6 custody env file and Phase 7 hosted env file so operators can see which
-values are missing or configured without printing tokens, private keys, or
-custody values. It reads the local env files with dotenv-style parsing, so quoted
-values are handled the same way as the evidence collectors.
-When required preflight inputs are ready, the next action reminds operators to
-run the GitHub settings/public-private license review and keep that record with
-launch evidence before collection.
-`product:launch-checklist --brief` prints the exact remaining public/private
-license review, local validation, hosted proof, custody evidence, combined
-status, and guarded mainnet canary commands; pass
-`--workspace split402-launch-evidence` or the Phase 6 and Phase 7 evidence
-paths to show checked, blocked, or ready section statuses from real files.
-`product:local-proof --brief` proves the local public-alpha repository hygiene,
-public/private license surface, protocol vectors, router alpha tests, and
-runnable MCP gateway smoke path before hosted evidence collection. Pass
-`--output split402-launch-evidence/local-public-alpha-proof.json` to save that
-proof beside the launch evidence workspace. This is an adoption-layer smoke proof
-only; it does not approve hosted Phase 7, production custody, mainnet, or
-commercial operations. The saved proof records the source commit, and
-`product:local-proof` fails unless the source worktree is clean.
-`product:status --workspace` also treats saved proof as stale if it does not
-match the current checkout or if the source worktree has uncommitted changes.
-`product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt`
-writes a fillable UTF-8 review record for the live GitHub repository settings in
-[`docs/GITHUB_REPOSITORY_SETTINGS.md`](docs/GITHUB_REPOSITORY_SETTINGS.md).
-The launch evidence workspace includes
-`split402-launch-evidence/github-settings-review.txt` as the intended saved
-review artifact.
-Run
-`product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt`
-to generate a no-go review record from the live GitHub API. The command can run
-without review env values; it writes placeholder reviewer and evidence fields
-until a human review fills them. It checks the About description, topics,
-homepage posture, branch protection, pull-request/codeowner review, required
-checks, force-push/deletion blocks, blank issue intake, releases, and package
-visibility where the GitHub token can read it. Human review must still confirm
-security advisories and any UI-only evidence before changing the record to
-approved.
-If the GitHub token cannot read organization packages, first confirm in GitHub
-Packages that no npm or container packages are published, then rerun with
-`SPLIT402_GITHUB_SETTINGS_PACKAGES_UNPUBLISHED_CONFIRMED=yes`; this only clears
-the package-count portion of the no-go API snapshot when releases are still
-zero and does not approve the review.
-Use `--output` instead of shell redirection so Windows PowerShell does not write
-the evidence file in an incompatible encoding. An approved review must include
-real reviewer, `SPLIT402_GITHUB_SETTINGS_REVIEW_METHOD`, and
-`SPLIT402_GITHUB_SETTINGS_EVIDENCE_SOURCE` values, such as an attached private
-UI/API evidence record.
-`product:public-surface-check --brief` can also be run alone to verify that
-launch-facing files still present Apache-2.0, link the public/private boundary,
-and do not drift back to old launch-facing license claims.
-`product:status` reports the current Split402
-phase, whether the GitHub public/private license review, public-alpha hosted
-proof, and production custody evidence are checked, launch-gate percentages,
-exact evidence-env setup commands, and why the launch decision remains `no-go`
-until every machine-checkable launch gate is satisfied. When the concise status
-hides extra actions, it prints the exact
-Phase 6 and Phase 7 status commands to run for the full blocker list.
-`product:mainnet-canary --brief --workspace split402-launch-evidence` is the
-guarded preflight for the first tiny mainnet canary. It does not broadcast
-transactions. It remains `no-go` until `product:status` is `go`, the canary is
-explicitly acknowledged as referral accounting rather than atomic split
-settlement, and a one-merchant/one-route/one-wallet dry-run and rollback plan
-are attached. With `--workspace`, it auto-loads
-`split402-launch-evidence/mainnet-canary.env`, resolves `attached:` dry-run and
-rollback artifact paths relative to that private workspace, and validates the
-required artifact fields and `source_commit` match before reporting ready. Shell
-environment variables override local file values.
+When the concise output hides extra actions, it prints the exact Phase 6 and
+Phase 7 status commands to run for the full blocker list.
 
-Generate the Phase 6 image provenance review record after building immutable
-signer and control-plane images:
-
-```bash
-corepack pnpm phase6:image-provenance
-```
-
-Generate the Phase 6 signer policy review record from deployed signer policy
-values:
-
-```bash
-corepack pnpm phase6:signer-policy
-```
-
-Generate the Phase 6 payout signer key custody review record:
-
-```bash
-corepack pnpm phase6:key-custody
-```
-
-Generate the Phase 6 private signer network policy review record:
-
-```bash
-corepack pnpm phase6:network-policy
-```
-
-Generate the Phase 6 signer smoke and secret-exposure review record:
-
-```bash
-corepack pnpm signer:payout:smoke
-corepack pnpm phase6:signer-smoke
-```
-
-Generate the Phase 6 emergency signer-auth revocation drill record:
-
-```bash
-corepack pnpm phase6:emergency-revocation
-```
-
-Generate the Phase 6 planned signer-auth rotation drill record:
-
-```bash
-corepack pnpm phase6:rotation-drill
-```
-
-Generate the Phase 6 payout signer rollback drill record:
-
-```bash
-corepack pnpm phase6:rollback-drill
-```
-
-Generate the Phase 6 payout custody incident drill record:
-
-```bash
-corepack pnpm phase6:incident-drill
-```
-
-Generate the Phase 6 unknown-outcome reconciliation drill record:
-
-```bash
-corepack pnpm phase6:reconciliation-drill
-```
-
-Generate the Phase 6 RPC failover review record after running the finality
-failover drill:
-
-```bash
-corepack pnpm payout:finality:failover-drill
-corepack pnpm phase6:rpc-failover
-```
-
-List the Phase 6 evidence commands and check the current custody bundle:
-
-```bash
-corepack pnpm phase6:evidence:bundle
-# Review split402-launch-evidence/phase6-evidence.env first; regenerate only if missing:
-corepack pnpm phase6:evidence:env-template split402-launch-evidence split402-launch-evidence/phase6-evidence.env
-corepack pnpm phase6:evidence:assemble --evidence-env-file split402-launch-evidence/phase6-evidence.env split402-launch-evidence/phase6-custody-evidence.txt
-corepack pnpm phase6:evidence:status --brief split402-launch-evidence/phase6-custody-evidence.txt
-corepack pnpm phase6:custody:check split402-launch-evidence/phase6-custody-evidence.txt
-```
-
-`product:evidence:init` creates `split402-launch-evidence/phase6-evidence.env`.
-Review that generated file before editing it. Use `phase6:evidence:env-template`
-only to recreate the local, commented `.env` helper when it is missing. Pass a
-custom launch evidence directory when not using the default:
-`corepack pnpm phase6:evidence:env-template evidence/launch evidence/launch/phase6-evidence.env`.
-`phase6:evidence:assemble` auto-loads the default launch env file when present;
-for any other directory, pass `--evidence-env-file <path>` and an explicit
-output file path.
-`phase6:evidence:status` and `phase6:custody:check` resolve `attached:`
-artifact paths relative to the custody bundle directory and fail readiness if
-any referenced artifact is missing.
-Keep private URLs, secrets, private keys, and transaction bytes out of the file
-and out of Git.
+## Common Local Workflows
 
 Run the optional live PostgreSQL harness against an empty test database:
 
@@ -596,7 +418,86 @@ For hosted staging, set `SPLIT402_DASHBOARD_VIEWER_TOKEN` so dashboard API
 routes require a viewer session cookie or `x-split402-dashboard-token` header
 while `/health` remains available for uptime probes.
 
-Launch the Phase 7 staging stack:
+Run the demo merchant and agent flows:
+
+```bash
+corepack pnpm demo:merchant
+corepack pnpm demo:inspect-offer
+corepack pnpm demo:mcp-bundle
+corepack pnpm demo:preflight
+corepack pnpm demo:paid-suite
+```
+
+Run the MCP stdio gateway for clients that want direct MCP tool discovery:
+
+```bash
+corepack pnpm demo:mcp-gateway
+```
+
+Inspect an external x402 API as an onboarding candidate without making a paid
+call:
+
+```bash
+corepack pnpm demo:discover-external-x402 https://x402.example \
+  --capability crypto.price \
+  --match-path /price \
+  --provider-id-prefix example-provider
+```
+
+See [External x402 Provider Onboarding](docs/runbooks/external-x402-provider-onboarding.md)
+for readiness meanings, required Split402 offer fields, provider next actions,
+field-level `split402OfferErrors` for malformed extensions, and the Base/EVM
+boundary: signed offers and receipts can carry EVM asset and wallet identifiers
+for public-alpha routing, but hosted proof, custody, and mainnet approvals
+remain separate gates.
+
+## Operator Launch Evidence
+
+These commands are for maintainers preparing public-alpha hosted proof, custody
+review, or a later guarded mainnet canary. Do not put private URLs, tokens,
+private keys, custody values, or transaction bytes in Git.
+
+### Evidence Workspace And Public Surface
+
+```bash
+corepack pnpm product:evidence:init --help
+corepack pnpm product:evidence:init
+corepack pnpm product:evidence:init --missing
+corepack pnpm product:evidence:init --refresh-source
+corepack pnpm product:evidence:init --force
+corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt
+corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt
+corepack pnpm product:public-surface-check --brief
+corepack pnpm product:launch-preflight --help
+corepack pnpm product:launch-preflight --brief
+corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence
+corepack pnpm product:launch-checklist --help
+corepack pnpm product:launch-checklist --brief
+corepack pnpm product:launch-checklist --brief --workspace split402-launch-evidence
+corepack pnpm product:launch-checklist --brief <phase6-custody-evidence.txt> <phase7-staging-proof.txt>
+```
+
+`product:evidence:init` creates a local evidence workspace for the remaining
+Phase 7 hosted proof and Phase 6 custody bundle. It refuses to overwrite
+existing scaffold files; use `--missing` for absent scaffold files,
+`--refresh-source` for stale scaffold `source_commit` values, and `--force`
+only when intentionally replacing local scaffold content.
+
+`product:launch-preflight --brief --workspace split402-launch-evidence` checks
+the workspace before collection. Its brief output includes redacted summaries
+of the Phase 6 custody env file and Phase 7 hosted env file without printing tokens, private keys,
+or custody values. It reads local env files with dotenv-style parsing.
+
+`product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt`
+writes a fillable UTF-8 review record for the live GitHub repository settings in
+[`docs/GITHUB_REPOSITORY_SETTINGS.md`](docs/GITHUB_REPOSITORY_SETTINGS.md).
+`product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt`
+generates the live API snapshot. Use `--output` instead of shell redirection on
+Windows PowerShell.
+
+### Phase 7 Hosted Staging
+
+Launch the staging stack:
 
 ```bash
 cp deploy/phase7-staging/phase7-staging.env.example deploy/phase7-staging/phase7-staging.env
@@ -668,44 +569,57 @@ discovered routes, dashboard summary, referrer balance, payout obligation,
 webhook delivery, paid-suite receipts, and MCP execution all describe the same
 hosted flow.
 
-Run the demo merchant and agent flows:
+### Phase 6 Custody Evidence
+
+Phase 6 remains a production custody gate. Use the runbooks in
+[Phase 6 status](docs/PHASE_6.md) and
+[Payout signer deployment](docs/runbooks/payout-signer-deployment.md) before
+marking anything production-ready.
+
+<details>
+<summary>Phase 6 command index</summary>
 
 ```bash
-corepack pnpm demo:merchant
-corepack pnpm demo:inspect-offer
-corepack pnpm demo:mcp-bundle
-corepack pnpm demo:preflight
-corepack pnpm demo:paid-suite
+corepack pnpm phase6:image-provenance
+corepack pnpm phase6:signer-policy
+corepack pnpm phase6:key-custody
+corepack pnpm phase6:network-policy
+corepack pnpm signer:payout:smoke
+corepack pnpm phase6:signer-smoke
+corepack pnpm phase6:emergency-revocation
+corepack pnpm phase6:rotation-drill
+corepack pnpm phase6:rollback-drill
+corepack pnpm phase6:incident-drill
+corepack pnpm phase6:reconciliation-drill
+corepack pnpm payout:finality:failover-drill
+corepack pnpm phase6:rpc-failover
+corepack pnpm phase6:evidence:bundle
+corepack pnpm phase6:evidence:env-template split402-launch-evidence split402-launch-evidence/phase6-evidence.env
+corepack pnpm phase6:evidence:env-template evidence/launch evidence/launch/phase6-evidence.env
+corepack pnpm phase6:evidence:assemble --evidence-env-file split402-launch-evidence/phase6-evidence.env split402-launch-evidence/phase6-custody-evidence.txt
+corepack pnpm phase6:evidence:status --brief split402-launch-evidence/phase6-custody-evidence.txt
+corepack pnpm phase6:custody:check split402-launch-evidence/phase6-custody-evidence.txt
 ```
 
-Run the MCP stdio gateway for clients that want direct MCP tool discovery:
+`product:evidence:init` creates `split402-launch-evidence/phase6-evidence.env`.
+Review that generated file before editing it. Use `phase6:evidence:env-template`
+only to recreate the local, commented `.env` helper when it is missing.
+
+</details>
+
+### Guarded Mainnet Canary
+
+Mainnet canary work stays blocked until `product:status` is `go`, the dry-run
+and rollback plan are attached, and the canary is explicitly acknowledged as
+referral accounting rather than atomic split settlement.
 
 ```bash
-corepack pnpm demo:mcp-gateway
+corepack pnpm product:mainnet-canary --brief --workspace split402-launch-evidence
 ```
 
-Inspect an external x402 API as an onboarding candidate without making a paid
-call:
-
-```bash
-corepack pnpm demo:discover-external-x402 https://x402.example \
-  --capability crypto.price \
-  --match-path /price \
-  --provider-id-prefix example-provider
-```
-
-See [External x402 Provider Onboarding](docs/runbooks/external-x402-provider-onboarding.md)
-for readiness meanings, required Split402 offer fields, provider next actions,
-field-level `split402OfferErrors` for malformed extensions, and the Base/EVM
-boundary: signed offers and receipts can carry EVM asset and wallet identifiers
-for public-alpha routing, but hosted proof, custody, and mainnet approvals
-remain separate gates.
-
-Run the deterministic gateway smoke proof:
-
-```bash
-corepack pnpm demo:mcp-gateway:smoke
-```
+With `--workspace`, it auto-loads `split402-launch-evidence/mainnet-canary.env`,
+resolves `attached:` dry-run and rollback artifact paths relative to that private
+workspace, and validates that the required artifact fields and `source_commit` match before reporting ready.
 
 ## Receipt Ingestion Example
 
