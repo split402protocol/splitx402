@@ -73,6 +73,16 @@ describe("Phase 6 evidence assembly", () => {
     expect(bundle).toContain("signer_policy_network: solana:devnet\n");
   });
 
+  it("uses the current source commit when generated records are not available yet", () => {
+    const bundle = assemblePhase6CustodyEvidenceBundle({
+      currentSourceCommit: "abcdef1234567890",
+      values: { network: "solana:devnet" },
+    });
+
+    expect(bundle).toContain("source_commit: abcdef1234567890\n");
+    expect(bundle).toContain("approval_decision: no-go\n");
+  });
+
   it("parses simple generated record fields", () => {
     expect(parsePhase6Record("field_one: value\nignored\nfield_two: ok\n")).toEqual(
       new Map([
