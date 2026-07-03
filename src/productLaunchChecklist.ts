@@ -247,6 +247,7 @@ function createPhase7Section(
     commands: [
       LAUNCH_PREFLIGHT_COMMAND,
       "Fill split402-launch-evidence/phase7-staging.env with hosted staging values reported by launch preflight.",
+      "Fill deploy/phase7-staging/phase7-staging.env from deploy/phase7-staging/phase7-staging.env.example with Docker runtime values.",
       "corepack pnpm phase7:docker:doctor --brief",
       "SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",
       "corepack pnpm phase7:hosted:preflight --evidence-env-file split402-launch-evidence/phase7-staging.env",

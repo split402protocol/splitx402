@@ -96,13 +96,7 @@ export function runPhase7DockerDoctor(
   const shouldValidateComposeConfig =
     dockerVersion.ok && composeVersion.ok && composeFileExists && envFileExists;
   const composeConfig = shouldValidateComposeConfig
-    ? runCommand(input, "docker", [
-        "compose",
-        "-f",
-        composeFile,
-        "config",
-        "--quiet",
-      ])
+    ? runCommand(input, "docker", createComposeConfigArgs(composeFile, envFile))
     : {
         ok: false as const,
         output: "",
@@ -112,7 +106,7 @@ export function runPhase7DockerDoctor(
     name: "compose_config",
     ok: composeConfig.ok,
     required: true,
-    command: `docker compose -f ${composeFile} config --quiet`,
+    command: `docker ${createComposeConfigArgs(composeFile, envFile).join(" ")}`,
     detail: composeConfig.ok
       ? "Compose configuration is valid."
       : formatCommandFailure(
@@ -130,6 +124,21 @@ export function runPhase7DockerDoctor(
     checks,
     nextActions: createNextActions(checks, composeFile, envFile),
   };
+}
+
+function createComposeConfigArgs(
+  composeFile: string,
+  envFile: string,
+): string[] {
+  return [
+    "compose",
+    "--env-file",
+    envFile,
+    "-f",
+    composeFile,
+    "config",
+    "--quiet",
+  ];
 }
 
 export function formatPhase7DockerDoctorBrief(
@@ -205,7 +214,7 @@ function createNextActions(
   }
   if (failed.has("compose_config")) {
     actions.push(
-      `Rerun \`docker compose -f ${composeFile} config --quiet\` after Docker and ${envFile} are ready.`,
+      `Rerun \`docker ${createComposeConfigArgs(composeFile, envFile).join(" ")}\` after Docker and ${envFile} are ready.`,
     );
   }
   if (actions.length === 0) {
