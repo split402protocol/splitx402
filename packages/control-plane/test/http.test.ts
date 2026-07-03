@@ -71,6 +71,16 @@ describe("control-plane HTTP API", () => {
     });
   });
 
+  it("rate limits control-plane requests when configured", async () => {
+    const { app } = createTestApp({
+      rateLimitWindowMs: 60_000,
+      rateLimitMaxRequests: 1
+    });
+
+    await request(app).get("/v1/health").expect(200);
+    await request(app).get("/v1/health").expect(429);
+  });
+
   it("accepts a public receipt submission", async () => {
     const { app, store, receipt } = createTestApp();
 
@@ -1764,6 +1774,8 @@ function createTestApp(
     webhookEventManagementStore?: WebhookEventManagementStore;
     withPayouts?: boolean;
     withRouteRegistry?: boolean;
+    rateLimitWindowMs?: number;
+    rateLimitMaxRequests?: number;
   } = {}
 ) {
   const bundle = createSampleProtocolArtifacts();
@@ -1823,7 +1835,13 @@ function createTestApp(
         : {}),
       ...(options.webhookEventManagementStore === undefined
         ? {}
-        : { webhookEventManagementStore: options.webhookEventManagementStore })
+        : { webhookEventManagementStore: options.webhookEventManagementStore }),
+      ...(options.rateLimitWindowMs === undefined
+        ? {}
+        : { rateLimitWindowMs: options.rateLimitWindowMs }),
+      ...(options.rateLimitMaxRequests === undefined
+        ? {}
+        : { rateLimitMaxRequests: options.rateLimitMaxRequests })
     }),
     merchantRegistry,
     store,

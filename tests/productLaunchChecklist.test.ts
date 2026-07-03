@@ -45,11 +45,11 @@ describe("Split402 launch checklist", () => {
     expect(checklist.sections[0]?.commands).toContain(
       "corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence",
     );
-    expect(checklist.sections[1]?.commands).toContain(
-      "corepack pnpm product:github-settings-review --template",
+    expect(checklist.sections[1]?.commands[0]).toBe(
+      "corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt",
     );
     expect(checklist.sections[1]?.commands).toContain(
-      "corepack pnpm product:github-settings-review",
+      "corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt",
     );
     expect(checklist.sections[1]?.notes).toContain(
       "Do not reintroduce MIT in README, package metadata, GitHub About text, release notes, or package manifests.",
@@ -122,7 +122,7 @@ describe("Split402 launch checklist", () => {
       "Review public/private and license boundary",
     );
     expect(formatSplit402LaunchChecklistBrief(checklist)).toContain(
-      "corepack pnpm product:github-settings-review --template",
+      "corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt",
     );
     expect(formatSplit402LaunchChecklistBrief(checklist)).toContain(
       "local-public-alpha-proof.json",
@@ -176,7 +176,7 @@ approval_notes: checked evidence is intentionally incomplete
       "blocked",
     ]);
     expect(checklist.nextCommand).toBe(
-      "corepack pnpm product:github-settings-review --template",
+      "corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt",
     );
     expect(formatSplit402LaunchChecklistBrief(checklist)).toContain(
       "Collect Phase 7 hosted public-alpha proof [blocked]",
@@ -221,7 +221,7 @@ approval_decision: no-go
       "blocked",
     ]);
     expect(checklist.nextCommand).toBe(
-      "corepack pnpm product:github-settings-review --template",
+      "corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt",
     );
   });
 
@@ -513,7 +513,7 @@ branch_protection_enabled: yes
 requires_pull_request: yes
 requires_code_owner_review: yes
 requires_status_checks: yes
-required_checks: Lint, Public surface check, Typecheck, Test, Build, Check vectors, Audit, Local public-alpha proof, PostgreSQL integration tests, CodeQL, Secret scan
+required_checks: Lint, Public surface check, Typecheck, Test, Build, Check vectors, Audit, Local public-alpha proof, postgres-integration, CodeQL, Secret scan
 blocks_force_pushes: yes
 blocks_deletion: yes
 blank_issues_disabled: yes

@@ -41,9 +41,13 @@ Required status checks:
 - `Check vectors`
 - `Audit`
 - `Local public-alpha proof`
-- `PostgreSQL integration tests`
+- `postgres-integration`
 - CodeQL
 - Secret scan
+
+The tracked Launch Gates workflow exposes the local validation commands as
+separate check names so branch protection can require each launch gate directly
+instead of only requiring the aggregate CI job.
 
 ## Merge Policy
 
@@ -76,25 +80,32 @@ support statement.
 Run this before launch-facing updates:
 
 ```bash
-corepack pnpm product:github-settings-review --template > split402-launch-evidence/github-settings-review.txt
+corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt
+corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt
 corepack pnpm product:public-surface-check --brief
 corepack pnpm product:local-proof --brief
 ```
 
 Then confirm the GitHub UI still matches this file.
 
-The local checks prove the tracked repository surface, not live branch protection settings.
+The local checks prove the tracked repository surface. The `--from-github`
+review captures live GitHub API state for repository metadata, branch
+protection, required checks, issue intake, releases, and readable package
+visibility. It can run before human review fields are filled and will leave
+placeholder reviewers/evidence plus `review_decision: no-go` until a human
+reviewer confirms UI-only settings such as security advisories and attached
+evidence.
 
-After verifying the live GitHub UI, generate a review record with:
+After fixing live GitHub blockers, regenerate the API review record with:
 
 ```bash
-corepack pnpm product:github-settings-review
+corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt
 ```
 
-The generated record must include the review method and evidence source:
+The generated no-go record may keep `pending` reviewer and evidence fields while
+it is only an API snapshot. Before approval, replace placeholders with real
+review evidence:
 
-- `SPLIT402_GITHUB_SETTINGS_REVIEW_METHOD`, for example
-  `github-ui-and-api`;
 - `SPLIT402_GITHUB_SETTINGS_EVIDENCE_SOURCE`, for example
   `attached: github-settings-review-YYYY-MM-DD.md`.
 
@@ -105,3 +116,5 @@ Keep the generated record with private launch evidence if it contains reviewer
 names, screenshots, or operational context that should not be public. The
 default local launch-evidence path is
 `split402-launch-evidence/github-settings-review.txt`.
+Use `--output` instead of shell redirection so the evidence file is written as
+UTF-8 on Windows PowerShell and remains parseable by launch preflight.

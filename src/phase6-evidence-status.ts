@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 
 import {
   createPhase6EvidenceStatusReport,
@@ -21,6 +22,14 @@ const evidenceText =
     : readFileSync(evidencePath, "utf8");
 
 const report = createPhase6EvidenceStatusReport(evidenceText, {
+  ...(evidencePath === undefined
+    ? {}
+    : {
+        artifactBaseDir: dirname(resolve(evidencePath)),
+        artifactExists: existsSync,
+        resolveArtifactPath: (artifactPath, baseDir) =>
+          resolve(baseDir, artifactPath),
+      }),
   currentSourceCommit: readCurrentGitCommit(),
 });
 console.log(
