@@ -7,6 +7,7 @@ import {
   ReceiptChainVerificationWorker,
   ReceiptIngestor,
   WebhookDispatchWorker,
+  isPayoutTransactionPendingFinality,
   runPayoutFinalityWorkerLoop,
   runReceiptChainVerificationWorkerLoop,
   runWebhookDispatchWorkerLoop,
@@ -610,7 +611,8 @@ describe("PayoutFinalityWorker", () => {
       {
         id: "ptx_finalize",
         status: "finalized",
-        observedAt: FIXED_NOW.toISOString()
+        observedAt: FIXED_NOW.toISOString(),
+        expectedStatus: "submitted"
       }
     ]);
   });
@@ -680,11 +682,11 @@ describe("PayoutFinalityWorker", () => {
         id: "ptx_failed",
         status: "failed",
         observedAt: FIXED_NOW.toISOString(),
+        expectedStatus: "submitted",
         error: {
           message: "custom program error",
           status: "failed",
-          signature: "sig_failed",
-          rpcUrl: "https://rpc.example"
+          signature: "sig_failed"
         }
       }
     ]);
@@ -725,7 +727,7 @@ describe("PayoutFinalityWorker", () => {
     ]);
   });
 
-  it("reports transactions that disappear during the sweep", async () => {
+  it("leaves raced or vanished transactions pending instead of forcing writes", async () => {
     const vanishing = createPendingPayoutTransaction({
       id: "ptx_vanishes",
       expectedSignature: "sig_vanishes"
@@ -749,12 +751,55 @@ describe("PayoutFinalityWorker", () => {
     if (result.status !== "swept") {
       throw new Error("expected swept result");
     }
-    expect(result.errors).toEqual([
-      {
-        transactionId: "ptx_vanishes",
-        error: "payout transaction disappeared during finality sweep"
+    expect(result.errors).toEqual([]);
+    expect(result.updatedTransactions).toEqual([]);
+    expect(result.pendingTransactionIds).toEqual(["ptx_vanishes"]);
+  });
+
+  it("does not overwrite a status that changed concurrently after listing", async () => {
+    const submitted = createPendingPayoutTransaction({
+      id: "ptx_raced",
+      expectedSignature: "sig_raced"
+    });
+    const store = new FakePayoutTransactionStore([submitted]);
+    const monitor = new FakePayoutFinalityMonitor({
+      ptx_raced: () => {
+        // Simulate an operator reconcile or a concurrent sweep replica
+        // finishing between listing and persisting.
+        store.forceStatus("ptx_raced", "failed");
+        return {
+          transactionId: "ptx_raced",
+          status: "confirmed"
+        };
       }
-    ]);
+    });
+    const worker = new PayoutFinalityWorker(store, monitor, {
+      now: () => FIXED_NOW
+    });
+
+    const result = await worker.processNext();
+
+    expect(result.status).toBe("swept");
+    if (result.status !== "swept") {
+      throw new Error("expected swept result");
+    }
+    expect(result.updatedTransactions).toEqual([]);
+    expect(result.pendingTransactionIds).toEqual(["ptx_raced"]);
+    expect(store.statusOf("ptx_raced")).toBe("failed");
+  });
+
+  it("excludes signature-less transactions from the sweep", async () => {
+    const unsigned = createPendingPayoutTransaction({ id: "ptx_unsigned" });
+    delete unsigned.expectedSignature;
+    const store = new FakePayoutTransactionStore([unsigned]);
+    const monitor = new FakePayoutFinalityMonitor({});
+    const worker = new PayoutFinalityWorker(store, monitor, {
+      now: () => FIXED_NOW
+    });
+
+    const result = await worker.processNext();
+
+    expect(result).toEqual({ status: "idle" });
   });
 
   it("passes the sweep limit to the transaction store", async () => {
@@ -782,17 +827,24 @@ describe("PayoutFinalityWorker", () => {
       { status: "idle" }
     ]);
     const results: PayoutFinalityWorkerResult[] = [];
+    const sleeps: number[] = [];
 
     const summary = await runPayoutFinalityWorkerLoop(processor, {
       maxIterations: 2,
+      pollIntervalMs: 250,
       onResult: (result) => {
         results.push(result);
       },
-      sleep: () => undefined
+      sleep: (delayMs) => {
+        sleeps.push(delayMs);
+      }
     });
 
     expect(summary).toEqual({ iterations: 2, stoppedBy: "max_iterations" });
     expect(results.map((result) => result.status)).toEqual(["swept", "idle"]);
+    // The sweep loop paces on the poll interval after every sweep, including
+    // non-idle sweeps, so a stable pending set cannot busy-spin against RPC.
+    expect(sleeps).toEqual([250]);
   });
 });
 
@@ -820,14 +872,22 @@ class FakePayoutTransactionStore implements PayoutTransactionStore {
     input: ListPayoutTransactionsPendingFinalityInput = {}
   ): PayoutTransactionRecord[] {
     this.listLimits.push(input.limit);
-    return this.transactions.filter(
-      (transaction) =>
-        transaction.status === "submitted" || transaction.status === "confirmed"
-    );
+    return this.transactions.filter(isPayoutTransactionPendingFinality);
   }
 
   markPayoutTransactionSubmitted(): never {
     throw new Error("not implemented");
+  }
+
+  forceStatus(id: string, status: PayoutTransactionRecord["status"]): void {
+    this.transactions = this.transactions.map((transaction) =>
+      transaction.id === id ? { ...transaction, status } : transaction
+    );
+  }
+
+  statusOf(id: string): PayoutTransactionRecord["status"] | undefined {
+    return this.transactions.find((transaction) => transaction.id === id)
+      ?.status;
   }
 
   markPayoutTransactionFinality(
@@ -841,6 +901,12 @@ class FakePayoutTransactionStore implements PayoutTransactionStore {
       (transaction) => transaction.id === input.id
     );
     if (existing === undefined) {
+      return undefined;
+    }
+    if (
+      input.expectedStatus !== undefined &&
+      existing.status !== input.expectedStatus
+    ) {
       return undefined;
     }
     const updated: PayoutTransactionRecord = {
@@ -859,7 +925,9 @@ class FakePayoutFinalityMonitor {
   constructor(
     private readonly results: Record<
       string,
-      PayoutReconciliationFinalityResult | Error
+      | PayoutReconciliationFinalityResult
+      | Error
+      | (() => PayoutReconciliationFinalityResult)
     >
   ) {}
 
@@ -872,6 +940,9 @@ class FakePayoutFinalityMonitor {
     }
     if (result instanceof Error) {
       throw result;
+    }
+    if (typeof result === "function") {
+      return result();
     }
     return result;
   }
