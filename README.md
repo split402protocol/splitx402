@@ -530,6 +530,7 @@ Prepare and check the Phase 7 staging proof:
 ```bash
 corepack pnpm phase7:staging:init
 corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json
+corepack pnpm phase7:docker:doctor --brief
 SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed
 corepack pnpm phase7:staging-proof --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-proof.txt
 corepack pnpm phase7:hosted:preflight --evidence-env-file split402-launch-evidence/phase7-staging.env

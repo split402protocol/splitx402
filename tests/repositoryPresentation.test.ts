@@ -338,6 +338,9 @@ describe("repository presentation", () => {
       expect(text, filePath).toContain(
         "split402-launch-evidence/phase7-staging-evidence/artifact-manifest.json",
       );
+      expect(text, filePath).toContain(
+        "corepack pnpm phase7:docker:doctor --brief",
+      );
       expect(text, filePath).not.toMatch(
         /--evidence-env-file phase7-staging-evidence\//u,
       );
@@ -370,6 +373,7 @@ describe("repository presentation", () => {
     expect(readme).toContain(
       "corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json",
     );
+    expect(readme).toContain("corepack pnpm phase7:docker:doctor --brief");
     expect(readme).toContain("corepack pnpm product:launch-preflight --help");
     expect(readme).toContain("corepack pnpm product:launch-preflight --brief");
     expect(readme).toContain("corepack pnpm product:launch-checklist --help");

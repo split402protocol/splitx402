@@ -172,6 +172,9 @@ describe("Split402 product evidence workspace", () => {
       "corepack pnpm phase7:staging:collect-reads --evidence-env-file split402-launch-evidence/phase7-staging.env",
     );
     expect(workspace.nextCommands).toContain(
+      "corepack pnpm phase7:docker:doctor --brief",
+    );
+    expect(workspace.nextCommands).toContain(
       "corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log",
     );
     expect(workspace.nextCommands).toContain(

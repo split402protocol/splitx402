@@ -2845,6 +2845,7 @@ function createNextActions(
   if (validation === undefined) {
     return [
       "Create the evidence workspace with corepack pnpm phase7:staging:init.",
+      "Run Docker readiness with corepack pnpm phase7:docker:doctor --brief from the hosted staging runtime.",
       "Seed the hosted staging demo state with SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed.",
       "Generate a proof scaffold with corepack pnpm phase7:staging-proof.",
       "Run the hosted staging preflight with corepack pnpm phase7:hosted:preflight.",
