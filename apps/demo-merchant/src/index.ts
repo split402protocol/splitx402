@@ -11,8 +11,9 @@ if (isMainModule()) {
   app.listen(port, () => {
     console.log(`Split402 demo merchant listening on ${config.merchantOrigin}`);
     console.log(`Split402 service public key: ${servicePublicKey}`);
-    console.log(`x402 Devnet payTo wallet: ${merchantPayTo}`);
-    console.log(`x402 Devnet asset: ${config.paymentAsset}`);
+    console.log(`x402 network: ${config.network.networkId} (${config.network.label})`);
+    console.log(`x402 payTo wallet: ${merchantPayTo}`);
+    console.log(`x402 asset: ${config.paymentAsset}`);
   });
 }
 

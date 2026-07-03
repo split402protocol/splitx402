@@ -14,7 +14,9 @@ import {
 } from "@split402/protocol";
 
 import { WORKSPACE_ROOT } from "./env.js";
+import { MAINNET_DEMO_CONFIRMATION, readDemoNetwork } from "./network.js";
 
+const NETWORK = readDemoNetwork();
 const DEFAULT_MERCHANT_SEED_HEX =
   "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
 const MERCHANT_PUBLIC_KEY =
@@ -41,6 +43,20 @@ try {
 }
 
 async function main(): Promise<void> {
+  const runInvalidClaimStep = NETWORK.cluster !== "mainnet";
+  if (NETWORK.cluster === "mainnet") {
+    if (
+      process.env.SPLIT402_MAINNET_CANARY_CONFIRM !== MAINNET_DEMO_CONFIRMATION
+    ) {
+      throw new Error(
+        `refusing the paid suite on Solana Mainnet: set SPLIT402_MAINNET_CANARY_CONFIRM=${MAINNET_DEMO_CONFIRMATION} to acknowledge a mainnet canary run`
+      );
+    }
+    writeStdout(
+      "mainnet canary mode: running one valid paid request only; the invalid-claim step is skipped\n"
+    );
+  }
+
   const merchant = startMerchant();
   try {
     await waitForHealth(MERCHANT_ORIGIN, 20_000);
@@ -63,22 +79,30 @@ async function main(): Promise<void> {
       "valid claim receipt"
     );
 
-    await runStep("invalid-claim paid request", "apps/demo-agent/dist/index.js", {
-      ...baseEnv(),
-      SPLIT402_USE_INVALID_CLAIM: "true"
-    });
-    const invalidReceipt = newestReceiptSince(
-      receiptsBefore.length + 1,
-      await getReceipts(MERCHANT_ORIGIN)
-    );
-    assertReceipt(invalidReceipt, 0, "invalid claim receipt");
+    let invalidReceipt: Split402ReceiptV1 | undefined;
+    if (runInvalidClaimStep) {
+      await runStep("invalid-claim paid request", "apps/demo-agent/dist/index.js", {
+        ...baseEnv(),
+        SPLIT402_USE_INVALID_CLAIM: "true"
+      });
+      invalidReceipt = newestReceiptSince(
+        receiptsBefore.length + 1,
+        await getReceipts(MERCHANT_ORIGIN)
+      );
+      assertReceipt(invalidReceipt, 0, "invalid claim receipt");
+    }
 
     writeStdout(
       JSON.stringify(
         {
           paidSuitePassed: true,
+          network: NETWORK.networkId,
           validReceipt: summarizeReceipt(validReceipt),
-          invalidReceipt: summarizeReceipt(invalidReceipt)
+          invalidClaimSkipped: !runInvalidClaimStep,
+          invalidReceipt:
+            invalidReceipt === undefined
+              ? undefined
+              : summarizeReceipt(invalidReceipt)
         },
         null,
         2
