@@ -114,7 +114,10 @@ workspace with Phase 6 and Phase 7 evidence files plus local env templates. The
 initializer refuses to overwrite existing scaffold files; use `--missing` to
 create only absent scaffold files in a partial workspace, use `--refresh-source`
 to update only stale scaffold `source_commit` values before evidence collection,
-and pass `--force` only when intentionally replacing scaffold files. Run
+and pass `--force` only when intentionally replacing scaffold files.
+`--refresh-source` skips filled or missing evidence files instead of failing:
+each skipped file is reported with the exact recollect or `--missing` command,
+and its `source_commit` is never rewritten under real evidence. Run
 `corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json`
 to prove and save the local public-alpha protocol vectors, router alpha tests,
 public/private license surface, and runnable MCP gateway smoke path before

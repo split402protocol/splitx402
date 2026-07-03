@@ -161,87 +161,120 @@ const GITHUB_SETTINGS_REFRESH_ALLOWED_NON_EMPTY_FIELDS = new Set([
   "required_checks",
 ]);
 
-export function createProductEvidenceSourceRefreshWrites(input: {
-  workspace: Split402ProductEvidenceWorkspace;
-  readText: (path: string) => string;
-}): ProductEvidenceInitWrite[] {
-  const phase6Path = join(
-    input.workspace.directory,
-    input.workspace.phase6EvidenceFileName,
-  );
-  const phase7Path = join(
-    input.workspace.directory,
-    input.workspace.phase7ProofFileName,
-  );
-  const githubSettingsReviewPath = join(
-    input.workspace.directory,
-    input.workspace.githubSettingsReviewFileName,
-  );
-  return [
-    {
-      path: githubSettingsReviewPath,
-      contents: addMissingRecordFields({
-        fields: ["review_method", "evidence_source"],
-        nextText: input.workspace.githubSettingsReviewText,
-        text: refreshSourceCommitField({
-          allowedNonEmptyFields: GITHUB_SETTINGS_REFRESH_ALLOWED_NON_EMPTY_FIELDS,
-          nextText: input.workspace.githubSettingsReviewText,
-          path: githubSettingsReviewPath,
-          previousText: input.readText(githubSettingsReviewPath),
-          scaffoldPlaceholderValues: new Set([
-            "<reviewer handles>",
-            "pending",
-            "no",
-            "no-go",
-            "scaffold only; replace with live GitHub UI/API evidence before approval",
-            "template only; replace with live GitHub UI/API evidence before approval",
-          ]),
-        }),
-      }),
-    },
-    {
-      path: phase6Path,
-      contents: refreshSourceCommitField({
-        allowedNonEmptyFields: PHASE6_REFRESH_ALLOWED_NON_EMPTY_FIELDS,
-        nextText: input.workspace.phase6EvidenceText,
-        path: phase6Path,
-        previousText: input.readText(phase6Path),
-      }),
-    },
-    {
-      path: phase7Path,
-      contents: refreshSourceCommitField({
-        allowedNonEmptyFields: PHASE7_REFRESH_ALLOWED_NON_EMPTY_FIELDS,
-        nextText: input.workspace.phase7ProofText,
-        path: phase7Path,
-        previousText: input.readText(phase7Path),
-      }),
-    },
-  ];
+export interface ProductEvidenceSourceRefreshSkip {
+  path: string;
+  nonRefreshableFields: string[];
+  nextAction: string;
 }
 
-function refreshSourceCommitField(input: {
+export interface ProductEvidenceSourceRefreshPlan {
+  writes: ProductEvidenceInitWrite[];
+  skipped: ProductEvidenceSourceRefreshSkip[];
+}
+
+export function createProductEvidenceSourceRefreshPlan(input: {
+  workspace: Split402ProductEvidenceWorkspace;
+  exists: (path: string) => boolean;
+  readText: (path: string) => string;
+}): ProductEvidenceSourceRefreshPlan {
+  const directory = input.workspace.directory;
+  const phase6Path = join(directory, input.workspace.phase6EvidenceFileName);
+  const phase6EnvFile = join(directory, input.workspace.phase6EnvFileName);
+  const phase7Path = join(directory, input.workspace.phase7ProofFileName);
+  const phase7EnvFile = join(directory, input.workspace.phase7EnvFileName);
+  const githubSettingsReviewPath = join(
+    directory,
+    input.workspace.githubSettingsReviewFileName,
+  );
+  const candidates: ProductEvidenceSourceRefreshCandidate[] = [
+    {
+      allowedNonEmptyFields: GITHUB_SETTINGS_REFRESH_ALLOWED_NON_EMPTY_FIELDS,
+      nextText: input.workspace.githubSettingsReviewText,
+      path: githubSettingsReviewPath,
+      recollectCommand:
+        "corepack pnpm product:github-settings-review from the current checkout",
+      scaffoldPlaceholderValues: new Set([
+        "<reviewer handles>",
+        "pending",
+        "no",
+        "no-go",
+        "scaffold only; replace with live GitHub UI/API evidence before approval",
+        "template only; replace with live GitHub UI/API evidence before approval",
+      ]),
+      toContents: (refreshedText) =>
+        addMissingRecordFields({
+          fields: ["review_method", "evidence_source"],
+          nextText: input.workspace.githubSettingsReviewText,
+          text: refreshedText,
+        }),
+    },
+    {
+      allowedNonEmptyFields: PHASE6_REFRESH_ALLOWED_NON_EMPTY_FIELDS,
+      nextText: input.workspace.phase6EvidenceText,
+      path: phase6Path,
+      recollectCommand: `corepack pnpm phase6:evidence:assemble --evidence-env-file ${toDisplayPath(phase6EnvFile)} ${toDisplayPath(phase6Path)}`,
+    },
+    {
+      allowedNonEmptyFields: PHASE7_REFRESH_ALLOWED_NON_EMPTY_FIELDS,
+      nextText: input.workspace.phase7ProofText,
+      path: phase7Path,
+      recollectCommand: `corepack pnpm phase7:staging:assemble --evidence-env-file ${toDisplayPath(phase7EnvFile)} ${toDisplayPath(phase7Path)}`,
+    },
+  ];
+
+  const writes: ProductEvidenceInitWrite[] = [];
+  const skipped: ProductEvidenceSourceRefreshSkip[] = [];
+  for (const candidate of candidates) {
+    if (!input.exists(candidate.path)) {
+      skipped.push({
+        path: toDisplayPath(candidate.path),
+        nonRefreshableFields: [],
+        nextAction: `Missing scaffold file; create absent scaffold files first with corepack pnpm product:evidence:init --missing ${directory}.`,
+      });
+      continue;
+    }
+    const previousText = input.readText(candidate.path);
+    const nonRefreshableFields = findNonRefreshableFields({
+      allowedNonEmptyFields: candidate.allowedNonEmptyFields,
+      scaffoldPlaceholderValues: candidate.scaffoldPlaceholderValues,
+      text: previousText,
+    });
+    if (nonRefreshableFields.length > 0) {
+      skipped.push({
+        path: toDisplayPath(candidate.path),
+        nonRefreshableFields,
+        nextAction: `Contains non-scaffold evidence fields; recollect it with ${candidate.recollectCommand} instead of rewriting source_commit.`,
+      });
+      continue;
+    }
+    const refreshedText = refreshSourceCommitField({
+      nextText: candidate.nextText,
+      previousText,
+    });
+    writes.push({
+      path: candidate.path,
+      contents:
+        candidate.toContents === undefined
+          ? refreshedText
+          : candidate.toContents(refreshedText),
+    });
+  }
+  return { skipped, writes };
+}
+
+interface ProductEvidenceSourceRefreshCandidate {
   allowedNonEmptyFields: ReadonlySet<string>;
   nextText: string;
   path: string;
-  previousText: string;
+  recollectCommand: string;
   scaffoldPlaceholderValues?: ReadonlySet<string>;
-}): string {
-  const nonRefreshableFields = findNonRefreshableFields({
-    allowedNonEmptyFields: input.allowedNonEmptyFields,
-    scaffoldPlaceholderValues: input.scaffoldPlaceholderValues,
-    text: input.previousText,
-  });
-  if (nonRefreshableFields.length > 0) {
-    throw new Error(
-      [
-        `Refusing to refresh source_commit in ${toDisplayPath(input.path)} because it already contains non-scaffold evidence fields.`,
-        `Non-refreshable fields: ${nonRefreshableFields.join(", ")}`,
-        "Recollect evidence from the current checkout instead of rewriting source_commit.",
-      ].join("\n"),
-    );
-  }
+  toContents?: (refreshedText: string) => string;
+}
 
+function refreshSourceCommitField(input: {
+  nextText: string;
+  previousText: string;
+}): string {
   const nextSourceCommit = readRecordField(input.nextText, "source_commit");
   if (nextSourceCommit === undefined || nextSourceCommit.length === 0) {
     throw new Error("Generated workspace source_commit is missing");
