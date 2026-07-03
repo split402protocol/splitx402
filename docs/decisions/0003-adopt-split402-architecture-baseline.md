@@ -39,6 +39,6 @@ For this repository:
 - Phase 2 maps to architecture Milestone 0: repository and protocol core.
 - Future phases follow the architecture milestones: Solana Devnet merchant demo,
   control plane and ingestion, production SDK, payout engine, dashboard/discovery,
-  `$SPLIT` route bonding, then `split-exact` research.
+  then `split-exact` research.
 - The repo should avoid accidental protocol behavior drift; changes should be
   intentional, reviewed, and covered by tests.

@@ -70,7 +70,6 @@ metadata.
 ## What Is Not Built Yet
 
 - The original x402 payment is not atomically split onchain in the MVP.
-- `$SPLIT` route bonding is not in the critical path yet.
 - The full production business machine is not public: hosted operations,
   commercial provider strategy, custody evidence, private URLs, and live
   deployment configuration belong in private Split402 infrastructure.

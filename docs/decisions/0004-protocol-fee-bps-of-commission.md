@@ -55,5 +55,5 @@ are supplied with different values, campaign creation fails.
 
 ## Non-Goals
 
-This decision does not introduce atomic split settlement, protocol-token
-bonding, governance, or a custom facilitator.
+This decision does not introduce atomic split settlement or a custom
+facilitator.

@@ -101,5 +101,5 @@ approval_notes:
 
 ## Mainnet Boundary
 
-This checklist is a production custody gate only. It does not approve `$SPLIT`
-route bonding, atomic split settlement, or any custom facilitator path.
+This checklist is a production custody gate only. It does not approve atomic
+split settlement or any custom facilitator path.

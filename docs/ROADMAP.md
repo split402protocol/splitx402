@@ -44,8 +44,8 @@ the combined Phase 6 custody and Phase 7 hosted-proof launch status.
 The MVP still uses normal x402 settlement to the merchant and records a
 commission liability for later merchant-funded payout. Protocol fee is a
 percentage of the referral commission via `protocolFeeBpsOfCommission`, not a
-percentage of gross x402 payment. Atomic split settlement and `$SPLIT` bonding
-remain later research.
+percentage of gross x402 payment. Atomic split settlement remains later
+research after accrual, payout, and idempotency behavior are proven.
 
 ## Phase 0: Repository Setup
 
@@ -464,10 +464,9 @@ Pending Phase 7 adoption layer:
 - Hosted/router-backed staging proof with real environment evidence. Do not
   claim full MCP compatibility beyond the implemented stdio tool interface.
 
-## Later: Token Bonding And Atomic Settlement
+## Later: Atomic Settlement Research
 
-Architecture Milestones 6 and 7 remain intentionally later:
+Atomic settlement remains intentionally later:
 
-- `$SPLIT` route bonding after the USDC commission product works;
 - `split-exact` atomic settlement research after accrual, payout, and idempotency
   behavior are proven.
