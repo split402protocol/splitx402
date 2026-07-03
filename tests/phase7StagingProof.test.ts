@@ -43,6 +43,7 @@ describe("Phase 7 staging proof", () => {
       "corepack pnpm phase7:staging:derive-receipt-verification phase7-staging-evidence/paid-suite.log phase7-staging-evidence/receipt-verification.json",
     );
     const expectedCaptureOrder = [
+      "corepack pnpm phase7:docker:doctor --brief",
       "corepack pnpm phase7:hosted:preflight",
       "corepack pnpm phase7:staging:collect-reads",
       "run the payout-obligations read with SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc and attach covered/deficit evidence",
@@ -946,6 +947,9 @@ funding_balance_evidence: funding.json
       "commands_run missing required command: corepack pnpm phase7:staging:seed",
     );
     expect(report.commandEvidenceStatus.blockers).toContain(
+      "commands_run missing required command: corepack pnpm phase7:docker:doctor --brief",
+    );
+    expect(report.commandEvidenceStatus.blockers).toContain(
       "commands_run missing required command: corepack pnpm audit --audit-level high",
     );
     expect(report.commandEvidenceStatus.blockers).toContain(
@@ -974,7 +978,7 @@ funding_balance_evidence: funding.json
         [
           "The operator reported running git rev-parse HEAD and git status --short --branch.",
           "The notes mention corepack pnpm lint, corepack pnpm test, corepack pnpm build, and corepack pnpm audit --audit-level high.",
-          "The checklist also names corepack pnpm phase7:staging:init, corepack pnpm phase7:staging:seed, corepack pnpm phase7:staging-proof, corepack pnpm phase7:hosted:preflight, corepack pnpm phase7:staging:collect-reads, corepack pnpm phase7:staging:collect-mcp-gateway, corepack pnpm demo:mcp-gateway:smoke, corepack pnpm demo:mcp-bundle, corepack pnpm demo:paid-suite, corepack pnpm phase7:staging:derive-receipt-verification, corepack pnpm phase7:staging:manifest, corepack pnpm phase7:staging:assemble, corepack pnpm phase7:staging:status, corepack pnpm typecheck, and corepack pnpm vectors:check.",
+          "The checklist also names corepack pnpm phase7:staging:init, corepack pnpm phase7:docker:doctor --brief, corepack pnpm phase7:staging:seed, corepack pnpm phase7:staging-proof, corepack pnpm phase7:hosted:preflight, corepack pnpm phase7:staging:collect-reads, corepack pnpm phase7:staging:collect-mcp-gateway, corepack pnpm demo:mcp-gateway:smoke, corepack pnpm demo:mcp-bundle, corepack pnpm demo:paid-suite, corepack pnpm phase7:staging:derive-receipt-verification, corepack pnpm phase7:staging:manifest, corepack pnpm phase7:staging:assemble, corepack pnpm phase7:staging:status, corepack pnpm typecheck, and corepack pnpm vectors:check.",
           "",
         ].join("\n"),
       ),
@@ -3049,6 +3053,8 @@ function createValidCommandsLog(): string {
     "$ corepack pnpm phase7:staging:init",
     "$ corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence",
     "Split402 launch preflight: ready",
+    "$ corepack pnpm phase7:docker:doctor --brief",
+    "Split402 Phase 7 Docker doctor: ready",
     "$ SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",
     "$ corepack pnpm phase7:staging-proof phase7-staging-proof.txt",
     "$ corepack pnpm phase7:hosted:preflight",

@@ -460,6 +460,8 @@ function createValidCommandsLog(): string {
     "$ corepack pnpm phase7:staging:init",
     "$ corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence",
     "Split402 launch preflight: ready",
+    "$ corepack pnpm phase7:docker:doctor --brief",
+    "Split402 Phase 7 Docker doctor: ready",
     "$ SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",
     "$ corepack pnpm phase7:staging-proof phase7-staging-proof.txt",
     "$ corepack pnpm phase7:hosted:preflight",
