@@ -46,6 +46,13 @@ docker compose -f deploy/phase7-staging/compose.yaml up postgres control-plane d
 The `migrate` service runs `corepack pnpm control-plane:migrate` once before the
 control plane starts. Save its JSON output if the launch review asks for schema
 migration evidence.
+The control plane and dashboard containers expose Docker healthchecks backed by
+their public health endpoints. Wait for `postgres`, `control-plane`, and
+`dashboard` to report healthy before collecting hosted proof artifacts:
+
+```bash
+docker compose -f deploy/phase7-staging/compose.yaml ps
+```
 
 Add the demo merchant and workers when the staging wallets and webhook receiver
 are ready:
@@ -53,6 +60,10 @@ are ready:
 ```bash
 docker compose -f deploy/phase7-staging/compose.yaml --profile demo --profile workers up
 ```
+
+The demo merchant also exposes a Docker healthcheck on `/health`, and it waits
+for the control plane to become healthy before starting. Do not run the paid
+suite or MCP execution collector until the demo merchant is healthy.
 
 The `workers` profile runs the receipt chain-verification worker, the webhook
 dispatch worker, and the payout finality worker. The payout finality worker
