@@ -158,6 +158,11 @@ const PRE_COLLECTION_APPROVAL_ENV_KEYS = [
   },
 ] as const;
 
+const PHASE7_DOCKER_RUNTIME_ENV_FILE =
+  "deploy/phase7-staging/phase7-staging.env";
+const PHASE7_DOCKER_RUNTIME_ENV_EXAMPLE_FILE =
+  "deploy/phase7-staging/phase7-staging.env.example";
+
 export function createSplit402LaunchPreflightReport(
   input: Split402LaunchPreflightInput,
 ): Split402LaunchPreflightReport {
@@ -258,6 +263,7 @@ export function createSplit402LaunchPreflightReport(
       (attachment) =>
         phase7Env.get(attachment.key) !== attachment.expectedPath,
     );
+  const dockerRuntimeEnvExists = input.exists(PHASE7_DOCKER_RUNTIME_ENV_FILE);
   const missingHostedKeys = REQUIRED_PHASE7_HOSTED_ENV_KEYS.filter(
     (key) => !hasConfiguredEnvValue(phase7Env, key),
   );
@@ -393,6 +399,19 @@ export function createSplit402LaunchPreflightReport(
               (attachment) =>
                 `Set ${attachment.key}=${attachment.expectedPath}`,
             ),
+    },
+    {
+      id: "phase7_docker_runtime_env",
+      label: "Phase 7 Docker runtime env file exists",
+      ok: dockerRuntimeEnvExists,
+      severity: "required",
+      details: dockerRuntimeEnvExists
+        ? [
+            `${PHASE7_DOCKER_RUNTIME_ENV_FILE} exists for Docker Compose runtime values.`,
+          ]
+        : [
+            `Copy ${PHASE7_DOCKER_RUNTIME_ENV_EXAMPLE_FILE} to ${PHASE7_DOCKER_RUNTIME_ENV_FILE} and fill Docker runtime values before running phase7:docker:doctor.`,
+          ],
     },
     {
       id: "phase7_hosted_env_values",
@@ -557,6 +576,7 @@ function createNextActions(checks: readonly Split402LaunchPreflightCheck[]): str
         detail.startsWith("Run ") ||
         detail.startsWith("Fix ") ||
         detail.startsWith("Fill ") ||
+        detail.startsWith("Copy ") ||
         detail.startsWith("Set ") ||
         detail.startsWith("Regenerate "),
     );
