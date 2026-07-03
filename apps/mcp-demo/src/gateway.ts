@@ -139,6 +139,14 @@ export async function createMcpGatewayContextFromEnv(
   if (controlPlaneUrl === undefined) {
     return createMcpGatewayContext(bundle);
   }
+  const signerSecret =
+    readOptionalEnvString(env.SPLIT402_MCP_SVM_PRIVATE_KEY) ??
+    readOptionalEnvString(env.SVM_PRIVATE_KEY);
+  if (options.requireSigner === true && signerSecret === undefined) {
+    throw new Error(
+      "SPLIT402_MCP_SVM_PRIVATE_KEY or SVM_PRIVATE_KEY is required for live MCP gateway execution"
+    );
+  }
 
   const capabilityOverride = readOptionalEnvString(env.SPLIT402_MCP_CAPABILITY);
   const bearerToken = readOptionalEnvString(env.SPLIT402_MCP_CONTROL_PLANE_TOKEN);
@@ -159,14 +167,6 @@ export async function createMcpGatewayContextFromEnv(
     ...(operationId === undefined ? {} : { operationId }),
     ...(limit === undefined ? {} : { limit })
   });
-  const signerSecret =
-    readOptionalEnvString(env.SPLIT402_MCP_SVM_PRIVATE_KEY) ??
-    readOptionalEnvString(env.SVM_PRIVATE_KEY);
-  if (options.requireSigner === true && signerSecret === undefined) {
-    throw new Error(
-      "SPLIT402_MCP_SVM_PRIVATE_KEY or SVM_PRIVATE_KEY is required for live MCP gateway execution"
-    );
-  }
   const signer =
     signerSecret === undefined
       ? undefined
@@ -244,10 +244,14 @@ export function createWalletRiskToolResult(
 }
 
 export async function runMcpGateway(
-  input = process.stdin,
-  output = process.stdout,
+  input: NodeJS.ReadableStream = process.stdin,
+  output: NodeJS.WritableStream = process.stdout,
+  options: McpGatewayRuntimeOptions = {},
 ): Promise<void> {
-  const context = await createMcpGatewayContextFromEnv();
+  const context = await createMcpGatewayContextFromEnv({
+    ...options,
+    requireSigner: options.requireSigner ?? true
+  });
   const reader = createInterface({
     input,
     crlfDelay: Number.POSITIVE_INFINITY,
