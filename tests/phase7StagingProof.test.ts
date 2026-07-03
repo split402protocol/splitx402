@@ -956,6 +956,9 @@ funding_balance_evidence: funding.json
       "commands_run missing required command: corepack pnpm phase7:docker:doctor --brief --profile demo --profile workers",
     );
     expect(report.commandEvidenceStatus.blockers).toContain(
+      "commands_run missing required command: corepack pnpm phase7:docker:health --brief --profile demo --profile workers",
+    );
+    expect(report.commandEvidenceStatus.blockers).toContain(
       "commands_run missing required command: corepack pnpm audit --audit-level high",
     );
     expect(report.commandEvidenceStatus.blockers).toContain(
@@ -984,7 +987,7 @@ funding_balance_evidence: funding.json
         [
           "The operator reported running git rev-parse HEAD and git status --short --branch.",
           "The notes mention corepack pnpm lint, corepack pnpm test, corepack pnpm build, and corepack pnpm audit --audit-level high.",
-          "The checklist also names corepack pnpm phase7:staging:init, corepack pnpm phase7:docker:doctor --brief, corepack pnpm phase7:docker:doctor --brief --profile demo --profile workers, corepack pnpm phase7:staging:seed, corepack pnpm phase7:staging-proof, corepack pnpm phase7:hosted:preflight, corepack pnpm phase7:staging:collect-reads, corepack pnpm phase7:staging:collect-mcp-gateway, corepack pnpm demo:mcp-gateway:smoke, corepack pnpm demo:mcp-bundle, corepack pnpm demo:paid-suite, corepack pnpm phase7:staging:derive-receipt-verification, corepack pnpm phase7:staging:manifest, corepack pnpm phase7:staging:assemble, corepack pnpm phase7:staging:status, corepack pnpm typecheck, and corepack pnpm vectors:check.",
+          "The checklist also names corepack pnpm phase7:staging:init, corepack pnpm phase7:docker:doctor --brief, corepack pnpm phase7:docker:doctor --brief --profile demo --profile workers, corepack pnpm phase7:docker:compose up --brief --profile demo --profile workers, corepack pnpm phase7:docker:health --brief --profile demo --profile workers, corepack pnpm phase7:staging:seed, corepack pnpm phase7:staging-proof, corepack pnpm phase7:hosted:preflight, corepack pnpm phase7:staging:collect-reads, corepack pnpm phase7:staging:collect-mcp-gateway, corepack pnpm demo:mcp-gateway:smoke, corepack pnpm demo:mcp-bundle, corepack pnpm demo:paid-suite, corepack pnpm phase7:staging:derive-receipt-verification, corepack pnpm phase7:staging:manifest, corepack pnpm phase7:staging:assemble, corepack pnpm phase7:staging:status, corepack pnpm typecheck, and corepack pnpm vectors:check.",
           "",
         ].join("\n"),
       ),
@@ -3068,6 +3071,9 @@ function createValidCommandsLog(): string {
     "$ corepack pnpm phase7:docker:compose up --brief --profile demo --profile workers",
     "Split402 Phase 7 Docker compose up: ok",
     "Command: docker compose --env-file deploy/phase7-staging/phase7-staging.env -f deploy/phase7-staging/compose.yaml --profile demo --profile workers up -d postgres control-plane dashboard demo-merchant chain-worker webhook-worker payout-finality-worker",
+    "$ corepack pnpm phase7:docker:health --brief --profile demo --profile workers",
+    "Split402 Phase 7 Docker health: ready",
+    "Profiles: demo, workers",
     "$ SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",
     "$ corepack pnpm phase7:staging-proof phase7-staging-proof.txt",
     "$ corepack pnpm phase7:hosted:preflight",

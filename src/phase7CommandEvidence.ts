@@ -6,6 +6,7 @@ export const PHASE7_REQUIRED_COMMAND_EVIDENCE = [
   "corepack pnpm phase7:docker:doctor --brief",
   "corepack pnpm phase7:docker:doctor --brief --profile demo --profile workers",
   "corepack pnpm phase7:docker:compose up --brief --profile demo --profile workers",
+  "corepack pnpm phase7:docker:health --brief --profile demo --profile workers",
   "corepack pnpm phase7:staging:seed",
   "corepack pnpm phase7:staging-proof",
   "corepack pnpm phase7:hosted:preflight",
@@ -99,6 +100,7 @@ export function validatePhase7CommandEvidence(
   validateLaunchPreflightCommandOutput(text, errors);
   validateDockerDoctorCommandOutput(text, errors);
   validateDockerComposeCommandOutput(text, errors);
+  validateDockerHealthCommandOutput(text, errors);
   validatePublicSurfaceCommandOutput(text, errors);
   return { ok: errors.length === 0, errors };
 }
@@ -250,6 +252,45 @@ function validateDockerComposeCommandOutput(
     ) {
       errors.push(
         "commands_run profile Docker compose output must include selected demo and workers profiles",
+      );
+    }
+  }
+}
+
+function validateDockerHealthCommandOutput(
+  text: string,
+  errors: string[],
+): void {
+  const dockerHealthBlocks = extractCommandEvidenceBlocks(text).filter((block) =>
+    block.command.includes("corepack pnpm phase7:docker:health"),
+  );
+  if (dockerHealthBlocks.length === 0) {
+    return;
+  }
+
+  for (const block of dockerHealthBlocks) {
+    const outputLines = block.outputLines
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+    if (outputLines.length === 0) {
+      errors.push(
+        `commands_run Docker health output is missing for ${block.command}`,
+      );
+      continue;
+    }
+    if (
+      !outputLines.some(
+        (line) => line === "Split402 Phase 7 Docker health: ready",
+      )
+    ) {
+      errors.push("commands_run Docker health output must be ready");
+    }
+    if (
+      block.command.includes("--profile") &&
+      !outputLines.some((line) => line === "Profiles: demo, workers")
+    ) {
+      errors.push(
+        "commands_run profile Docker health output must include selected demo and workers profiles",
       );
     }
   }

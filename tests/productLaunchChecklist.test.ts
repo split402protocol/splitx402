@@ -84,6 +84,9 @@ describe("Split402 launch checklist", () => {
     expect(checklist.sections[3]?.commands[5]).toBe(
       "corepack pnpm phase7:docker:doctor --brief --profile demo --profile workers",
     );
+    expect(checklist.sections[3]?.commands[7]).toBe(
+      "corepack pnpm phase7:docker:health --brief --profile demo --profile workers",
+    );
     expect(checklist.sections[3]?.commands).toContain(
       "corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log",
     );
@@ -147,6 +150,9 @@ describe("Split402 launch checklist", () => {
     );
     expect(formatSplit402LaunchChecklistBrief(checklist)).toContain(
       "corepack pnpm phase7:docker:doctor --brief --profile demo --profile workers",
+    );
+    expect(formatSplit402LaunchChecklistBrief(checklist)).toContain(
+      "corepack pnpm phase7:docker:health --brief --profile demo --profile workers",
     );
     expect(formatSplit402LaunchChecklistBrief(checklist)).toContain(
       "The combined status remains no-go until every machine-checkable launch gate passes.",
@@ -487,6 +493,9 @@ function createValidCommandsLog(): string {
     "$ corepack pnpm phase7:docker:compose up --brief --profile demo --profile workers",
     "Split402 Phase 7 Docker compose up: ok",
     "Command: docker compose --env-file deploy/phase7-staging/phase7-staging.env -f deploy/phase7-staging/compose.yaml --profile demo --profile workers up -d postgres control-plane dashboard demo-merchant chain-worker webhook-worker payout-finality-worker",
+    "$ corepack pnpm phase7:docker:health --brief --profile demo --profile workers",
+    "Split402 Phase 7 Docker health: ready",
+    "Profiles: demo, workers",
     "$ SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",
     "$ corepack pnpm phase7:staging-proof phase7-staging-proof.txt",
     "$ corepack pnpm phase7:hosted:preflight",

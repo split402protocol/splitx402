@@ -178,6 +178,9 @@ describe("Split402 product evidence workspace", () => {
       "corepack pnpm phase7:docker:doctor --brief --profile demo --profile workers",
     );
     expect(workspace.nextCommands).toContain(
+      "corepack pnpm phase7:docker:health --brief --profile demo --profile workers",
+    );
+    expect(workspace.nextCommands).toContain(
       "corepack pnpm phase7:docker:env:init",
     );
     expect(workspace.nextCommands).toContain(

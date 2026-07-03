@@ -145,6 +145,9 @@ describe("Phase 7 staging evidence workspace", () => {
       "corepack pnpm phase7:docker:doctor --brief --profile demo --profile workers",
     );
     expect(workspace.readmeText).toContain(
+      "corepack pnpm phase7:docker:health --brief --profile demo --profile workers",
+    );
+    expect(workspace.readmeText).toContain(
       "corepack pnpm phase7:docker:env:init",
     );
     expect(workspace.readmeText).toContain(
@@ -154,6 +157,9 @@ describe("Phase 7 staging evidence workspace", () => {
       "Split402 Phase 7 Docker doctor: ready",
     );
     expect(workspace.readmeText).toContain("Profiles: demo, workers");
+    expect(workspace.readmeText).toContain(
+      "Split402 Phase 7 Docker health: ready",
+    );
     expect(workspace.readmeText).toContain("git rev-parse HEAD");
     expect(workspace.readmeText).toContain("git status --short --branch");
     expect(workspace.readmeText).toContain(

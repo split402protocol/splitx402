@@ -50,6 +50,7 @@
     "phase7:docker:env:init": "tsx src/phase7-docker-env-init.ts",
     "phase7:docker:doctor": "tsx src/phase7-docker-doctor.ts",
     "phase7:docker:compose": "tsx src/phase7-docker-compose.ts",
+    "phase7:docker:health": "tsx src/phase7-docker-health.ts",
     "phase7:staging:seed": "corepack pnpm --filter @split402/control-plane phase7:staging:seed",
     "phase7:hosted:preflight": "tsx src/phase7-hosted-preflight.ts",
     "phase7:staging:collect-reads": "tsx src/phase7-staging-collect-reads.ts",
