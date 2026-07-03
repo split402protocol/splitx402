@@ -9,6 +9,9 @@ public-alpha protocol foundation and reference implementation.
   tags as supported artifacts until a release decision is recorded.
 - Keep every workspace package marked `"private": true` until the package has a
   versioning plan, support statement, registry policy, and launch approval.
+  `product:public-surface-check` derives the checked package manifests from
+  `pnpm-workspace.yaml`, so newly added workspace packages are included in this
+  pre-release privacy gate automatically.
 - Do not claim production readiness, mainnet readiness, custody readiness, or
   commercial hosted availability from `main`.
 - Use Apache-2.0 for the public repository. Keep private hosted operations,
@@ -77,8 +80,8 @@ Before publishing any public artifact:
 
 ```bash
 corepack pnpm lint
-corepack pnpm product:github-settings-review --template > split402-launch-evidence/github-settings-review.txt
-corepack pnpm product:github-settings-review
+corepack pnpm product:github-settings-review --from-github --output split402-launch-evidence/github-settings-review.txt
+corepack pnpm product:github-settings-review --template --output split402-launch-evidence/github-settings-review.txt
 corepack pnpm product:public-surface-check --brief
 corepack pnpm repo:guard
 corepack pnpm typecheck

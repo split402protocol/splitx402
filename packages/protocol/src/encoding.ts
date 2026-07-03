@@ -52,12 +52,20 @@ export function base58Encode(bytes: Uint8Array): string {
     let carry = byte;
     for (let index = 0; index < digits.length; index += 1) {
       const value = (digits[index] ?? 0) * 256 + carry;
+
+      // codeql[js/biased-cryptographic-random]: Base58 encoding uses deterministic divmod arithmetic; no random value is generated here.
       digits[index] = value % 58;
+
+      // codeql[js/biased-cryptographic-random]: Base58 encoding uses deterministic divmod arithmetic; no random value is generated here.
       carry = Math.floor(value / 58);
     }
 
     while (carry > 0) {
+
+      // codeql[js/biased-cryptographic-random]: Base58 encoding uses deterministic divmod arithmetic; no random value is generated here.
       digits.push(carry % 58);
+
+      // codeql[js/biased-cryptographic-random]: Base58 encoding uses deterministic divmod arithmetic; no random value is generated here.
       carry = Math.floor(carry / 58);
     }
   }
@@ -117,4 +125,3 @@ export function assertByteLength(
     throw new Error(`${label} must be ${expectedLength} bytes`);
   }
 }
-

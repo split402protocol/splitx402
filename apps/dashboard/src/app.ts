@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 import express, { type Request, type Response } from "express";
+import { rateLimit } from "express-rate-limit";
 
 export interface DashboardConfig {
   controlPlaneUrl: string;
@@ -12,6 +13,8 @@ export interface DashboardConfig {
   sessionCookieName: string;
   secureSessionCookie: boolean;
   sessionMaxAgeSeconds: number;
+  rateLimitWindowMs: number;
+  rateLimitMaxRequests: number;
 }
 
 export interface DashboardAppOptions {
@@ -49,6 +52,18 @@ export function createDashboardApp(
   const app = express();
 
   app.disable("x-powered-by");
+  app.use(
+    rateLimit({
+      windowMs: config.rateLimitWindowMs,
+      limit: config.rateLimitMaxRequests,
+      standardHeaders: "draft-8",
+      legacyHeaders: false,
+      message: {
+        error: "rate_limited",
+        message: "Too many dashboard requests"
+      }
+    })
+  );
   app.use(express.json({ limit: "32kb" }));
 
   app.get("/", (_req, res) => {
@@ -230,6 +245,20 @@ export function readDashboardConfig(
       "SPLIT402_DASHBOARD_SESSION_MAX_AGE_SECONDS"
     ) ??
     28_800;
+  const rateLimitWindowMs =
+    overrides.rateLimitWindowMs ??
+    readPositiveInteger(
+      env.SPLIT402_DASHBOARD_RATE_LIMIT_WINDOW_MS,
+      "SPLIT402_DASHBOARD_RATE_LIMIT_WINDOW_MS"
+    ) ??
+    60_000;
+  const rateLimitMaxRequests =
+    overrides.rateLimitMaxRequests ??
+    readPositiveInteger(
+      env.SPLIT402_DASHBOARD_RATE_LIMIT_MAX_REQUESTS,
+      "SPLIT402_DASHBOARD_RATE_LIMIT_MAX_REQUESTS"
+    ) ??
+    1_000;
   return {
     controlPlaneUrl,
     port,
@@ -255,7 +284,9 @@ export function readDashboardConfig(
         }),
     sessionCookieName,
     secureSessionCookie,
-    sessionMaxAgeSeconds
+    sessionMaxAgeSeconds,
+    rateLimitWindowMs,
+    rateLimitMaxRequests
   };
 }
 
