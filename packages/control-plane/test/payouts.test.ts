@@ -690,6 +690,7 @@ describe("payout allocation release guard", () => {
       id: "ptx_no_signature",
       status: "signed"
     });
+    delete withoutSignature.expectedSignature;
 
     expect(
       listPayoutBatchAllocationReleaseHazards([
