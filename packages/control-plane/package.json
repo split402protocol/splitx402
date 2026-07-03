@@ -9,6 +9,7 @@
     "split402-control-plane": "./dist/server.js",
     "split402-control-plane-migrate": "./dist/migrate.js",
     "split402-chain-worker": "./dist/chain-worker.js",
+    "split402-payout-finality-worker": "./dist/payout-finality-worker.js",
     "split402-webhook-worker": "./dist/webhook-worker.js"
   },
   "files": [
@@ -26,6 +27,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "server": "tsx src/server.ts",
     "worker:chain": "tsx src/chain-worker.ts",
+    "worker:payout-finality": "tsx src/payout-finality-worker.ts",
     "worker:webhook": "tsx src/webhook-worker.ts"
   },
   "dependencies": {

@@ -3,9 +3,15 @@ import type { Split402ReceiptV1 } from "@split402/protocol";
 import type {
   OutboxEventRecord,
   OutboxEventStore,
+  PayoutFinalityMonitor,
+  PayoutReconciliationFinalityResult,
   ReceiptChainVerificationStore,
   ReceiptIngestionSnapshot
 } from "./index.js";
+import type {
+  PayoutTransactionRecord,
+  PayoutTransactionStore
+} from "./payouts.js";
 
 export type ReceiptChainVerificationResult =
   | {
@@ -39,28 +45,33 @@ export interface ReceiptChainVerificationWorkerOptions {
   retryDelayMs?: number;
 }
 
-export interface ReceiptChainVerificationWorkerLoopOptions {
+export interface WorkerLoopOptions<TResult> {
   errorDelayMs?: number;
   maxIterations?: number;
   onError?: (error: unknown) => Promise<void> | void;
-  onResult?: (
-    result: ReceiptChainVerificationWorkerResult
-  ) => Promise<void> | void;
+  onResult?: (result: TResult) => Promise<void> | void;
   pollIntervalMs?: number;
   signal?: AbortSignal;
-  sleep?: ReceiptChainVerificationWorkerLoopSleep;
+  sleep?: WorkerLoopSleep;
   stopOnError?: boolean;
 }
 
-export type ReceiptChainVerificationWorkerLoopSleep = (
+export type WorkerLoopSleep = (
   delayMs: number,
   signal?: AbortSignal
 ) => Promise<void> | void;
 
-export interface ReceiptChainVerificationWorkerLoopSummary {
+export interface WorkerLoopSummary {
   iterations: number;
   stoppedBy: "aborted" | "max_iterations";
 }
+
+export type ReceiptChainVerificationWorkerLoopOptions =
+  WorkerLoopOptions<ReceiptChainVerificationWorkerResult>;
+
+export type ReceiptChainVerificationWorkerLoopSleep = WorkerLoopSleep;
+
+export type ReceiptChainVerificationWorkerLoopSummary = WorkerLoopSummary;
 
 export type ReceiptChainVerificationWorkerResult =
   | {
@@ -82,6 +93,37 @@ export type ReceiptChainVerificationWorkerResult =
       event: OutboxEventRecord;
       lastError: string;
     };
+
+export interface PayoutFinalityWorkerOptions {
+  now?: () => Date;
+  sweepLimit?: number;
+}
+
+export interface PayoutFinalityProcessor {
+  processNext(): Promise<PayoutFinalityWorkerResult> | PayoutFinalityWorkerResult;
+}
+
+export interface PayoutFinalitySweepError {
+  transactionId: string;
+  error: string;
+}
+
+export type PayoutFinalityWorkerResult =
+  | {
+      status: "idle";
+    }
+  | {
+      status: "swept";
+      checked: number;
+      updatedTransactions: PayoutTransactionRecord[];
+      pendingTransactionIds: string[];
+      errors: PayoutFinalitySweepError[];
+    };
+
+export type PayoutFinalityWorkerLoopOptions =
+  WorkerLoopOptions<PayoutFinalityWorkerResult>;
+
+export type PayoutFinalityWorkerLoopSummary = WorkerLoopSummary;
 
 const RECEIPT_ACCEPTED_EVENT_TYPE = "receipt.accepted.v1";
 const DEFAULT_RETRY_DELAY_MS = 60_000;
@@ -195,10 +237,119 @@ export class ReceiptChainVerificationWorker
   }
 }
 
+export class PayoutFinalityWorker implements PayoutFinalityProcessor {
+  constructor(
+    private readonly transactionStore: PayoutTransactionStore,
+    private readonly monitor: PayoutFinalityMonitor,
+    private readonly options: PayoutFinalityWorkerOptions = {}
+  ) {}
+
+  async processNext(): Promise<PayoutFinalityWorkerResult> {
+    const observedAt = this.now();
+    const candidates =
+      await this.transactionStore.listPayoutTransactionsPendingFinality(
+        this.options.sweepLimit === undefined
+          ? {}
+          : { limit: this.options.sweepLimit }
+      );
+    if (candidates.length === 0) {
+      return { status: "idle" };
+    }
+
+    const updatedTransactions: PayoutTransactionRecord[] = [];
+    const pendingTransactionIds: string[] = [];
+    const errors: PayoutFinalitySweepError[] = [];
+    for (const transaction of candidates) {
+      try {
+        const result = await this.monitor.monitor({ transaction });
+        if (result.status === "retry" || result.status === transaction.status) {
+          // Re-persisting an unchanged status would rewrite observation
+          // timestamps and duplicate lifecycle events on every sweep, so
+          // unchanged transactions stay pending until the chain moves.
+          pendingTransactionIds.push(transaction.id);
+          continue;
+        }
+        const updated =
+          await this.transactionStore.markPayoutTransactionFinality({
+            id: transaction.id,
+            status: result.status,
+            observedAt,
+            // Compare-and-set against the listed status so a concurrent
+            // sweep replica or an operator reconcile decision is never
+            // overwritten with a stale chain observation.
+            expectedStatus: transaction.status,
+            ...(result.error === undefined
+              ? {}
+              : { error: createPayoutFinalitySweepErrorDetail(result) })
+          });
+        if (updated === undefined) {
+          // The transaction disappeared or its status changed concurrently;
+          // leave it for the next sweep instead of forcing a stale write.
+          pendingTransactionIds.push(transaction.id);
+          continue;
+        }
+        updatedTransactions.push(updated);
+      } catch (error) {
+        errors.push({
+          transactionId: transaction.id,
+          error: error instanceof Error ? error.message : "unknown error"
+        });
+      }
+    }
+
+    return {
+      status: "swept",
+      checked: candidates.length,
+      updatedTransactions,
+      pendingTransactionIds,
+      errors
+    };
+  }
+
+  private now(): string {
+    return (this.options.now?.() ?? new Date()).toISOString();
+  }
+}
+
+function createPayoutFinalitySweepErrorDetail(
+  result: PayoutReconciliationFinalityResult
+): Record<string, unknown> {
+  // rpcUrl is intentionally omitted: RPC URLs can embed provider API keys
+  // and this detail is persisted and surfaced through merchant-facing
+  // reconciliation responses.
+  return {
+    message: result.error,
+    status: result.status,
+    ...(result.signature === undefined ? {} : { signature: result.signature })
+  };
+}
+
 export async function runReceiptChainVerificationWorkerLoop(
   worker: ReceiptChainVerificationProcessor,
   options: ReceiptChainVerificationWorkerLoopOptions = {}
 ): Promise<ReceiptChainVerificationWorkerLoopSummary> {
+  return runWorkerLoop(worker, options);
+}
+
+export async function runPayoutFinalityWorkerLoop(
+  worker: PayoutFinalityProcessor,
+  options: PayoutFinalityWorkerLoopOptions = {}
+): Promise<PayoutFinalityWorkerLoopSummary> {
+  // The sweep worker re-checks the same pending set each iteration, so it
+  // must pace on the poll interval after every sweep — unlike the queue
+  // workers, an immediate re-poll after a non-idle result would busy-spin
+  // against Solana RPC and PostgreSQL for the whole confirmation window.
+  return runWorkerLoop(worker, options, () => true);
+}
+
+async function runWorkerLoop<TResult extends { status: string }>(
+  worker: {
+    processNext(): Promise<TResult> | TResult;
+  },
+  options: WorkerLoopOptions<TResult>,
+  shouldSleepAfter: (result: TResult) => boolean = (result) =>
+    result.status === "idle"
+): Promise<WorkerLoopSummary> {
   assertValidMaxIterations(options.maxIterations);
   let iterations = 0;
 
@@ -212,7 +363,7 @@ export async function runReceiptChainVerificationWorkerLoop(
       iterations += 1;
       await options.onResult?.(result);
 
-      if (result.status === "idle" && !shouldStop(iterations, options)) {
+      if (shouldSleepAfter(result) && !shouldStop(iterations, options)) {
         await sleep(options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS, options);
       }
     } catch (error) {
@@ -253,9 +404,9 @@ function hasReachedMaxIterations(
   return maxIterations !== undefined && iterations >= maxIterations;
 }
 
-function shouldStop(
+function shouldStop<TResult>(
   iterations: number,
-  options: ReceiptChainVerificationWorkerLoopOptions
+  options: WorkerLoopOptions<TResult>
 ): boolean {
   return (
     isAborted(options.signal) ||
@@ -263,9 +414,9 @@ function shouldStop(
   );
 }
 
-async function sleep(
+async function sleep<TResult>(
   delayMs: number,
-  options: ReceiptChainVerificationWorkerLoopOptions
+  options: WorkerLoopOptions<TResult>
 ): Promise<void> {
   const sleepFn = options.sleep ?? defaultSleep;
   await sleepFn(delayMs, options.signal);
