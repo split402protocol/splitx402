@@ -72,6 +72,9 @@ describe("Split402 launch checklist", () => {
     expect(checklist.sections[3]?.commands[1]).toBe(
       "Fill split402-launch-evidence/phase7-staging.env with hosted staging values reported by launch preflight.",
     );
+    expect(checklist.sections[3]?.commands[2]).toBe(
+      "corepack pnpm phase7:docker:doctor --brief",
+    );
     expect(checklist.sections[3]?.commands).toContain(
       "corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log",
     );
@@ -129,6 +132,9 @@ describe("Split402 launch checklist", () => {
     );
     expect(formatSplit402LaunchChecklistBrief(checklist)).toContain(
       "local-public-alpha-proof.json",
+    );
+    expect(formatSplit402LaunchChecklistBrief(checklist)).toContain(
+      "corepack pnpm phase7:docker:doctor --brief",
     );
     expect(formatSplit402LaunchChecklistBrief(checklist)).toContain(
       "The combined status remains no-go until every machine-checkable launch gate passes.",
