@@ -1,10 +1,13 @@
+import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 import {
+  PHASE7_DOCKER_GENERATED_SECRET_KEYS,
   PHASE7_DOCKER_ENV_INIT_USAGE,
   createPhase7DockerEnvInitPlan,
   parsePhase7DockerEnvInitArgs,
+  populatePhase7DockerGeneratedSecrets,
 } from "./phase7DockerEnvInit.js";
 
 const args = parseArgs();
@@ -21,7 +24,13 @@ const plan = createPhase7DockerEnvInitPlan({
 
 if (plan.shouldWrite) {
   mkdirSync(dirname(plan.target), { recursive: true });
-  writeFileSync(plan.target, readFileSync(plan.source, "utf8"));
+  const sourceText = readFileSync(plan.source, "utf8");
+  writeFileSync(
+    plan.target,
+    args.generateSecrets
+      ? populatePhase7DockerGeneratedSecrets(sourceText, generateRuntimeSecret)
+      : sourceText,
+  );
 }
 
 console.log(
@@ -32,6 +41,10 @@ console.log(
       target: plan.target,
       written: plan.shouldWrite,
       refused: plan.refused,
+      generatedSecretKeys:
+        plan.shouldWrite && args.generateSecrets
+          ? PHASE7_DOCKER_GENERATED_SECRET_KEYS
+          : [],
       message: plan.message,
       nextActions: plan.nextActions,
     },
@@ -42,6 +55,10 @@ console.log(
 
 if (plan.refused) {
   process.exitCode = 1;
+}
+
+function generateRuntimeSecret(): string {
+  return `s402_${randomBytes(32).toString("base64url")}`;
 }
 
 function parseArgs() {

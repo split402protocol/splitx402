@@ -5,18 +5,25 @@ import {
   DEFAULT_PHASE7_DOCKER_ENV_TARGET,
   createPhase7DockerEnvInitPlan,
   parsePhase7DockerEnvInitArgs,
+  populatePhase7DockerGeneratedSecrets,
 } from "../src/phase7DockerEnvInit.js";
 
 describe("Phase 7 Docker env init", () => {
   it("parses default, force, custom path, and help args", () => {
     expect(parsePhase7DockerEnvInitArgs([])).toEqual({
       force: false,
+      generateSecrets: false,
       help: false,
       source: DEFAULT_PHASE7_DOCKER_ENV_SOURCE,
       target: DEFAULT_PHASE7_DOCKER_ENV_TARGET,
     });
     expect(parsePhase7DockerEnvInitArgs(["--force"])).toMatchObject({
       force: true,
+    });
+    expect(
+      parsePhase7DockerEnvInitArgs(["--generate-secrets"]),
+    ).toMatchObject({
+      generateSecrets: true,
     });
     expect(
       parsePhase7DockerEnvInitArgs([
@@ -28,6 +35,7 @@ describe("Phase 7 Docker env init", () => {
       ]),
     ).toEqual({
       force: false,
+      generateSecrets: false,
       help: true,
       source: "example.env",
       target: "runtime.env",
@@ -35,13 +43,13 @@ describe("Phase 7 Docker env init", () => {
     expect(() =>
       parsePhase7DockerEnvInitArgs(["--target"]),
     ).toThrowErrorMatchingInlineSnapshot(`
-      [Error: Usage: corepack pnpm phase7:docker:env:init [--force] [--source <path>] [--target <path>]
+      [Error: Usage: corepack pnpm phase7:docker:env:init [--force] [--generate-secrets] [--source <path>] [--target <path>]
       --target requires a value]
     `);
     expect(() =>
       parsePhase7DockerEnvInitArgs(["--unknown"]),
     ).toThrowErrorMatchingInlineSnapshot(`
-      [Error: Usage: corepack pnpm phase7:docker:env:init [--force] [--source <path>] [--target <path>]
+      [Error: Usage: corepack pnpm phase7:docker:env:init [--force] [--generate-secrets] [--source <path>] [--target <path>]
       Unknown option: --unknown]
     `);
   });
@@ -59,7 +67,23 @@ describe("Phase 7 Docker env init", () => {
       refused: false,
       message: `${DEFAULT_PHASE7_DOCKER_ENV_TARGET} will be created from ${DEFAULT_PHASE7_DOCKER_ENV_SOURCE}.`,
       nextActions: [
-        `Fill private Docker runtime values in ${DEFAULT_PHASE7_DOCKER_ENV_TARGET}.`,
+        `Fill private Docker runtime values in ${DEFAULT_PHASE7_DOCKER_ENV_TARGET}, or rerun with --generate-secrets to create local runtime secrets automatically.`,
+        "Run corepack pnpm phase7:docker:doctor --brief.",
+      ],
+    });
+  });
+
+  it("plans generated-secret scaffolds without claiming runtime readiness", () => {
+    const plan = createPhase7DockerEnvInitPlan({
+      args: parsePhase7DockerEnvInitArgs(["--generate-secrets"]),
+      exists: (path) => path === DEFAULT_PHASE7_DOCKER_ENV_SOURCE,
+    });
+
+    expect(plan).toMatchObject({
+      shouldWrite: true,
+      refused: false,
+      nextActions: [
+        `Generated private runtime secrets in ${DEFAULT_PHASE7_DOCKER_ENV_TARGET}; fill the remaining URLs, wallets, control-plane tokens, and keys manually.`,
         "Run corepack pnpm phase7:docker:doctor --brief.",
       ],
     });
@@ -112,5 +136,48 @@ describe("Phase 7 Docker env init", () => {
         "Restore the Phase 7 Docker env example before creating the private runtime env file.",
       ],
     });
+  });
+
+  it("generates only supported placeholder runtime secrets", () => {
+    let sequence = 0;
+    const text = [
+      "SPLIT402_DASHBOARD_VIEWER_TOKEN=replace-with-staging-viewer-token",
+      "SPLIT402_DASHBOARD_CONTROL_PLANE_TOKEN=",
+      "SPLIT402_WEBHOOK_WORKER_SECRET=replace-with-staging-webhook-secret",
+      "SPLIT402_SERVICE_SEED_HEX=",
+      "SPLIT402_MERCHANT_PAY_TO=",
+    ].join("\n");
+
+    expect(
+      populatePhase7DockerGeneratedSecrets(text, () => {
+        sequence += 1;
+        return `generated-secret-${sequence}`;
+      }),
+    ).toBe(
+      [
+        "SPLIT402_DASHBOARD_VIEWER_TOKEN=generated-secret-1",
+        "SPLIT402_DASHBOARD_CONTROL_PLANE_TOKEN=",
+        "SPLIT402_WEBHOOK_WORKER_SECRET=generated-secret-2",
+        "SPLIT402_SERVICE_SEED_HEX=",
+        "SPLIT402_MERCHANT_PAY_TO=",
+      ].join("\n"),
+    );
+  });
+
+  it("does not replace already-filled generated secret values", () => {
+    expect(
+      populatePhase7DockerGeneratedSecrets(
+        [
+          "SPLIT402_DASHBOARD_VIEWER_TOKEN=existing-viewer-token",
+          "SPLIT402_WEBHOOK_WORKER_SECRET=existing-webhook-secret",
+        ].join("\n"),
+        () => "new-secret",
+      ),
+    ).toBe(
+      [
+        "SPLIT402_DASHBOARD_VIEWER_TOKEN=existing-viewer-token",
+        "SPLIT402_WEBHOOK_WORKER_SECRET=existing-webhook-secret",
+      ].join("\n"),
+    );
   });
 });

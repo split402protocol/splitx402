@@ -99,6 +99,12 @@ corepack pnpm phase7:docker:compose up --brief
 corepack pnpm phase7:docker:compose ps --brief
 ```
 
+When creating a fresh ignored runtime env file on the staging host, use
+`corepack pnpm phase7:docker:env:init --generate-secrets` to generate local
+dashboard viewer and webhook worker secrets automatically. Hosted URLs, wallets,
+service keys, buyer keys, and control-plane session tokens still must be filled
+deliberately, and generated secrets do not approve Phase 7 evidence.
+
 ## Staging Proof
 
 Phase 7 now has a machine-checkable proof record for hosted end-to-end demo
