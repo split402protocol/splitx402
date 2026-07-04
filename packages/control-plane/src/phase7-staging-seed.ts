@@ -253,7 +253,7 @@ export async function runPhase7StagingSeed(
   const campaign = await ensureCampaign(campaignRegistry, config);
   const route = await ensureRoute(routeRegistry, config);
   const authSession = await createSeededOwnerAuthSession(db, config);
-  const proofEnv = createProofEnv(config, authSession.session);
+  const proofEnv = createPhase7StagingSeedProofEnv(config, authSession.session);
 
   return {
     schema: "split402.phase7_staging_seed.v1",
@@ -332,9 +332,9 @@ async function createSeededOwnerAuthSession(
   };
 }
 
-function createProofEnv(
+export function createPhase7StagingSeedProofEnv(
   config: Phase7StagingSeedConfig,
-  authSession: WalletAuthSessionResult | undefined
+  authSession: Pick<WalletAuthSessionResult, "accessToken"> | undefined
 ): Record<string, string> {
   return {
     SPLIT402_PHASE7_MERCHANT_ID: config.merchantId,
@@ -352,6 +352,7 @@ function createProofEnv(
     SPLIT402_MCP_WALLET: config.referrerWallet,
     SPLIT402_MCP_MAX_AMOUNT_ATOMIC: config.requiredAmountAtomic,
     SPLIT402_MERCHANT_ORIGIN: config.merchantOrigin,
+    SPLIT402_MERCHANT_PAY_TO: config.payToWallet,
     SPLIT402_MERCHANT_PUBLIC_KEY: config.servicePublicKey
   };
 }

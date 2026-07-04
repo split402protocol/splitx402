@@ -101,8 +101,10 @@ staging. It creates or verifies the active demo merchant, verified origin,
 offer/receipt key, payout wallet, active campaign, and active referral route
 without adding a public self-approval endpoint. When the staging owner seed is
 available, its JSON output includes private `proofEnv` token values for hosted
-proof, dashboard, and MCP control-plane access; copy them only into private env
-or evidence files and never commit them. Set `SPLIT402_DATABASE_URL` or
+proof, dashboard, and MCP control-plane access, plus the public
+`SPLIT402_MERCHANT_PAY_TO` wallet used by the demo merchant; copy token values
+only into private env or evidence files and never commit them. Set
+`SPLIT402_DATABASE_URL` or
 `DATABASE_URL` before running it, and keep
 `SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging` out of production
 environments.
