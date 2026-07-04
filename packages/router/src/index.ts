@@ -1907,7 +1907,9 @@ function validateJsonSchemaValue(
     schemaTypes?.includes("object") === true ||
     record.properties !== undefined ||
     record.required !== undefined ||
-    record.additionalProperties !== undefined;
+    record.additionalProperties !== undefined ||
+    record.minProperties !== undefined ||
+    record.maxProperties !== undefined;
   if (hasObjectShape) {
     if (isJsonObject(value)) {
       errors.push(...validateJsonObjectShape(value, record, path));
@@ -1961,6 +1963,22 @@ function validateJsonObjectShape(
       if (!(property in value)) {
         errors.push(`${path}.${property} is required`);
       }
+    }
+  }
+  if (schema.minProperties !== undefined) {
+    const minProperties = readNonNegativeIntegerSchemaKeyword(schema.minProperties);
+    if (minProperties === undefined) {
+      errors.push(`${path} minProperties must be a non-negative integer`);
+    } else if (Object.keys(value).length < minProperties) {
+      errors.push(`${path} must contain at least ${minProperties} properties`);
+    }
+  }
+  if (schema.maxProperties !== undefined) {
+    const maxProperties = readNonNegativeIntegerSchemaKeyword(schema.maxProperties);
+    if (maxProperties === undefined) {
+      errors.push(`${path} maxProperties must be a non-negative integer`);
+    } else if (Object.keys(value).length > maxProperties) {
+      errors.push(`${path} must contain at most ${maxProperties} properties`);
     }
   }
   if (properties !== undefined) {
@@ -2172,6 +2190,40 @@ function validateJsonNumberConstraints(
       errors.push(`${path} must be at most ${schema.maximum}`);
     }
   }
+  if (schema.exclusiveMinimum !== undefined) {
+    if (
+      typeof schema.exclusiveMinimum !== "number" ||
+      !Number.isFinite(schema.exclusiveMinimum)
+    ) {
+      errors.push(`${path} exclusiveMinimum must be a finite number`);
+    } else if (typeof value !== "number" || value <= schema.exclusiveMinimum) {
+      errors.push(`${path} must be greater than ${schema.exclusiveMinimum}`);
+    }
+  }
+  if (schema.exclusiveMaximum !== undefined) {
+    if (
+      typeof schema.exclusiveMaximum !== "number" ||
+      !Number.isFinite(schema.exclusiveMaximum)
+    ) {
+      errors.push(`${path} exclusiveMaximum must be a finite number`);
+    } else if (typeof value !== "number" || value >= schema.exclusiveMaximum) {
+      errors.push(`${path} must be less than ${schema.exclusiveMaximum}`);
+    }
+  }
+  if (schema.multipleOf !== undefined) {
+    if (
+      typeof schema.multipleOf !== "number" ||
+      !Number.isFinite(schema.multipleOf) ||
+      schema.multipleOf <= 0
+    ) {
+      errors.push(`${path} multipleOf must be a positive finite number`);
+    } else if (
+      typeof value !== "number" ||
+      !numberIsMultipleOf(value, schema.multipleOf)
+    ) {
+      errors.push(`${path} must be a multiple of ${schema.multipleOf}`);
+    }
+  }
   return errors;
 }
 
@@ -2249,6 +2301,11 @@ function arrayItemsAreUnique(value: readonly unknown[]): boolean {
     seen.add(key);
   }
   return true;
+}
+
+function numberIsMultipleOf(value: number, divisor: number): boolean {
+  const quotient = value / divisor;
+  return Number.isInteger(quotient) || Math.abs(quotient - Math.round(quotient)) < 1e-12;
 }
 
 function readSchemaRecord(value: unknown): Record<string, unknown> | undefined {
