@@ -12,6 +12,7 @@ import {
   runReceiptChainVerificationWorkerLoop,
   runWebhookDispatchWorkerLoop,
   type ListPayoutTransactionsPendingFinalityInput,
+  type LedgerTransaction,
   type MarkOutboxEventFailedInput,
   type MarkPayoutTransactionFinalityInput,
   type OutboxEventRecord,
@@ -30,6 +31,12 @@ import {
   type WebhookDispatchProcessor,
   type WebhookDispatchWorkerResult
 } from "../src/index.js";
+import type {
+  ClosePayoutBatchLedgerInput,
+  PayoutBatchRecord,
+  PayoutFinalizedTransferVerifier,
+  PayoutLedgerClosureStore
+} from "../src/payouts.js";
 
 const FIXED_NOW = new Date("2026-06-24T00:04:00Z");
 
@@ -617,6 +624,138 @@ describe("PayoutFinalityWorker", () => {
     ]);
   });
 
+  it("closes finalized payout ledgers when explicitly configured", async () => {
+    const batch = createPayoutBatch({ status: "finalized" });
+    const submitted = createPendingPayoutTransaction({
+      id: "ptx_finalize",
+      payoutBatchId: batch.id,
+      expectedSignature: "sig_finalize"
+    });
+    const transactionStore = new FakePayoutTransactionStore([submitted]);
+    const ledgerClosureStore = new FakePayoutLedgerClosureStore(batch);
+    const worker = new PayoutFinalityWorker(
+      transactionStore,
+      new FakePayoutFinalityMonitor({
+        ptx_finalize: {
+          transactionId: "ptx_finalize",
+          status: "finalized",
+          signature: "sig_finalize"
+        }
+      }),
+      {
+        now: () => FIXED_NOW,
+        finalizedLedgerClosure: {
+          batchStore: ledgerClosureStore,
+          ledgerClosureStore,
+          finalizedTransferVerifier: createPassingFinalizedTransferVerifier()
+        }
+      }
+    );
+
+    const result = await worker.processNext();
+
+    expect(result.status).toBe("swept");
+    if (result.status !== "swept") {
+      throw new Error("expected swept result");
+    }
+    expect(result.closedLedgerTransactions?.map((transaction) => transaction.id)).toEqual([
+      "ldg_00000000000000000000000000000001"
+    ]);
+    expect(ledgerClosureStore.closeInputs).toEqual([
+      {
+        payoutBatchId: batch.id,
+        now: FIXED_NOW.toISOString(),
+        finalizedTransferVerifier: expect.any(Object)
+      }
+    ]);
+  });
+
+  it("does not auto-close ledgers for batches that are not fully finalized", async () => {
+    const batch = createPayoutBatch({ status: "confirmed" });
+    const submitted = createPendingPayoutTransaction({
+      id: "ptx_finalize_partial",
+      payoutBatchId: batch.id,
+      expectedSignature: "sig_finalize_partial"
+    });
+    const transactionStore = new FakePayoutTransactionStore([submitted]);
+    const ledgerClosureStore = new FakePayoutLedgerClosureStore(batch);
+    const worker = new PayoutFinalityWorker(
+      transactionStore,
+      new FakePayoutFinalityMonitor({
+        ptx_finalize_partial: {
+          transactionId: "ptx_finalize_partial",
+          status: "finalized"
+        }
+      }),
+      {
+        now: () => FIXED_NOW,
+        finalizedLedgerClosure: {
+          batchStore: ledgerClosureStore,
+          ledgerClosureStore,
+          finalizedTransferVerifier: createPassingFinalizedTransferVerifier()
+        }
+      }
+    );
+
+    const result = await worker.processNext();
+
+    expect(result.status).toBe("swept");
+    if (result.status !== "swept") {
+      throw new Error("expected swept result");
+    }
+    expect(result.closedLedgerTransactions).toBeUndefined();
+    expect(ledgerClosureStore.closeInputs).toEqual([]);
+  });
+
+  it("reports ledger closure failures without hiding finalized observations", async () => {
+    const batch = createPayoutBatch({ status: "finalized" });
+    const submitted = createPendingPayoutTransaction({
+      id: "ptx_finalize_bad_transfer",
+      payoutBatchId: batch.id,
+      expectedSignature: "sig_finalize_bad_transfer"
+    });
+    const transactionStore = new FakePayoutTransactionStore([submitted]);
+    const ledgerClosureStore = new FakePayoutLedgerClosureStore(
+      batch,
+      new Error("finalized payout transfer verification failed")
+    );
+    const worker = new PayoutFinalityWorker(
+      transactionStore,
+      new FakePayoutFinalityMonitor({
+        ptx_finalize_bad_transfer: {
+          transactionId: "ptx_finalize_bad_transfer",
+          status: "finalized"
+        }
+      }),
+      {
+        now: () => FIXED_NOW,
+        finalizedLedgerClosure: {
+          batchStore: ledgerClosureStore,
+          ledgerClosureStore,
+          finalizedTransferVerifier: createPassingFinalizedTransferVerifier()
+        }
+      }
+    );
+
+    const result = await worker.processNext();
+
+    expect(result.status).toBe("swept");
+    if (result.status !== "swept") {
+      throw new Error("expected swept result");
+    }
+    expect(result.updatedTransactions.map((transaction) => transaction.id)).toEqual([
+      "ptx_finalize_bad_transfer"
+    ]);
+    expect(result.closedLedgerTransactions).toBeUndefined();
+    expect(result.errors).toEqual([
+      {
+        transactionId: "ptx_finalize_bad_transfer",
+        payoutBatchId: batch.id,
+        error: "finalized payout transfer verification failed"
+      }
+    ]);
+  });
+
   it("keeps retry and unchanged transactions pending without re-persisting", async () => {
     const submitted = createPendingPayoutTransaction({
       id: "ptx_retry",
@@ -921,6 +1060,39 @@ class FakePayoutTransactionStore implements PayoutTransactionStore {
   }
 }
 
+class FakePayoutLedgerClosureStore implements PayoutLedgerClosureStore {
+  readonly closeInputs: ClosePayoutBatchLedgerInput[] = [];
+
+  constructor(
+    private readonly batch: PayoutBatchRecord | undefined,
+    private readonly closeError?: Error
+  ) {}
+
+  getPayoutBatch(batchId: string): PayoutBatchRecord | undefined {
+    return this.batch?.id === batchId ? this.batch : undefined;
+  }
+
+  closeFinalizedPayoutBatchLedger(
+    input: ClosePayoutBatchLedgerInput
+  ): LedgerTransaction | undefined {
+    this.closeInputs.push(input);
+    if (this.closeError !== undefined) {
+      throw this.closeError;
+    }
+    if (this.batch?.id !== input.payoutBatchId) {
+      return undefined;
+    }
+    return {
+      id: "ldg_00000000000000000000000000000001",
+      sourceType: "payout_batch",
+      sourceId: input.payoutBatchId,
+      asset: this.batch.asset,
+      createdAt: input.now ?? FIXED_NOW.toISOString(),
+      entries: []
+    };
+  }
+}
+
 class FakePayoutFinalityMonitor {
   constructor(
     private readonly results: Record<
@@ -980,6 +1152,49 @@ function createPendingPayoutTransaction(
     createdAt: "2026-06-24T00:02:00.000Z",
     items: [],
     ...overrides
+  };
+}
+
+function createPayoutBatch(
+  overrides: Partial<PayoutBatchRecord> = {}
+): PayoutBatchRecord {
+  return {
+    id: "pbt_00000000000000000000000000000001",
+    merchantId: "mrc_00000000000000000000000000000001",
+    payoutWalletId: "mpw_00000000000000000000000000000001",
+    network: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+    asset: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+    status: "finalized",
+    totalAmountAtomic: "2000",
+    itemCount: 1,
+    accrualCount: 1,
+    createdAt: "2026-06-24T00:02:00.000Z",
+    updatedAt: "2026-06-24T00:04:00.000Z",
+    items: [
+      {
+        id: "pit_00000000000000000000000000000001",
+        payoutBatchId: "pbt_00000000000000000000000000000001",
+        destinationWallet: "destination-wallet",
+        destinationTokenAccount: "destination-token-account",
+        amountAtomic: "2000",
+        status: "finalized",
+        createdAt: "2026-06-24T00:02:00.000Z",
+        allocations: [
+          {
+            payoutItemId: "pit_00000000000000000000000000000001",
+            accrualId: "acr_00000000000000000000000000000001",
+            amountAtomic: "2000"
+          }
+        ]
+      }
+    ],
+    ...overrides
+  };
+}
+
+function createPassingFinalizedTransferVerifier(): PayoutFinalizedTransferVerifier {
+  return {
+    verifyFinalizedPayout: () => ({ ok: true, errors: [] })
   };
 }
 

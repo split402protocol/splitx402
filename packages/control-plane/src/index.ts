@@ -1509,6 +1509,7 @@ export interface ControlPlaneRuntime {
   ingestor: ReceiptIngestor;
   merchantRegistry: PostgresMerchantRegistry;
   outboxStore: PostgresOutboxEventStore;
+  payoutFinalizedTransferVerifier?: PayoutFinalizedTransferVerifier;
   receiptStore: PostgresReceiptIngestionStore;
   routeRegistry: PostgresRouteRegistry;
   authenticator?: WalletAuthenticator;
@@ -1600,6 +1601,11 @@ export function createControlPlaneRuntime(
     routeRegistry,
     receiptStore,
     outboxStore,
+    ...(options.payoutFinalizedTransferVerifier === undefined
+      ? {}
+      : {
+          payoutFinalizedTransferVerifier: options.payoutFinalizedTransferVerifier
+        }),
     ...(authenticator === undefined ? {} : { authenticator }),
     close: async () => {
       await options.close?.();
