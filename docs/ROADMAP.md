@@ -27,7 +27,8 @@ static providers, control-plane route discovery, quote preflight, budget
 enforcement, ranking, fallback, and receipt verification, and the MCP demo
 gateway now exposes router-backed `split402.searchCapabilities`,
 `split402.quote`, `split402.execute`, and `split402.getReceipt`
-tools in demo mode plus optional control-plane route discovery. The Phase 7
+tools in demo mode plus optional control-plane route discovery and verified
+external x402 router-ready provider loading. The Phase 7
 proof validator now requires the MCP transcript to prove budgeted discovery,
 provider continuity, receipt lookup consistency, route attribution,
 route-discovery continuity, read-artifact continuity, paid-suite to
