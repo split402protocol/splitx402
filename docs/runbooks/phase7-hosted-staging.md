@@ -183,6 +183,11 @@ corepack pnpm phase7:staging:status --brief split402-launch-evidence/phase7-stag
 corepack pnpm product:status --brief --workspace split402-launch-evidence
 ```
 
+`demo:paid-suite` auto-loads `split402-launch-evidence/phase7-staging.env`
+when present. If the Docker demo merchant is already healthy at the configured
+`SPLIT402_MERCHANT_ORIGIN`, the suite reuses it instead of starting a second
+merchant process on a conflicting port.
+
 The `commands_run` transcript must include the hosted Docker, seed, seed-env
 apply, collection, paid-suite, manifest, assemble, status, and full
 validation-suite commands, including
