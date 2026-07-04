@@ -2234,6 +2234,7 @@ function validateMcpGatewayTranscript(
   let quoteProviderRouteId: string | undefined;
   let quoteProviderReferrerWallet: string | undefined;
   let quoteProviderPayoutWallet: string | undefined;
+  let quoteProviderSource: string | undefined;
   let quoteProviderAmount: bigint | undefined;
   if (quoteRequest === undefined) {
     blockers.push("mcp_gateway_evidence missing split402.quote request");
@@ -2293,6 +2294,7 @@ function validateMcpGatewayTranscript(
       quoteProviderPayoutWallet = readNonEmptyString(
         quoteProvider?.payoutWallet,
       );
+      quoteProviderSource = readProviderSource(quoteProvider?.source);
       quoteProviderAmount = readPositiveAtomicString(quoteProvider?.amountAtomic);
       for (const [field, value] of [
         ["providerId", quoteContent.providerId],
@@ -2361,6 +2363,11 @@ function validateMcpGatewayTranscript(
         if (quoteProviderPayoutWallet === undefined) {
           blockers.push(
             "mcp_gateway_evidence quote provider payoutWallet is missing",
+          );
+        }
+        if (quoteProviderSource === undefined) {
+          blockers.push(
+            "mcp_gateway_evidence quote provider source is missing or unsupported",
           );
         }
       }
@@ -2507,6 +2514,7 @@ function validateMcpGatewayTranscript(
   const executeProviderPayoutWallet = readNonEmptyString(
     executeProvider?.payoutWallet,
   );
+  const executeProviderSource = readProviderSource(executeProvider?.source);
   const executeProviderAmount = readPositiveAtomicString(
     executeProvider?.amountAtomic,
   );
@@ -2560,6 +2568,11 @@ function validateMcpGatewayTranscript(
         "mcp_gateway_evidence execute provider payoutWallet is missing",
       );
     }
+    if (executeProviderSource === undefined) {
+      blockers.push(
+        "mcp_gateway_evidence execute provider source is missing or unsupported",
+      );
+    }
   }
   const selectedProvider =
     providerId === undefined ? undefined : searchProvidersById.get(providerId);
@@ -2593,6 +2606,7 @@ function validateMcpGatewayTranscript(
   const selectedProviderPayoutWallet = readNonEmptyString(
     selectedProvider?.payoutWallet,
   );
+  const selectedProviderSource = readProviderSource(selectedProvider?.source);
   const selectedProviderAmount = readPositiveAtomicString(
     selectedProvider?.amountAtomic,
   );
@@ -2641,6 +2655,11 @@ function validateMcpGatewayTranscript(
         "mcp_gateway_evidence selected provider payoutWallet is missing",
       );
     }
+    if (selectedProviderSource === undefined) {
+      blockers.push(
+        "mcp_gateway_evidence selected provider source is missing or unsupported",
+      );
+    }
   }
   if (executeProvider !== undefined && selectedProvider !== undefined) {
     for (const [field, executeValue, selectedValue] of [
@@ -2654,6 +2673,7 @@ function validateMcpGatewayTranscript(
       ["routeId", executeProviderRouteId, selectedProviderRouteId],
       ["referrerWallet", executeProviderReferrerWallet, selectedProviderReferrerWallet],
       ["payoutWallet", executeProviderPayoutWallet, selectedProviderPayoutWallet],
+      ["source", executeProviderSource, selectedProviderSource],
     ] as const) {
       if (
         executeValue !== undefined &&
@@ -2687,6 +2707,7 @@ function validateMcpGatewayTranscript(
       ["routeId", quoteProviderRouteId, selectedProviderRouteId],
       ["referrerWallet", quoteProviderReferrerWallet, selectedProviderReferrerWallet],
       ["payoutWallet", quoteProviderPayoutWallet, selectedProviderPayoutWallet],
+      ["source", quoteProviderSource, selectedProviderSource],
     ] as const) {
       if (
         quoteValue !== undefined &&
@@ -2720,6 +2741,7 @@ function validateMcpGatewayTranscript(
       ["routeId", quoteProviderRouteId, executeProviderRouteId],
       ["referrerWallet", quoteProviderReferrerWallet, executeProviderReferrerWallet],
       ["payoutWallet", quoteProviderPayoutWallet, executeProviderPayoutWallet],
+      ["source", quoteProviderSource, executeProviderSource],
     ] as const) {
       if (
         quoteValue !== undefined &&
@@ -3659,6 +3681,14 @@ function readRecord(value: unknown): Record<string, unknown> | undefined {
 
 function readNonEmptyString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function readProviderSource(value: unknown): string | undefined {
+  return value === "static" ||
+    value === "control_plane" ||
+    value === "external_x402"
+    ? value
+    : undefined;
 }
 
 function readMerchantObligationSummary(

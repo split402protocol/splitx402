@@ -60,6 +60,7 @@ describe("Phase 7 MCP gateway evidence collector", () => {
     expect(transcript).toContain('"split402.searchCapabilities"');
     expect(transcript).toContain('"budget":{"maxAmountAtomic":"50000"}');
     expect(transcript).toContain('"providerId":"rte_discovered:wallet-risk-score"');
+    expect(transcript).toContain('"source":"control_plane"');
     expect(transcript).not.toContain('"id":"execute"');
   });
 
@@ -107,6 +108,7 @@ describe("Phase 7 MCP gateway evidence collector", () => {
       quoteProviderRouteId: "rte_00000000000000000000000000000003",
       quoteProviderReferrerWallet: sample.artifacts.receipt.referrerWallet,
       quoteProviderPayoutWallet: sample.artifacts.receipt.payoutWallet,
+      quoteProviderSource: "static",
       providerNetwork: bundle.mcp.tools[0].x402.network,
       providerAsset: bundle.mcp.tools[0].x402.asset,
       providerMerchantOrigin: bundle.merchant.origin,
@@ -117,6 +119,7 @@ describe("Phase 7 MCP gateway evidence collector", () => {
       providerRouteId: "rte_00000000000000000000000000000003",
       providerReferrerWallet: sample.artifacts.receipt.referrerWallet,
       providerPayoutWallet: sample.artifacts.receipt.payoutWallet,
+      providerSource: "static",
       executeProviderNetwork: bundle.mcp.tools[0].x402.network,
       executeProviderAsset: bundle.mcp.tools[0].x402.asset,
       executeProviderMerchantOrigin: bundle.merchant.origin,
@@ -127,6 +130,7 @@ describe("Phase 7 MCP gateway evidence collector", () => {
       executeProviderRouteId: "rte_00000000000000000000000000000003",
       executeProviderReferrerWallet: sample.artifacts.receipt.referrerWallet,
       executeProviderPayoutWallet: sample.artifacts.receipt.payoutWallet,
+      executeProviderSource: "static",
       amountPaidAtomic: "10000",
       receiptVerificationStatus: "verified",
       executeExecutionMode: "router-demo-mock",
@@ -157,6 +161,7 @@ describe("Phase 7 MCP gateway evidence collector", () => {
     expect(transcript).toContain('"budget":{"maxAmountAtomic":"50000"}');
     expect(transcript).toContain('"providerId":"split402-demo-merchant"');
     expect(transcript).toContain('"provider":{"providerId":"split402-demo-merchant"');
+    expect(transcript).toContain('"source":"static"');
     expect(transcript).toContain('"amountPaidAtomic":"10000"');
     expect(transcript).toContain(`"receiptId":"${report.receiptId}"`);
     expect(transcript).toContain('"receiptVerificationStatus":"verified"');
