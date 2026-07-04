@@ -458,6 +458,158 @@ describe("Split402Router", () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
+  it("rejects before payment when input violates provider string constraints", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-wallet-pattern",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["wallet"],
+              properties: {
+                wallet: {
+                  type: "string",
+                  pattern: "^wallet_[0-9]+$",
+                  minLength: 8,
+                  maxLength: 20
+                }
+              },
+              additionalProperties: false
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: { wallet: "abc" },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-wallet-pattern",
+          retryable: false,
+          error: expect.stringContaining(
+            "input.wallet must match pattern ^wallet_[0-9]+$"
+          )
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("rejects before payment when input violates provider number constraints", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-confidence-range",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["confidence"],
+              properties: {
+                confidence: {
+                  type: "integer",
+                  minimum: 1,
+                  maximum: 100
+                }
+              },
+              additionalProperties: false
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: { confidence: 0 },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-confidence-range",
+          retryable: false,
+          error: expect.stringContaining("input.confidence must be at least 1")
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("executes when input satisfies provider schema constraints", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>().mockResolvedValue({
+      data: { risk: "low" },
+      receipt
+    });
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-constrained",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["wallet", "confidence"],
+              properties: {
+                wallet: {
+                  type: "string",
+                  pattern: "^wallet_[0-9]+$",
+                  minLength: 8
+                },
+                confidence: {
+                  type: "integer",
+                  minimum: 1,
+                  maximum: 100
+                }
+              },
+              additionalProperties: false
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    const input = { wallet: "wallet_123", confidence: 80 };
+    const result = await router.execute({
+      capability: "solana.wallet-risk",
+      input,
+      budget: {
+        network: receipt.network,
+        asset: receipt.asset,
+        maxAmountAtomic: receipt.requiredAmountAtomic
+      }
+    });
+
+    expect(result.providerId).toBe("provider-constrained");
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: expect.objectContaining({ providerId: "provider-constrained" }),
+        body: input
+      })
+    );
+  });
+
   it("passes EVM signer config to provider execution", async () => {
     const evmReceipt = {
       ...receipt,
