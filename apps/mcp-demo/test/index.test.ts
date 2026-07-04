@@ -1892,6 +1892,115 @@ describe("MCP demo gateway", () => {
     ]);
   });
 
+  it("can build the gateway router from router-ready external x402 discovery", async () => {
+    const signed = createExternalSplit402Offer();
+    const calls: string[] = [];
+    const baseFetch = mcpExternalX402Fetch({ split402Offer: signed.offer });
+    const context = await createMcpGatewayContextFromEnv({
+      env: {
+        SPLIT402_MCP_EXTERNAL_X402_ORIGIN: "https://x402.example",
+        SPLIT402_MCP_EXTERNAL_X402_MERCHANT_PUBLIC_KEY: signed.merchantPublicKey,
+        SPLIT402_MCP_EXTERNAL_X402_PROVIDER_ID_PREFIX: "external-live",
+        SPLIT402_MCP_CAPABILITY: "crypto.price",
+        SPLIT402_MCP_EXTERNAL_X402_MATCH_PATH: "/price"
+      },
+      fetch: async (url, init) => {
+        calls.push(new URL(url).pathname);
+        return baseFetch(url, init);
+      }
+    });
+
+    const response = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "search-external",
+        method: "tools/call",
+        params: {
+          name: "split402.searchCapabilities",
+          arguments: {
+            capability: "crypto.price",
+            budget: {
+              network: EXTERNAL_X402_NETWORK,
+              asset: EXTERNAL_X402_ASSET,
+              maxAmountAtomic: EXTERNAL_X402_AMOUNT_ATOMIC
+            }
+          }
+        }
+      }),
+      context
+    );
+
+    expect(context.executionMode).toBe("router-live-agent-sdk");
+    expect(response).toMatchObject({
+      result: {
+        structuredContent: {
+          capabilities: [
+            expect.objectContaining({
+              providerId: "external-live:get.price.coin",
+              capability: "crypto.price",
+              merchantOrigin: "https://x402.example",
+              path: "/price/btc",
+              method: "GET",
+              operationId: "get.price.coin",
+              campaignId: signed.offer.campaignId,
+              network: EXTERNAL_X402_NETWORK,
+              asset: EXTERNAL_X402_ASSET,
+              payToWallet: EXTERNAL_X402_PAY_TO_WALLET,
+              amountAtomic: EXTERNAL_X402_AMOUNT_ATOMIC
+            })
+          ]
+        },
+        isError: false
+      }
+    });
+    expect(calls).toEqual([
+      "/.well-known/x402",
+      "/openapi.json",
+      "/mcp/tools",
+      "/price/btc"
+    ]);
+  });
+
+  it("rejects external x402 router discovery without a merchant public key", async () => {
+    const calls: string[] = [];
+    await expect(
+      createMcpGatewayContextFromEnv({
+        env: {
+          SPLIT402_MCP_EXTERNAL_X402_ORIGIN: "https://x402.example",
+          SPLIT402_MCP_CAPABILITY: "crypto.price"
+        },
+        fetch: async (url, init) => {
+          calls.push(new URL(url).pathname);
+          return mcpExternalX402Fetch()(url, init);
+        }
+      })
+    ).rejects.toThrow(
+      "SPLIT402_MCP_EXTERNAL_X402_MERCHANT_PUBLIC_KEY is required for external x402 router provider discovery"
+    );
+    expect(calls).toEqual([]);
+  });
+
+  it("rejects external x402 router discovery when no candidate is router-ready", async () => {
+    const calls: string[] = [];
+    await expect(
+      createMcpGatewayContextFromEnv({
+        env: {
+          SPLIT402_MCP_EXTERNAL_X402_ORIGIN: "https://x402.example",
+          SPLIT402_MCP_EXTERNAL_X402_MERCHANT_PUBLIC_KEY:
+            createExternalSplit402Offer().merchantPublicKey,
+          SPLIT402_MCP_CAPABILITY: "crypto.price"
+        },
+        fetch: async (url, init) => {
+          calls.push(new URL(url).pathname);
+          return mcpExternalX402Fetch()(url, init);
+        }
+      })
+    ).rejects.toThrow(
+      "external x402 discovery found no router-ready providers"
+    );
+    expect(calls).toContain("/price/btc");
+  });
+
   it("rejects invalid hosted Solana execution signer configuration", async () => {
     const bundle = createMcpDemoBundle({
       merchantOrigin: "https://merchant.example",

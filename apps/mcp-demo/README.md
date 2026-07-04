@@ -417,6 +417,33 @@ and at least one buyer payment signer are present, so live execution cannot
 accidentally run without authenticated discovery and payment authorization. This
 remains a public-alpha gateway path, not a production hosted MCP service.
 
+### External Router-Ready x402 Providers
+
+For partner providers that are not in the control plane yet, the gateway can
+load executable providers directly from external x402 discovery, but only when
+the route is already `router_ready`: the unpaid `402 Payment Required` response
+must include a valid Split402 offer extension, the x402 payment metadata must
+match that offer, and the configured merchant public key must verify the offer
+signature.
+
+```bash
+SPLIT402_MCP_EXTERNAL_X402_ORIGIN=https://x402.example \
+SPLIT402_MCP_EXTERNAL_X402_MERCHANT_PUBLIC_KEY=<merchant-offer-receipt-public-key> \
+SPLIT402_MCP_EXTERNAL_X402_PROVIDER_ID_PREFIX=partner \
+SPLIT402_MCP_EXTERNAL_X402_MATCH_PATH=/price \
+SPLIT402_MCP_CAPABILITY=crypto.price \
+SPLIT402_MCP_EVM_PRIVATE_KEY=<0x-prefixed-funded-buyer-private-key> \
+corepack pnpm demo:mcp-gateway
+```
+
+Optional external filters:
+
+- `SPLIT402_MCP_EXTERNAL_X402_PROVIDER_ID_PREFIX`
+- `SPLIT402_MCP_EXTERNAL_X402_MATCH_PATH`
+
+If no router-ready external candidate is found, the gateway fails closed instead
+of treating a plain x402 route as a Split402 referral provider.
+
 ## Proof Commands
 
 ```bash

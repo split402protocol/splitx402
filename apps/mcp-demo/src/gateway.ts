@@ -145,7 +145,10 @@ export async function createMcpGatewayContextFromEnv(
   const controlPlaneUrl = readOptionalEnvString(
     env.SPLIT402_MCP_CONTROL_PLANE_URL
   );
-  if (controlPlaneUrl === undefined) {
+  const externalX402Origin = readOptionalEnvString(
+    env.SPLIT402_MCP_EXTERNAL_X402_ORIGIN
+  );
+  if (controlPlaneUrl === undefined && externalX402Origin === undefined) {
     return createMcpGatewayContext(bundle);
   }
   const svmSignerSecret =
@@ -167,28 +170,49 @@ export async function createMcpGatewayContextFromEnv(
 
   const capabilityOverride = readOptionalEnvString(env.SPLIT402_MCP_CAPABILITY);
   const bearerToken = readOptionalEnvString(env.SPLIT402_MCP_CONTROL_PLANE_TOKEN);
-  if (options.requireControlPlaneToken === true && bearerToken === undefined) {
+  if (
+    controlPlaneUrl !== undefined &&
+    options.requireControlPlaneToken === true &&
+    bearerToken === undefined
+  ) {
     throw new Error(
       "SPLIT402_MCP_CONTROL_PLANE_TOKEN is required for live MCP gateway discovery"
     );
   }
-  const discovery = new Split402ControlPlaneDiscoveryClient({
-    controlPlaneUrl,
-    ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
-    ...(bearerToken === undefined ? {} : { bearerToken }),
-    ...(capabilityOverride === undefined
-      ? {}
-      : { capabilityMapper: () => capabilityOverride })
-  });
-  const resourceOrigin = readOptionalEnvString(env.SPLIT402_MCP_RESOURCE_ORIGIN);
-  const operationId = readOptionalEnvString(env.SPLIT402_MCP_OPERATION_ID);
-  const limit = readOptionalPositiveInteger(env.SPLIT402_MCP_DISCOVERY_LIMIT);
-  const providers = await discovery.discoverProviders({
-    ...(capabilityOverride === undefined ? {} : { capability: capabilityOverride }),
-    ...(resourceOrigin === undefined ? {} : { resourceOrigin }),
-    ...(operationId === undefined ? {} : { operationId }),
-    ...(limit === undefined ? {} : { limit })
-  });
+  const providers: Split402CapabilityProvider[] = [];
+  if (controlPlaneUrl !== undefined) {
+    const discovery = new Split402ControlPlaneDiscoveryClient({
+      controlPlaneUrl,
+      ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+      ...(bearerToken === undefined ? {} : { bearerToken }),
+      ...(capabilityOverride === undefined
+        ? {}
+        : { capabilityMapper: () => capabilityOverride })
+    });
+    const resourceOrigin = readOptionalEnvString(env.SPLIT402_MCP_RESOURCE_ORIGIN);
+    const operationId = readOptionalEnvString(env.SPLIT402_MCP_OPERATION_ID);
+    const limit = readOptionalPositiveInteger(env.SPLIT402_MCP_DISCOVERY_LIMIT);
+    providers.push(
+      ...(await discovery.discoverProviders({
+        ...(capabilityOverride === undefined
+          ? {}
+          : { capability: capabilityOverride }),
+        ...(resourceOrigin === undefined ? {} : { resourceOrigin }),
+        ...(operationId === undefined ? {} : { operationId }),
+        ...(limit === undefined ? {} : { limit })
+      }))
+    );
+  }
+  if (externalX402Origin !== undefined) {
+    providers.push(
+      ...(await discoverExternalX402RouterProvidersFromEnv(
+        externalX402Origin,
+        env,
+        capabilityOverride,
+        options.fetch
+      ))
+    );
+  }
   const signer =
     svmSignerSecret === undefined
       ? undefined
@@ -211,6 +235,53 @@ export async function createMcpGatewayContextFromEnv(
     "router-live-agent-sdk",
     options.fetch
   );
+}
+
+async function discoverExternalX402RouterProvidersFromEnv(
+  merchantOrigin: string,
+  env: NodeJS.ProcessEnv,
+  capabilityOverride: string | undefined,
+  fetch: Split402ExternalX402DiscoveryFetch | undefined
+): Promise<Split402CapabilityProvider[]> {
+  const merchantPublicKey = readOptionalEnvString(
+    env.SPLIT402_MCP_EXTERNAL_X402_MERCHANT_PUBLIC_KEY
+  );
+  if (merchantPublicKey === undefined) {
+    throw new Error(
+      "SPLIT402_MCP_EXTERNAL_X402_MERCHANT_PUBLIC_KEY is required for external x402 router provider discovery"
+    );
+  }
+  const matchPath = readOptionalEnvString(
+    env.SPLIT402_MCP_EXTERNAL_X402_MATCH_PATH
+  );
+  const providerIdPrefix = readOptionalEnvString(
+    env.SPLIT402_MCP_EXTERNAL_X402_PROVIDER_ID_PREFIX
+  );
+  const discovery = new Split402ExternalX402DiscoveryClient({
+    merchantOrigin,
+    ...(fetch === undefined ? {} : { fetch }),
+    ...(providerIdPrefix === undefined ? {} : { providerIdPrefix }),
+    merchantPublicKey,
+    ...(capabilityOverride === undefined
+      ? {}
+      : { capabilityMapper: () => capabilityOverride })
+  });
+  const candidates = await discovery.discoverCandidates({
+    ...(capabilityOverride === undefined ? {} : { capability: capabilityOverride })
+  });
+  const matched =
+    matchPath === undefined
+      ? candidates
+      : candidates.filter((candidate) => candidate.path.includes(matchPath));
+  const providers = matched
+    .map((candidate) => candidate.provider)
+    .filter(isDefined);
+  if (providers.length === 0) {
+    throw new Error(
+      "external x402 discovery found no router-ready providers; require a valid Split402 offer extension, merchant public key, and matching payment metadata"
+    );
+  }
+  return providers;
 }
 
 export function createEvmSignerFromPrivateKey(
@@ -1585,6 +1656,10 @@ function readGatewayContext(
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function isDefined<T>(value: T | undefined): value is T {
+  return value !== undefined;
 }
 
 function readOptionalEnvString(value: string | undefined): string | undefined {
