@@ -12,6 +12,7 @@ export interface Phase7CommandRecorderInput {
     file: string,
     args: readonly string[],
   ) => Phase7RecordedCommandResult;
+  sleep?: (milliseconds: number) => void;
   writeText: (path: string, text: string) => void;
   now?: () => Date;
 }
@@ -37,6 +38,10 @@ interface CommandSpec {
   file: string;
   args: readonly string[];
   outputPath?: string;
+  retry?: {
+    attempts: number;
+    delayMs: number;
+  };
 }
 
 const safeLocalCommands: readonly CommandSpec[] = [
@@ -152,7 +157,7 @@ export function recordPhase7LocalCommandEvidence(
   const failedCommands: string[] = [];
 
   for (const command of commands) {
-    const result = input.runCommand(command.file, command.args);
+    const result = runCommandWithRetry(input, command);
     if (
       command.outputPath !== undefined &&
       result.exitCode === 0 &&
@@ -178,6 +183,24 @@ export function recordPhase7LocalCommandEvidence(
     written: true,
     nextActions: createNextActions(input.outputPath, failedCommands),
   };
+}
+
+function runCommandWithRetry(
+  input: Phase7CommandRecorderInput,
+  command: CommandSpec,
+): Phase7RecordedCommandResult {
+  const attempts = command.retry?.attempts ?? 1;
+  let result: Phase7RecordedCommandResult | undefined;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    result = input.runCommand(command.file, command.args);
+    if (result.exitCode === 0 || attempt === attempts) {
+      return result;
+    }
+    input.sleep?.(command.retry?.delayMs ?? 0);
+  }
+
+  return result ?? { exitCode: 1, stdout: "", stderr: "" };
 }
 
 function formatCommandBlock(
@@ -265,6 +288,10 @@ function createHostedStagingCommands(
         "--profile",
         "workers",
       ],
+      retry: {
+        attempts: 12,
+        delayMs: 5000,
+      },
     },
     {
       command: "corepack pnpm phase7:staging:seed",
