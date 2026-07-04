@@ -81,6 +81,9 @@ not match that destination and contract.
 Successful execution responses also include the selected provider summary so
 agents can audit the exact merchant origin, operation, campaign, route, asset,
 pay-to wallet, amount, and discovery source used for the paid call.
+Router failures include structured JSON-RPC `error.data` with the router error
+code and provider attempts; when a failure happens after receipt verification,
+the failed attempt includes the receipt id for audit and follow-up.
 
 Example `tools/call` request:
 

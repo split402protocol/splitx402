@@ -23,6 +23,7 @@ import {
   Split402Router,
   Split402ControlPlaneDiscoveryClient,
   Split402ExternalX402DiscoveryClient,
+  Split402RouterError,
   type Split402CapabilityProvider,
   type Split402DiscoveryFetch,
   type Split402ExternalX402DiscoveryFetch,
@@ -62,6 +63,7 @@ export interface McpGatewayResponse {
   error?: {
     code: number;
     message: string;
+    data?: unknown;
   };
 }
 
@@ -690,7 +692,7 @@ async function handleExternalX402DiscoveryTool(
       candidates: candidates.map(publicExternalX402CandidateView)
     });
   } catch (error) {
-    return createErrorResponse(id, -32000, errorMessage(error));
+    return createRouterErrorResponse(id, error);
   }
 }
 
@@ -718,7 +720,7 @@ function handleRouterQuoteTool(
     });
     return createRouterQuoteResponse(id, quote, context.executionMode);
   } catch (error) {
-    return createErrorResponse(id, -32000, errorMessage(error));
+    return createRouterErrorResponse(id, error);
   }
 }
 
@@ -752,7 +754,7 @@ async function handleRouterExecuteTool(
     context.receipts.set(result.receipt.receiptId, result.receipt);
     return createRouterExecuteResponse(id, result, context.executionMode);
   } catch (error) {
-    return createErrorResponse(id, -32000, errorMessage(error));
+    return createRouterErrorResponse(id, error);
   }
 }
 
@@ -954,14 +956,61 @@ function createErrorResponse(
   id: string | number | null,
   code: number,
   message: string,
+  data?: unknown,
 ): McpGatewayResponse {
   return {
     jsonrpc: "2.0",
     id,
     error: {
       code,
-      message
+      message,
+      ...(data === undefined ? {} : { data })
     }
+  };
+}
+
+function createRouterErrorResponse(
+  id: string | number | null,
+  error: unknown,
+): McpGatewayResponse {
+  const routerError = readRouterErrorData(error);
+  if (routerError !== undefined) {
+    return createErrorResponse(id, -32000, errorMessage(error), {
+      routerCode: routerError.routerCode,
+      attempts: routerError.attempts
+    });
+  }
+  return createErrorResponse(id, -32000, errorMessage(error));
+}
+
+function readRouterErrorData(
+  error: unknown
+):
+  | {
+      routerCode: Split402RouterError["code"];
+      attempts: Split402RouterError["attempts"];
+    }
+  | undefined {
+  if (error instanceof Split402RouterError) {
+    return {
+      routerCode: error.code,
+      attempts: error.attempts
+    };
+  }
+  if (typeof error !== "object" || error === null) {
+    return undefined;
+  }
+  const record = error as Record<string, unknown>;
+  if (
+    record.name !== "Split402RouterError" ||
+    typeof record.code !== "string" ||
+    !Array.isArray(record.attempts)
+  ) {
+    return undefined;
+  }
+  return {
+    routerCode: record.code as Split402RouterError["code"],
+    attempts: record.attempts as Split402RouterError["attempts"]
   };
 }
 
