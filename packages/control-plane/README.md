@@ -140,7 +140,9 @@ GET  /v1/referrers/:referrerWallet/routes
 - Solana RPC finality monitoring with retry, blockhash-expiry, and
   outcome-unknown classification;
 - payout batch and item status rollup from transaction finality;
-- idempotent payout-batch ledger closure for finalized payouts;
+- idempotent payout-batch ledger closure for finalized payouts, either through
+  the owner-authorized close-ledger endpoint or the opt-in finality worker
+  auto-close path when finalized-transfer verifier env is configured;
 - payout submitted, confirmed, finalized, failed, and outcome-unknown internal
   and webhook outbox events.
 - optional Solana RPC merchant funding-balance provider for covered/deficit
@@ -157,12 +159,20 @@ corepack pnpm control-plane:migrate
 corepack pnpm control-plane
 corepack pnpm worker:chain
 corepack pnpm worker:webhook
+corepack pnpm worker:payout-finality
 ```
 
 The migration entrypoint is `split402-control-plane-migrate`. Run it as a
 controlled release step before starting the HTTP server against a fresh database.
 The packaged HTTP entrypoint is `split402-control-plane`. It reads `PORT` or
 `SPLIT402_CONTROL_PLANE_PORT`, defaulting to `4021`.
+
+The payout finality worker observes submitted/confirmed payout transactions and
+persists chain outcomes. Set `SPLIT402_PAYOUT_FINALITY_WORKER_CLOSE_LEDGER=true`
+only after configuring `SPLIT402_PAYOUT_LEDGER_CLOSURE_FUNDING_WALLET` and
+`SPLIT402_PAYOUT_LEDGER_CLOSURE_SOURCE_TOKEN_ACCOUNT`; then finalized batches
+are closed to paid accruals automatically after transfer-content verification
+passes.
 
 ## Local-Dev Payout Signer
 

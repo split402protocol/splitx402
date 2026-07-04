@@ -23,7 +23,8 @@ describe("payout finality worker entrypoint", () => {
         SPLIT402_PAYOUT_FINALITY_WORKER_POLL_INTERVAL_MS: "250",
         SPLIT402_PAYOUT_FINALITY_WORKER_ERROR_DELAY_MS: "500",
         SPLIT402_PAYOUT_FINALITY_WORKER_MAX_ITERATIONS: "2",
-        SPLIT402_PAYOUT_FINALITY_WORKER_STOP_ON_ERROR: "true"
+        SPLIT402_PAYOUT_FINALITY_WORKER_STOP_ON_ERROR: "true",
+        SPLIT402_PAYOUT_FINALITY_WORKER_CLOSE_LEDGER: "false"
       },
       poolFactory: (config) => {
         createdConfigs.push(config);
@@ -36,7 +37,8 @@ describe("payout finality worker entrypoint", () => {
       pollIntervalMs: 250,
       errorDelayMs: 500,
       maxIterations: 2,
-      stopOnError: true
+      stopOnError: true,
+      closeLedger: false
     });
     expect(createdConfigs).toEqual([
       expect.objectContaining({
@@ -57,7 +59,8 @@ describe("payout finality worker entrypoint", () => {
     expect(
       readPayoutFinalityWorkerConfig({
         SPLIT402_PAYOUT_FINALITY_WORKER_SWEEP_LIMIT: "",
-        SPLIT402_PAYOUT_FINALITY_WORKER_STOP_ON_ERROR: ""
+        SPLIT402_PAYOUT_FINALITY_WORKER_STOP_ON_ERROR: "",
+        SPLIT402_PAYOUT_FINALITY_WORKER_CLOSE_LEDGER: ""
       })
     ).toEqual({});
   });
@@ -83,6 +86,29 @@ describe("payout finality worker entrypoint", () => {
       })
     ).toThrow(
       "SPLIT402_PAYOUT_FINALITY_WORKER_STOP_ON_ERROR must be true or false"
+    );
+    expect(() =>
+      readPayoutFinalityWorkerConfig({
+        SPLIT402_PAYOUT_FINALITY_WORKER_CLOSE_LEDGER: "yes"
+      })
+    ).toThrow(
+      "SPLIT402_PAYOUT_FINALITY_WORKER_CLOSE_LEDGER must be true or false"
+    );
+  });
+
+  it("fails closed when auto ledger closure is enabled without verifier env", () => {
+    const pool = new ThrowingPostgresPool();
+
+    expect(() =>
+      createPayoutFinalityWorkerRuntimeFromEnv({
+        env: {
+          SPLIT402_DATABASE_URL: "postgresql://split402.example/worker",
+          SPLIT402_PAYOUT_FINALITY_WORKER_CLOSE_LEDGER: "true"
+        },
+        poolFactory: () => pool
+      })
+    ).toThrow(
+      "SPLIT402_PAYOUT_FINALITY_WORKER_CLOSE_LEDGER requires payout finalized transfer verifier env"
     );
   });
 

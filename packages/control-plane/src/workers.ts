@@ -3,12 +3,16 @@ import type { Split402ReceiptV1 } from "@split402/protocol";
 import type {
   OutboxEventRecord,
   OutboxEventStore,
+  LedgerTransaction,
   PayoutFinalityMonitor,
   PayoutReconciliationFinalityResult,
   ReceiptChainVerificationStore,
   ReceiptIngestionSnapshot
 } from "./index.js";
 import type {
+  PayoutBatchStore,
+  PayoutFinalizedTransferVerifier,
+  PayoutLedgerClosureStore,
   PayoutTransactionRecord,
   PayoutTransactionStore
 } from "./payouts.js";
@@ -95,8 +99,15 @@ export type ReceiptChainVerificationWorkerResult =
     };
 
 export interface PayoutFinalityWorkerOptions {
+  finalizedLedgerClosure?: PayoutFinalizedLedgerClosureOptions;
   now?: () => Date;
   sweepLimit?: number;
+}
+
+export interface PayoutFinalizedLedgerClosureOptions {
+  batchStore: Pick<PayoutBatchStore, "getPayoutBatch">;
+  finalizedTransferVerifier: PayoutFinalizedTransferVerifier;
+  ledgerClosureStore: PayoutLedgerClosureStore;
 }
 
 export interface PayoutFinalityProcessor {
@@ -104,6 +115,7 @@ export interface PayoutFinalityProcessor {
 }
 
 export interface PayoutFinalitySweepError {
+  payoutBatchId?: string;
   transactionId: string;
   error: string;
 }
@@ -115,6 +127,7 @@ export type PayoutFinalityWorkerResult =
   | {
       status: "swept";
       checked: number;
+      closedLedgerTransactions?: LedgerTransaction[];
       updatedTransactions: PayoutTransactionRecord[];
       pendingTransactionIds: string[];
       errors: PayoutFinalitySweepError[];
@@ -257,8 +270,10 @@ export class PayoutFinalityWorker implements PayoutFinalityProcessor {
     }
 
     const updatedTransactions: PayoutTransactionRecord[] = [];
+    const closedLedgerTransactions: LedgerTransaction[] = [];
     const pendingTransactionIds: string[] = [];
     const errors: PayoutFinalitySweepError[] = [];
+    const finalizedTransactionByBatchId = new Map<string, PayoutTransactionRecord>();
     for (const transaction of candidates) {
       try {
         const result = await this.monitor.monitor({ transaction });
@@ -288,6 +303,9 @@ export class PayoutFinalityWorker implements PayoutFinalityProcessor {
           pendingTransactionIds.push(transaction.id);
           continue;
         }
+        if (updated.status === "finalized") {
+          finalizedTransactionByBatchId.set(updated.payoutBatchId, updated);
+        }
         updatedTransactions.push(updated);
       } catch (error) {
         errors.push({
@@ -297,13 +315,49 @@ export class PayoutFinalityWorker implements PayoutFinalityProcessor {
       }
     }
 
+    for (const [payoutBatchId, transaction] of finalizedTransactionByBatchId) {
+      try {
+        const closed = await this.closeFinalizedLedgerIfReady(payoutBatchId);
+        if (closed !== undefined) {
+          closedLedgerTransactions.push(closed);
+        }
+      } catch (error) {
+        errors.push({
+          transactionId: transaction.id,
+          payoutBatchId,
+          error: error instanceof Error ? error.message : "unknown error"
+        });
+      }
+    }
+
     return {
       status: "swept",
       checked: candidates.length,
       updatedTransactions,
+      ...(closedLedgerTransactions.length === 0
+        ? {}
+        : { closedLedgerTransactions }),
       pendingTransactionIds,
       errors
     };
+  }
+
+  private async closeFinalizedLedgerIfReady(
+    payoutBatchId: string
+  ): Promise<LedgerTransaction | undefined> {
+    const closure = this.options.finalizedLedgerClosure;
+    if (closure === undefined) {
+      return undefined;
+    }
+    const batch = await closure.batchStore.getPayoutBatch(payoutBatchId);
+    if (batch?.status !== "finalized") {
+      return undefined;
+    }
+    return closure.ledgerClosureStore.closeFinalizedPayoutBatchLedger({
+      payoutBatchId,
+      now: this.now(),
+      finalizedTransferVerifier: closure.finalizedTransferVerifier
+    });
   }
 
   private now(): string {

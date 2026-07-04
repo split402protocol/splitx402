@@ -18,6 +18,7 @@ import {
 } from "./workers.js";
 
 export interface PayoutFinalityWorkerConfig {
+  closeLedger?: boolean;
   errorDelayMs?: number;
   maxIterations?: number;
   pollIntervalMs?: number;
@@ -54,10 +55,30 @@ export function createPayoutFinalityWorkerRuntimeFromEnv(
     ...(options.walletAuth === undefined ? {} : { walletAuth: options.walletAuth })
   });
   const monitor = options.monitor ?? createPayoutFinalityMonitorFromEnv(env);
+  const finalizedTransferVerifier = runtime.payoutFinalizedTransferVerifier;
+  if (
+    config.closeLedger === true &&
+    finalizedTransferVerifier === undefined
+  ) {
+    throw new Error(
+      "SPLIT402_PAYOUT_FINALITY_WORKER_CLOSE_LEDGER requires payout finalized transfer verifier env"
+    );
+  }
+  const finalizedLedgerClosure =
+    config.closeLedger === true && finalizedTransferVerifier !== undefined
+      ? {
+          batchStore: runtime.receiptStore,
+          ledgerClosureStore: runtime.receiptStore,
+          finalizedTransferVerifier
+        }
+      : undefined;
   const worker = new PayoutFinalityWorker(
     runtime.receiptStore,
     monitor,
-    config.sweepLimit === undefined ? {} : { sweepLimit: config.sweepLimit }
+    {
+      ...(config.sweepLimit === undefined ? {} : { sweepLimit: config.sweepLimit }),
+      ...(finalizedLedgerClosure === undefined ? {} : { finalizedLedgerClosure })
+    }
   );
 
   return {
@@ -97,8 +118,13 @@ export function readPayoutFinalityWorkerConfig(
     env.SPLIT402_PAYOUT_FINALITY_WORKER_STOP_ON_ERROR,
     "SPLIT402_PAYOUT_FINALITY_WORKER_STOP_ON_ERROR"
   );
+  const closeLedger = readOptionalBoolean(
+    env.SPLIT402_PAYOUT_FINALITY_WORKER_CLOSE_LEDGER,
+    "SPLIT402_PAYOUT_FINALITY_WORKER_CLOSE_LEDGER"
+  );
 
   return {
+    ...(closeLedger === undefined ? {} : { closeLedger }),
     ...(sweepLimit === undefined ? {} : { sweepLimit }),
     ...(pollIntervalMs === undefined ? {} : { pollIntervalMs }),
     ...(errorDelayMs === undefined ? {} : { errorDelayMs }),
@@ -237,10 +263,17 @@ Optional environment:
   SPLIT402_PAYOUT_FINALITY_WORKER_ERROR_DELAY_MS
   SPLIT402_PAYOUT_FINALITY_WORKER_MAX_ITERATIONS
   SPLIT402_PAYOUT_FINALITY_WORKER_STOP_ON_ERROR=true|false
+  SPLIT402_PAYOUT_FINALITY_WORKER_CLOSE_LEDGER=true|false
 
 Falls back to SPLIT402_CHAIN_WORKER_SOLANA_RPC_URL(S) and
 SPLIT402_CHAIN_WORKER_NETWORK when payout finality RPC values are unset
-or empty.`);
+or empty.
+
+Ledger closure:
+  Set SPLIT402_PAYOUT_FINALITY_WORKER_CLOSE_LEDGER=true only when the
+  finalized-transfer verifier env is configured. When enabled, the worker
+  closes a payout batch ledger only after finality rollup marks the whole
+  batch finalized and transfer-content verification passes.`);
 }
 
 function readOptionalPositiveInteger(
