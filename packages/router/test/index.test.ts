@@ -3730,6 +3730,86 @@ describe("Split402Router", () => {
       });
     }
   });
+
+  it("rejects receipts whose attribution does not match provider route metadata", async () => {
+    const cases: Array<{
+      name: string;
+      providerOverrides: Partial<Split402CapabilityProvider>;
+      returnedReceipt: Split402ReceiptV1;
+      expectedError: string;
+    }> = [
+      {
+        name: "route id",
+        providerOverrides: { routeId: referralClaim.routeId },
+        returnedReceipt: {
+          ...receipt,
+          routeId: "rte_ffffffffffffffffffffffffffffffff"
+        },
+        expectedError: "receipt routeId does not match provider routeId"
+      },
+      {
+        name: "referrer wallet",
+        providerOverrides: {
+          metadata: {
+            referrerWallet: referralClaim.referrerWallet
+          }
+        },
+        returnedReceipt: {
+          ...receipt,
+          referrerWallet: sample.keys.payerWallet
+        },
+        expectedError:
+          "receipt referrerWallet does not match provider referrerWallet"
+      },
+      {
+        name: "payout wallet",
+        providerOverrides: {
+          metadata: {
+            payoutWallet: referralClaim.payoutWallet
+          }
+        },
+        returnedReceipt: {
+          ...receipt,
+          payoutWallet: sample.keys.payerWallet
+        },
+        expectedError: "receipt payoutWallet does not match provider payoutWallet"
+      }
+    ];
+
+    for (const testCase of cases) {
+      const router = new Split402Router({
+        providers: [
+          provider({
+            providerId: `provider-${testCase.name}`,
+            ...testCase.providerOverrides
+          })
+        ],
+        executor: executorReturning(testCase.returnedReceipt),
+        verifyReceipts: false
+      });
+
+      await expect(
+        router.execute({
+          capability: "solana.wallet-risk",
+          input: { wallet: "wallet_1" },
+          budget: {
+            network: receipt.network,
+            asset: receipt.asset,
+            maxAmountAtomic: receipt.requiredAmountAtomic
+          },
+          maxAttempts: 1
+        })
+      ).rejects.toMatchObject({
+        code: "execution_failed",
+        attempts: [
+          expect.objectContaining({
+            retryable: true,
+            error: expect.stringContaining(testCase.expectedError)
+          })
+        ]
+      });
+    }
+  });
 });
 
 describe("Split402ControlPlaneDiscoveryClient", () => {

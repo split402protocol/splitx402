@@ -126,6 +126,8 @@ until the route includes a valid Split402 offer extension.
 - verifies receipts fail-closed by default;
 - requires merchant offers and receipts to match the provider's network, asset,
   amount, and advertised `payToWallet`;
+- requires returned receipts to match discovered provider route, referrer, and
+  payout metadata when that metadata is present;
 - requires returned receipts to match the supplied `referralClaim` route, claim
   hash, referrer wallet, and payout wallet;
 - retries/falls back on network errors, HTTP 5xx, 408, 425, 429, missing
