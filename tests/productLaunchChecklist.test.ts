@@ -106,6 +106,9 @@ describe("Split402 launch checklist", () => {
       "Generate Phase 6 custody records at the paths listed in split402-launch-evidence/phase6-evidence.env.",
     );
     expect(checklist.sections[4]?.commands).toContain(
+      "corepack pnpm phase6:evidence:collect --evidence-env-file split402-launch-evidence/phase6-evidence.env",
+    );
+    expect(checklist.sections[4]?.commands).toContain(
       "corepack pnpm phase6:evidence:status --brief split402-launch-evidence/phase6-custody-evidence.txt",
     );
     expect(checklist.sections[5]?.commands).toContain(

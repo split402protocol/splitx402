@@ -36,6 +36,7 @@ and fill every field. Then run:
 corepack pnpm phase6:evidence:bundle phase6-custody-evidence.txt
 # Review split402-launch-evidence/phase6-evidence.env first; regenerate only if missing:
 corepack pnpm phase6:evidence:env-template split402-launch-evidence split402-launch-evidence/phase6-evidence.env
+corepack pnpm phase6:evidence:collect --evidence-env-file split402-launch-evidence/phase6-evidence.env
 corepack pnpm phase6:evidence:assemble --evidence-env-file split402-launch-evidence/phase6-evidence.env split402-launch-evidence/phase6-custody-evidence.txt
 corepack pnpm phase6:evidence:status --brief split402-launch-evidence/phase6-custody-evidence.txt
 corepack pnpm phase6:custody:check split402-launch-evidence/phase6-custody-evidence.txt
@@ -48,11 +49,14 @@ attachment-path helper. `product:evidence:init` creates the default
 directory to `phase6:evidence:env-template` when using a non-default workspace,
 for example
 `corepack pnpm phase6:evidence:env-template evidence/launch evidence/launch/phase6-evidence.env`.
-Use `phase6:evidence:assemble` after generated evidence record files exist and
-the required environment values are set. The validator fails while any required
-field is empty, placeholder-like, uses a mutable image tag instead of a
-`sha256:` digest, uses an invalid `review_date` calendar date, or leaves
-`approval_decision` as anything other than `approved`.
+Use `phase6:evidence:collect` after the env file is reviewed to run the custody
+record generators and write their outputs to the configured private paths. It
+refuses to overwrite existing record files unless `--force` is passed
+intentionally. Then use `phase6:evidence:assemble` after generated evidence
+record files exist and the required environment values are set. The validator
+fails while any required field is empty, placeholder-like, uses a mutable image
+tag instead of a `sha256:` digest, uses an invalid `review_date` calendar date,
+or leaves `approval_decision` as anything other than `approved`.
 Artifact evidence fields such as drill records, signer-policy records, network
 policy records, signer smoke output, and dependency audit output must use
 `attached: <path>` with evidence artifact paths relative to the launch evidence

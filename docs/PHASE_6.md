@@ -126,6 +126,10 @@ unknown-outcome reconciliation queue and referrer payout views.
   Launch preflight requires `SPLIT402_PHASE6_EVIDENCE_NETWORK=solana:devnet`;
   mainnet custody remains outside this evidence workspace until separate
   approval.
+- Added `corepack pnpm phase6:evidence:collect` to run the Phase 6 custody
+  record generators and write their outputs to the private paths configured in
+  `split402-launch-evidence/phase6-evidence.env`. The collector refuses to
+  overwrite existing evidence files unless `--force` is passed intentionally.
 - Added `corepack pnpm phase6:evidence:assemble` to assemble the canonical
   custody evidence bundle from generated evidence records, attachment paths, and
   explicit field overrides.
@@ -214,6 +218,7 @@ the merchant has enough funding.
 - `corepack pnpm test`
 - `corepack pnpm build`
 - `corepack pnpm phase6:custody:check <evidence-bundle.txt>`
+- `corepack pnpm phase6:evidence:collect --evidence-env-file split402-launch-evidence/phase6-evidence.env`
 - `corepack pnpm phase6:evidence:assemble --evidence-env-file split402-launch-evidence/phase6-evidence.env split402-launch-evidence/phase6-custody-evidence.txt`
 - `corepack pnpm phase6:evidence:bundle`
 - Review generated `split402-launch-evidence/phase6-evidence.env` before editing; regenerate only if missing with `corepack pnpm phase6:evidence:env-template split402-launch-evidence split402-launch-evidence/phase6-evidence.env`

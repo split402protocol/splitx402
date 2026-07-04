@@ -26,6 +26,12 @@ export const PHASE6_EVIDENCE_COMMANDS = [
     evidenceField: "review_id",
   },
   {
+    gate: "custody_record_collection",
+    command:
+      "corepack pnpm phase6:evidence:collect --evidence-env-file split402-launch-evidence/phase6-evidence.env",
+    evidenceField: "signer_policy_record",
+  },
+  {
     gate: "signer_image_provenance",
     command: "corepack pnpm phase6:image-provenance",
     evidenceField: "signer_image_dependency_audit_output",
@@ -280,8 +286,8 @@ function createNextActions(
     return [
       "Generate a bundle scaffold with corepack pnpm phase6:evidence:bundle.",
       "Review generated split402-launch-evidence/phase6-evidence.env before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template split402-launch-evidence split402-launch-evidence/phase6-evidence.env.",
-      "Run each listed evidence command against staging outputs.",
-      "Attach generated records to docs/templates/phase6-custody-evidence.txt copy.",
+      "Run corepack pnpm phase6:evidence:collect --evidence-env-file split402-launch-evidence/phase6-evidence.env to write generated custody records to private evidence files.",
+      "Attach generated records to the Phase 6 custody evidence bundle.",
       "Run corepack pnpm phase6:evidence:status --brief <evidence-bundle.txt>.",
     ];
   }
@@ -307,7 +313,7 @@ function createNextActions(
   actions.push(...attachmentBlockers);
   if (actions.length > 0) {
     actions.push(
-      "Reassemble with corepack pnpm phase6:evidence:assemble --evidence-env-file split402-launch-evidence/phase6-evidence.env split402-launch-evidence/phase6-custody-evidence.txt, then rerun corepack pnpm phase6:evidence:status --brief split402-launch-evidence/phase6-custody-evidence.txt.",
+      "Collect with corepack pnpm phase6:evidence:collect --evidence-env-file split402-launch-evidence/phase6-evidence.env, reassemble with corepack pnpm phase6:evidence:assemble --evidence-env-file split402-launch-evidence/phase6-evidence.env split402-launch-evidence/phase6-custody-evidence.txt, then rerun corepack pnpm phase6:evidence:status --brief split402-launch-evidence/phase6-custody-evidence.txt.",
     );
   }
   return actions;
