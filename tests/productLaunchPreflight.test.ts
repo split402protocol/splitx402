@@ -230,11 +230,11 @@ describe("Split402 launch preflight", () => {
       ok: false,
       severity: "required",
       details: [
-        "Run corepack pnpm phase7:docker:env:init, then fill deploy/phase7-staging/phase7-staging.env with private Docker runtime values before running phase7:docker:doctor.",
+        "Run corepack pnpm phase7:docker:env:init --generate-secrets, then fill remaining deploy/phase7-staging/phase7-staging.env values for hosted URLs, wallets, service keys, buyer keys, and control-plane tokens before running phase7:docker:doctor.",
       ],
     });
     expect(report.nextActions).toContain(
-      "Run corepack pnpm phase7:docker:env:init, then fill deploy/phase7-staging/phase7-staging.env with private Docker runtime values before running phase7:docker:doctor.",
+      "Run corepack pnpm phase7:docker:env:init --generate-secrets, then fill remaining deploy/phase7-staging/phase7-staging.env values for hosted URLs, wallets, service keys, buyer keys, and control-plane tokens before running phase7:docker:doctor.",
     );
   });
 

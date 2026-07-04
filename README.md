@@ -499,7 +499,7 @@ Windows PowerShell.
 Launch the staging stack:
 
 ```bash
-corepack pnpm phase7:docker:env:init
+corepack pnpm phase7:docker:env:init --generate-secrets
 corepack pnpm phase7:docker:doctor --brief
 corepack pnpm phase7:docker:compose up --brief
 corepack pnpm phase7:docker:compose ps --brief
@@ -532,8 +532,8 @@ Prepare and check the Phase 7 staging proof:
 ```bash
 corepack pnpm phase7:staging:init
 corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json
-corepack pnpm phase7:docker:env:init
-# Fill deploy/phase7-staging/phase7-staging.env with private Docker runtime values.
+corepack pnpm phase7:docker:env:init --generate-secrets
+# Fill remaining deploy/phase7-staging/phase7-staging.env values: hosted URLs, wallets, service keys, buyer keys, and control-plane tokens.
 corepack pnpm phase7:docker:doctor --brief
 corepack pnpm phase7:docker:doctor --brief --profile demo --profile workers
 corepack pnpm phase7:docker:compose up --brief --profile demo --profile workers

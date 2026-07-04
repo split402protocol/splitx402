@@ -148,10 +148,10 @@ describe("Phase 7 staging evidence workspace", () => {
       "corepack pnpm phase7:docker:health --brief --profile demo --profile workers",
     );
     expect(workspace.readmeText).toContain(
-      "corepack pnpm phase7:docker:env:init",
+      "corepack pnpm phase7:docker:env:init --generate-secrets",
     );
     expect(workspace.readmeText).toContain(
-      "Fill deploy/phase7-staging/phase7-staging.env with private Docker runtime values.",
+      "Fill remaining deploy/phase7-staging/phase7-staging.env values: hosted URLs, wallets, service keys, buyer keys, and control-plane tokens.",
     );
     expect(workspace.readmeText).toContain(
       "Split402 Phase 7 Docker doctor: ready",

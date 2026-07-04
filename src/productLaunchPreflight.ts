@@ -408,7 +408,7 @@ export function createSplit402LaunchPreflightReport(
             `${PHASE7_DOCKER_RUNTIME_ENV_FILE} exists for Docker Compose runtime values.`,
           ]
         : [
-            `Run corepack pnpm phase7:docker:env:init, then fill ${PHASE7_DOCKER_RUNTIME_ENV_FILE} with private Docker runtime values before running phase7:docker:doctor.`,
+            `Run corepack pnpm phase7:docker:env:init --generate-secrets, then fill remaining ${PHASE7_DOCKER_RUNTIME_ENV_FILE} values for hosted URLs, wallets, service keys, buyer keys, and control-plane tokens before running phase7:docker:doctor.`,
           ],
     },
     {

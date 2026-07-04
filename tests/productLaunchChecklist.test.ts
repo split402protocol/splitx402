@@ -73,10 +73,10 @@ describe("Split402 launch checklist", () => {
       "Fill split402-launch-evidence/phase7-staging.env with hosted staging values reported by launch preflight.",
     );
     expect(checklist.sections[3]?.commands[2]).toBe(
-      "corepack pnpm phase7:docker:env:init",
+      "corepack pnpm phase7:docker:env:init --generate-secrets",
     );
     expect(checklist.sections[3]?.commands[3]).toBe(
-      "Fill deploy/phase7-staging/phase7-staging.env with private Docker runtime values.",
+      "Fill remaining deploy/phase7-staging/phase7-staging.env values: hosted URLs, wallets, service keys, buyer keys, and control-plane tokens.",
     );
     expect(checklist.sections[3]?.commands[4]).toBe(
       "corepack pnpm phase7:docker:doctor --brief",

@@ -181,10 +181,10 @@ describe("Split402 product evidence workspace", () => {
       "corepack pnpm phase7:docker:health --brief --profile demo --profile workers",
     );
     expect(workspace.nextCommands).toContain(
-      "corepack pnpm phase7:docker:env:init",
+      "corepack pnpm phase7:docker:env:init --generate-secrets",
     );
     expect(workspace.nextCommands).toContain(
-      "Fill deploy/phase7-staging/phase7-staging.env with private Docker runtime values.",
+      "Fill remaining deploy/phase7-staging/phase7-staging.env values: hosted URLs, wallets, service keys, buyer keys, and control-plane tokens.",
     );
     expect(workspace.nextCommands).toContain(
       "corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log",
