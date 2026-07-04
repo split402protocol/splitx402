@@ -1005,6 +1005,120 @@ describe("Split402ExternalX402DiscoveryClient", () => {
     expect(requestedPaths).not.toContain("/research/topic");
   });
 
+  it("enriches external paid MCP gateway candidates with tool catalog metadata", async () => {
+    const discovery = new Split402ExternalX402DiscoveryClient({
+      merchantOrigin: "https://x402.example",
+      providerIdPrefix: "mcp-gateway",
+      capabilityMapper: () => "mcp.revenue-tools",
+      fetch: async (url) => {
+        const parsed = new URL(url);
+        if (parsed.pathname === "/.well-known/x402") {
+          return jsonResponse({
+            version: 1,
+            paid_routes: [
+              {
+                method: "POST",
+                path: "/mcp/call",
+                price: "$0.05",
+                description: "Paid MCP-style tool execution gateway.",
+                example_unpaid_curl:
+                  "curl -i -X POST https://x402.example/mcp/call"
+              }
+            ]
+          });
+        }
+        if (parsed.pathname === "/openapi.json") {
+          return jsonResponse({ openapi: "3.0.3", paths: {} });
+        }
+        if (parsed.pathname === "/mcp/tools") {
+          return jsonResponse({
+            schema_version: "revenue.paid_mcp.catalog.v1",
+            payment: {
+              protocol: "x402",
+              paid_call_route: "https://x402.example/mcp/call",
+              price_usdc: 0.05
+            },
+            tools: [
+              {
+                name: "scan_revenue_surfaces",
+                description: "Rank current monetization surfaces.",
+                input_schema: {
+                  type: "object",
+                  properties: { focus: { type: "string" } }
+                }
+              },
+              {
+                name: "audit_x402_endpoint",
+                description: "Audit an x402 endpoint.",
+                inputSchema: {
+                  type: "object",
+                  properties: { url: { type: "string" } },
+                  required: ["url"]
+                }
+              }
+            ]
+          });
+        }
+        if (parsed.pathname === "/mcp/call") {
+          return textResponse("", {
+            status: 402,
+            headers: {
+              "Payment-Required": encodePaymentRequiredHeader(
+                {
+                  ...externalPaymentRequired({ includeSplit402: false }),
+                  resource: {
+                    url: "https://x402.example/mcp/call",
+                    description: "Paid MCP-style tool execution gateway",
+                    mimeType: "application/json"
+                  }
+                }
+              )
+            }
+          });
+        }
+        return jsonResponse({}, 404);
+      }
+    });
+
+    await expect(
+      discovery.discoverCandidates({ capability: "mcp.revenue-tools" })
+    ).resolves.toEqual([
+      expect.objectContaining({
+        providerId: "mcp-gateway:post.mcp.call",
+        path: "/mcp/call",
+        inputSchema: expect.objectContaining({
+          properties: expect.objectContaining({
+            tool: expect.objectContaining({
+              enum: ["scan_revenue_surfaces", "audit_x402_endpoint"]
+            })
+          }),
+          required: ["tool"]
+        }),
+        mcpTools: [
+          {
+            name: "scan_revenue_surfaces",
+            description: "Rank current monetization surfaces.",
+            inputSchema: {
+              type: "object",
+              properties: { focus: { type: "string" } }
+            }
+          },
+          {
+            name: "audit_x402_endpoint",
+            description: "Audit an x402 endpoint.",
+            inputSchema: {
+              type: "object",
+              properties: { url: { type: "string" } },
+              required: ["url"]
+            }
+          }
+        ],
+        readiness: "requires_split402_campaign",
+        blockers: ["missing Split402 offer extension"]
+      })
+    ]);
+  });
+
   it("reports invalid Split402 offer extensions separately from missing extensions", async () => {
     const discovery = new Split402ExternalX402DiscoveryClient({
       merchantOrigin: "https://x402.example",

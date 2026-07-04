@@ -184,6 +184,9 @@ not overstate them as referral-ready providers. Candidate responses include
 `requiredSplit402Fields` and `nextActions`. If an external API includes a
 malformed `extensions.split402.info`, the response includes
 `split402OfferErrors` so the provider can fix exact fields before paid staging.
+If the external API exposes a free `/mcp/tools` catalog for a paid `/mcp/call`
+gateway, candidate responses also include the public MCP tool names,
+descriptions, and input schemas for onboarding review.
 When the route has complete x402 payment metadata but is not router-ready yet,
 responses also include `split402OfferTemplate`, a non-secret scaffold for the
 provider's `extensions.split402.info` object. It includes route-derived payment

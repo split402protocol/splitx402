@@ -91,6 +91,10 @@ offer extension; only `router_ready` candidates produce receipt-verified router
 providers. OpenAPI path parameters are probed with concrete examples, defaults,
 constants, or enum values when available, so discovery can inspect real unpaid
 routes without replacing `{param}` with a weak placeholder.
+When a provider exposes a free `/mcp/tools` catalog for a paid `/mcp/call`
+gateway, discovery attaches the public tool catalog to the onboarding candidate
+and builds a conservative tool-call input schema. This remains metadata-only
+until the route includes a valid Split402 offer extension.
 
 ## Current Behavior
 
@@ -103,6 +107,8 @@ routes without replacing `{param}` with a weak placeholder.
 - discovers active control-plane routes into provider records;
 - discovers external x402 provider candidates for onboarding without treating
   plain x402 payment requirements as Split402 referral routes;
+- enriches paid MCP-style external candidates with public `/mcp/tools` catalog
+  metadata when the catalog is available;
 - supports x402 `GET` and `POST` provider methods; object-shaped router input is
   passed as query parameters for `GET` providers and as JSON body for `POST`
   providers;
