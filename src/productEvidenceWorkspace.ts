@@ -265,7 +265,7 @@ function createNextCommands(input: {
     `corepack pnpm phase7:staging:collect-reads ${phase7EnvOption}`,
     "corepack pnpm demo:mcp-gateway:smoke",
     `corepack pnpm phase7:staging:commands-template ${input.directory}/phase7-staging-evidence/commands.log`,
-    `corepack pnpm phase7:staging:commands-record --output ${input.directory}/phase7-staging-evidence/commands.log`,
+    `corepack pnpm phase7:staging:commands-record --include-hosted --force --evidence-env-file ${phase7EnvFile} --evidence-dir ${input.directory}/phase7-staging-evidence --proof ${input.directory}/${input.phase7ProofFileName} --seed-output ${input.directory}/phase7-seed.json --output ${input.directory}/phase7-staging-evidence/commands.log`,
     `corepack pnpm phase7:staging:commands-status --brief ${input.directory}/phase7-staging-evidence/commands.log`,
     `corepack pnpm phase7:staging:manifest ${input.directory}/${input.phase7ProofFileName} ${input.directory}/phase7-staging-evidence/artifact-manifest.json`,
     `corepack pnpm phase7:staging:assemble ${phase7EnvOption} ${input.directory}/${input.phase7ProofFileName}`,

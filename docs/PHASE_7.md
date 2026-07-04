@@ -142,8 +142,7 @@ corepack pnpm phase7:staging:collect-mcp-gateway --evidence-env-file split402-la
 corepack pnpm phase7:staging:collect-reads --evidence-env-file split402-launch-evidence/phase7-staging.env
 corepack pnpm demo:mcp-gateway:smoke
 corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log
-corepack pnpm phase7:staging:commands-record --output split402-launch-evidence/phase7-staging-evidence/commands.log
-# Append hosted Docker, seed, collection, paid-suite, manifest, assemble, and status command output.
+corepack pnpm phase7:staging:commands-record --include-hosted --force --evidence-env-file split402-launch-evidence/phase7-staging.env --evidence-dir split402-launch-evidence/phase7-staging-evidence --proof split402-launch-evidence/phase7-staging-proof.txt --seed-output split402-launch-evidence/phase7-seed.json --output split402-launch-evidence/phase7-staging-evidence/commands.log
 corepack pnpm phase7:staging:commands-status --brief split402-launch-evidence/phase7-staging-evidence/commands.log
 corepack pnpm phase7:staging:manifest split402-launch-evidence/phase7-staging-proof.txt split402-launch-evidence/phase7-staging-evidence/artifact-manifest.json
 corepack pnpm phase7:staging:assemble --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-proof.txt

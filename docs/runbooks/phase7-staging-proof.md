@@ -34,8 +34,7 @@ corepack pnpm phase7:staging:collect-mcp-gateway --evidence-env-file split402-la
 corepack pnpm phase7:staging:collect-reads --evidence-env-file split402-launch-evidence/phase7-staging.env
 corepack pnpm demo:mcp-gateway:smoke
 corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log
-corepack pnpm phase7:staging:commands-record --output split402-launch-evidence/phase7-staging-evidence/commands.log
-# Append hosted Docker, seed, collection, paid-suite, manifest, assemble, and status command output.
+corepack pnpm phase7:staging:commands-record --include-hosted --force --evidence-env-file split402-launch-evidence/phase7-staging.env --evidence-dir split402-launch-evidence/phase7-staging-evidence --proof split402-launch-evidence/phase7-staging-proof.txt --seed-output split402-launch-evidence/phase7-seed.json --output split402-launch-evidence/phase7-staging-evidence/commands.log
 corepack pnpm phase7:staging:commands-status --brief split402-launch-evidence/phase7-staging-evidence/commands.log
 corepack pnpm phase7:staging:manifest split402-launch-evidence/phase7-staging-proof.txt split402-launch-evidence/phase7-staging-evidence/artifact-manifest.json
 corepack pnpm phase7:staging:assemble --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-proof.txt
@@ -70,17 +69,18 @@ Run `corepack pnpm phase7:staging:commands-status --brief
 split402-launch-evidence/phase7-staging-evidence/commands.log` before assembly
 to catch missing command lines or placeholder output without rebuilding the full
 Phase 7 proof.
-`corepack pnpm phase7:staging:commands-record --output <commands.log>` can
-capture the safe local validation blocks automatically. It refuses to overwrite
-an existing transcript unless `--force` is passed. It does not record hosted
-Docker, seed, collection, paid-suite, manifest, assemble, or status commands;
-append those blocks from the real hosted staging run.
+`corepack pnpm phase7:staging:commands-record --include-hosted ...` can capture
+the hosted Docker, seed, seed-env apply, collection, paid-suite, manifest,
+assemble, status, and validation blocks automatically on the staging runtime. It
+refuses to overwrite an existing transcript unless `--force` is passed and
+redacts token, seed, secret, and private-key shaped command output.
 On Windows, PowerShell transcript lines with environment assignments are valid
 as long as the executed command remains on the same uncommented line, for
 example:
 
 ```powershell
-PS C:\split402> $env:SPLIT402_PHASE7_SEED_CONFIRM='seed-hosted-staging'; corepack pnpm phase7:staging:seed
+PS C:\split402> $env:SPLIT402_PHASE7_SEED_CONFIRM='seed-hosted-staging'; corepack pnpm phase7:staging:seed > split402-launch-evidence/phase7-seed.json
+PS C:\split402> corepack pnpm phase7:staging:apply-seed-env --seed-output split402-launch-evidence/phase7-seed.json
 ```
 
 The collection and assembly commands auto-load the default evidence env files
