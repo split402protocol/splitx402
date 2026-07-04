@@ -1968,6 +1968,17 @@ function validateJsonObjectShape(
   if (schema.propertyNames !== undefined && propertyNames === undefined) {
     errors.push(`${path} propertyNames must be a schema object`);
   }
+  const additionalProperties = readAdditionalPropertiesSchema(
+    schema.additionalProperties
+  );
+  if (
+    schema.additionalProperties !== undefined &&
+    additionalProperties === undefined
+  ) {
+    errors.push(
+      `${path} additionalProperties must be a boolean or schema object`
+    );
+  }
   const required = readRequiredSchemaProperties(schema.required);
   if (required === undefined) {
     errors.push(`${path} required must be an array of strings`);
@@ -2029,13 +2040,21 @@ function validateJsonObjectShape(
       }
     }
   }
-  if (schema.additionalProperties === false) {
-    for (const property of Object.keys(value)) {
-      if (
-        (properties === undefined || !(property in properties)) &&
-        !propertyMatchesPatternProperties(property, patternProperties)
-      ) {
+  for (const property of Object.keys(value)) {
+    if (propertyIsAdditional(property, properties, patternProperties)) {
+      if (additionalProperties === false) {
         errors.push(`${path}.${property} is not allowed`);
+      } else if (
+        typeof additionalProperties === "object" &&
+        additionalProperties !== null
+      ) {
+        errors.push(
+          ...validateJsonSchemaValue(
+            value[property],
+            additionalProperties,
+            `${path}.${property}`
+          )
+        );
       }
     }
   }
@@ -2200,6 +2219,31 @@ function propertyMatchesPatternProperties(
     | undefined
 ): boolean {
   return patternProperties?.some((pattern) => pattern.regex.test(property)) ?? false;
+}
+
+function propertyIsAdditional(
+  property: string,
+  properties: Record<string, unknown> | undefined,
+  patternProperties:
+    | Array<{ regex: RegExp; schema: Record<string, unknown> }>
+    | undefined
+): boolean {
+  return (
+    (properties === undefined || !(property in properties)) &&
+    !propertyMatchesPatternProperties(property, patternProperties)
+  );
+}
+
+function readAdditionalPropertiesSchema(
+  value: unknown
+): boolean | Record<string, unknown> | undefined {
+  if (value === undefined) {
+    return true;
+  }
+  if (typeof value === "boolean") {
+    return value;
+  }
+  return readSchemaRecord(value);
 }
 
 function validateJsonStringConstraints(
