@@ -27,7 +27,11 @@ export interface Phase7DockerEnvInitPlan {
 export const PHASE7_DOCKER_GENERATED_SECRET_KEYS = [
   "SPLIT402_DASHBOARD_VIEWER_TOKEN",
   "SPLIT402_WEBHOOK_WORKER_SECRET",
+  "SPLIT402_SERVICE_SEED_HEX",
 ] as const;
+
+export type Phase7DockerGeneratedSecretKey =
+  (typeof PHASE7_DOCKER_GENERATED_SECRET_KEYS)[number];
 
 export function parsePhase7DockerEnvInitArgs(
   argv: readonly string[],
@@ -75,7 +79,7 @@ export function parsePhase7DockerEnvInitArgs(
 
 export function populatePhase7DockerGeneratedSecrets(
   text: string,
-  generateSecret: () => string,
+  generateSecret: (key: Phase7DockerGeneratedSecretKey) => string,
 ): string {
   return text
     .split(/\r?\n/u)
@@ -149,7 +153,7 @@ export function createPhase7DockerEnvInitPlan(input: {
 
 function populateGeneratedSecretLine(
   line: string,
-  generateSecret: () => string,
+  generateSecret: (key: Phase7DockerGeneratedSecretKey) => string,
 ): string {
   const match = /^([A-Z0-9_]+)=(.*)$/u.exec(line);
   if (match === null) {
@@ -161,14 +165,20 @@ function populateGeneratedSecretLine(
     return line;
   }
   if (
-    !PHASE7_DOCKER_GENERATED_SECRET_KEYS.includes(
-      key as (typeof PHASE7_DOCKER_GENERATED_SECRET_KEYS)[number],
-    ) ||
+    !isPhase7DockerGeneratedSecretKey(key) ||
     !shouldReplaceGeneratedSecretValue(value)
   ) {
     return line;
   }
-  return `${key}=${generateSecret()}`;
+  return `${key}=${generateSecret(key)}`;
+}
+
+function isPhase7DockerGeneratedSecretKey(
+  key: string,
+): key is Phase7DockerGeneratedSecretKey {
+  return PHASE7_DOCKER_GENERATED_SECRET_KEYS.includes(
+    key as Phase7DockerGeneratedSecretKey,
+  );
 }
 
 function shouldReplaceGeneratedSecretValue(value: string): boolean {

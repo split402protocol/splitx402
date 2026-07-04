@@ -8,6 +8,7 @@ import {
   createPhase7DockerEnvInitPlan,
   parsePhase7DockerEnvInitArgs,
   populatePhase7DockerGeneratedSecrets,
+  type Phase7DockerGeneratedSecretKey,
 } from "./phase7DockerEnvInit.js";
 
 const args = parseArgs();
@@ -60,7 +61,10 @@ if (plan.refused) {
   process.exitCode = 1;
 }
 
-function generateRuntimeSecret(): string {
+function generateRuntimeSecret(key: Phase7DockerGeneratedSecretKey): string {
+  if (key === "SPLIT402_SERVICE_SEED_HEX") {
+    return randomBytes(32).toString("hex");
+  }
   return `s402_${randomBytes(32).toString("base64url")}`;
 }
 

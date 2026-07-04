@@ -289,13 +289,13 @@ describe("Split402 launch preflight", () => {
       ok: false,
       severity: "required",
       details: [
-        "Run corepack pnpm phase7:docker:env:init --generate-secrets to replace generated Docker runtime secret placeholders for SPLIT402_DASHBOARD_VIEWER_TOKEN, SPLIT402_WEBHOOK_WORKER_SECRET while preserving existing filled values.",
+        "Run corepack pnpm phase7:docker:env:init --generate-secrets to fill generated Docker runtime secret values for SPLIT402_DASHBOARD_VIEWER_TOKEN, SPLIT402_SERVICE_SEED_HEX, SPLIT402_WEBHOOK_WORKER_SECRET while preserving existing filled values.",
         "Fill Phase 7 Docker runtime env values in deploy/phase7-staging/phase7-staging.env: SPLIT402_DASHBOARD_VIEWER_TOKEN, SPLIT402_DASHBOARD_CONTROL_PLANE_TOKEN, SPLIT402_SERVICE_SEED_HEX, SPLIT402_WEBHOOK_WORKER_SECRET.",
         "Replace template placeholders in deploy/phase7-staging/phase7-staging.env: SPLIT402_DASHBOARD_VIEWER_TOKEN, SPLIT402_WEBHOOK_WORKER_SECRET.",
       ],
     });
     expect(report.nextActions).toContain(
-      "Run corepack pnpm phase7:docker:env:init --generate-secrets to replace generated Docker runtime secret placeholders for SPLIT402_DASHBOARD_VIEWER_TOKEN, SPLIT402_WEBHOOK_WORKER_SECRET while preserving existing filled values.",
+      "Run corepack pnpm phase7:docker:env:init --generate-secrets to fill generated Docker runtime secret values for SPLIT402_DASHBOARD_VIEWER_TOKEN, SPLIT402_SERVICE_SEED_HEX, SPLIT402_WEBHOOK_WORKER_SECRET while preserving existing filled values.",
     );
   });
 
