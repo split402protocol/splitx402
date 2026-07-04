@@ -148,11 +148,12 @@ corepack pnpm product:launch-preflight --brief --workspace split402-launch-evide
 corepack pnpm phase7:docker:env:init --generate-secrets
 # Fill remaining deploy/phase7-staging/phase7-staging.env values: hosted URLs, wallets, service keys, buyer keys, and control-plane tokens.
 corepack pnpm phase7:docker:doctor --brief
-SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed
+SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed > split402-launch-evidence/phase7-seed.json
 # Copy the command's proofEnv values into private staging env/evidence files.
 # If the owner seed is available, proofEnv includes the private merchant-session
 # token for hosted proof, dashboard, and MCP control-plane access. It also
 # includes SPLIT402_MERCHANT_PAY_TO. Never commit token values.
+corepack pnpm phase7:staging:apply-seed-env --seed-output split402-launch-evidence/phase7-seed.json
 corepack pnpm phase7:staging-proof --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-proof.txt
 corepack pnpm phase7:hosted:preflight --evidence-env-file split402-launch-evidence/phase7-staging.env
 corepack pnpm phase7:staging:collect-reads --evidence-env-file split402-launch-evidence/phase7-staging.env
