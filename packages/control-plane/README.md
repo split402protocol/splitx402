@@ -168,6 +168,22 @@ controlled release step before starting the HTTP server against a fresh database
 The packaged HTTP entrypoint is `split402-control-plane`. It reads `PORT` or
 `SPLIT402_CONTROL_PLANE_PORT`, defaulting to `4021`.
 
+## Container Image
+
+Build the control-plane image from the repository root:
+
+```bash
+docker build \
+  -f packages/control-plane/Dockerfile \
+  -t ghcr.io/split402protocol/splitx402/control-plane:<git-sha> \
+  .
+```
+
+The image starts `packages/control-plane/dist/server.js` and listens on `PORT`
+or `SPLIT402_CONTROL_PLANE_PORT`, defaulting to `4021`. Production-facing
+deployment manifests must pin this image by immutable digest, for example
+`ghcr.io/split402protocol/splitx402/control-plane@sha256:<digest>`.
+
 The payout finality worker observes submitted/confirmed payout transactions and
 persists chain outcomes. Set `SPLIT402_PAYOUT_FINALITY_WORKER_CLOSE_LEDGER=true`
 only after configuring `SPLIT402_PAYOUT_LEDGER_CLOSURE_FUNDING_WALLET` and
