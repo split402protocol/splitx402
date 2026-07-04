@@ -22,7 +22,8 @@ corepack pnpm phase7:docker:doctor --brief
 corepack pnpm phase7:docker:doctor --brief --profile demo --profile workers
 corepack pnpm phase7:docker:compose up --brief --profile demo --profile workers
 corepack pnpm phase7:docker:health --brief --profile demo --profile workers
-SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed
+SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed > split402-launch-evidence/phase7-seed.json
+corepack pnpm phase7:staging:apply-seed-env --seed-output split402-launch-evidence/phase7-seed.json
 corepack pnpm phase7:staging-proof --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-proof.txt
 corepack pnpm phase7:hosted:preflight --evidence-env-file split402-launch-evidence/phase7-staging.env
 # Confirm hosted control plane has SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc.
@@ -107,7 +108,9 @@ only into private env or evidence files and never commit them. Set
 `SPLIT402_DATABASE_URL` or
 `DATABASE_URL` before running it, and keep
 `SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging` out of production
-environments.
+environments. `phase7:staging:apply-seed-env` can then copy only allow-listed
+`proofEnv` values from the saved seed JSON into the private Phase 7 evidence env
+and Docker env files.
 `phase7:staging:collect-reads` captures the control-plane read evidence for
 referrer routes, referrer balances, dashboard summary, webhook delivery, payout
 obligations, and funding-balance coverage using the staging merchant and
