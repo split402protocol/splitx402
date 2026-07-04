@@ -483,8 +483,25 @@ export class Split402Router {
   ): Promise<Split402RouterExecuteResult<T>> {
     assertExecuteInput(input);
     const quote = this.quoteExecution(input);
+    const rankedProviders = filterProvidersByInputSchema(
+      quote.rankedProviders,
+      input.input
+    );
+    if (rankedProviders.length === 0) {
+      throw new Split402RouterError(
+        "invalid_request",
+        `input does not match any provider inputSchema for ${input.capability}`,
+        quote.rankedProviders.map(({ provider }) => ({
+          providerId: provider.providerId,
+          capability: provider.capability,
+          status: "failed",
+          retryable: false,
+          error: validateInputAgainstProviderSchema(provider, input.input).join("; ")
+        }))
+      );
+    }
     const attempts: Split402RouterAttempt[] = [];
-    for (const { provider } of quote.rankedProviders) {
+    for (const { provider } of rankedProviders) {
       try {
         const result = await this.executor.execute({
           provider,
@@ -1841,6 +1858,183 @@ function validateReceiptMatchesReferralClaim(
     errors.push("receipt payoutWallet does not match referralClaim payoutWallet");
   }
   return errors;
+}
+
+function filterProvidersByInputSchema(
+  providers: Split402RouterQuoteProvider[],
+  input: unknown
+): Split402RouterQuoteProvider[] {
+  return providers.filter(
+    ({ provider }) => validateInputAgainstProviderSchema(provider, input).length === 0
+  );
+}
+
+function validateInputAgainstProviderSchema(
+  provider: Split402CapabilityProvider,
+  input: unknown
+): string[] {
+  if (provider.metadata?.inputSchema === undefined) {
+    return [];
+  }
+  return validateJsonSchemaValue(input, provider.metadata.inputSchema, "input");
+}
+
+function validateJsonSchemaValue(
+  value: unknown,
+  schema: unknown,
+  path: string
+): string[] {
+  const record = readSchemaRecord(schema);
+  if (record === undefined) {
+    return [`${path} schema must be an object`];
+  }
+  const errors: string[] = [];
+  const enumValues = record.enum;
+  if (enumValues !== undefined) {
+    if (!Array.isArray(enumValues)) {
+      errors.push(`${path} enum must be an array`);
+    } else if (!enumValues.some((allowed) => schemaValuesEqual(value, allowed))) {
+      errors.push(`${path} must be one of the allowed enum values`);
+    }
+  }
+  const schemaTypes = readSchemaTypes(record.type);
+  if (schemaTypes === undefined) {
+    errors.push(`${path} type is unsupported`);
+  } else if (schemaTypes.length > 0 && !schemaTypes.some((type) => valueMatchesSchemaType(value, type))) {
+    errors.push(`${path} must be ${schemaTypes.join(" or ")}`);
+  }
+  const hasObjectShape =
+    schemaTypes?.includes("object") === true ||
+    record.properties !== undefined ||
+    record.required !== undefined ||
+    record.additionalProperties !== undefined;
+  if (hasObjectShape) {
+    if (!isJsonObject(value)) {
+      errors.push(`${path} must be an object`);
+      return errors;
+    }
+    errors.push(...validateJsonObjectShape(value, record, path));
+  }
+  return errors;
+}
+
+function validateJsonObjectShape(
+  value: Record<string, unknown>,
+  schema: Record<string, unknown>,
+  path: string
+): string[] {
+  const errors: string[] = [];
+  const properties =
+    schema.properties === undefined ? undefined : readSchemaRecord(schema.properties);
+  if (schema.properties !== undefined && properties === undefined) {
+    errors.push(`${path} properties must be an object`);
+  }
+  const required = readRequiredSchemaProperties(schema.required);
+  if (required === undefined) {
+    errors.push(`${path} required must be an array of strings`);
+  } else {
+    for (const property of required) {
+      if (!(property in value)) {
+        errors.push(`${path}.${property} is required`);
+      }
+    }
+  }
+  if (properties !== undefined) {
+    for (const [property, propertySchema] of Object.entries(properties)) {
+      if (property in value) {
+        errors.push(
+          ...validateJsonSchemaValue(
+            value[property],
+            propertySchema,
+            `${path}.${property}`
+          )
+        );
+      }
+    }
+    if (schema.additionalProperties === false) {
+      for (const property of Object.keys(value)) {
+        if (!(property in properties)) {
+          errors.push(`${path}.${property} is not allowed`);
+        }
+      }
+    }
+  }
+  return errors;
+}
+
+function readSchemaTypes(value: unknown): JsonSchemaType[] | undefined {
+  if (value === undefined) {
+    return [];
+  }
+  if (typeof value === "string") {
+    return isJsonSchemaType(value) ? [value] : undefined;
+  }
+  if (Array.isArray(value)) {
+    const types = value.filter(isJsonSchemaType);
+    return types.length === value.length ? types : undefined;
+  }
+  return undefined;
+}
+
+function readRequiredSchemaProperties(value: unknown): string[] | undefined {
+  if (value === undefined) {
+    return [];
+  }
+  return Array.isArray(value) && value.every((item) => typeof item === "string")
+    ? value
+    : undefined;
+}
+
+type JsonSchemaType =
+  | "array"
+  | "boolean"
+  | "integer"
+  | "null"
+  | "number"
+  | "object"
+  | "string";
+
+function isJsonSchemaType(value: unknown): value is JsonSchemaType {
+  return (
+    value === "array" ||
+    value === "boolean" ||
+    value === "integer" ||
+    value === "null" ||
+    value === "number" ||
+    value === "object" ||
+    value === "string"
+  );
+}
+
+function valueMatchesSchemaType(value: unknown, type: JsonSchemaType): boolean {
+  switch (type) {
+    case "array":
+      return Array.isArray(value);
+    case "boolean":
+      return typeof value === "boolean";
+    case "integer":
+      return typeof value === "number" && Number.isInteger(value);
+    case "null":
+      return value === null;
+    case "number":
+      return typeof value === "number" && Number.isFinite(value);
+    case "object":
+      return isJsonObject(value);
+    case "string":
+      return typeof value === "string";
+  }
+}
+
+function schemaValuesEqual(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function readSchemaRecord(value: unknown): Record<string, unknown> | undefined {
+  return isJsonObject(value) ? value : undefined;
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function readReliabilityBps(provider: Split402CapabilityProvider): number {
