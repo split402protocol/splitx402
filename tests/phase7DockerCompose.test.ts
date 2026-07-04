@@ -19,6 +19,9 @@ describe("Phase 7 Docker compose runner", () => {
         if (args.join(" ") === "--version") {
           return "Docker version 27.0.0";
         }
+        if (args.join(" ") === "info --format {{.ServerVersion}}") {
+          return "27.0.0";
+        }
         if (args.join(" ") === "compose version") {
           return "Docker Compose version v2.29.1";
         }
@@ -45,6 +48,7 @@ describe("Phase 7 Docker compose runner", () => {
     expect(report.output).toBe("started");
     expect(commands).toEqual([
       "docker --version",
+      "docker info --format {{.ServerVersion}}",
       "docker compose version",
       "docker compose --env-file deploy/phase7-staging/phase7-staging.env -f deploy/phase7-staging/compose.yaml config --quiet",
       "docker compose --env-file deploy/phase7-staging/phase7-staging.env -f deploy/phase7-staging/compose.yaml up -d postgres control-plane dashboard",
@@ -62,6 +66,9 @@ describe("Phase 7 Docker compose runner", () => {
       execFile: (_file, args) => {
         if (args.join(" ") === "--version") {
           return "Docker version 27.0.0";
+        }
+        if (args.join(" ") === "info --format {{.ServerVersion}}") {
+          return "27.0.0";
         }
         if (args.join(" ") === "compose version") {
           return "Docker Compose version v2.29.1";
@@ -99,6 +106,9 @@ describe("Phase 7 Docker compose runner", () => {
         if (args.join(" ") === "--version") {
           return "Docker version 27.0.0";
         }
+        if (args.join(" ") === "info --format {{.ServerVersion}}") {
+          return "27.0.0";
+        }
         if (args.join(" ") === "compose version") {
           return "Docker Compose version v2.29.1";
         }
@@ -110,7 +120,11 @@ describe("Phase 7 Docker compose runner", () => {
     expect(report.error).toBe(
       "Phase 7 Docker doctor is not ready; refusing to run compose command.",
     );
-    expect(commands).toEqual(["docker --version", "docker compose version"]);
+    expect(commands).toEqual([
+      "docker --version",
+      "docker info --format {{.ServerVersion}}",
+      "docker compose version",
+    ]);
     expect(report.nextActions).toContain(
       "Run corepack pnpm phase7:docker:env:init --generate-secrets, then fill remaining deploy/phase7-staging/phase7-staging.env values on the host.",
     );

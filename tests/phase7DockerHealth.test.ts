@@ -20,6 +20,9 @@ describe("Phase 7 Docker health checker", () => {
         if (args.join(" ") === "--version") {
           return "Docker version 27.0.0";
         }
+        if (args.join(" ") === "info --format {{.ServerVersion}}") {
+          return "27.0.0";
+        }
         if (args.join(" ") === "compose version") {
           return "Docker Compose version v2.29.1";
         }

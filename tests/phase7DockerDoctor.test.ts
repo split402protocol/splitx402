@@ -18,6 +18,9 @@ describe("Phase 7 Docker doctor", () => {
         if (args.join(" ") === "--version") {
           return "Docker version 27.0.0";
         }
+        if (args.join(" ") === "info --format {{.ServerVersion}}") {
+          return "27.0.0";
+        }
         if (args.join(" ") === "compose version") {
           return "Docker Compose version v2.29.1";
         }
@@ -35,6 +38,7 @@ describe("Phase 7 Docker doctor", () => {
     expect(report.checks.every((check) => check.ok)).toBe(true);
     expect(commands).toEqual([
       "docker --version",
+      "docker info --format {{.ServerVersion}}",
       "docker compose version",
       "docker compose --env-file deploy/phase7-staging/phase7-staging.env -f deploy/phase7-staging/compose.yaml config --quiet",
     ]);
@@ -56,6 +60,9 @@ describe("Phase 7 Docker doctor", () => {
         commands.push([file, ...args].join(" "));
         if (args.join(" ") === "--version") {
           return "Docker version 27.0.0";
+        }
+        if (args.join(" ") === "info --format {{.ServerVersion}}") {
+          return "27.0.0";
         }
         if (args.join(" ") === "compose version") {
           return "Docker Compose version v2.29.1";
@@ -89,6 +96,9 @@ describe("Phase 7 Docker doctor", () => {
         commands.push([file, ...args].join(" "));
         if (args.join(" ") === "--version") {
           return "Docker version 27.0.0";
+        }
+        if (args.join(" ") === "info --format {{.ServerVersion}}") {
+          return "27.0.0";
         }
         if (args.join(" ") === "compose version") {
           return "Docker Compose version v2.29.1";
@@ -129,6 +139,9 @@ describe("Phase 7 Docker doctor", () => {
         if (args.join(" ") === "--version") {
           return "Docker version 27.0.0";
         }
+        if (args.join(" ") === "info --format {{.ServerVersion}}") {
+          return "27.0.0";
+        }
         if (args.join(" ") === "compose version") {
           return "Docker Compose version v2.29.1";
         }
@@ -151,15 +164,74 @@ describe("Phase 7 Docker doctor", () => {
           "deploy/phase7-staging/phase7-staging.env is not ready (missing required values: SPLIT402_MERCHANT_PAY_TO, SPLIT402_SERVICE_SEED_HEX, SPLIT402_WEBHOOK_WORKER_URL).",
       }),
     );
-    expect(commands).toEqual(["docker --version", "docker compose version"]);
+    expect(commands).toEqual([
+      "docker --version",
+      "docker info --format {{.ServerVersion}}",
+      "docker compose version",
+    ]);
     expect(report.checks).toContainEqual(
       expect.objectContaining({
         name: "compose_config",
         ok: false,
         detail:
-          "Compose configuration could not be validated: Skipped until Docker, Compose, compose.yaml, phase7-staging.env, and required env values are ready.",
+          "Compose configuration could not be validated: Skipped until Docker CLI, Docker daemon, Compose, compose.yaml, phase7-staging.env, and required env values are ready.",
       }),
     );
+  });
+
+  it("fails closed when Docker is installed but the daemon is not running", () => {
+    const commands: string[] = [];
+    const report = runPhase7DockerDoctor({
+      exists: (path) =>
+        path === "deploy/phase7-staging/compose.yaml" ||
+        path === "deploy/phase7-staging/phase7-staging.env",
+      readText: () => filledDockerEnv(),
+      execFile: (file, args) => {
+        commands.push([file, ...args].join(" "));
+        if (args.join(" ") === "--version") {
+          return "Docker version 27.0.0";
+        }
+        if (args.join(" ") === "info --format {{.ServerVersion}}") {
+          throw new Error("Cannot connect to the Docker daemon");
+        }
+        if (args.join(" ") === "compose version") {
+          return "Docker Compose version v2.29.1";
+        }
+        throw new Error(`unexpected command ${file} ${args.join(" ")}`);
+      },
+    });
+
+    expect(report.ready).toBe(false);
+    expect(report.checks).toContainEqual(
+      expect.objectContaining({
+        name: "docker_cli",
+        ok: true,
+      }),
+    );
+    expect(report.checks).toContainEqual(
+      expect.objectContaining({
+        name: "docker_daemon",
+        ok: false,
+        detail:
+          "Docker daemon is not reachable; start Docker Desktop or Docker Engine: Cannot connect to the Docker daemon",
+      }),
+    );
+    expect(report.checks).toContainEqual(
+      expect.objectContaining({
+        name: "compose_config",
+        ok: false,
+        detail:
+          "Compose configuration could not be validated: Skipped until Docker CLI, Docker daemon, Compose, compose.yaml, phase7-staging.env, and required env values are ready.",
+      }),
+    );
+    expect(report.nextActions).toContain(
+      "Start Docker Desktop or Docker Engine, then rerun `corepack pnpm phase7:docker:doctor --brief`.",
+    );
+    expect(commands).toEqual([
+      "docker --version",
+      "docker info --format {{.ServerVersion}}",
+      "docker compose version",
+    ]);
   });
 
   it("fails closed and gives setup actions when Docker is missing", () => {
@@ -186,6 +258,12 @@ describe("Phase 7 Docker doctor", () => {
     expect(report.nextActions).toContain(
       "Install Docker Engine or Docker Desktop on the host that will run Phase 7 staging.",
     );
+    expect(report.nextActions).not.toContain(
+      "Start Docker Desktop or Docker Engine, then rerun `corepack pnpm phase7:docker:doctor --brief`.",
+    );
+    expect(report.nextActions).not.toContain(
+      "Install Docker Compose v2 so `docker compose version` succeeds.",
+    );
     expect(report.nextActions).toContain(
       "Run corepack pnpm phase7:docker:env:init --generate-secrets, then fill remaining deploy/phase7-staging/phase7-staging.env values on the host.",
     );
@@ -206,6 +284,9 @@ describe("Phase 7 Docker doctor", () => {
         commands.push([file, ...args].join(" "));
         if (args.join(" ") === "--version") {
           return "Docker version 27.0.0";
+        }
+        if (args.join(" ") === "info --format {{.ServerVersion}}") {
+          return "27.0.0";
         }
         if (args.join(" ") === "compose version") {
           return "Docker Compose version v2.29.1";
@@ -235,13 +316,17 @@ describe("Phase 7 Docker doctor", () => {
     expect(report.nextActions).toContain(
       "Fill missing private runtime values and replace template placeholders in deploy/phase7-staging/phase7-staging.env; do not commit this file.",
     );
-    expect(commands).toEqual(["docker --version", "docker compose version"]);
+    expect(commands).toEqual([
+      "docker --version",
+      "docker info --format {{.ServerVersion}}",
+      "docker compose version",
+    ]);
     expect(report.checks).toContainEqual(
       expect.objectContaining({
         name: "compose_config",
         ok: false,
         detail:
-          "Compose configuration could not be validated: Skipped until Docker, Compose, compose.yaml, phase7-staging.env, and required env values are ready.",
+          "Compose configuration could not be validated: Skipped until Docker CLI, Docker daemon, Compose, compose.yaml, phase7-staging.env, and required env values are ready.",
       }),
     );
   });
@@ -255,6 +340,9 @@ describe("Phase 7 Docker doctor", () => {
         if (args.join(" ") === "--version") {
           return "Docker version 27.0.0";
         }
+        if (args.join(" ") === "info --format {{.ServerVersion}}") {
+          return "27.0.0";
+        }
         if (args.join(" ") === "compose version") {
           return "Docker Compose version v2.29.1";
         }
@@ -263,13 +351,17 @@ describe("Phase 7 Docker doctor", () => {
     });
 
     expect(report.ready).toBe(false);
-    expect(commands).toEqual(["docker --version", "docker compose version"]);
+    expect(commands).toEqual([
+      "docker --version",
+      "docker info --format {{.ServerVersion}}",
+      "docker compose version",
+    ]);
     expect(report.checks).toContainEqual(
       expect.objectContaining({
         name: "compose_config",
         ok: false,
         detail:
-          "Compose configuration could not be validated: Skipped until Docker, Compose, compose.yaml, phase7-staging.env, and required env values are ready.",
+          "Compose configuration could not be validated: Skipped until Docker CLI, Docker daemon, Compose, compose.yaml, phase7-staging.env, and required env values are ready.",
       }),
     );
   });
@@ -289,6 +381,9 @@ describe("Phase 7 Docker doctor", () => {
       execFile: (file, args) => {
         if (args.join(" ") === "--version") {
           return "Docker version 27.0.0";
+        }
+        if (args.join(" ") === "info --format {{.ServerVersion}}") {
+          return "27.0.0";
         }
         if (args.join(" ") === "compose version") {
           return "Docker Compose version v2.29.1";
