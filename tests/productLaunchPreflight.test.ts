@@ -177,6 +177,9 @@ describe("Split402 launch preflight", () => {
       "Fill Phase 7 hosted proof env values in split402-launch-evidence/phase7-staging.env: SPLIT402_PHASE7_PROOF_ID, SPLIT402_PHASE7_PROOF_REVIEWERS, SPLIT402_PHASE7_STAGING_ENVIRONMENT, SPLIT402_PHASE7_CONTROL_PLANE_URL, SPLIT402_PHASE7_DASHBOARD_URL, SPLIT402_PHASE7_DEMO_MERCHANT_URL, SPLIT402_PHASE7_WEBHOOK_RECEIVER_URL, SPLIT402_PHASE7_CONTROL_PLANE_TOKEN, SPLIT402_PHASE7_MERCHANT_ID, SPLIT402_PHASE7_REFERRER_WALLET.",
     );
     expect(report.nextActions).toContain(
+      "Run SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed > split402-launch-evidence/phase7-seed.json, then run corepack pnpm phase7:staging:apply-seed-env --seed-output split402-launch-evidence/phase7-seed.json to copy seed-derived env values safely.",
+    );
+    expect(report.nextActions).toContain(
       "Fill Phase 7 MCP live execution env values in split402-launch-evidence/phase7-staging.env: SPLIT402_MCP_CONTROL_PLANE_URL, SPLIT402_MCP_CONTROL_PLANE_TOKEN, SPLIT402_MCP_CAPABILITY=solana.wallet-risk, SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1, SPLIT402_MCP_SVM_PRIVATE_KEY or SVM_PRIVATE_KEY.",
     );
     expect(report.nextActions).not.toContain(
@@ -1116,6 +1119,29 @@ describe("Split402 launch preflight", () => {
     expect(report.readyToCollectEvidence).toBe(true);
     expect(report.checks.find((check) => check.id === "phase6_evidence_env_mappings"))
       .toMatchObject({ ok: true });
+  });
+
+  it("uses custom launch workspace paths for seed env apply guidance", () => {
+    const workspace = createSplit402ProductEvidenceWorkspace({
+      directory: "evidence/launch",
+      reviewDate: "2026-06-29",
+    });
+    const files = createWorkspaceFileMap(
+      workspace.phase7.envText,
+      createFilledPhase6EnvText(workspace.phase6EnvText),
+      workspace,
+    );
+
+    const report = createSplit402LaunchPreflightReport({
+      directory: "evidence/launch",
+      exists: (path) => files.has(path),
+      readText: (path) => files.get(path) ?? "",
+    });
+
+    expect(report.readyToCollectEvidence).toBe(false);
+    expect(report.nextActions).toContain(
+      "Run SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed > evidence/launch/phase7-seed.json, then run corepack pnpm phase7:staging:apply-seed-env --seed-output evidence/launch/phase7-seed.json to copy seed-derived env values safely.",
+    );
   });
 });
 
