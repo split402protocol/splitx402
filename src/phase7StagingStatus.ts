@@ -225,7 +225,7 @@ const PHASE7_MISSING_FIELD_ACTIONS: readonly Phase7MissingFieldAction[] = [
   {
     fields: ["commands_run"],
     createAction: () =>
-      "Capture commands_run with corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log, validate it with corepack pnpm phase7:staging:commands-status --brief split402-launch-evidence/phase7-staging-evidence/commands.log, then replace template comments with the real command transcript.",
+      "Capture commands_run with corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log, use corepack pnpm phase7:staging:commands-record --output split402-launch-evidence/phase7-staging-evidence/commands.log for safe local validation blocks, append hosted command blocks from the real staging run, then validate it with corepack pnpm phase7:staging:commands-status --brief split402-launch-evidence/phase7-staging-evidence/commands.log.",
   },
   {
     fields: ["approval_decision"],
@@ -3017,7 +3017,7 @@ function createCommandEvidenceAction(blockers: readonly string[]): string {
       : ` Missing commands include: ${missingCommands.slice(0, 5).join(", ")}${
           missingCommands.length > 5 ? `, and ${missingCommands.length - 5} more` : ""
         }.`;
-  return `Replace split402-launch-evidence/phase7-staging-evidence/commands.log with a real command transcript: run corepack pnpm phase7:staging:commands-template to get the checklist, paste executed shell command lines and outputs with command lines uncommented, then run corepack pnpm phase7:staging:commands-status --brief split402-launch-evidence/phase7-staging-evidence/commands.log.${missingSummary}`;
+  return `Replace split402-launch-evidence/phase7-staging-evidence/commands.log with a real command transcript: run corepack pnpm phase7:staging:commands-template to get the checklist, run corepack pnpm phase7:staging:commands-record --output split402-launch-evidence/phase7-staging-evidence/commands.log to capture safe local validation blocks, append hosted command blocks from the real staging run with command lines uncommented, then run corepack pnpm phase7:staging:commands-status --brief split402-launch-evidence/phase7-staging-evidence/commands.log.${missingSummary}`;
 }
 
 function isReadCollectorArtifactField(field: string): boolean {
@@ -3062,7 +3062,7 @@ function createMissingArtifactAction(field: string): string[] {
       ];
     case "commands_run":
       return [
-        "Capture commands_run with corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log, validate it with corepack pnpm phase7:staging:commands-status --brief split402-launch-evidence/phase7-staging-evidence/commands.log, then replace the template comments with the real command transcript.",
+        "Capture commands_run with corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log, run corepack pnpm phase7:staging:commands-record --output split402-launch-evidence/phase7-staging-evidence/commands.log for safe local validation blocks, append hosted command blocks from the real staging run, then validate it with corepack pnpm phase7:staging:commands-status --brief split402-launch-evidence/phase7-staging-evidence/commands.log.",
       ];
     default:
       return [`Capture ${field} and attach the local artifact before approval.`];

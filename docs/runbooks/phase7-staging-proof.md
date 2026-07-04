@@ -30,6 +30,8 @@ corepack pnpm phase7:staging:collect-reads --evidence-env-file split402-launch-e
 corepack pnpm phase7:staging:collect-mcp-gateway --evidence-env-file split402-launch-evidence/phase7-staging.env
 corepack pnpm demo:mcp-gateway:smoke
 corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log
+corepack pnpm phase7:staging:commands-record --output split402-launch-evidence/phase7-staging-evidence/commands.log
+# Append hosted Docker, seed, collection, paid-suite, manifest, assemble, and status command output.
 corepack pnpm phase7:staging:commands-status --brief split402-launch-evidence/phase7-staging-evidence/commands.log
 corepack pnpm demo:mcp-bundle split402-launch-evidence/phase7-staging-evidence/mcp-bundle.json
 corepack pnpm demo:paid-suite split402-launch-evidence/phase7-staging-evidence/paid-suite.log
@@ -67,6 +69,11 @@ Run `corepack pnpm phase7:staging:commands-status --brief
 split402-launch-evidence/phase7-staging-evidence/commands.log` before assembly
 to catch missing command lines or placeholder output without rebuilding the full
 Phase 7 proof.
+`corepack pnpm phase7:staging:commands-record --output <commands.log>` can
+capture the safe local validation blocks automatically. It refuses to overwrite
+an existing transcript unless `--force` is passed. It does not record hosted
+Docker, seed, collection, paid-suite, manifest, assemble, or status commands;
+append those blocks from the real hosted staging run.
 On Windows, PowerShell transcript lines with environment assignments are valid
 as long as the executed command remains on the same uncommented line, for
 example:

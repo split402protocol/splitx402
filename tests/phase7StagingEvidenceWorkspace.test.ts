@@ -166,6 +166,9 @@ describe("Phase 7 staging evidence workspace", () => {
       "corepack pnpm phase7:hosted:preflight",
     );
     expect(workspace.readmeText).toContain(
+      "corepack pnpm phase7:staging:commands-record",
+    );
+    expect(workspace.readmeText).toContain(
       "corepack pnpm phase7:hosted:preflight --evidence-env-file phase7-staging-evidence/phase7-staging.env",
     );
     expect(workspace.readmeText).toContain(
