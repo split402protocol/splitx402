@@ -28,6 +28,7 @@
     "phase6:custody:check": "tsx src/phase6-custody-check.ts",
     "phase6:evidence:status": "tsx src/phase6-evidence-status.ts",
     "phase6:emergency-revocation": "tsx src/phase6-emergency-revocation.ts",
+    "phase6:destination-amount-list:hash": "tsx src/phase6-destination-amount-list-hash.ts",
     "phase6:image-provenance": "tsx src/phase6-image-provenance.ts",
     "phase6:incident-drill": "tsx src/phase6-incident-drill.ts",
     "phase6:key-custody": "tsx src/phase6-key-custody.ts",

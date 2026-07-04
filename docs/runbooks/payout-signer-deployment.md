@@ -245,6 +245,19 @@ than one initialized account. It intentionally leaves destination amount-list
 hash and signer reference blank. Fill those from the actual deployed signer
 policy before running `corepack pnpm phase6:signer-policy`.
 
+Generate the destination amount-list hash from an explicit approved payout plan
+file, not from a balance summary:
+
+```bash
+corepack pnpm phase6:destination-amount-list:hash \
+  --env \
+  split402-launch-evidence/approved-payout-plan.json
+```
+
+Copy the resulting
+`SPLIT402_SIGNER_POLICY_EXPECTED_DESTINATION_AMOUNT_LIST_HASH=...` value into
+the private signer-policy env file.
+
 You can generate the correctly shaped signer policy review with:
 
 ```bash
