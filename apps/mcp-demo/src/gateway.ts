@@ -30,7 +30,8 @@ import {
   type Split402ExternalX402DiscoveryFetch,
   type Split402RouterExecuteResult,
   type Split402RouterQuoteResult,
-  type Split402RouterExecutor
+  type Split402RouterExecutor,
+  type Split402RouterOptions
 } from "@split402/router";
 import { toClientEvmSigner } from "@x402/evm";
 import { createPublicClient, http } from "viem";
@@ -325,11 +326,15 @@ export function createEvmSignerFromPrivateKey(
 }
 
 export function createMcpDemoRouter(
-  bundle: McpDemoBundle = createMcpDemoBundle()
+  bundle: McpDemoBundle = createMcpDemoBundle(),
+  options: Pick<Split402RouterOptions, "receiptRecorder"> = {}
 ): Split402Router {
   return new Split402Router({
     providers: [createDemoProvider(bundle)],
-    executor: createDemoRouterExecutor(bundle)
+    executor: createDemoRouterExecutor(bundle),
+    ...(options.receiptRecorder === undefined
+      ? {}
+      : { receiptRecorder: options.receiptRecorder })
   });
 }
 
@@ -939,6 +944,12 @@ function createRouterExecuteResponse(
     amountPaidAtomic: result.receipt.requiredAmountAtomic,
     receiptId: result.receipt.receiptId,
     receiptVerificationStatus: "verified",
+    ...(result.receiptRecording === undefined
+      ? {}
+      : {
+          receiptRecordingStatus: result.receiptRecording.status,
+          receiptRecordingSource: result.receiptRecording.source
+        }),
     referrerCreditAtomic: result.receipt.referrerCreditAtomic,
     data: result.data,
     attempts: result.attempts

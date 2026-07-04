@@ -3625,7 +3625,10 @@ describe("Split402Router", () => {
   });
 
   it("records verified receipts before returning success", async () => {
-    const record = vi.fn().mockResolvedValue(undefined);
+    const record = vi.fn().mockResolvedValue({
+      status: "created",
+      source: "buyer"
+    });
     const router = new Split402Router({
       providers: [provider()],
       executor: executorReturning(receipt),
@@ -3645,6 +3648,10 @@ describe("Split402Router", () => {
     });
 
     expect(result.receipt.receiptId).toBe(receipt.receiptId);
+    expect(result.receiptRecording).toEqual({
+      status: "created",
+      source: "buyer"
+    });
     expect(record).toHaveBeenCalledWith({
       provider: expect.objectContaining({ providerId: "provider-a" }),
       receipt,
@@ -3718,7 +3725,10 @@ describe("Split402Router", () => {
       }
     });
 
-    await recorder.record({ provider: provider(), receipt });
+    await expect(recorder.record({ provider: provider(), receipt })).resolves.toEqual({
+      status: "created",
+      source: "buyer"
+    });
 
     expect(calls).toEqual([
       {
@@ -3748,7 +3758,10 @@ describe("Split402Router", () => {
 
     await expect(
       recorder.record({ provider: provider(), receipt })
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({
+      status: "duplicate",
+      source: "buyer"
+    });
   });
 
   it("rejects unexpected successful control-plane receipt responses", async () => {
