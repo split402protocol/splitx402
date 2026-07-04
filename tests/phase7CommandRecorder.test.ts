@@ -40,7 +40,7 @@ describe("Phase 7 command recorder", () => {
   });
 
   it("can record the full hosted staging command checklist", () => {
-    const writes: string[] = [];
+    const writes: Array<{ path: string; text: string }> = [];
     const report = recordPhase7LocalCommandEvidence({
       outputPath: "evidence/commands.log",
       includeHosted: true,
@@ -49,7 +49,7 @@ describe("Phase 7 command recorder", () => {
       proofPath: "private/phase7-proof.txt",
       seedOutputPath: "private/phase7-seed.json",
       exists: () => false,
-      writeText: (_path, text) => writes.push(text),
+      writeText: (path, text) => writes.push({ path, text }),
       runCommand: (file, args) => ({
         exitCode: 0,
         stdout: `${file} ${args.join(" ")} ok\n`,
@@ -63,36 +63,40 @@ describe("Phase 7 command recorder", () => {
       failedCommands: [],
       written: true,
     });
-    expect(writes[0]).toContain(
+    const transcript = writes.find((write) => write.path === "evidence/commands.log");
+    const seedOutput = writes.find((write) => write.path === "private/phase7-seed.json");
+    expect(transcript?.text).toContain(
       "# This includes hosted staging commands from this runtime.",
     );
-    expect(writes[0]).toContain("$ corepack pnpm product:evidence:init --missing");
-    expect(writes[0]).toContain(
+    expect(transcript?.text).toContain("$ corepack pnpm product:evidence:init --missing");
+    expect(transcript?.text).toContain(
       "$ corepack pnpm phase7:docker:compose up --brief --profile demo --profile workers",
     );
-    expect(writes[0]).toContain("$ corepack pnpm phase7:staging:seed");
-    expect(writes[0]).toContain(
+    expect(transcript?.text).toContain("$ corepack pnpm phase7:staging:seed");
+    expect(transcript?.text).toContain(
       "$ corepack pnpm phase7:staging:apply-seed-env --seed-output private/phase7-seed.json",
     );
-    expect(writes[0]).toContain("$ corepack pnpm phase7:staging:status");
-    expect(writes[0]).toContain("private/phase7.env");
-    expect(writes[0]).toContain("private/evidence/paid-suite.log");
-    expect(writes[0]).toContain("private/phase7-proof.txt");
-    expect(writes[0]).toContain("$ corepack pnpm audit --audit-level high");
+    expect(transcript?.text).toContain("$ corepack pnpm phase7:staging:status");
+    expect(transcript?.text).toContain("private/phase7.env");
+    expect(transcript?.text).toContain("private/evidence/paid-suite.log");
+    expect(transcript?.text).toContain("private/phase7-proof.txt");
+    expect(transcript?.text).toContain("$ corepack pnpm audit --audit-level high");
+    expect(seedOutput?.text).toBe("corepack pnpm phase7:staging:seed ok\n");
     expect(
-      writes[0]?.indexOf("$ corepack pnpm demo:paid-suite") ?? -1,
+      transcript?.text.indexOf("$ corepack pnpm demo:paid-suite") ?? -1,
     ).toBeLessThan(
-      writes[0]?.indexOf("$ corepack pnpm phase7:staging:collect-reads") ?? -1,
+      transcript?.text.indexOf("$ corepack pnpm phase7:staging:collect-reads") ??
+        -1,
     );
   });
 
   it("redacts sensitive command output before writing transcripts", () => {
-    const writes: string[] = [];
+    const writes: Array<{ path: string; text: string }> = [];
     const report = recordPhase7LocalCommandEvidence({
       outputPath: "evidence/commands.log",
       includeHosted: true,
       exists: () => false,
-      writeText: (_path, text) => writes.push(text),
+      writeText: (path, text) => writes.push({ path, text }),
       runCommand: (_file, args) =>
         args.includes("phase7:staging:seed")
           ? {
@@ -107,16 +111,25 @@ describe("Phase 7 command recorder", () => {
           : { exitCode: 0, stdout: "ok\n", stderr: "" },
     });
 
+    const transcript = writes.find((write) => write.path === "evidence/commands.log");
+    const seedOutput = writes.find(
+      (write) => write.path === "split402-launch-evidence/phase7-seed.json",
+    );
     expect(report.ok).toBe(true);
-    expect(writes[0]).toContain('"SPLIT402_PHASE7_CONTROL_PLANE_TOKEN":"[redacted]"');
-    expect(writes[0]).toContain('"SVM_PRIVATE_KEY":"[redacted]"');
-    expect(writes[0]).toContain('"SPLIT402_SERVICE_SEED_HEX":"[redacted]"');
-    expect(writes[0]).toContain("SPLIT402_WEBHOOK_WORKER_SECRET=[redacted]");
-    expect(writes[0]).not.toContain("super-secret-token");
-    expect(writes[0]).not.toContain("private-key");
-    expect(writes[0]).not.toContain("seed-value");
-    expect(writes[0]).not.toContain("webhook-secret");
-    expect(writes[0]).not.toContain("stderr-secret");
+    expect(transcript?.text).toContain(
+      '"SPLIT402_PHASE7_CONTROL_PLANE_TOKEN":"[redacted]"',
+    );
+    expect(transcript?.text).toContain('"SVM_PRIVATE_KEY":"[redacted]"');
+    expect(transcript?.text).toContain('"SPLIT402_SERVICE_SEED_HEX":"[redacted]"');
+    expect(transcript?.text).toContain(
+      "SPLIT402_WEBHOOK_WORKER_SECRET=[redacted]",
+    );
+    expect(transcript?.text).not.toContain("super-secret-token");
+    expect(transcript?.text).not.toContain("private-key");
+    expect(transcript?.text).not.toContain("seed-value");
+    expect(transcript?.text).not.toContain("webhook-secret");
+    expect(transcript?.text).not.toContain("stderr-secret");
+    expect(seedOutput?.text).toContain("super-secret-token");
   });
 
   it("can include launch preflight when the operator opts in", () => {
