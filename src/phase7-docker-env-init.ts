@@ -24,7 +24,10 @@ const plan = createPhase7DockerEnvInitPlan({
 
 if (plan.shouldWrite) {
   mkdirSync(dirname(plan.target), { recursive: true });
-  const sourceText = readFileSync(plan.source, "utf8");
+  const sourceText = readFileSync(
+    plan.writeSource === "target" ? plan.target : plan.source,
+    "utf8",
+  );
   writeFileSync(
     plan.target,
     args.generateSecrets

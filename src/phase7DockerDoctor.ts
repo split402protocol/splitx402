@@ -273,11 +273,11 @@ function createNextActions(
   if (failed.has("compose_env_values")) {
     if (envValues.generatedSecretPlaceholders.length > 0) {
       actions.push(
-        `Regenerate local Docker runtime secrets with \`corepack pnpm phase7:docker:env:init --generate-secrets --force${
+        `Regenerate local Docker runtime secrets with \`corepack pnpm phase7:docker:env:init --generate-secrets${
           envFile === defaultEnvFile ? "" : ` --target ${envFile}`
         }\`; this replaces generated placeholders for ${envValues.generatedSecretPlaceholders.join(
           ", ",
-        )} but still requires hosted URLs, wallets, control-plane tokens, and keys to be filled privately.`,
+        )} while preserving existing filled values, but still requires hosted URLs, wallets, control-plane tokens, and keys to be filled privately.`,
       );
     }
     actions.push(

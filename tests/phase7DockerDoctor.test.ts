@@ -230,7 +230,7 @@ describe("Phase 7 Docker doctor", () => {
       }),
     );
     expect(report.nextActions).toContain(
-      "Regenerate local Docker runtime secrets with `corepack pnpm phase7:docker:env:init --generate-secrets --force`; this replaces generated placeholders for SPLIT402_DASHBOARD_VIEWER_TOKEN, SPLIT402_WEBHOOK_WORKER_SECRET but still requires hosted URLs, wallets, control-plane tokens, and keys to be filled privately.",
+      "Regenerate local Docker runtime secrets with `corepack pnpm phase7:docker:env:init --generate-secrets`; this replaces generated placeholders for SPLIT402_DASHBOARD_VIEWER_TOKEN, SPLIT402_WEBHOOK_WORKER_SECRET while preserving existing filled values, but still requires hosted URLs, wallets, control-plane tokens, and keys to be filled privately.",
     );
     expect(report.nextActions).toContain(
       "Fill missing private runtime values and replace template placeholders in deploy/phase7-staging/phase7-staging.env; do not commit this file.",
@@ -299,7 +299,7 @@ describe("Phase 7 Docker doctor", () => {
 
     expect(report.ready).toBe(false);
     expect(report.nextActions).toContain(
-      "Regenerate local Docker runtime secrets with `corepack pnpm phase7:docker:env:init --generate-secrets --force --target split402-launch-evidence/docker.env`; this replaces generated placeholders for SPLIT402_DASHBOARD_VIEWER_TOKEN but still requires hosted URLs, wallets, control-plane tokens, and keys to be filled privately.",
+      "Regenerate local Docker runtime secrets with `corepack pnpm phase7:docker:env:init --generate-secrets --target split402-launch-evidence/docker.env`; this replaces generated placeholders for SPLIT402_DASHBOARD_VIEWER_TOKEN while preserving existing filled values, but still requires hosted URLs, wallets, control-plane tokens, and keys to be filled privately.",
     );
   });
 });

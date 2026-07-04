@@ -107,6 +107,28 @@ describe("Phase 7 Docker env init", () => {
     });
   });
 
+  it("repairs generated secret placeholders in an existing private env without force", () => {
+    const plan = createPhase7DockerEnvInitPlan({
+      args: parsePhase7DockerEnvInitArgs(["--generate-secrets"]),
+      exists: (path) =>
+        path === DEFAULT_PHASE7_DOCKER_ENV_SOURCE ||
+        path === DEFAULT_PHASE7_DOCKER_ENV_TARGET,
+    });
+
+    expect(plan).toMatchObject({
+      source: DEFAULT_PHASE7_DOCKER_ENV_SOURCE,
+      target: DEFAULT_PHASE7_DOCKER_ENV_TARGET,
+      writeSource: "target",
+      shouldWrite: true,
+      refused: false,
+      message: `${DEFAULT_PHASE7_DOCKER_ENV_TARGET} will be updated in place with generated local runtime secrets where placeholders are still present.`,
+      nextActions: [
+        `Generated private runtime secrets in ${DEFAULT_PHASE7_DOCKER_ENV_TARGET} while preserving existing filled values; fill the remaining URLs, wallets, control-plane tokens, and keys manually.`,
+        "Run corepack pnpm phase7:docker:doctor --brief.",
+      ],
+    });
+  });
+
   it("allows intentional replacement with force", () => {
     const plan = createPhase7DockerEnvInitPlan({
       args: parsePhase7DockerEnvInitArgs(["--force"]),
@@ -118,6 +140,7 @@ describe("Phase 7 Docker env init", () => {
     expect(plan).toMatchObject({
       shouldWrite: true,
       refused: false,
+      writeSource: "source",
       message: `${DEFAULT_PHASE7_DOCKER_ENV_TARGET} will be replaced from ${DEFAULT_PHASE7_DOCKER_ENV_SOURCE}.`,
     });
   });
@@ -160,6 +183,32 @@ describe("Phase 7 Docker env init", () => {
         "SPLIT402_WEBHOOK_WORKER_SECRET=generated-secret-2",
         "SPLIT402_SERVICE_SEED_HEX=",
         "SPLIT402_MERCHANT_PAY_TO=",
+      ].join("\n"),
+    );
+  });
+
+  it("preserves manually filled values while repairing generated placeholders", () => {
+    let sequence = 0;
+    const text = [
+      "SPLIT402_DASHBOARD_VIEWER_TOKEN=replace-with-staging-viewer-token",
+      "SPLIT402_DASHBOARD_CONTROL_PLANE_TOKEN=already-filled-token",
+      "SPLIT402_WEBHOOK_WORKER_SECRET=replace-with-staging-webhook-secret",
+      "SPLIT402_SERVICE_SEED_HEX=already-filled-service-seed",
+      "SPLIT402_MERCHANT_PAY_TO=already-filled-wallet",
+    ].join("\n");
+
+    expect(
+      populatePhase7DockerGeneratedSecrets(text, () => {
+        sequence += 1;
+        return `generated-secret-${sequence}`;
+      }),
+    ).toBe(
+      [
+        "SPLIT402_DASHBOARD_VIEWER_TOKEN=generated-secret-1",
+        "SPLIT402_DASHBOARD_CONTROL_PLANE_TOKEN=already-filled-token",
+        "SPLIT402_WEBHOOK_WORKER_SECRET=generated-secret-2",
+        "SPLIT402_SERVICE_SEED_HEX=already-filled-service-seed",
+        "SPLIT402_MERCHANT_PAY_TO=already-filled-wallet",
       ].join("\n"),
     );
   });
