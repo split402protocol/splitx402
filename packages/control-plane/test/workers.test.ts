@@ -645,7 +645,6 @@ describe("PayoutFinalityWorker", () => {
       {
         now: () => FIXED_NOW,
         finalizedLedgerClosure: {
-          batchStore: ledgerClosureStore,
           ledgerClosureStore,
           finalizedTransferVerifier: createPassingFinalizedTransferVerifier()
         }
@@ -670,6 +669,36 @@ describe("PayoutFinalityWorker", () => {
     ]);
   });
 
+  it("retries ledger closure for already-finalized batches without pending transactions", async () => {
+    const batch = createPayoutBatch({ status: "finalized" });
+    const transactionStore = new FakePayoutTransactionStore([]);
+    const ledgerClosureStore = new FakePayoutLedgerClosureStore(batch);
+    const worker = new PayoutFinalityWorker(
+      transactionStore,
+      new FakePayoutFinalityMonitor({}),
+      {
+        now: () => FIXED_NOW,
+        finalizedLedgerClosure: {
+          ledgerClosureStore,
+          finalizedTransferVerifier: createPassingFinalizedTransferVerifier()
+        }
+      }
+    );
+
+    const result = await worker.processNext();
+
+    expect(result.status).toBe("swept");
+    if (result.status !== "swept") {
+      throw new Error("expected swept result");
+    }
+    expect(result.checked).toBe(0);
+    expect(result.updatedTransactions).toEqual([]);
+    expect(result.closedLedgerTransactions?.map((transaction) => transaction.id)).toEqual([
+      "ldg_00000000000000000000000000000001"
+    ]);
+    expect(ledgerClosureStore.listInputs).toEqual([{}]);
+  });
+
   it("does not auto-close ledgers for batches that are not fully finalized", async () => {
     const batch = createPayoutBatch({ status: "confirmed" });
     const submitted = createPendingPayoutTransaction({
@@ -690,7 +719,6 @@ describe("PayoutFinalityWorker", () => {
       {
         now: () => FIXED_NOW,
         finalizedLedgerClosure: {
-          batchStore: ledgerClosureStore,
           ledgerClosureStore,
           finalizedTransferVerifier: createPassingFinalizedTransferVerifier()
         }
@@ -730,7 +758,6 @@ describe("PayoutFinalityWorker", () => {
       {
         now: () => FIXED_NOW,
         finalizedLedgerClosure: {
-          batchStore: ledgerClosureStore,
           ledgerClosureStore,
           finalizedTransferVerifier: createPassingFinalizedTransferVerifier()
         }
@@ -749,7 +776,6 @@ describe("PayoutFinalityWorker", () => {
     expect(result.closedLedgerTransactions).toBeUndefined();
     expect(result.errors).toEqual([
       {
-        transactionId: "ptx_finalize_bad_transfer",
         payoutBatchId: batch.id,
         error: "finalized payout transfer verification failed"
       }
@@ -1062,6 +1088,7 @@ class FakePayoutTransactionStore implements PayoutTransactionStore {
 
 class FakePayoutLedgerClosureStore implements PayoutLedgerClosureStore {
   readonly closeInputs: ClosePayoutBatchLedgerInput[] = [];
+  readonly listInputs: Array<{ limit?: number }> = [];
 
   constructor(
     private readonly batch: PayoutBatchRecord | undefined,
@@ -1070,6 +1097,20 @@ class FakePayoutLedgerClosureStore implements PayoutLedgerClosureStore {
 
   getPayoutBatch(batchId: string): PayoutBatchRecord | undefined {
     return this.batch?.id === batchId ? this.batch : undefined;
+  }
+
+  listFinalizedPayoutBatchesPendingLedgerClosure(
+    input: { limit?: number } = {}
+  ): PayoutBatchRecord[] {
+    this.listInputs.push(input);
+    if (
+      this.batch === undefined ||
+      this.batch.status !== "finalized" ||
+      this.closeInputs.length > 0
+    ) {
+      return [];
+    }
+    return [this.batch].slice(0, input.limit);
   }
 
   closeFinalizedPayoutBatchLedger(

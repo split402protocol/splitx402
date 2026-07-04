@@ -67,7 +67,6 @@ export function createPayoutFinalityWorkerRuntimeFromEnv(
   const finalizedLedgerClosure =
     config.closeLedger === true && finalizedTransferVerifier !== undefined
       ? {
-          batchStore: runtime.receiptStore,
           ledgerClosureStore: runtime.receiptStore,
           finalizedTransferVerifier
         }
@@ -208,6 +207,8 @@ function summarizeWorkerResult(
     updatedTransactionIds: result.updatedTransactions.map(
       (transaction) => transaction.id
     ),
+    closedLedgerTransactionIds:
+      result.closedLedgerTransactions?.map((transaction) => transaction.id) ?? [],
     updatedStatuses: result.updatedTransactions.map(
       (transaction) => transaction.status
     ),
@@ -273,7 +274,9 @@ Ledger closure:
   Set SPLIT402_PAYOUT_FINALITY_WORKER_CLOSE_LEDGER=true only when the
   finalized-transfer verifier env is configured. When enabled, the worker
   closes a payout batch ledger only after finality rollup marks the whole
-  batch finalized and transfer-content verification passes.`);
+  batch finalized and transfer-content verification passes. Finalized batches
+  without a payout-batch ledger transaction stay on the closure sweep so
+  transient verifier or RPC failures can recover on a later iteration.`);
 }
 
 function readOptionalPositiveInteger(

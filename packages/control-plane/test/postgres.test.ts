@@ -665,6 +665,8 @@ describe("PostgresReceiptIngestionStore", () => {
       observedAt: "2026-06-24T00:08:00Z"
     });
     const rolledUpBatch = await store.getPayoutBatch(batch.id);
+    const pendingLedgerClosure =
+      await store.listFinalizedPayoutBatchesPendingLedgerClosure();
     const ledgerClose = await store.closeFinalizedPayoutBatchLedger({
       payoutBatchId: batch.id,
       now: "2026-06-24T00:09:00Z",
@@ -679,6 +681,8 @@ describe("PostgresReceiptIngestionStore", () => {
       payoutBatchId: batch.id,
       finalizedTransferVerifier: approvingFinalizedTransferVerifier()
     });
+    const pendingLedgerClosureAfterClose =
+      await store.listFinalizedPayoutBatchesPendingLedgerClosure();
 
     expect(saved).toHaveLength(1);
     expect(listed).toEqual(saved);
@@ -706,6 +710,9 @@ describe("PostgresReceiptIngestionStore", () => {
       })
     );
     expect(rolledUpBatch?.items[0]?.status).toBe("finalized");
+    expect(pendingLedgerClosure.map((candidate) => candidate.id)).toEqual([
+      batch.id
+    ]);
     expect(ledgerClose).toEqual(
       expect.objectContaining({
         id: "ldg_ffffffffffffffffffffffffffffffff",
@@ -728,6 +735,7 @@ describe("PostgresReceiptIngestionStore", () => {
       })
     );
     expect(repeatedLedgerClose?.id).toBe(ledgerClose?.id);
+    expect(pendingLedgerClosureAfterClose).toEqual([]);
     expect(repeatedLedgerClose?.sourceType).toBe("payout_batch");
     await expect(store.getByReceiptId(bundle.artifacts.receipt.receiptId)).resolves.toEqual(
       expect.objectContaining({
@@ -3433,6 +3441,26 @@ class FakePostgresDatabase {
     normalizedSql: string,
     values: readonly unknown[]
   ): StoredPayoutBatchRow[] {
+    if (normalizedSql.includes("left join ledger_transactions")) {
+      const limit = readNumber(values[0]);
+      return this.payoutBatches
+        .filter((row) => row.status === "finalized")
+        .filter(
+          (row) =>
+            !this.ledgerTransactions.some(
+              (transaction) =>
+                transaction.source_type === "payout_batch" &&
+                transaction.source_id === row.id
+            )
+        )
+        .sort(
+          (left, right) =>
+            left.updated_at.localeCompare(right.updated_at) ||
+            left.id.localeCompare(right.id)
+        )
+        .slice(0, limit)
+        .map((row) => ({ id: row.id }) as StoredPayoutBatchRow);
+    }
     if (normalizedSql.includes("join payout_allocations")) {
       const accrualIds = readStringArray(values[0]);
       const batchIds = new Set(
