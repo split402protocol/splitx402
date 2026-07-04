@@ -213,6 +213,7 @@ export function createSplit402LaunchPreflightReport(
     : "";
   const sourceCommitBlockers = createSourceCommitBlockers({
     currentSourceCommit: input.currentSourceCommit,
+    directory: workspace.directory,
     githubSettingsReviewPath,
     githubSettingsReviewText,
     phase6EvidencePath,
@@ -693,6 +694,7 @@ function parseEnvText(text: string): Map<string, string> {
 
 function createSourceCommitBlockers(input: {
   currentSourceCommit?: string;
+  directory: string;
   githubSettingsReviewPath: string;
   githubSettingsReviewText: string;
   phase6EvidencePath: string;
@@ -715,6 +717,7 @@ function createSourceCommitBlockers(input: {
     "source_commit",
   );
   const blockers: string[] = [];
+  let hasMissingOrStaleSourceCommit = false;
   for (const item of [
     {
       label: "GitHub settings review",
@@ -733,16 +736,25 @@ function createSourceCommitBlockers(input: {
     },
   ] as const) {
     if (item.sourceCommit === undefined || item.sourceCommit.length === 0) {
+      hasMissingOrStaleSourceCommit = true;
       blockers.push(
         `${item.label} source_commit is missing in ${toDisplayPath(item.path)}.`,
       );
     } else if (!gitShasMatch(item.sourceCommit, currentSourceCommit)) {
+      hasMissingOrStaleSourceCommit = true;
       blockers.push(
         `Regenerate ${toDisplayPath(item.path)} from checkout ${currentSourceCommit} before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist; found source_commit ${item.sourceCommit}.`,
       );
     }
   }
-  return blockers;
+  return hasMissingOrStaleSourceCommit
+    ? [
+        `Run corepack pnpm product:evidence:init --refresh-source ${toDisplayPath(
+          input.directory,
+        )} to update scaffold-only source_commit values; filled evidence files are skipped and must be recollected from the current checkout.`,
+        ...blockers,
+      ]
+    : blockers;
 }
 
 function createMcpHostedMismatchDetails(input: {

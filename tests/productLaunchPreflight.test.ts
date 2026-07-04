@@ -701,13 +701,14 @@ describe("Split402 launch preflight", () => {
     ).toMatchObject({
       ok: false,
       details: expect.arrayContaining([
+        "Run corepack pnpm product:evidence:init --refresh-source split402-launch-evidence to update scaffold-only source_commit values; filled evidence files are skipped and must be recollected from the current checkout.",
         "Regenerate split402-launch-evidence/github-settings-review.txt from checkout def5678 before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist; found source_commit abc1234.",
         "Regenerate split402-launch-evidence/phase6-custody-evidence.txt from checkout def5678 before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist; found source_commit abc1234.",
         "Regenerate split402-launch-evidence/phase7-staging-proof.txt from checkout def5678 before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist; found source_commit abc1234.",
       ]),
     });
     expect(report.nextActions).toContain(
-      "Regenerate split402-launch-evidence/github-settings-review.txt from checkout def5678 before collecting evidence, or recollect evidence from the current checkout if real artifacts already exist; found source_commit abc1234.",
+      "Run corepack pnpm product:evidence:init --refresh-source split402-launch-evidence to update scaffold-only source_commit values; filled evidence files are skipped and must be recollected from the current checkout.",
     );
   });
 
