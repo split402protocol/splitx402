@@ -12,6 +12,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   Split402ControlPlaneDiscoveryClient,
+  Split402ControlPlaneReceiptRecorder,
   Split402ExternalX402DiscoveryClient,
   Split402Router,
   Split402RouterProviderError,
@@ -3621,6 +3622,133 @@ describe("Split402Router", () => {
         })
       ]
     });
+  });
+
+  it("records verified receipts before returning success", async () => {
+    const record = vi.fn().mockResolvedValue(undefined);
+    const router = new Split402Router({
+      providers: [provider()],
+      executor: executorReturning(receipt),
+      receiptRecorder: { record }
+    });
+
+    const result = await router.execute({
+      capability: "solana.wallet-risk",
+      input: { wallet: "wallet_1" },
+      budget: {
+        network: receipt.network,
+        asset: receipt.asset,
+        maxAmountAtomic: receipt.requiredAmountAtomic
+      },
+      referralClaim,
+      maxAttempts: 1
+    });
+
+    expect(result.receipt.receiptId).toBe(receipt.receiptId);
+    expect(record).toHaveBeenCalledWith({
+      provider: expect.objectContaining({ providerId: "provider-a" }),
+      receipt,
+      referralClaim
+    });
+  });
+
+  it("does not fall back after a verified receipt fails to record", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>().mockResolvedValue({
+      data: { ok: true },
+      receipt
+    });
+    const record = vi.fn().mockRejectedValue(new Error("ingestion unavailable"));
+    const router = new Split402Router({
+      providers: [
+        provider({ providerId: "provider-a" }),
+        provider({ providerId: "provider-b" })
+      ],
+      executor: { execute },
+      receiptRecorder: { record }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: { wallet: "wallet_1" },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "execution_failed",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-a",
+          retryable: false,
+          receiptId: receipt.receiptId,
+          error: expect.stringContaining(
+            "failed to record Split402 receipt: ingestion unavailable"
+          )
+        })
+      ]
+    });
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(record).toHaveBeenCalledTimes(1);
+  });
+
+  it("posts receipts to the control-plane ingestion endpoint", async () => {
+    const calls: Array<{
+      url: string;
+      method?: string;
+      authorization?: string;
+      body?: unknown;
+    }> = [];
+    const recorder = new Split402ControlPlaneReceiptRecorder({
+      controlPlaneUrl: "https://control.example/base",
+      bearerToken: "control-token",
+      source: "buyer",
+      fetch: async (url, init) => {
+        calls.push({
+          url,
+          ...(init?.method === undefined ? {} : { method: init.method }),
+          ...(init?.headers?.authorization === undefined
+            ? {}
+            : { authorization: init.headers.authorization }),
+          ...(init?.body === undefined ? {} : { body: JSON.parse(init.body) })
+        });
+        return jsonResponse({ status: "created" }, 201);
+      }
+    });
+
+    await recorder.record({ provider: provider(), receipt });
+
+    expect(calls).toEqual([
+      {
+        url: "https://control.example/v1/receipts",
+        method: "POST",
+        authorization: "Bearer control-token",
+        body: {
+          receipt,
+          source: "buyer"
+        }
+      }
+    ]);
+  });
+
+  it("fails closed when control-plane receipt ingestion rejects", async () => {
+    const recorder = new Split402ControlPlaneReceiptRecorder({
+      controlPlaneUrl: "https://control.example",
+      fetch: async () =>
+        jsonResponse(
+          {
+            status: "rejected",
+            errors: ["campaign is inactive"]
+          },
+          400
+        )
+    });
+
+    await expect(recorder.record({ provider: provider(), receipt })).rejects.toThrow(
+      "control-plane receipt ingestion failed with HTTP 400"
+    );
   });
 
   it("accepts receipts that match the supplied referral claim", async () => {

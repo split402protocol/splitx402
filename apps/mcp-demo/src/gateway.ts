@@ -22,6 +22,7 @@ import {
 import {
   Split402Router,
   Split402ControlPlaneDiscoveryClient,
+  Split402ControlPlaneReceiptRecorder,
   Split402ExternalX402DiscoveryClient,
   Split402RouterError,
   type Split402CapabilityProvider,
@@ -244,7 +245,17 @@ export async function createMcpGatewayContextFromEnv(
     new Split402Router({
       providers,
       ...(signer === undefined ? {} : { signer }),
-      ...(evmSigner === undefined ? {} : { evmSigner })
+      ...(evmSigner === undefined ? {} : { evmSigner }),
+      ...(controlPlaneUrl === undefined
+        ? {}
+        : {
+            receiptRecorder: new Split402ControlPlaneReceiptRecorder({
+              controlPlaneUrl,
+              ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+              ...(bearerToken === undefined ? {} : { bearerToken }),
+              source: "buyer"
+            })
+          })
     }),
     "router-live-agent-sdk",
     options.fetch,
