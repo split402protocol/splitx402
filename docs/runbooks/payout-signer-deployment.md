@@ -228,6 +228,20 @@ and record the signer policy values used for deployment. Attach it to
 `signer_policy_record`, then copy its reviewed values into the
 `signer_policy_*` fields in the custody evidence bundle.
 
+To reduce manual transcription, generate a private signer-policy env template
+from the current Phase 7 proof artifacts:
+
+```bash
+corepack pnpm phase6:signer-policy:env-template \
+  split402-launch-evidence/phase6-signer-policy.env
+```
+
+The template pre-fills values that can be derived from public-alpha proof
+artifacts, such as network, funding wallet, mint, and observed payout amounts.
+It intentionally leaves custody-specific fields blank: source token account,
+destination amount-list hash, and signer reference. Fill those from the actual
+deployed signer policy before running `corepack pnpm phase6:signer-policy`.
+
 You can generate the correctly shaped signer policy review with:
 
 ```bash
