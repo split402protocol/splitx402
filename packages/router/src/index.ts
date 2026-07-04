@@ -1261,15 +1261,91 @@ function materializeOpenApiPath(
     if (name === undefined) {
       continue;
     }
-    const schema = readRecord(parameter.schema);
-    const enumValues = Array.isArray(schema?.enum) ? schema.enum : [];
-    const replacement =
-      readOptionalString(schema?.default) ??
-      enumValues.map(readOptionalString).find((item) => item !== undefined) ??
-      name;
-    materialized = materialized.replace(`{${name}}`, replacement);
+    const replacement = readOpenApiPathParameterReplacement(parameter, name);
+    materialized = materialized.replace(
+      `{${name}}`,
+      encodeURIComponent(replacement)
+    );
   }
   return materialized;
+}
+
+function readOpenApiPathParameterReplacement(
+  parameter: Record<string, unknown>,
+  name: string
+): string {
+  const schema = readRecord(parameter.schema);
+  return (
+    readStringLike(parameter.example) ??
+    readOpenApiExamplesValue(parameter.examples) ??
+    readStringLike(schema?.example) ??
+    readOpenApiExamplesValue(schema?.examples) ??
+    readStringLike(schema?.default) ??
+    readStringLike(schema?.const) ??
+    readFirstStringLike(schema?.enum) ??
+    readNamedPathParameterFallback(name, schema) ??
+    name
+  );
+}
+
+function readOpenApiExamplesValue(value: unknown): string | undefined {
+  if (Array.isArray(value)) {
+    return value.map(readStringLike).find((item) => item !== undefined);
+  }
+  const examples = readRecord(value);
+  if (examples === undefined) {
+    return undefined;
+  }
+  for (const example of Object.values(examples)) {
+    const record = readRecord(example);
+    const candidate = readStringLike(record?.value) ?? readStringLike(example);
+    if (candidate !== undefined) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
+function readFirstStringLike(value: unknown): string | undefined {
+  return Array.isArray(value)
+    ? value.map(readStringLike).find((item) => item !== undefined)
+    : undefined;
+}
+
+function readStringLike(value: unknown): string | undefined {
+  if (typeof value === "string" && value.length > 0) {
+    return value;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+  if (typeof value === "boolean") {
+    return String(value);
+  }
+  return undefined;
+}
+
+function readNamedPathParameterFallback(
+  name: string,
+  schema: Record<string, unknown> | undefined
+): string | undefined {
+  const normalized = name.toLowerCase();
+  if (normalized === "coin" || normalized === "symbol" || normalized === "token") {
+    return "btc";
+  }
+  if (normalized === "topic" || normalized === "query") {
+    return "market";
+  }
+  if (normalized.endsWith("id") || normalized === "id") {
+    return "sample-id";
+  }
+  if (schema?.type === "integer" || schema?.type === "number") {
+    return "1";
+  }
+  if (schema?.type === "boolean") {
+    return "true";
+  }
+  return undefined;
 }
 
 function parsePaymentRequiredBody(text: string): PaymentRequired | undefined {
