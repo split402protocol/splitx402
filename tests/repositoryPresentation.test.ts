@@ -354,10 +354,10 @@ describe("repository presentation", () => {
         "corepack pnpm phase7:docker:doctor --brief",
       );
       expect(text, filePath).toContain(
-        "corepack pnpm phase7:docker:env:init",
+        "corepack pnpm phase7:docker:env:init --generate-secrets",
       );
       expect(text, filePath).toContain(
-        "Fill deploy/phase7-staging/phase7-staging.env with private Docker runtime values.",
+        "Fill remaining deploy/phase7-staging/phase7-staging.env values: hosted URLs, wallets, service keys, buyer keys, and control-plane tokens.",
       );
       expect(text, filePath).not.toMatch(
         /--evidence-env-file phase7-staging-evidence\//u,

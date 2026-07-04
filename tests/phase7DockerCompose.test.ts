@@ -112,7 +112,7 @@ describe("Phase 7 Docker compose runner", () => {
     );
     expect(commands).toEqual(["docker --version", "docker compose version"]);
     expect(report.nextActions).toContain(
-      "Run corepack pnpm phase7:docker:env:init, then fill deploy/phase7-staging/phase7-staging.env with private staging values on the host.",
+      "Run corepack pnpm phase7:docker:env:init --generate-secrets, then fill remaining deploy/phase7-staging/phase7-staging.env values on the host.",
     );
   });
 

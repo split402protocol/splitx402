@@ -113,9 +113,9 @@ export function runPhase7DockerDoctor(
     required: true,
     detail: envFileExists
       ? `${envFile} exists.`
-      : `${envFile} is missing. Run corepack pnpm phase7:docker:env:init${
+      : `${envFile} is missing. Run corepack pnpm phase7:docker:env:init --generate-secrets${
           envFile === defaultEnvFile ? "" : ` --target ${envFile}`
-        }, then fill staging values.`,
+        }, then fill remaining staging values.`,
   });
 
   const envValues = envFileExists
@@ -261,9 +261,9 @@ function createNextActions(
   }
   if (failed.has("compose_env_file")) {
     actions.push(
-      `Run corepack pnpm phase7:docker:env:init${
+      `Run corepack pnpm phase7:docker:env:init --generate-secrets${
         envFile === defaultEnvFile ? "" : ` --target ${envFile}`
-      }, then fill ${envFile} with private staging values on the host.`,
+      }, then fill remaining ${envFile} values on the host.`,
     );
   }
   if (failed.has("compose_env_values")) {

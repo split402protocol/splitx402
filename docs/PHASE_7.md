@@ -93,7 +93,7 @@ staging so Phase 7 evidence captures are not publicly readable.
 Launch the hosted-staging stack with:
 
 ```bash
-corepack pnpm phase7:docker:env:init
+corepack pnpm phase7:docker:env:init --generate-secrets
 corepack pnpm phase7:docker:doctor --brief
 corepack pnpm phase7:docker:compose up --brief
 corepack pnpm phase7:docker:compose ps --brief
@@ -114,8 +114,8 @@ evidence:
 corepack pnpm product:evidence:init --missing
 corepack pnpm product:launch-preflight --brief --workspace split402-launch-evidence
 corepack pnpm product:local-proof --brief --output split402-launch-evidence/local-public-alpha-proof.json
-corepack pnpm phase7:docker:env:init
-# Fill deploy/phase7-staging/phase7-staging.env with private Docker runtime values.
+corepack pnpm phase7:docker:env:init --generate-secrets
+# Fill remaining deploy/phase7-staging/phase7-staging.env values: hosted URLs, wallets, service keys, buyer keys, and control-plane tokens.
 corepack pnpm phase7:docker:doctor --brief
 corepack pnpm phase7:docker:doctor --brief --profile demo --profile workers
 corepack pnpm phase7:docker:compose up --brief --profile demo --profile workers
