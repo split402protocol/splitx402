@@ -35,8 +35,46 @@ describe("Phase 7 command recorder", () => {
     );
     expect(writes[0]?.text).not.toContain("phase7:docker:health");
     expect(report.nextActions).toContain(
-      "Append the hosted Docker, seed, collection, paid-suite, manifest, assemble, and status command outputs to evidence/commands.log.",
+      "Append any missing hosted Docker, seed, collection, paid-suite, manifest, assemble, and status command outputs to evidence/commands.log.",
     );
+  });
+
+  it("can record the full hosted staging command checklist", () => {
+    const writes: string[] = [];
+    const report = recordPhase7LocalCommandEvidence({
+      outputPath: "evidence/commands.log",
+      includeHosted: true,
+      evidenceEnvFile: "private/phase7.env",
+      evidenceDirectory: "private/evidence",
+      proofPath: "private/phase7-proof.txt",
+      exists: () => false,
+      writeText: (_path, text) => writes.push(text),
+      runCommand: (file, args) => ({
+        exitCode: 0,
+        stdout: `${file} ${args.join(" ")} ok\n`,
+        stderr: "",
+      }),
+    });
+
+    expect(report).toMatchObject({
+      ok: true,
+      commandCount: 27,
+      failedCommands: [],
+      written: true,
+    });
+    expect(writes[0]).toContain(
+      "# This includes hosted staging commands from this runtime.",
+    );
+    expect(writes[0]).toContain("$ corepack pnpm product:evidence:init --missing");
+    expect(writes[0]).toContain(
+      "$ corepack pnpm phase7:docker:compose up --brief --profile demo --profile workers",
+    );
+    expect(writes[0]).toContain("$ corepack pnpm phase7:staging:seed");
+    expect(writes[0]).toContain("$ corepack pnpm phase7:staging:status");
+    expect(writes[0]).toContain("private/phase7.env");
+    expect(writes[0]).toContain("private/evidence/paid-suite.log");
+    expect(writes[0]).toContain("private/phase7-proof.txt");
+    expect(writes[0]).toContain("$ corepack pnpm audit --audit-level high");
   });
 
   it("can include launch preflight when the operator opts in", () => {

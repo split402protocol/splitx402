@@ -164,9 +164,13 @@ SPLIT402_MCP_SVM_PRIVATE_KEY="$SVM_PRIVATE_KEY" \
 SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 \
 corepack pnpm phase7:staging:collect-mcp-gateway --evidence-env-file split402-launch-evidence/phase7-staging.env
 corepack pnpm demo:mcp-gateway:smoke
-corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log
-corepack pnpm phase7:staging:commands-record --output split402-launch-evidence/phase7-staging-evidence/commands.log
-# Append hosted Docker, seed, collection, paid-suite, manifest, assemble, and status command output.
+corepack pnpm phase7:staging:commands-record \
+  --include-hosted \
+  --force \
+  --evidence-env-file split402-launch-evidence/phase7-staging.env \
+  --evidence-dir split402-launch-evidence/phase7-staging-evidence \
+  --proof split402-launch-evidence/phase7-staging-proof.txt \
+  --output split402-launch-evidence/phase7-staging-evidence/commands.log
 corepack pnpm phase7:staging:commands-status --brief split402-launch-evidence/phase7-staging-evidence/commands.log
 corepack pnpm demo:mcp-bundle split402-launch-evidence/phase7-staging-evidence/mcp-bundle.json
 corepack pnpm demo:paid-suite split402-launch-evidence/phase7-staging-evidence/paid-suite.log
@@ -177,15 +181,20 @@ corepack pnpm phase7:staging:status --brief split402-launch-evidence/phase7-stag
 corepack pnpm product:status --brief --workspace split402-launch-evidence
 ```
 
-The `commands_run` transcript must include the full validation suite, including
-`corepack pnpm product:public-surface-check --brief`, and the real output for
-`git status --short --branch`; it must show only the branch/status header and no
-changed-file rows. Use `corepack pnpm phase7:staging:commands-record --output
-<commands.log>` to capture the safe local validation blocks, then append the
-hosted Docker, seed, collection, paid-suite, manifest, assemble, and status
-command blocks from the same staging run. Run `corepack pnpm phase7:staging:commands-status --brief
+The `commands_run` transcript must include the hosted Docker, seed, collection,
+paid-suite, manifest, assemble, status, and full validation-suite commands,
+including `corepack pnpm product:public-surface-check --brief`, plus the real
+output for `git status --short --branch`; it must show only the branch/status
+header and no changed-file rows. Use
+`corepack pnpm phase7:staging:commands-record --include-hosted ...` on the same
+hosted staging runtime after private env values are filled. The recorder writes
+the 27 required command blocks to `commands.log`; keep that file in the private
+evidence workspace and do not commit it. Run
+`corepack pnpm phase7:staging:commands-status --brief
 split402-launch-evidence/phase7-staging-evidence/commands.log` before assembling
-the proof to catch command-transcript problems early.
+the proof to catch command-transcript problems early. If a hosted command fails,
+fix the runtime issue and rerun the recorder with `--force` only after saving
+any transcript you still need for debugging.
 
 `phase7:staging:collect-reads` writes both payout-obligation and
 funding-balance artifacts from the payout-obligations endpoint and validates
