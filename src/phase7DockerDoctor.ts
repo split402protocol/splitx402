@@ -301,9 +301,9 @@ function createNextActions(
   if (failed.has("compose_env_values")) {
     if (envValues.generatedSecretPlaceholders.length > 0) {
       actions.push(
-        `Regenerate local Docker runtime secrets with \`corepack pnpm phase7:docker:env:init --generate-secrets${
+        `Fill generated local Docker runtime secrets with \`corepack pnpm phase7:docker:env:init --generate-secrets${
           envFile === defaultEnvFile ? "" : ` --target ${envFile}`
-        }\`; this replaces generated placeholders for ${envValues.generatedSecretPlaceholders.join(
+        }\`; this fills generated secret values for ${envValues.generatedSecretPlaceholders.join(
           ", ",
         )} while preserving existing filled values, but still requires hosted URLs, wallets, control-plane tokens, and keys to be filled privately.`,
       );
@@ -374,6 +374,11 @@ function validateEnvValues(
       key as (typeof PHASE7_DOCKER_GENERATED_SECRET_KEYS)[number],
     ),
   );
+  const missingGeneratedSecrets = missingRequired.filter((key) =>
+    PHASE7_DOCKER_GENERATED_SECRET_KEYS.includes(
+      key as (typeof PHASE7_DOCKER_GENERATED_SECRET_KEYS)[number],
+    ),
+  );
 
   if (missingRequired.length > 0 || placeholderKeys.length > 0) {
     const details = [
@@ -387,7 +392,9 @@ function validateEnvValues(
     return {
       ok: false,
       detail: `${envFile} is not ready (${details.join("; ")}).`,
-      generatedSecretPlaceholders,
+      generatedSecretPlaceholders: [
+        ...new Set([...generatedSecretPlaceholders, ...missingGeneratedSecrets]),
+      ],
     };
   }
 

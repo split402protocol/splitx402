@@ -161,7 +161,7 @@ describe("Phase 7 Docker env init", () => {
     });
   });
 
-  it("generates only supported placeholder runtime secrets", () => {
+  it("generates supported placeholder runtime secrets and service seed", () => {
     let sequence = 0;
     const text = [
       "SPLIT402_DASHBOARD_VIEWER_TOKEN=replace-with-staging-viewer-token",
@@ -172,16 +172,18 @@ describe("Phase 7 Docker env init", () => {
     ].join("\n");
 
     expect(
-      populatePhase7DockerGeneratedSecrets(text, () => {
+      populatePhase7DockerGeneratedSecrets(text, (key) => {
         sequence += 1;
-        return `generated-secret-${sequence}`;
+        return key === "SPLIT402_SERVICE_SEED_HEX"
+          ? "a".repeat(64)
+          : `generated-secret-${sequence}`;
       }),
     ).toBe(
       [
         "SPLIT402_DASHBOARD_VIEWER_TOKEN=generated-secret-1",
         "SPLIT402_DASHBOARD_CONTROL_PLANE_TOKEN=",
         "SPLIT402_WEBHOOK_WORKER_SECRET=generated-secret-2",
-        "SPLIT402_SERVICE_SEED_HEX=",
+        `SPLIT402_SERVICE_SEED_HEX=${"a".repeat(64)}`,
         "SPLIT402_MERCHANT_PAY_TO=",
       ].join("\n"),
     );

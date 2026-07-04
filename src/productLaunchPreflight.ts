@@ -804,16 +804,21 @@ function createDockerRuntimeEnvDetails(input: {
     ];
   }
 
-  const generatedSecretPlaceholders = input.placeholderKeys.filter((key) =>
-    PHASE7_DOCKER_GENERATED_SECRET_KEYS.includes(
-      key as (typeof PHASE7_DOCKER_GENERATED_SECRET_KEYS)[number],
-    ),
-  );
+  const generatedSecretKeysToRepair = [
+    ...input.missingDockerRuntimeKeys,
+    ...input.placeholderKeys,
+  ]
+    .filter((key) =>
+      PHASE7_DOCKER_GENERATED_SECRET_KEYS.includes(
+        key as (typeof PHASE7_DOCKER_GENERATED_SECRET_KEYS)[number],
+      ),
+    )
+    .filter((key, index, keys) => keys.indexOf(key) === index);
   return [
-    ...(generatedSecretPlaceholders.length === 0
+    ...(generatedSecretKeysToRepair.length === 0
       ? []
       : [
-          `Run corepack pnpm phase7:docker:env:init --generate-secrets to replace generated Docker runtime secret placeholders for ${generatedSecretPlaceholders.join(
+          `Run corepack pnpm phase7:docker:env:init --generate-secrets to fill generated Docker runtime secret values for ${generatedSecretKeysToRepair.join(
             ", ",
           )} while preserving existing filled values.`,
         ]),
