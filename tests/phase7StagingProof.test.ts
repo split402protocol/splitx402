@@ -1586,7 +1586,35 @@ funding_balance_evidence: funding.json
       "mcp_gateway_evidence tools/list missing split402.searchCapabilities",
     );
     expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence tools/list missing split402.quote",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
       "mcp_gateway_evidence tools/list missing split402.getReceipt",
+    );
+  });
+
+  it("blocks staged proof status when MCP gateway evidence has no quote preflight", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          includeQuote: false,
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence missing split402.quote request",
     );
   });
 
@@ -1687,6 +1715,31 @@ funding_balance_evidence: funding.json
     expect(report.readyForPublicAlphaDemo).toBe(false);
     expect(report.mcpGatewayStatus.blockers).toContain(
       "mcp_gateway_evidence execute budget.maxAmountAtomic does not match search budget",
+    );
+  });
+
+  it("blocks staged proof status when MCP quote budget differs from search", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          quoteMaxAmountAtomic: "60000",
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence quote budget.maxAmountAtomic does not match search budget",
     );
   });
 
@@ -2012,6 +2065,35 @@ funding_balance_evidence: funding.json
     );
     expect(report.mcpGatewayStatus.blockers).toContain(
       "mcp_gateway_evidence execute amountPaidAtomic does not match execute provider amountAtomic",
+    );
+  });
+
+  it("blocks staged proof status when MCP execute result differs from quote", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          quoteProviderId: "split402-quoted-merchant",
+          quotedAmountAtomic: "9000",
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute providerId does not match quote providerId",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute amountPaidAtomic does not match quote quotedAmountAtomic",
     );
   });
 
@@ -3117,16 +3199,27 @@ function createPowerShellCommandsLog(): string {
 function createValidMcpGatewayTranscript(
   options: {
     includeExecute?: boolean;
+    includeQuote?: boolean;
+    includeQuoteBudget?: boolean;
     includeExecuteBudget?: boolean;
     includeReceiptLookup?: boolean;
     includeSearchBudget?: boolean;
     searchMaxAmountAtomic?: string;
+    quoteMaxAmountAtomic?: string;
     executeMaxAmountAtomic?: string;
     searchCapability?: string;
+    quoteCapability?: string;
     executeCapability?: string;
     includeSearchProviderId?: boolean;
     searchProviderId?: string;
     executeProviderId?: string;
+    quoteProviderId?: string;
+    quoteExecutionMode?: string;
+    quotedAmountAtomic?: string;
+    quoteProviderIdValue?: string;
+    quoteProviderAmountAtomic?: string;
+    quoteRankedProviderId?: string;
+    quoteRankedAmountAtomic?: string;
     executeExecutionMode?: string;
     includeSearchProviderNetwork?: boolean;
     includeSearchProviderAsset?: boolean;
@@ -3199,15 +3292,23 @@ function createValidMcpGatewayTranscript(
   } = {},
 ): string {
   const includeExecute = options.includeExecute ?? true;
+  const includeQuote = options.includeQuote ?? true;
+  const includeQuoteBudget = options.includeQuoteBudget ?? true;
   const includeExecuteBudget = options.includeExecuteBudget ?? true;
   const includeReceiptLookup = options.includeReceiptLookup ?? true;
   const includeSearchBudget = options.includeSearchBudget ?? true;
   const searchMaxAmountAtomic = options.searchMaxAmountAtomic ?? "50000";
+  const quoteMaxAmountAtomic =
+    options.quoteMaxAmountAtomic ?? searchMaxAmountAtomic;
   const searchCapability = options.searchCapability ?? "solana.wallet-risk";
+  const quoteCapability = options.quoteCapability ?? searchCapability;
   const executeCapability = options.executeCapability ?? searchCapability;
   const includeSearchProviderId = options.includeSearchProviderId ?? true;
   const searchProviderId = options.searchProviderId ?? "split402-demo-merchant";
+  const quoteProviderId = options.quoteProviderId ?? "split402-demo-merchant";
   const executeProviderId = options.executeProviderId ?? "split402-demo-merchant";
+  const quoteExecutionMode =
+    options.quoteExecutionMode ?? "router-live-agent-sdk";
   const executeExecutionMode =
     options.executeExecutionMode ?? "router-live-agent-sdk";
   const executeMaxAmountAtomic =
@@ -3272,6 +3373,8 @@ function createValidMcpGatewayTranscript(
     options.includeExecuteProviderPayoutWallet ?? true;
   const executeProviderIdValue =
     options.executeProviderIdValue ?? executeProviderId;
+  const quoteProviderIdValue =
+    options.quoteProviderIdValue ?? quoteProviderId;
   const executeProviderNetwork =
     options.executeProviderNetwork ?? searchProviderNetwork;
   const executeProviderAsset = options.executeProviderAsset ?? searchProviderAsset;
@@ -3293,8 +3396,16 @@ function createValidMcpGatewayTranscript(
     options.executeProviderPayoutWallet ?? searchProviderPayoutWallet;
   const executeReferrerCreditAtomic =
     options.executeReferrerCreditAtomic ?? "1800";
+  const quotedAmountAtomic = options.quotedAmountAtomic ?? amountPaidAtomic;
+  const quoteProviderAmountAtomic =
+    options.quoteProviderAmountAtomic ?? searchProviderAmountAtomic;
+  const quoteRankedProviderId =
+    options.quoteRankedProviderId ?? quoteProviderId;
+  const quoteRankedAmountAtomic =
+    options.quoteRankedAmountAtomic ?? quotedAmountAtomic;
   const tools = options.tools ?? [
     "split402.searchCapabilities",
+    "split402.quote",
     "split402.execute",
     "split402.getReceipt",
   ];
@@ -3420,6 +3531,62 @@ function createValidMcpGatewayTranscript(
         },
       },
     },
+    ...(includeQuote
+      ? [
+          {
+            direction: "request",
+            message: {
+              jsonrpc: "2.0",
+              id: "quote",
+              method: "tools/call",
+              params: {
+                name: "split402.quote",
+                arguments: {
+                  capability: quoteCapability,
+                  ...(includeQuoteBudget
+                    ? { budget: { maxAmountAtomic: quoteMaxAmountAtomic } }
+                    : {}),
+                },
+              },
+            },
+          },
+          {
+            direction: "response",
+            message: {
+              jsonrpc: "2.0",
+              id: "quote",
+              result: {
+                structuredContent: {
+                  providerId: quoteProviderId,
+                  executionMode: quoteExecutionMode,
+                  quotedAmountAtomic,
+                  maxAttempts: 1,
+                  provider: {
+                    providerId: quoteProviderIdValue,
+                    network: searchProviderNetwork,
+                    asset: searchProviderAsset,
+                    merchantOrigin: searchProviderMerchantOrigin,
+                    operationId: searchProviderOperationId,
+                    campaignId: searchProviderCampaignId,
+                    payToWallet: searchProviderPayToWallet,
+                    amountAtomic: quoteProviderAmountAtomic,
+                    routeId: searchProviderRouteId,
+                    referrerWallet: searchProviderReferrerWallet,
+                    payoutWallet: searchProviderPayoutWallet,
+                  },
+                  rankedProviders: [
+                    {
+                      rank: 1,
+                      providerId: quoteRankedProviderId,
+                      amountAtomic: quoteRankedAmountAtomic,
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        ]
+      : []),
     ...(includeExecute
       ? [
           {
