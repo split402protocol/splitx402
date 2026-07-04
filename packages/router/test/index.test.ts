@@ -597,6 +597,166 @@ describe("Split402Router", () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
+  it("executes when input satisfies provider string formats", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>().mockResolvedValue({
+      data: { risk: "low" },
+      receipt
+    });
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-string-formats",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["callbackUrl", "requestId", "contact", "observedAt"],
+              properties: {
+                callbackUrl: { type: "string", format: "url" },
+                requestId: { type: "string", format: "uuid" },
+                contact: { type: "string", format: "email" },
+                observedAt: { type: "string", format: "date-time" }
+              },
+              additionalProperties: false
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    const input = {
+      callbackUrl: "https://agent.example/callback",
+      requestId: "018f3c2a-7b5a-7a2c-8d1f-4e8b6a2e3c11",
+      contact: "ops@example.com",
+      observedAt: "2026-07-04T03:00:00Z"
+    };
+    const result = await router.execute({
+      capability: "solana.wallet-risk",
+      input,
+      budget: {
+        network: receipt.network,
+        asset: receipt.asset,
+        maxAmountAtomic: receipt.requiredAmountAtomic
+      }
+    });
+
+    expect(result.providerId).toBe("provider-string-formats");
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: expect.objectContaining({ providerId: "provider-string-formats" }),
+        body: input
+      })
+    );
+  });
+
+  it("rejects before payment when input violates provider string formats", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-string-format-reject",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["requestId"],
+              properties: {
+                requestId: { type: "string", format: "uuid" }
+              },
+              additionalProperties: false
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: { requestId: "not-a-uuid" },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-string-format-reject",
+          retryable: false,
+          error: expect.stringContaining("input.requestId must be a valid UUID")
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed or unsupported provider string formats before payment", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-malformed-format",
+          amountAtomic: "10000",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["contact"],
+              properties: {
+                contact: { type: "string", format: 42 }
+              }
+            }
+          }
+        }),
+        provider({
+          providerId: "provider-unsupported-format",
+          amountAtomic: "20000",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["contact"],
+              properties: {
+                contact: { type: "string", format: "wallet-address" }
+              }
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: { contact: "ops@example.com" },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: "50000"
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-malformed-format",
+          retryable: false,
+          error: expect.stringContaining("input.contact format must be a string")
+        }),
+        expect.objectContaining({
+          providerId: "provider-unsupported-format",
+          retryable: false,
+          error: expect.stringContaining(
+            "input.contact format wallet-address is unsupported"
+          )
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it("rejects before payment when input violates provider number constraints", async () => {
     const execute = vi.fn<Split402RouterExecutor["execute"]>();
     const router = new Split402Router({
