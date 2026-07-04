@@ -2906,6 +2906,91 @@ describe("MCP demo gateway", () => {
     });
   });
 
+  it("returns structured router attempts when execution fails after receipt verification", async () => {
+    const sample = createSampleProtocolArtifacts().artifacts.receipt;
+    const provider: Split402CapabilityProvider = {
+      providerId: "provider-output-contract",
+      capability: "solana.wallet-risk",
+      merchantOrigin: sample.merchantOrigin,
+      path: "/v1/risk",
+      method: "POST",
+      operationId: sample.operationId,
+      campaignId: sample.campaignId,
+      network: sample.network,
+      asset: sample.asset,
+      payToWallet: sample.payToWallet,
+      amountAtomic: sample.requiredAmountAtomic,
+      metadata: {
+        outputSchema: {
+          type: "object",
+          required: ["risk"],
+          properties: {
+            risk: { type: "string", enum: ["low", "medium", "high"] }
+          },
+          additionalProperties: false
+        }
+      }
+    };
+    const executor: Split402RouterExecutor = {
+      execute: async () => ({
+        data: { risk: "unknown" },
+        receipt: sample
+      })
+    };
+    const context = createMcpGatewayContext(
+      createMcpDemoBundle({
+        generatedAt: "2026-06-26T00:00:00.000Z"
+      }),
+      new Split402Router({
+        providers: [provider],
+        executor,
+        verifyReceipts: false
+      })
+    );
+
+    const response = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "execute-output-contract-failure",
+        method: "tools/call",
+        params: {
+          name: "split402.execute",
+          arguments: {
+            capability: "solana.wallet-risk",
+            input: {
+              wallet: "wallet-123"
+            },
+            budget: {
+              maxAmountAtomic: sample.requiredAmountAtomic
+            }
+          }
+        }
+      }),
+      context
+    );
+
+    expect(response).toMatchObject({
+      jsonrpc: "2.0",
+      id: "execute-output-contract-failure",
+      error: {
+        code: -32000,
+        message: expect.stringContaining("invalid provider output"),
+        data: {
+          routerCode: "execution_failed",
+          attempts: [
+            expect.objectContaining({
+              providerId: "provider-output-contract",
+              status: "failed",
+              retryable: false,
+              receiptId: sample.receiptId,
+              error: expect.stringContaining("invalid provider output")
+            })
+          ]
+        }
+      }
+    });
+  });
+
   it("rejects router execution when an optional budget asset override is unsupported", async () => {
     const context = createMcpGatewayContext(
       createMcpDemoBundle({
