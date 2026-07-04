@@ -16,6 +16,7 @@ export interface McpGatewaySmokeReport {
   payToWallet: string;
   maxAmountAtomic: string;
   providerAmountAtomic: string;
+  quotedAmountAtomic: string;
   executionMode: string;
   amountPaidAtomic: string;
   receiptId: string;
@@ -48,6 +49,7 @@ export async function runMcpGatewaySmoke(): Promise<McpGatewaySmokeReport> {
   });
   const tools = readToolNames(listed);
   assertTool(tools, "split402.searchCapabilities");
+  assertTool(tools, "split402.quote");
   assertTool(tools, "split402.execute");
   assertTool(tools, "split402.discoverExternalX402");
   assertTool(tools, "split402.prepareExternalX402Offer");
@@ -75,6 +77,37 @@ export async function runMcpGatewaySmoke(): Promise<McpGatewaySmokeReport> {
     "split402-demo-merchant"
   );
 
+  const quoted = await callGateway(context, {
+    jsonrpc: "2.0",
+    id: "smoke-quote",
+    method: "tools/call",
+    params: {
+      name: "split402.quote",
+      arguments: {
+        capability: "solana.wallet-risk",
+        budget: {
+          maxAmountAtomic
+        }
+      }
+    }
+  });
+  const quotedProviderId = readString(
+    quoted,
+    ["result", "structuredContent", "providerId"],
+    "quote provider id"
+  );
+  if (quotedProviderId !== selectedProvider.providerId) {
+    throw new Error("quote provider id must match search provider id");
+  }
+  const quotedAmountAtomic = readString(
+    quoted,
+    ["result", "structuredContent", "quotedAmountAtomic"],
+    "quote amount"
+  );
+  if (quotedAmountAtomic !== selectedProvider.amountAtomic) {
+    throw new Error("quote amount must match search provider amount");
+  }
+
   const executed = await callGateway(context, {
     jsonrpc: "2.0",
     id: "smoke-execute",
@@ -100,6 +133,9 @@ export async function runMcpGatewaySmoke(): Promise<McpGatewaySmokeReport> {
   if (providerId !== selectedProvider.providerId) {
     throw new Error("execute provider id must match search provider id");
   }
+  if (providerId !== quotedProviderId) {
+    throw new Error("execute provider id must match quote provider id");
+  }
   const executionMode = readString(
     executed,
     ["result", "structuredContent", "executionMode"],
@@ -112,6 +148,9 @@ export async function runMcpGatewaySmoke(): Promise<McpGatewaySmokeReport> {
   );
   if (amountPaidAtomic !== selectedProvider.amountAtomic) {
     throw new Error("execute amount paid must match search provider amount");
+  }
+  if (amountPaidAtomic !== quotedAmountAtomic) {
+    throw new Error("execute amount paid must match quote amount");
   }
   if (
     readAtomicAmount(amountPaidAtomic, "execute amount paid") >
@@ -197,6 +236,7 @@ export async function runMcpGatewaySmoke(): Promise<McpGatewaySmokeReport> {
     payToWallet: selectedProvider.payToWallet,
     maxAmountAtomic,
     providerAmountAtomic: selectedProvider.amountAtomic,
+    quotedAmountAtomic,
     executionMode,
     amountPaidAtomic,
     receiptId,

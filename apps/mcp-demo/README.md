@@ -48,6 +48,8 @@ JSON-RPC. It exposes:
 - `split402.walletRiskScore` for the original paid HTTP request metadata;
 - `split402.searchCapabilities` for router provider discovery with optional
   network, asset, and max-amount budget filters;
+- `split402.quote` for a read-only router preflight that selects the provider,
+  amount, budget, and fallback set before payment;
 - `split402.execute` for a router-backed demo execution result;
 - `split402.discoverExternalX402` for metadata-only onboarding checks against
   external x402 APIs;
@@ -67,14 +69,16 @@ merchant-signed demo receipt so agents can exercise discovery, execution result
 shape, and receipt verification without a live funded buyer wallet. It is not a
 claim of production MCP hosting or mainnet-ready payment execution.
 `split402.execute` always requires an explicit `budget.maxAmountAtomic`; the
-gateway never silently spends against a provider default. Capability search
-results include each provider's advertised `payToWallet`, merchant origin,
-operation id, campaign id, route attribution, referrer wallet, and payout wallet
-when available, and router execution rejects merchant offers or receipts that do
-not match that destination. Successful execution responses also include the
-selected provider summary so agents can audit the exact merchant origin,
-operation, campaign, route, asset, pay-to wallet, and amount used for the paid
-call.
+gateway never silently spends against a provider default. Agents can call
+`split402.quote` first to see the selected provider, quoted amount, normalized
+budget, and ranked fallback set without creating a receipt or making a payment.
+Capability search results include each provider's advertised `payToWallet`,
+merchant origin, operation id, campaign id, route attribution, referrer wallet,
+and payout wallet when available, and router execution rejects merchant offers
+or receipts that do not match that destination. Successful execution responses
+also include the selected provider summary so agents can audit the exact
+merchant origin, operation, campaign, route, asset, pay-to wallet, and amount
+used for the paid call.
 
 Example `tools/call` request:
 
@@ -90,6 +94,25 @@ Example `tools/call` request:
       "budget": {
         "network": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
         "asset": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+        "maxAmountAtomic": "50000"
+      }
+    }
+  }
+}
+```
+
+Example quote request:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "quote-1",
+  "method": "tools/call",
+  "params": {
+    "name": "split402.quote",
+    "arguments": {
+      "capability": "solana.wallet-risk",
+      "budget": {
         "maxAmountAtomic": "50000"
       }
     }
@@ -397,11 +420,12 @@ corepack pnpm demo:mcp-gateway:smoke
 ```
 
 The smoke command initializes the gateway, lists the router tools, performs
-budget-filtered capability search, executes `split402.execute` in demo-router
-mode, and retrieves the captured receipt with `split402.getReceipt`. It checks
-that the executed amount matches the selected provider amount, stays within the
-smoke budget, and that the receipt network, asset, and `payToWallet` match the
-selected provider's advertised payment details.
+budget-filtered capability search, quotes `split402.quote`, executes
+`split402.execute` in demo-router mode, and retrieves the captured receipt with
+`split402.getReceipt`. It checks that quote and execution select the same
+provider and amount, that the executed amount stays within the smoke budget,
+and that the receipt network, asset, and `payToWallet` match the selected
+provider's advertised payment details.
 
 ## Status
 

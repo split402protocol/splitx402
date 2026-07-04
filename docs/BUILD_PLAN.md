@@ -444,13 +444,15 @@ Current slice:
   payment details, Split402 campaign metadata, expected referral economics, and
   proof commands.
 - `@split402/router` public-alpha package with static providers,
-  control-plane route discovery, budget enforcement, deterministic ranking,
-  retry/fallback, pay-to wallet checks, and fail-closed receipt verification.
+  control-plane route discovery, quote preflight, budget enforcement,
+  deterministic ranking, retry/fallback, pay-to wallet checks, and fail-closed
+  receipt verification.
 - Router-backed MCP demo tools, `split402.searchCapabilities`,
-  `split402.execute`, and `split402.getReceipt`, for capability search, demo
-  execution results, and session receipt lookup, plus optional control-plane
-  route discovery for live staging providers. The default execution path is
-  explicitly demo/mock mode, not production MCP hosting.
+  `split402.quote`, `split402.execute`, and `split402.getReceipt`, for
+  capability search, read-only quote preflight, demo execution results, and
+  session receipt lookup, plus optional control-plane route discovery for live
+  staging providers. The default execution path is explicitly demo/mock mode,
+  not production MCP hosting.
 - merchant/referrer dashboard UI with a narrow control-plane read proxy for
   summaries, reliability profiles, webhook delivery, routes, balances, and
   payouts.

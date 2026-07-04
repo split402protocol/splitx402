@@ -1095,6 +1095,7 @@ describe("MCP demo gateway", () => {
     expect(result.tools.map((tool) => tool.name)).toEqual([
       "split402.walletRiskScore",
       "split402.searchCapabilities",
+      "split402.quote",
       "split402.execute",
       "split402.discoverExternalX402",
       "split402.prepareExternalX402Offer",
@@ -1116,7 +1117,20 @@ describe("MCP demo gateway", () => {
         }
       }
     });
-    expect(result.tools[2]?.inputSchema).toMatchObject({
+    const quoteTool = result.tools.find((tool) => tool.name === "split402.quote");
+    expect(quoteTool?.inputSchema).toMatchObject({
+      required: ["capability", "budget"],
+      properties: {
+        referralClaim: { type: "object" },
+        budget: {
+          required: ["maxAmountAtomic"]
+        }
+      }
+    });
+    const executeTool = result.tools.find(
+      (tool) => tool.name === "split402.execute"
+    );
+    expect(executeTool?.inputSchema).toMatchObject({
       required: ["capability", "input", "budget"],
       properties: {
         referralClaim: { type: "object" },
@@ -1125,7 +1139,10 @@ describe("MCP demo gateway", () => {
         }
       }
     });
-    expect(result.tools[3]?.inputSchema).toMatchObject({
+    const externalDiscoveryTool = result.tools.find(
+      (tool) => tool.name === "split402.discoverExternalX402"
+    );
+    expect(externalDiscoveryTool?.inputSchema).toMatchObject({
       required: ["merchantOrigin"],
       properties: {
         merchantOrigin: { type: "string" },
@@ -1944,6 +1961,66 @@ describe("MCP demo gateway", () => {
     expect(calls).toEqual([]);
   });
 
+  it("quotes router execution without creating a receipt", async () => {
+    const context = createMcpGatewayContext(
+      createMcpDemoBundle({
+        generatedAt: "2026-06-26T00:00:00.000Z"
+      })
+    );
+
+    const response = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "quote-1",
+        method: "tools/call",
+        params: {
+          name: "split402.quote",
+          arguments: {
+            capability: "solana.wallet-risk",
+            budget: {
+              maxAmountAtomic: "10000"
+            }
+          }
+        }
+      }),
+      context
+    );
+
+    expect(response).toMatchObject({
+      jsonrpc: "2.0",
+      id: "quote-1",
+      result: {
+        structuredContent: {
+          status: "quoted",
+          executionMode: "router-demo-mock",
+          providerId: "split402-demo-merchant",
+          provider: {
+            providerId: "split402-demo-merchant",
+            capability: "solana.wallet-risk",
+            amountAtomic: "10000"
+          },
+          capability: "solana.wallet-risk",
+          budget: {
+            network: expect.any(String),
+            asset: expect.any(String),
+            maxAmountAtomic: "10000"
+          },
+          quotedAmountAtomic: "10000",
+          maxAttempts: 1,
+          rankedProviders: [
+            expect.objectContaining({
+              rank: 1,
+              providerId: "split402-demo-merchant",
+              amountAtomic: "10000"
+            })
+          ]
+        },
+        isError: false
+      }
+    });
+    expect(context.receipts.size).toBe(0);
+  });
+
   it("executes through the router gateway and stores receipts for lookup", async () => {
     const context = createMcpGatewayContext(
       createMcpDemoBundle({
@@ -2553,6 +2630,7 @@ describe("MCP demo gateway", () => {
       tools: [
         "split402.walletRiskScore",
         "split402.searchCapabilities",
+        "split402.quote",
         "split402.execute",
         "split402.discoverExternalX402",
         "split402.prepareExternalX402Offer",
@@ -2567,6 +2645,7 @@ describe("MCP demo gateway", () => {
       payToWallet: expect.any(String),
       maxAmountAtomic: "50000",
       providerAmountAtomic: "10000",
+      quotedAmountAtomic: "10000",
       executionMode: "router-demo-mock",
       amountPaidAtomic: "10000",
       receiptVerificationStatus: "verified",

@@ -23,9 +23,10 @@ state, finalized payout ledger closure marks allocated accruals paid only after
 transfer-content verification, and safe release can cancel
 pre-submission/problem payout batches back to available accruals. The first
 `@split402/router` alpha package is present with
-static providers, control-plane route discovery, budget enforcement, ranking,
-fallback, and receipt verification, and the MCP demo gateway now exposes router-backed
-`split402.searchCapabilities`, `split402.execute`, and `split402.getReceipt`
+static providers, control-plane route discovery, quote preflight, budget
+enforcement, ranking, fallback, and receipt verification, and the MCP demo
+gateway now exposes router-backed `split402.searchCapabilities`,
+`split402.quote`, `split402.execute`, and `split402.getReceipt`
 tools in demo mode plus optional control-plane route discovery. The Phase 7
 proof validator now requires the MCP transcript to prove budgeted discovery,
 provider continuity, receipt lookup consistency, route attribution,
@@ -436,9 +437,9 @@ Current slice:
   payment details, Split402 campaign metadata, expected referral economics, and
   proof commands.
 - `@split402/router` public-alpha package with static providers, control-plane
-  route discovery, external x402 onboarding discovery, budget enforcement,
-  deterministic ranking, retry/fallback, pay-to wallet checks, and fail-closed
-  receipt verification.
+  route discovery, external x402 onboarding discovery, quote preflight, budget
+  enforcement, deterministic ranking, retry/fallback, pay-to wallet checks, and
+  fail-closed receipt verification.
 - Router-backed MCP demo tools for capability search, demo execution results,
   and session receipt lookup, plus optional control-plane route discovery for
   live staging providers. The default execution path is explicitly demo/mock

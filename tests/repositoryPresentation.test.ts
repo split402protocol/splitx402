@@ -296,6 +296,7 @@ describe("repository presentation", () => {
       expect(text).toContain("@split402/router");
       expect(text).toContain("control-plane route discovery");
       expect(text).toContain("split402.searchCapabilities");
+      expect(text).toContain("split402.quote");
       expect(text).toContain("split402.execute");
       expect(text).toContain("split402.getReceipt");
       expect(text).toContain("not production MCP hosting");

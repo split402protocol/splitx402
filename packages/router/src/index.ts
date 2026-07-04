@@ -56,6 +56,17 @@ export interface Split402RouterExecuteInput {
   maxAttempts?: number;
 }
 
+export interface Split402RouterQuoteInput {
+  capability: string;
+  budget: {
+    network: string;
+    asset: string;
+    maxAmountAtomic: string;
+  };
+  referralClaim?: ReferralClaimV1;
+  maxAttempts?: number;
+}
+
 export interface Split402RouterExecuteResult<T = unknown> {
   providerId: string;
   provider: Split402CapabilityProvider;
@@ -63,6 +74,24 @@ export interface Split402RouterExecuteResult<T = unknown> {
   data: T;
   receipt: Split402ReceiptV1;
   attempts: Split402RouterAttempt[];
+}
+
+export interface Split402RouterQuoteProvider {
+  rank: number;
+  providerId: string;
+  provider: Split402CapabilityProvider;
+  amountAtomic: string;
+  reliability: Split402CapabilityProvider["reliability"] | null;
+}
+
+export interface Split402RouterQuoteResult {
+  capability: string;
+  budget: Split402RouterQuoteInput["budget"];
+  selectedProviderId: string;
+  selectedProvider: Split402CapabilityProvider;
+  quotedAmountAtomic: string;
+  maxAttempts: number;
+  rankedProviders: Split402RouterQuoteProvider[];
 }
 
 export interface Split402RouterSearchInput {
@@ -354,8 +383,8 @@ export class Split402Router {
       .sort(compareProviders);
   }
 
-  rankProviders(input: Split402RouterExecuteInput): Split402CapabilityProvider[] {
-    assertExecuteInput(input);
+  rankProviders(input: Split402RouterQuoteInput): Split402CapabilityProvider[] {
+    assertQuoteInput(input);
     const maxAmount = readAtomicAmount(
       input.budget.maxAmountAtomic,
       "budget.maxAmountAtomic"
@@ -371,10 +400,8 @@ export class Split402Router {
       .sort(compareProviders);
   }
 
-  async execute<T = unknown>(
-    input: Split402RouterExecuteInput
-  ): Promise<Split402RouterExecuteResult<T>> {
-    assertExecuteInput(input);
+  quoteExecution(input: Split402RouterQuoteInput): Split402RouterQuoteResult {
+    assertQuoteInput(input);
     const availableForCapability = this.providers.filter(
       (provider) =>
         provider.capability === input.capability &&
@@ -415,9 +442,39 @@ export class Split402Router {
       );
     }
 
-    const maxAttempts = normalizeMaxAttempts(input.maxAttempts, eligibleProviders.length);
+    const maxAttempts = normalizeMaxAttempts(
+      input.maxAttempts,
+      eligibleProviders.length
+    );
+    const rankedProviders = eligibleProviders
+      .slice(0, maxAttempts)
+      .map((provider, index) => ({
+        rank: index + 1,
+        providerId: provider.providerId,
+        provider,
+        amountAtomic: provider.amountAtomic,
+        reliability: provider.reliability ?? null
+      }));
+    const selectedProvider = rankedProviders[0]!.provider;
+
+    return {
+      capability: input.capability,
+      budget: input.budget,
+      selectedProviderId: selectedProvider.providerId,
+      selectedProvider,
+      quotedAmountAtomic: selectedProvider.amountAtomic,
+      maxAttempts,
+      rankedProviders
+    };
+  }
+
+  async execute<T = unknown>(
+    input: Split402RouterExecuteInput
+  ): Promise<Split402RouterExecuteResult<T>> {
+    assertExecuteInput(input);
+    const quote = this.quoteExecution(input);
     const attempts: Split402RouterAttempt[] = [];
-    for (const provider of eligibleProviders.slice(0, maxAttempts)) {
+    for (const { provider } of quote.rankedProviders) {
       try {
         const result = await this.executor.execute({
           provider,
@@ -1635,6 +1692,10 @@ function compareAtomicAmount(left: string, right: string): number {
 }
 
 function assertExecuteInput(input: Split402RouterExecuteInput): void {
+  assertQuoteInput(input);
+}
+
+function assertQuoteInput(input: Split402RouterQuoteInput): void {
   if (input.capability.trim().length === 0) {
     throw new Split402RouterError("invalid_request", "capability is required");
   }
