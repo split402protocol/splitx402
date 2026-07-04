@@ -1,5 +1,5 @@
 export const PHASE7_DOCKER_ENV_INIT_USAGE =
-  "Usage: corepack pnpm phase7:docker:env:init [--force] [--source <path>] [--target <path>]";
+  "Usage: corepack pnpm phase7:docker:env:init [--force] [--generate-secrets] [--source <path>] [--target <path>]";
 
 export const DEFAULT_PHASE7_DOCKER_ENV_SOURCE =
   "deploy/phase7-staging/phase7-staging.env.example";
@@ -8,6 +8,7 @@ export const DEFAULT_PHASE7_DOCKER_ENV_TARGET =
 
 export interface Phase7DockerEnvInitArgs {
   force: boolean;
+  generateSecrets: boolean;
   help: boolean;
   source: string;
   target: string;
@@ -22,11 +23,17 @@ export interface Phase7DockerEnvInitPlan {
   nextActions: string[];
 }
 
+export const PHASE7_DOCKER_GENERATED_SECRET_KEYS = [
+  "SPLIT402_DASHBOARD_VIEWER_TOKEN",
+  "SPLIT402_WEBHOOK_WORKER_SECRET",
+] as const;
+
 export function parsePhase7DockerEnvInitArgs(
   argv: readonly string[],
 ): Phase7DockerEnvInitArgs {
   const parsed: Phase7DockerEnvInitArgs = {
     force: false,
+    generateSecrets: false,
     help: false,
     source: DEFAULT_PHASE7_DOCKER_ENV_SOURCE,
     target: DEFAULT_PHASE7_DOCKER_ENV_TARGET,
@@ -45,6 +52,10 @@ export function parsePhase7DockerEnvInitArgs(
       parsed.force = true;
       continue;
     }
+    if (arg === "--generate-secrets") {
+      parsed.generateSecrets = true;
+      continue;
+    }
     if (arg === "--source") {
       parsed.source = readOptionValue(argv, index, arg);
       index += 1;
@@ -59,6 +70,16 @@ export function parsePhase7DockerEnvInitArgs(
   }
 
   return parsed;
+}
+
+export function populatePhase7DockerGeneratedSecrets(
+  text: string,
+  generateSecret: () => string,
+): string {
+  return text
+    .split(/\r?\n/u)
+    .map((line) => populateGeneratedSecretLine(line, generateSecret))
+    .join("\n");
 }
 
 export function createPhase7DockerEnvInitPlan(input: {
@@ -100,10 +121,45 @@ export function createPhase7DockerEnvInitPlan(input: {
       ? `${input.args.target} will be replaced from ${input.args.source}.`
       : `${input.args.target} will be created from ${input.args.source}.`,
     nextActions: [
-      `Fill private Docker runtime values in ${input.args.target}.`,
+      input.args.generateSecrets
+        ? `Generated private runtime secrets in ${input.args.target}; fill the remaining URLs, wallets, control-plane tokens, and keys manually.`
+        : `Fill private Docker runtime values in ${input.args.target}, or rerun with --generate-secrets to create local runtime secrets automatically.`,
       "Run corepack pnpm phase7:docker:doctor --brief.",
     ],
   };
+}
+
+function populateGeneratedSecretLine(
+  line: string,
+  generateSecret: () => string,
+): string {
+  const match = /^([A-Z0-9_]+)=(.*)$/u.exec(line);
+  if (match === null) {
+    return line;
+  }
+  const key = match[1];
+  const value = match[2];
+  if (key === undefined || value === undefined) {
+    return line;
+  }
+  if (
+    !PHASE7_DOCKER_GENERATED_SECRET_KEYS.includes(
+      key as (typeof PHASE7_DOCKER_GENERATED_SECRET_KEYS)[number],
+    ) ||
+    !shouldReplaceGeneratedSecretValue(value)
+  ) {
+    return line;
+  }
+  return `${key}=${generateSecret()}`;
+}
+
+function shouldReplaceGeneratedSecretValue(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized.length === 0 ||
+    normalized === "replace-me" ||
+    normalized.includes("replace-with")
+  );
 }
 
 function readOptionValue(

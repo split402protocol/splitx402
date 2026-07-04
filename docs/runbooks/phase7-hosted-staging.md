@@ -36,6 +36,11 @@ corepack pnpm phase7:docker:env:init
 
 Fill the viewer token, webhook target, Devnet wallets, and demo merchant signing
 settings in `deploy/phase7-staging/phase7-staging.env`.
+For a fresh ignored runtime env file, use
+`corepack pnpm phase7:docker:env:init --generate-secrets` to generate local
+dashboard viewer and webhook worker secrets automatically. Hosted URLs, wallets,
+service keys, buyer keys, and control-plane session tokens still must be filled
+deliberately.
 
 Before starting services on a local machine or VPS, run the Docker doctor:
 
