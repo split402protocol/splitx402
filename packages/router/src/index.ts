@@ -2260,6 +2260,13 @@ function validateJsonStringConstraints(
   path: string
 ): string[] {
   const errors: string[] = [];
+  if (schema.format !== undefined) {
+    if (typeof schema.format !== "string") {
+      errors.push(`${path} format must be a string`);
+    } else {
+      errors.push(...validateJsonStringFormat(value, schema.format, path));
+    }
+  }
   if (schema.pattern !== undefined) {
     if (typeof schema.pattern !== "string") {
       errors.push(`${path} pattern must be a string`);
@@ -2292,6 +2299,81 @@ function validateJsonStringConstraints(
     }
   }
   return errors;
+}
+
+function validateJsonStringFormat(
+  value: unknown,
+  format: string,
+  path: string
+): string[] {
+  if (!isSupportedJsonStringFormat(format)) {
+    return [`${path} format ${format} is unsupported`];
+  }
+  if (typeof value !== "string") {
+    return [`${path} must be a string with format ${format}`];
+  }
+  switch (format) {
+    case "date-time":
+      return isDateTimeString(value)
+        ? []
+        : [`${path} must be a valid date-time string`];
+    case "email":
+      return isEmailString(value) ? [] : [`${path} must be a valid email string`];
+    case "uri":
+      return isAbsoluteUrlString(value) ? [] : [`${path} must be a valid URI`];
+    case "url":
+      return isHttpUrlString(value) ? [] : [`${path} must be a valid URL`];
+    case "uuid":
+      return isUuidString(value) ? [] : [`${path} must be a valid UUID`];
+  }
+}
+
+function isSupportedJsonStringFormat(
+  value: string
+): value is "date-time" | "email" | "uri" | "url" | "uuid" {
+  return (
+    value === "date-time" ||
+    value === "email" ||
+    value === "uri" ||
+    value === "url" ||
+    value === "uuid"
+  );
+}
+
+function isAbsoluteUrlString(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol.length > 1;
+  } catch {
+    return false;
+  }
+}
+
+function isHttpUrlString(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function isUuidString(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
+    value
+  );
+}
+
+function isEmailString(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value);
+}
+
+function isDateTimeString(value: string): boolean {
+  return (
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/u.test(
+      value
+    ) && Number.isFinite(Date.parse(value))
+  );
 }
 
 function validateJsonNumberConstraints(
