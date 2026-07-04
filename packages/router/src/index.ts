@@ -591,6 +591,7 @@ export class Split402Router {
     const receipt = parsed.data;
     const errors = [
       ...validateReceiptMatchesProvider(receipt, provider),
+      ...validateReceiptMatchesProviderRouteMetadata(receipt, provider),
       ...validateReceiptMatchesReferralClaim(receipt, referralClaim)
     ];
     if (this.verifyReceipts) {
@@ -1813,6 +1814,29 @@ function validateReceiptMatchesProvider(
     },
     provider
   ).map((error) => error.replace(/^offer/u, "receipt"));
+}
+
+function validateReceiptMatchesProviderRouteMetadata(
+  receipt: Split402ReceiptV1,
+  provider: Split402CapabilityProvider
+): string[] {
+  const errors: string[] = [];
+  if (provider.routeId !== undefined && receipt.routeId !== provider.routeId) {
+    errors.push("receipt routeId does not match provider routeId");
+  }
+  if (
+    provider.metadata?.referrerWallet !== undefined &&
+    receipt.referrerWallet !== provider.metadata.referrerWallet
+  ) {
+    errors.push("receipt referrerWallet does not match provider referrerWallet");
+  }
+  if (
+    provider.metadata?.payoutWallet !== undefined &&
+    receipt.payoutWallet !== provider.metadata.payoutWallet
+  ) {
+    errors.push("receipt payoutWallet does not match provider payoutWallet");
+  }
+  return errors;
 }
 
 function validateProviderAcceptsReferralClaim(
