@@ -3733,6 +3733,35 @@ describe("Split402Router", () => {
     ]);
   });
 
+  it("accepts duplicate control-plane receipt ingestion as idempotent success", async () => {
+    const recorder = new Split402ControlPlaneReceiptRecorder({
+      controlPlaneUrl: "https://control.example",
+      fetch: async () =>
+        jsonResponse(
+          {
+            status: "duplicate",
+            id: receipt.receiptId
+          },
+          200
+        )
+    });
+
+    await expect(
+      recorder.record({ provider: provider(), receipt })
+    ).resolves.toBeUndefined();
+  });
+
+  it("rejects unexpected successful control-plane receipt responses", async () => {
+    const recorder = new Split402ControlPlaneReceiptRecorder({
+      controlPlaneUrl: "https://control.example",
+      fetch: async () => textResponse("ok", { status: 200 })
+    });
+
+    await expect(recorder.record({ provider: provider(), receipt })).rejects.toThrow(
+      "control-plane receipt ingestion returned unexpected status: ok"
+    );
+  });
+
   it("fails closed when control-plane receipt ingestion rejects", async () => {
     const recorder = new Split402ControlPlaneReceiptRecorder({
       controlPlaneUrl: "https://control.example",

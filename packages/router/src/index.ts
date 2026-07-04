@@ -920,10 +920,16 @@ export class Split402ControlPlaneReceiptRecorder
         source: this.source
       })
     });
+    const body = await response.text();
     if (response.status < 200 || response.status >= 300) {
-      const body = await response.text();
       throw new Error(
         `control-plane receipt ingestion failed with HTTP ${response.status}${formatReceiptRecorderErrorBody(body)}`
+      );
+    }
+    const status = readReceiptRecorderResponseStatus(body);
+    if (status !== "created" && status !== "duplicate") {
+      throw new Error(
+        `control-plane receipt ingestion returned unexpected status${formatReceiptRecorderErrorBody(body)}`
       );
     }
   }
@@ -3189,4 +3195,17 @@ function parseUrl(value: string): URL | undefined {
 function formatReceiptRecorderErrorBody(body: string): string {
   const trimmed = body.trim();
   return trimmed.length === 0 ? "" : `: ${trimmed}`;
+}
+
+function readReceiptRecorderResponseStatus(body: string): string | undefined {
+  try {
+    const parsed = JSON.parse(body) as unknown;
+    if (typeof parsed !== "object" || parsed === null) {
+      return undefined;
+    }
+    const status = (parsed as { status?: unknown }).status;
+    return typeof status === "string" ? status : undefined;
+  } catch {
+    return undefined;
+  }
 }
