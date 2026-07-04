@@ -91,6 +91,9 @@ describe("Split402 launch checklist", () => {
       "corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log",
     );
     expect(checklist.sections[3]?.commands).toContain(
+      "corepack pnpm phase7:staging:commands-record --output split402-launch-evidence/phase7-staging-evidence/commands.log",
+    );
+    expect(checklist.sections[3]?.commands).toContain(
       "corepack pnpm phase7:staging:commands-status --brief split402-launch-evidence/phase7-staging-evidence/commands.log",
     );
     expect(checklist.sections[4]?.commands[0]).toBe(

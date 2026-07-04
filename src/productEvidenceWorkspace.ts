@@ -261,6 +261,7 @@ function createNextCommands(input: {
     `SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 corepack pnpm phase7:staging:collect-mcp-gateway ${phase7EnvOption}`,
     "corepack pnpm demo:mcp-gateway:smoke",
     `corepack pnpm phase7:staging:commands-template ${input.directory}/phase7-staging-evidence/commands.log`,
+    `corepack pnpm phase7:staging:commands-record --output ${input.directory}/phase7-staging-evidence/commands.log`,
     `corepack pnpm phase7:staging:commands-status --brief ${input.directory}/phase7-staging-evidence/commands.log`,
     `corepack pnpm demo:mcp-bundle ${input.directory}/phase7-staging-evidence/mcp-bundle.json`,
     `corepack pnpm demo:paid-suite ${input.directory}/phase7-staging-evidence/paid-suite.log`,

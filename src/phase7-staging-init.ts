@@ -61,6 +61,7 @@ function main(): void {
           "Fill SPLIT402_MCP_* hosted proof variables and use a funded buyer key before MCP collection.",
           `SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 corepack pnpm phase7:staging:collect-mcp-gateway --evidence-env-file ${envFilePath}`,
           "corepack pnpm demo:mcp-gateway:smoke",
+          `corepack pnpm phase7:staging:commands-record --output ${workspace.directory}/commands.log`,
           `corepack pnpm demo:mcp-bundle ${workspace.directory}/mcp-bundle.json`,
           `corepack pnpm demo:paid-suite ${workspace.directory}/paid-suite.log`,
           `corepack pnpm phase7:staging:derive-receipt-verification --evidence-env-file ${envFilePath} ${workspace.directory}/paid-suite.log ${workspace.directory}/receipt-verification.json`,
