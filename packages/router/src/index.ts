@@ -2100,6 +2100,62 @@ function validateJsonArrayShape(
       }
     }
   }
+  if (
+    schema.contains !== undefined ||
+    schema.minContains !== undefined ||
+    schema.maxContains !== undefined
+  ) {
+    errors.push(...validateJsonArrayContains(value, schema, path));
+  }
+  return errors;
+}
+
+function validateJsonArrayContains(
+  value: unknown[],
+  schema: Record<string, unknown>,
+  path: string
+): string[] {
+  const errors: string[] = [];
+  const containsRequired =
+    schema.contains !== undefined ||
+    schema.minContains !== undefined ||
+    schema.maxContains !== undefined;
+  const contains = readSchemaRecord(schema.contains);
+  if (containsRequired && contains === undefined) {
+    errors.push(`${path} contains must be a schema object`);
+  }
+  const minContains =
+    schema.minContains === undefined
+      ? contains === undefined
+        ? 0
+        : 1
+      : readNonNegativeIntegerSchemaKeyword(schema.minContains);
+  if (schema.minContains !== undefined && minContains === undefined) {
+    errors.push(`${path} minContains must be a non-negative integer`);
+  }
+  const maxContains =
+    schema.maxContains === undefined
+      ? undefined
+      : readNonNegativeIntegerSchemaKeyword(schema.maxContains);
+  if (schema.maxContains !== undefined && maxContains === undefined) {
+    errors.push(`${path} maxContains must be a non-negative integer`);
+  }
+  if (
+    contains === undefined ||
+    minContains === undefined ||
+    (schema.maxContains !== undefined && maxContains === undefined)
+  ) {
+    return errors;
+  }
+  const matchCount = value.filter(
+    (item) => validateJsonSchemaValue(item, contains, path).length === 0
+  ).length;
+  if (matchCount < minContains) {
+    errors.push(`${path} must contain at least ${minContains} matching items`);
+  }
+  if (maxContains !== undefined && matchCount > maxContains) {
+    errors.push(`${path} must contain at most ${maxContains} matching items`);
+  }
   return errors;
 }
 

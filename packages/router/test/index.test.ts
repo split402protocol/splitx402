@@ -961,6 +961,206 @@ describe("Split402Router", () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
+  it("executes when input satisfies provider array contains constraints", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>().mockResolvedValue({
+      data: { risk: "low" },
+      receipt
+    });
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-wallet-tags",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["tags"],
+              properties: {
+                tags: {
+                  type: "array",
+                  items: { type: "string" },
+                  contains: { const: "risk:high-signal" },
+                  minContains: 1,
+                  maxContains: 1
+                }
+              },
+              additionalProperties: false
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    const input = { tags: ["chain:solana", "risk:high-signal"] };
+    const result = await router.execute({
+      capability: "solana.wallet-risk",
+      input,
+      budget: {
+        network: receipt.network,
+        asset: receipt.asset,
+        maxAmountAtomic: receipt.requiredAmountAtomic
+      }
+    });
+
+    expect(result.providerId).toBe("provider-wallet-tags");
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: expect.objectContaining({ providerId: "provider-wallet-tags" }),
+        body: input
+      })
+    );
+  });
+
+  it("rejects before payment when array contains matches are below minimum", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-wallet-tags",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["tags"],
+              properties: {
+                tags: {
+                  type: "array",
+                  items: { type: "string" },
+                  contains: { const: "risk:high-signal" },
+                  minContains: 1
+                }
+              },
+              additionalProperties: false
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: { tags: ["chain:solana", "risk:low"] },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-wallet-tags",
+          retryable: false,
+          error: expect.stringContaining(
+            "input.tags must contain at least 1 matching items"
+          )
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("rejects before payment when array contains matches exceed maximum", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-wallet-tags",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["tags"],
+              properties: {
+                tags: {
+                  type: "array",
+                  items: { type: "string" },
+                  contains: { const: "risk:high-signal" },
+                  maxContains: 1
+                }
+              },
+              additionalProperties: false
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: { tags: ["risk:high-signal", "risk:high-signal"] },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-wallet-tags",
+          retryable: false,
+          error: expect.stringContaining(
+            "input.tags must contain at most 1 matching items"
+          )
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed array contains schemas before payment", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-malformed-contains",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["tags"],
+              properties: {
+                tags: {
+                  type: "array",
+                  contains: true,
+                  minContains: -1,
+                  maxContains: "one"
+                }
+              }
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: { tags: ["risk:high-signal"] },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-malformed-contains",
+          retryable: false,
+          error: expect.stringContaining("input.tags contains must be a schema object")
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it("executes when input satisfies provider array constraints", async () => {
     const execute = vi.fn<Split402RouterExecutor["execute"]>().mockResolvedValue({
       data: { risk: "low" },
