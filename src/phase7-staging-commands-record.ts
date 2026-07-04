@@ -5,7 +5,11 @@ import { spawnSync } from "node:child_process";
 import { recordPhase7LocalCommandEvidence } from "./phase7CommandRecorder.js";
 
 const USAGE =
-  "Usage: corepack pnpm phase7:staging:commands-record [--output <path>] [--force] [--include-preflight]";
+  [
+    "Usage: corepack pnpm phase7:staging:commands-record",
+    "[--output <path>] [--force] [--include-preflight] [--include-hosted]",
+    "[--evidence-env-file <path>] [--evidence-dir <path>] [--proof <path>]",
+  ].join(" ");
 
 const args = parseCliArgs(process.argv.slice(2));
 if (args.help) {
@@ -16,7 +20,15 @@ if (args.help) {
 const report = recordPhase7LocalCommandEvidence({
   outputPath: args.outputPath,
   force: args.force,
+  includeHosted: args.includeHosted,
   includePreflight: args.includePreflight,
+  ...(args.evidenceEnvFile === undefined
+    ? {}
+    : { evidenceEnvFile: args.evidenceEnvFile }),
+  ...(args.evidenceDirectory === undefined
+    ? {}
+    : { evidenceDirectory: args.evidenceDirectory }),
+  ...(args.proofPath === undefined ? {} : { proofPath: args.proofPath }),
   exists: existsSync,
   writeText: (path, text) => {
     mkdirSync(dirname(path), { recursive: true });
@@ -50,16 +62,21 @@ if (!report.ok) {
 }
 
 interface CliArgs {
+  evidenceDirectory?: string;
+  evidenceEnvFile?: string;
   force: boolean;
   help: boolean;
+  includeHosted: boolean;
   includePreflight: boolean;
   outputPath: string;
+  proofPath?: string;
 }
 
 function parseCliArgs(argv: readonly string[]): CliArgs {
   const parsed: CliArgs = {
     force: false,
     help: false,
+    includeHosted: false,
     includePreflight: false,
     outputPath: "split402-launch-evidence/phase7-staging-evidence/commands.log",
   };
@@ -72,6 +89,17 @@ function parseCliArgs(argv: readonly string[]): CliArgs {
       parsed.force = true;
     } else if (arg === "--include-preflight") {
       parsed.includePreflight = true;
+    } else if (arg === "--include-hosted") {
+      parsed.includeHosted = true;
+    } else if (arg === "--evidence-env-file") {
+      parsed.evidenceEnvFile = readOptionValue(argv, index, arg);
+      index += 1;
+    } else if (arg === "--evidence-dir") {
+      parsed.evidenceDirectory = readOptionValue(argv, index, arg);
+      index += 1;
+    } else if (arg === "--proof") {
+      parsed.proofPath = readOptionValue(argv, index, arg);
+      index += 1;
     } else if (arg === "--output") {
       parsed.outputPath = readOptionValue(argv, index, arg);
       index += 1;
