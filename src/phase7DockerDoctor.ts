@@ -1,5 +1,7 @@
 import dotenv from "dotenv";
 
+import { PHASE7_DOCKER_GENERATED_SECRET_KEYS } from "./phase7DockerEnvInit.js";
+
 export interface Phase7DockerDoctorInput {
   composeFile?: string;
   envFile?: string;
@@ -123,6 +125,7 @@ export function runPhase7DockerDoctor(
     : {
         ok: false,
         detail: `Skipped until ${envFile} exists.`,
+        generatedSecretPlaceholders: [],
       };
   checks.push({
     name: "compose_env_values",
@@ -170,7 +173,7 @@ export function runPhase7DockerDoctor(
     envFile,
     profiles,
     checks,
-    nextActions: createNextActions(checks, composeFile, envFile, profiles),
+    nextActions: createNextActions(checks, composeFile, envFile, profiles, envValues),
   };
 }
 
@@ -247,6 +250,7 @@ function createNextActions(
   composeFile: string,
   envFile: string,
   profiles: readonly Phase7DockerProfile[],
+  envValues: EnvValidationResult,
 ): string[] {
   const failed = new Set(
     checks.filter((check) => check.required && !check.ok).map((check) => check.name),
@@ -267,6 +271,15 @@ function createNextActions(
     );
   }
   if (failed.has("compose_env_values")) {
+    if (envValues.generatedSecretPlaceholders.length > 0) {
+      actions.push(
+        `Regenerate local Docker runtime secrets with \`corepack pnpm phase7:docker:env:init --generate-secrets --force${
+          envFile === defaultEnvFile ? "" : ` --target ${envFile}`
+        }\`; this replaces generated placeholders for ${envValues.generatedSecretPlaceholders.join(
+          ", ",
+        )} but still requires hosted URLs, wallets, control-plane tokens, and keys to be filled privately.`,
+      );
+    }
     actions.push(
       `Fill missing private runtime values and replace template placeholders in ${envFile}; do not commit this file.`,
     );
@@ -288,6 +301,7 @@ function createNextActions(
 interface EnvValidationResult {
   ok: boolean;
   detail: string;
+  generatedSecretPlaceholders: string[];
 }
 
 function validateEnvValues(
@@ -299,6 +313,7 @@ function validateEnvValues(
     return {
       ok: false,
       detail: `${envFile} exists, but env values could not be inspected by this runner.`,
+      generatedSecretPlaceholders: [],
     };
   }
 
@@ -311,6 +326,7 @@ function validateEnvValues(
       detail: `${envFile} could not be read: ${
         error instanceof Error ? error.message : String(error)
       }`,
+      generatedSecretPlaceholders: [],
     };
   }
 
@@ -325,6 +341,11 @@ function validateEnvValues(
     .filter(([, value]) => value.trim().length > 0 && isPlaceholderEnvValue(value))
     .map(([key]) => key)
     .sort();
+  const generatedSecretPlaceholders = placeholderKeys.filter((key) =>
+    PHASE7_DOCKER_GENERATED_SECRET_KEYS.includes(
+      key as (typeof PHASE7_DOCKER_GENERATED_SECRET_KEYS)[number],
+    ),
+  );
 
   if (missingRequired.length > 0 || placeholderKeys.length > 0) {
     const details = [
@@ -338,12 +359,14 @@ function validateEnvValues(
     return {
       ok: false,
       detail: `${envFile} is not ready (${details.join("; ")}).`,
+      generatedSecretPlaceholders,
     };
   }
 
   return {
     ok: true,
     detail: `${envFile} has required ${describeProfileSet(profiles)} runtime values and no obvious template placeholders.`,
+    generatedSecretPlaceholders: [],
   };
 }
 
