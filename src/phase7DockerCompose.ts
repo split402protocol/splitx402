@@ -165,7 +165,12 @@ function resolveServices(
     "dashboard",
     ...(profiles.includes("demo") ? ["demo-merchant"] : []),
     ...(profiles.includes("workers")
-      ? ["chain-worker", "webhook-worker", "payout-finality-worker"]
+      ? [
+          "webhook-receiver",
+          "chain-worker",
+          "webhook-worker",
+          "payout-finality-worker",
+        ]
       : []),
   ];
 }

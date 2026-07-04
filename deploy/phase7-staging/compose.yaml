@@ -1,5 +1,22 @@
 name: split402-phase7-staging
 
+x-workspace-volumes: &workspace-volumes
+  - ../..:/workspace
+  - split402-phase7-root-node-modules:/workspace/node_modules
+  - split402-phase7-agent-sdk-node-modules:/workspace/packages/agent-sdk/node_modules
+  - split402-phase7-control-plane-node-modules:/workspace/packages/control-plane/node_modules
+  - split402-phase7-express-node-modules:/workspace/packages/express/node_modules
+  - split402-phase7-merchant-sdk-node-modules:/workspace/packages/merchant-sdk/node_modules
+  - split402-phase7-protocol-node-modules:/workspace/packages/protocol/node_modules
+  - split402-phase7-router-node-modules:/workspace/packages/router/node_modules
+  - split402-phase7-test-vectors-node-modules:/workspace/packages/test-vectors/node_modules
+  - split402-phase7-x402-extension-node-modules:/workspace/packages/x402-extension/node_modules
+  - split402-phase7-dashboard-node-modules:/workspace/apps/dashboard/node_modules
+  - split402-phase7-demo-agent-node-modules:/workspace/apps/demo-agent/node_modules
+  - split402-phase7-demo-merchant-node-modules:/workspace/apps/demo-merchant/node_modules
+  - split402-phase7-mcp-demo-node-modules:/workspace/apps/mcp-demo/node_modules
+  - split402-phase7-payout-signer-node-modules:/workspace/apps/payout-signer/node_modules
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -22,7 +39,6 @@ services:
     working_dir: /workspace
     command: >
       sh -lc "corepack enable &&
-      corepack pnpm install --frozen-lockfile &&
       corepack pnpm control-plane"
     depends_on:
       migrate:
@@ -30,6 +46,7 @@ services:
     env_file:
       - phase7-staging.env
     environment:
+      CI: "true"
       PORT: "4021"
       SPLIT402_DATABASE_URL: postgresql://split402:split402@postgres:5432/split402
       SPLIT402_DATABASE_SSL: "false"
@@ -46,8 +63,7 @@ services:
       timeout: 3s
       retries: 30
       start_period: 20s
-    volumes:
-      - ../..:/workspace
+    volumes: *workspace-volumes
 
   migrate:
     image: node:22-slim
@@ -62,17 +78,16 @@ services:
     env_file:
       - phase7-staging.env
     environment:
+      CI: "true"
       SPLIT402_DATABASE_URL: postgresql://split402:split402@postgres:5432/split402
       SPLIT402_DATABASE_SSL: "false"
-    volumes:
-      - ../..:/workspace
+    volumes: *workspace-volumes
 
   dashboard:
     image: node:22-slim
     working_dir: /workspace
     command: >
       sh -lc "corepack enable &&
-      corepack pnpm install --frozen-lockfile &&
       corepack pnpm dashboard"
     depends_on:
       control-plane:
@@ -80,6 +95,7 @@ services:
     env_file:
       - phase7-staging.env
     environment:
+      CI: "true"
       SPLIT402_DASHBOARD_PORT: "4027"
       SPLIT402_DASHBOARD_CONTROL_PLANE_URL: http://control-plane:4021
       SPLIT402_DASHBOARD_SESSION_COOKIE_SECURE: "false"
@@ -95,8 +111,7 @@ services:
       timeout: 3s
       retries: 30
       start_period: 20s
-    volumes:
-      - ../..:/workspace
+    volumes: *workspace-volumes
 
   demo-merchant:
     profiles: ["demo"]
@@ -104,7 +119,6 @@ services:
     working_dir: /workspace
     command: >
       sh -lc "corepack enable &&
-      corepack pnpm install --frozen-lockfile &&
       corepack pnpm demo:merchant"
     depends_on:
       control-plane:
@@ -112,6 +126,7 @@ services:
     env_file:
       - phase7-staging.env
     environment:
+      CI: "true"
       SPLIT402_MERCHANT_ORIGIN: http://localhost:4023
       PORT: "4023"
     ports:
@@ -126,8 +141,23 @@ services:
       timeout: 3s
       retries: 30
       start_period: 20s
-    volumes:
-      - ../..:/workspace
+    volumes: *workspace-volumes
+
+  webhook-receiver:
+    profiles: ["workers"]
+    image: node:22-slim
+    command: >
+      node -e "require('http').createServer((req,res)=>{req.resume();res.writeHead(204);res.end();}).listen(4040,'0.0.0.0')"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:4040/health',{method:'POST'}).then((response)=>process.exit(response.status===204?0:1)).catch(()=>process.exit(1))\""
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
 
   chain-worker:
     profiles: ["workers"]
@@ -135,18 +165,17 @@ services:
     working_dir: /workspace
     command: >
       sh -lc "corepack enable &&
-      corepack pnpm install --frozen-lockfile &&
       corepack pnpm worker:chain"
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     env_file:
       - phase7-staging.env
     environment:
+      CI: "true"
       SPLIT402_DATABASE_URL: postgresql://split402:split402@postgres:5432/split402
       SPLIT402_DATABASE_SSL: "false"
-    volumes:
-      - ../..:/workspace
+    volumes: *workspace-volumes
 
   webhook-worker:
     profiles: ["workers"]
@@ -154,18 +183,17 @@ services:
     working_dir: /workspace
     command: >
       sh -lc "corepack enable &&
-      corepack pnpm install --frozen-lockfile &&
       corepack pnpm worker:webhook"
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     env_file:
       - phase7-staging.env
     environment:
+      CI: "true"
       SPLIT402_DATABASE_URL: postgresql://split402:split402@postgres:5432/split402
       SPLIT402_DATABASE_SSL: "false"
-    volumes:
-      - ../..:/workspace
+    volumes: *workspace-volumes
 
   payout-finality-worker:
     profiles: ["workers"]
@@ -173,18 +201,31 @@ services:
     working_dir: /workspace
     command: >
       sh -lc "corepack enable &&
-      corepack pnpm install --frozen-lockfile &&
       corepack pnpm worker:payout-finality"
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     env_file:
       - phase7-staging.env
     environment:
+      CI: "true"
       SPLIT402_DATABASE_URL: postgresql://split402:split402@postgres:5432/split402
       SPLIT402_DATABASE_SSL: "false"
-    volumes:
-      - ../..:/workspace
+    volumes: *workspace-volumes
 
 volumes:
   split402-phase7-postgres:
+  split402-phase7-root-node-modules:
+  split402-phase7-agent-sdk-node-modules:
+  split402-phase7-control-plane-node-modules:
+  split402-phase7-express-node-modules:
+  split402-phase7-merchant-sdk-node-modules:
+  split402-phase7-protocol-node-modules:
+  split402-phase7-router-node-modules:
+  split402-phase7-test-vectors-node-modules:
+  split402-phase7-x402-extension-node-modules:
+  split402-phase7-dashboard-node-modules:
+  split402-phase7-demo-agent-node-modules:
+  split402-phase7-demo-merchant-node-modules:
+  split402-phase7-mcp-demo-node-modules:
+  split402-phase7-payout-signer-node-modules:

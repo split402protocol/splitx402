@@ -43,7 +43,7 @@ describe("Phase 7 Docker health checker", () => {
     });
 
     expect(report.ready).toBe(true);
-    expect(report.services).toHaveLength(7);
+    expect(report.services).toHaveLength(8);
     expect(report.services.every((service) => service.ok)).toBe(true);
     expect(report.command).toBe(
       "docker compose --env-file deploy/phase7-staging/phase7-staging.env -f deploy/phase7-staging/compose.yaml --profile demo --profile workers ps --format json",
@@ -91,6 +91,9 @@ describe("Phase 7 Docker health checker", () => {
     });
 
     expect(report.ready).toBe(false);
+    expect(report.errors).toContain(
+      "webhook-receiver is missing from docker compose ps output.",
+    );
     expect(report.errors).toContain(
       "chain-worker is missing from docker compose ps output.",
     );
@@ -167,6 +170,7 @@ function fullStackPs(): Array<Record<string, string>> {
   return [
     ...baseStackPs(),
     service("demo-merchant", "running", "healthy"),
+    service("webhook-receiver", "running", "healthy"),
     service("chain-worker", "running", ""),
     service("webhook-worker", "running", ""),
     service("payout-finality-worker", "running", ""),

@@ -7,6 +7,7 @@ import { decodePaymentRequiredHeader } from "@x402/core/http";
 import type { PaymentRequired } from "@x402/core/types";
 import {
   hashProtocolObject,
+  ReferralClaimV1Schema,
   Split402OfferV1Schema,
   Split402ReceiptV1Schema,
   verifySplit402Offer,
@@ -26,6 +27,7 @@ export interface Split402CapabilityProvider {
   method: Split402ProviderHttpMethod;
   operationId: string;
   campaignId: string;
+  referralClaim?: ReferralClaimV1;
   merchantPublicKey?: string;
   network: string;
   asset: string;
@@ -564,12 +566,13 @@ export class Split402Router {
     const attempts: Split402RouterAttempt[] = [];
     for (const { provider } of quote.rankedProviders) {
       try {
+        const referralClaim = input.referralClaim ?? provider.referralClaim;
         const result = await this.executor.execute({
           provider,
           body: input.input,
-          ...(input.referralClaim === undefined
+          ...(referralClaim === undefined
             ? {}
-            : { referralClaim: input.referralClaim }),
+            : { referralClaim }),
           ...(this.signer === undefined ? {} : { signer: this.signer }),
           ...(this.evmSigner === undefined ? {} : { evmSigner: this.evmSigner }),
           ...(this.evmNetworks === undefined
@@ -582,12 +585,12 @@ export class Split402Router {
         const receipt = this.verifyProviderReceipt(
           provider,
           result.receipt,
-          input.referralClaim
+          referralClaim
         );
         const receiptRecording = await this.recordProviderReceipt(
           provider,
           receipt,
-          input.referralClaim
+          referralClaim
         );
         validateOutputAgainstProviderSchema(provider, result.data, receipt);
         attempts.push({
@@ -721,6 +724,10 @@ export class Split402ControlPlaneDiscoveryClient {
     string,
     string | undefined
   >();
+  private readonly routeReferralClaimsByRouteId = new Map<
+    string,
+    ReferralClaimV1 | undefined
+  >();
 
   constructor(options: Split402ControlPlaneDiscoveryOptions) {
     this.controlPlaneUrl = normalizeBaseUrl(options.controlPlaneUrl);
@@ -808,18 +815,21 @@ export class Split402ControlPlaneDiscoveryClient {
     if (merchantPublicKey === undefined && this.requireMerchantPublicKey) {
       return undefined;
     }
+    const routeId = resource.metadata.split402.routeId;
+    const referralClaim = await this.resolveRouteReferralClaim(routeId);
     return {
       providerId: [
-        resource.metadata.split402.routeId,
+        routeId,
         resource.metadata.operationId
       ].join(":"),
       capability,
-      routeId: resource.metadata.split402.routeId,
+      routeId,
       merchantOrigin: resourceUrl.origin,
       path: `${resourceUrl.pathname}${resourceUrl.search}`,
       method,
       operationId: resource.metadata.operationId,
       campaignId: resource.metadata.split402.campaignId,
+      ...(referralClaim === undefined ? {} : { referralClaim }),
       ...(merchantPublicKey === undefined ? {} : { merchantPublicKey }),
       network: accept.network,
       asset: accept.asset,
@@ -871,6 +881,22 @@ export class Split402ControlPlaneDiscoveryClient {
       .find((key) => isActiveOfferReceiptKey(key, merchantKid, now))?.publicKey;
     const value = readOptionalString(publicKey);
     this.merchantPublicKeysByCampaignId.set(campaignId, value);
+    return value;
+  }
+
+  private async resolveRouteReferralClaim(
+    routeId: string
+  ): Promise<ReferralClaimV1 | undefined> {
+    if (this.routeReferralClaimsByRouteId.has(routeId)) {
+      return this.routeReferralClaimsByRouteId.get(routeId);
+    }
+    const routeResponse = await this.getJson<{ route?: unknown }>(
+      `/v1/routes/${encodeURIComponent(routeId)}`
+    );
+    const route = readRecord(routeResponse.route);
+    const parsed = ReferralClaimV1Schema.safeParse(route?.claim);
+    const value = parsed.success ? parsed.data : undefined;
+    this.routeReferralClaimsByRouteId.set(routeId, value);
     return value;
   }
 

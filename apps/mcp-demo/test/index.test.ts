@@ -2147,7 +2147,8 @@ describe("MCP demo gateway", () => {
       "https://control.example/v1/routes/search?status=active&limit=10",
       "https://control.example/v1/routes/rte_discovered/bazaar-resources",
       "https://control.example/v1/campaigns/cmp_00000000000000000000000000000002",
-      "https://control.example/v1/merchants/mrc_00000000000000000000000000000001"
+      "https://control.example/v1/merchants/mrc_00000000000000000000000000000001",
+      "https://control.example/v1/routes/rte_discovered"
     ]);
   });
 
@@ -2324,7 +2325,8 @@ describe("MCP demo gateway", () => {
       "https://control.example/v1/routes/search?status=active",
       "https://control.example/v1/routes/rte_discovered/bazaar-resources",
       "https://control.example/v1/campaigns/cmp_00000000000000000000000000000002",
-      "https://control.example/v1/merchants/mrc_00000000000000000000000000000001"
+      "https://control.example/v1/merchants/mrc_00000000000000000000000000000001",
+      "https://control.example/v1/routes/rte_discovered"
     ]);
   });
 
@@ -2445,7 +2447,8 @@ describe("MCP demo gateway", () => {
       "https://control.example/v1/routes/search?status=active",
       "https://control.example/v1/routes/rte_discovered/bazaar-resources",
       "https://control.example/v1/campaigns/cmp_00000000000000000000000000000002",
-      "https://control.example/v1/merchants/mrc_00000000000000000000000000000001"
+      "https://control.example/v1/merchants/mrc_00000000000000000000000000000001",
+      "https://control.example/v1/routes/rte_discovered"
     ]);
   });
 
@@ -3527,6 +3530,7 @@ function mcpControlPlaneFetch(
   calls: string[],
   bundle: ReturnType<typeof createMcpDemoBundle>
 ): Split402DiscoveryFetch {
+  const sample = createSampleProtocolArtifacts();
   return async (url, init) => {
     expect(init?.headers?.authorization).toBe("Bearer control-token");
     calls.push(url);
@@ -3565,6 +3569,14 @@ function mcpControlPlaneFetch(
             }
           }
         ]
+      });
+    }
+    if (parsed.pathname === "/v1/routes/rte_discovered") {
+      return mcpJsonResponse({
+        route: {
+          id: "rte_discovered",
+          claim: sample.artifacts.referralClaim
+        }
       });
     }
     if (parsed.pathname === `/v1/campaigns/${bundle.mcp.tools[0].split402.campaignId}`) {

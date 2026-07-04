@@ -123,6 +123,36 @@ describe("receipt ingestion", () => {
     expect(backingStore.listAccruals()).toHaveLength(1);
   });
 
+  it("generates receipt-scoped accounting ids across ingestor restarts", async () => {
+    const bundle = createSampleProtocolArtifacts();
+    const store = new InMemoryReceiptIngestionStore();
+    const firstIngestor = new ReceiptIngestor(store, {
+      resolveMerchantPublicKey: () => bundle.keys.merchantPublicKey,
+      now: () => FIXED_NOW
+    });
+    const secondIngestor = new ReceiptIngestor(store, {
+      resolveMerchantPublicKey: () => bundle.keys.merchantPublicKey,
+      now: () => FIXED_NOW
+    });
+
+    const first = await firstIngestor.ingest({ receipt: bundle.artifacts.receipt });
+    const second = await secondIngestor.ingest({
+      receipt: createReceiptVariant(bundle.artifacts.receipt, "08", "dd")
+    });
+
+    expect(first.status).toBe("created");
+    expect(second.status).toBe("created");
+    if (first.status !== "created" || second.status !== "created") {
+      throw new Error("expected both receipts to be created");
+    }
+    expect(second.accrual?.id).not.toBe(first.accrual?.id);
+    expect(second.ledgerTransaction?.id).not.toBe(first.ledgerTransaction?.id);
+    expect(second.ledgerTransaction?.entries.map((entry) => entry.id)).not.toEqual(
+      first.ledgerTransaction?.entries.map((entry) => entry.id)
+    );
+    expect(store.listAccruals()).toHaveLength(2);
+  });
+
   it("rejects conflicting receipt identifiers before signature verification", async () => {
     const bundle = createSampleProtocolArtifacts();
     const store = new InMemoryReceiptIngestionStore();
@@ -189,6 +219,21 @@ describe("receipt ingestion", () => {
     expect(store.listAccruals()).toHaveLength(0);
   });
 });
+
+function createReceiptVariant(
+  receipt: Split402ReceiptV1,
+  idSuffix: string,
+  settlementByteHex: string
+): Split402ReceiptV1 {
+  const variant = structuredClone(receipt);
+  variant.receiptId = `rcp_000000000000000000000000000000${idSuffix}`;
+  variant.paymentId = `pay_000000000000000000000000000000${idSuffix}`;
+  variant.settlementTxSignature = base58Encode(
+    hexToBytes(settlementByteHex.repeat(64))
+  );
+
+  return signReceipt(variant);
+}
 
 function createZeroCreditReceipt(receipt: Split402ReceiptV1): Split402ReceiptV1 {
   const zeroCreditReceipt = structuredClone(receipt);

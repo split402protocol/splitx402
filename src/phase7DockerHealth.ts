@@ -57,6 +57,7 @@ const healthcheckedServices = new Set([
   "control-plane",
   "dashboard",
   "demo-merchant",
+  "webhook-receiver",
 ]);
 
 export function runPhase7DockerHealth(
@@ -303,7 +304,12 @@ function expectedServices(profiles: readonly Phase7DockerProfile[]): string[] {
     "dashboard",
     ...(profiles.includes("demo") ? ["demo-merchant"] : []),
     ...(profiles.includes("workers")
-      ? ["chain-worker", "webhook-worker", "payout-finality-worker"]
+      ? [
+          "webhook-receiver",
+          "chain-worker",
+          "webhook-worker",
+          "payout-finality-worker",
+        ]
       : []),
   ];
 }

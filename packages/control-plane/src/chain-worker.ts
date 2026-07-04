@@ -91,9 +91,9 @@ export function readChainWorkerConfig(
   env: NodeJS.ProcessEnv = process.env
 ): ChainVerificationWorkerConfig {
   const rpcUrls = readRpcUrls(
-    env.SPLIT402_CHAIN_WORKER_SOLANA_RPC_URLS ??
-      env.SPLIT402_CHAIN_WORKER_SOLANA_RPC_URL ??
-      env.SPLIT402_SOLANA_RPC_URL,
+    readOptionalNonEmptyString(env.SPLIT402_CHAIN_WORKER_SOLANA_RPC_URLS) ??
+      readOptionalNonEmptyString(env.SPLIT402_CHAIN_WORKER_SOLANA_RPC_URL) ??
+      readOptionalNonEmptyString(env.SPLIT402_SOLANA_RPC_URL),
     "SPLIT402_CHAIN_WORKER_SOLANA_RPC_URLS or SPLIT402_CHAIN_WORKER_SOLANA_RPC_URL or SPLIT402_SOLANA_RPC_URL"
   );
   const rpcUrl = rpcUrls[0];
@@ -276,6 +276,14 @@ function readRequiredString(
     throw new Error(`${label} is required`);
   }
   return value;
+}
+
+function readOptionalNonEmptyString(value: string | undefined): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? undefined : trimmed;
 }
 
 function readRpcUrls(value: string | undefined, label: string): string[] {

@@ -53,6 +53,7 @@ describe("Phase 7 MCP gateway evidence collector", () => {
       "https://control.example/v1/routes/rte_discovered/bazaar-resources",
       "https://control.example/v1/campaigns/cmp_00000000000000000000000000000002",
       "https://control.example/v1/merchants/mrc_00000000000000000000000000000001",
+      "https://control.example/v1/routes/rte_discovered",
     ]);
     const transcript = writes.get("evidence/mcp-gateway.jsonl");
     expect(transcript).toContain('"direction":"request"');
@@ -253,6 +254,7 @@ function gatewayFetch(
   calls: string[],
   bundle: ReturnType<typeof createMcpDemoBundle>,
 ): Split402DiscoveryFetch {
+  const sample = createSampleProtocolArtifacts();
   return async (url, init) => {
     expect(init?.headers?.authorization).toBe("Bearer control-token");
     calls.push(url);
@@ -294,6 +296,14 @@ function gatewayFetch(
             },
           },
         ],
+      });
+    }
+    if (parsed.pathname === "/v1/routes/rte_discovered") {
+      return jsonResponse({
+        route: {
+          id: "rte_discovered",
+          claim: sample.artifacts.referralClaim,
+        },
       });
     }
     if (parsed.pathname === `/v1/campaigns/${bundle.mcp.tools[0].split402.campaignId}`) {
