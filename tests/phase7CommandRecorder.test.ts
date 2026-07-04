@@ -47,6 +47,7 @@ describe("Phase 7 command recorder", () => {
       evidenceEnvFile: "private/phase7.env",
       evidenceDirectory: "private/evidence",
       proofPath: "private/phase7-proof.txt",
+      seedOutputPath: "private/phase7-seed.json",
       exists: () => false,
       writeText: (_path, text) => writes.push(text),
       runCommand: (file, args) => ({
@@ -58,7 +59,7 @@ describe("Phase 7 command recorder", () => {
 
     expect(report).toMatchObject({
       ok: true,
-      commandCount: 27,
+      commandCount: 28,
       failedCommands: [],
       written: true,
     });
@@ -70,6 +71,9 @@ describe("Phase 7 command recorder", () => {
       "$ corepack pnpm phase7:docker:compose up --brief --profile demo --profile workers",
     );
     expect(writes[0]).toContain("$ corepack pnpm phase7:staging:seed");
+    expect(writes[0]).toContain(
+      "$ corepack pnpm phase7:staging:apply-seed-env --seed-output private/phase7-seed.json",
+    );
     expect(writes[0]).toContain("$ corepack pnpm phase7:staging:status");
     expect(writes[0]).toContain("private/phase7.env");
     expect(writes[0]).toContain("private/evidence/paid-suite.log");
@@ -80,6 +84,39 @@ describe("Phase 7 command recorder", () => {
     ).toBeLessThan(
       writes[0]?.indexOf("$ corepack pnpm phase7:staging:collect-reads") ?? -1,
     );
+  });
+
+  it("redacts sensitive command output before writing transcripts", () => {
+    const writes: string[] = [];
+    const report = recordPhase7LocalCommandEvidence({
+      outputPath: "evidence/commands.log",
+      includeHosted: true,
+      exists: () => false,
+      writeText: (_path, text) => writes.push(text),
+      runCommand: (_file, args) =>
+        args.includes("phase7:staging:seed")
+          ? {
+              exitCode: 0,
+              stdout: [
+                '{"proofEnv":{"SPLIT402_PHASE7_CONTROL_PLANE_TOKEN":"super-secret-token","SVM_PRIVATE_KEY":"private-key","SPLIT402_SERVICE_SEED_HEX":"seed-value"}}',
+                "SPLIT402_WEBHOOK_WORKER_SECRET=webhook-secret",
+                "",
+              ].join("\n"),
+              stderr: "SPLIT402_PHASE7_CONTROL_PLANE_TOKEN=stderr-secret\n",
+            }
+          : { exitCode: 0, stdout: "ok\n", stderr: "" },
+    });
+
+    expect(report.ok).toBe(true);
+    expect(writes[0]).toContain('"SPLIT402_PHASE7_CONTROL_PLANE_TOKEN":"[redacted]"');
+    expect(writes[0]).toContain('"SVM_PRIVATE_KEY":"[redacted]"');
+    expect(writes[0]).toContain('"SPLIT402_SERVICE_SEED_HEX":"[redacted]"');
+    expect(writes[0]).toContain("SPLIT402_WEBHOOK_WORKER_SECRET=[redacted]");
+    expect(writes[0]).not.toContain("super-secret-token");
+    expect(writes[0]).not.toContain("private-key");
+    expect(writes[0]).not.toContain("seed-value");
+    expect(writes[0]).not.toContain("webhook-secret");
+    expect(writes[0]).not.toContain("stderr-secret");
   });
 
   it("can include launch preflight when the operator opts in", () => {

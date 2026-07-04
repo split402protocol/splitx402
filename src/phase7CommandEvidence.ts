@@ -8,6 +8,7 @@ export const PHASE7_REQUIRED_COMMAND_EVIDENCE = [
   "corepack pnpm phase7:docker:compose up --brief --profile demo --profile workers",
   "corepack pnpm phase7:docker:health --brief --profile demo --profile workers",
   "corepack pnpm phase7:staging:seed",
+  "corepack pnpm phase7:staging:apply-seed-env",
   "corepack pnpm phase7:staging-proof",
   "corepack pnpm phase7:hosted:preflight",
   "corepack pnpm phase7:staging:collect-reads",

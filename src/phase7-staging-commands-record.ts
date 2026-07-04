@@ -9,6 +9,7 @@ const USAGE =
     "Usage: corepack pnpm phase7:staging:commands-record",
     "[--output <path>] [--force] [--include-preflight] [--include-hosted]",
     "[--evidence-env-file <path>] [--evidence-dir <path>] [--proof <path>]",
+    "[--seed-output <path>]",
   ].join(" ");
 
 const args = parseCliArgs(process.argv.slice(2));
@@ -29,6 +30,9 @@ const report = recordPhase7LocalCommandEvidence({
     ? {}
     : { evidenceDirectory: args.evidenceDirectory }),
   ...(args.proofPath === undefined ? {} : { proofPath: args.proofPath }),
+  ...(args.seedOutputPath === undefined
+    ? {}
+    : { seedOutputPath: args.seedOutputPath }),
   exists: existsSync,
   writeText: (path, text) => {
     mkdirSync(dirname(path), { recursive: true });
@@ -70,6 +74,7 @@ interface CliArgs {
   includePreflight: boolean;
   outputPath: string;
   proofPath?: string;
+  seedOutputPath?: string;
 }
 
 function parseCliArgs(argv: readonly string[]): CliArgs {
@@ -99,6 +104,9 @@ function parseCliArgs(argv: readonly string[]): CliArgs {
       index += 1;
     } else if (arg === "--proof") {
       parsed.proofPath = readOptionValue(argv, index, arg);
+      index += 1;
+    } else if (arg === "--seed-output") {
+      parsed.seedOutputPath = readOptionValue(argv, index, arg);
       index += 1;
     } else if (arg === "--output") {
       parsed.outputPath = readOptionValue(argv, index, arg);

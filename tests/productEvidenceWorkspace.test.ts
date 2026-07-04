@@ -190,7 +190,7 @@ describe("Split402 product evidence workspace", () => {
       "corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log",
     );
     expect(workspace.nextCommands).toContain(
-      "corepack pnpm phase7:staging:commands-record --output split402-launch-evidence/phase7-staging-evidence/commands.log",
+      "corepack pnpm phase7:staging:commands-record --include-hosted --force --evidence-env-file split402-launch-evidence/phase7-staging.env --evidence-dir split402-launch-evidence/phase7-staging-evidence --proof split402-launch-evidence/phase7-staging-proof.txt --seed-output split402-launch-evidence/phase7-seed.json --output split402-launch-evidence/phase7-staging-evidence/commands.log",
     );
     expect(workspace.nextCommands).toContain(
       "corepack pnpm phase7:staging:commands-status --brief split402-launch-evidence/phase7-staging-evidence/commands.log",

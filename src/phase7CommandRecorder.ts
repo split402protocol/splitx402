@@ -6,6 +6,7 @@ export interface Phase7CommandRecorderInput {
   evidenceEnvFile?: string;
   evidenceDirectory?: string;
   proofPath?: string;
+  seedOutputPath?: string;
   exists: (path: string) => boolean;
   runCommand: (
     file: string,
@@ -177,8 +178,8 @@ function formatCommandBlock(
 ): string {
   return [
     `$ ${command}`,
-    result.stdout.trimEnd(),
-    result.stderr.trimEnd(),
+    redactSensitiveCommandOutput(result.stdout).trimEnd(),
+    redactSensitiveCommandOutput(result.stderr).trimEnd(),
     result.exitCode === 0 ? "" : `# exit_code: ${result.exitCode}`,
     "",
   ]
@@ -189,7 +190,7 @@ function formatCommandBlock(
 function createHostedStagingCommands(
   input: Pick<
     Phase7CommandRecorderInput,
-    "evidenceDirectory" | "evidenceEnvFile" | "proofPath"
+    "evidenceDirectory" | "evidenceEnvFile" | "proofPath" | "seedOutputPath"
   >,
 ): CommandSpec[] {
   const evidenceDirectory =
@@ -198,6 +199,8 @@ function createHostedStagingCommands(
     input.evidenceEnvFile ?? "split402-launch-evidence/phase7-staging.env";
   const proofPath =
     input.proofPath ?? "split402-launch-evidence/phase7-staging-proof.txt";
+  const seedOutputPath =
+    input.seedOutputPath ?? "split402-launch-evidence/phase7-seed.json";
   const evidenceEnvArgs = ["--evidence-env-file", evidenceEnvFile] as const;
   const artifact = (fileName: string): string =>
     `${evidenceDirectory}/${fileName}`;
@@ -259,6 +262,16 @@ function createHostedStagingCommands(
       command: "corepack pnpm phase7:staging:seed",
       file: "corepack",
       args: ["pnpm", "phase7:staging:seed"],
+    },
+    {
+      command: `corepack pnpm phase7:staging:apply-seed-env --seed-output ${seedOutputPath}`,
+      file: "corepack",
+      args: [
+        "pnpm",
+        "phase7:staging:apply-seed-env",
+        "--seed-output",
+        seedOutputPath,
+      ],
     },
     {
       command: `${withEvidenceEnv("corepack pnpm phase7:staging-proof")} ${proofPath}`,
@@ -349,4 +362,16 @@ function createNextActions(
     `Append any missing hosted Docker, seed, collection, paid-suite, manifest, assemble, and status command outputs to ${outputPath}.`,
     `Run corepack pnpm phase7:staging:commands-status --brief ${outputPath} before assembling the Phase 7 proof.`,
   ];
+}
+
+function redactSensitiveCommandOutput(text: string): string {
+  return text
+    .replace(
+      /("(?:[^"]*(?:TOKEN|PRIVATE_KEY|SEED|SECRET)[^"]*)"\s*:\s*")([^"]+)(")/giu,
+      "$1[redacted]$3",
+    )
+    .replace(
+      /^((?:[A-Z0-9_]*(?:TOKEN|PRIVATE_KEY|SEED|SECRET)[A-Z0-9_]*)=).+$/gimu,
+      "$1[redacted]",
+    );
 }

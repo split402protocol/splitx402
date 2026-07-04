@@ -100,7 +100,8 @@ migrations have run and before collecting proof evidence:
 ```bash
 SPLIT402_DATABASE_URL=postgresql://split402:split402@localhost:5432/split402 \
 SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging \
-corepack pnpm phase7:staging:seed
+corepack pnpm phase7:staging:seed > split402-launch-evidence/phase7-seed.json
+corepack pnpm phase7:staging:apply-seed-env --seed-output split402-launch-evidence/phase7-seed.json
 ```
 
 This command creates or verifies the active demo merchant, verified origin,
@@ -173,6 +174,7 @@ corepack pnpm phase7:staging:commands-record \
   --evidence-env-file split402-launch-evidence/phase7-staging.env \
   --evidence-dir split402-launch-evidence/phase7-staging-evidence \
   --proof split402-launch-evidence/phase7-staging-proof.txt \
+  --seed-output split402-launch-evidence/phase7-seed.json \
   --output split402-launch-evidence/phase7-staging-evidence/commands.log
 corepack pnpm phase7:staging:commands-status --brief split402-launch-evidence/phase7-staging-evidence/commands.log
 corepack pnpm phase7:staging:manifest split402-launch-evidence/phase7-staging-proof.txt split402-launch-evidence/phase7-staging-evidence/artifact-manifest.json
@@ -181,14 +183,15 @@ corepack pnpm phase7:staging:status --brief split402-launch-evidence/phase7-stag
 corepack pnpm product:status --brief --workspace split402-launch-evidence
 ```
 
-The `commands_run` transcript must include the hosted Docker, seed, collection,
-paid-suite, manifest, assemble, status, and full validation-suite commands,
-including `corepack pnpm product:public-surface-check --brief`, plus the real
-output for `git status --short --branch`; it must show only the branch/status
-header and no changed-file rows. Use
+The `commands_run` transcript must include the hosted Docker, seed, seed-env
+apply, collection, paid-suite, manifest, assemble, status, and full
+validation-suite commands, including
+`corepack pnpm product:public-surface-check --brief`, plus the real output for
+`git status --short --branch`; it must show only the branch/status header and no
+changed-file rows. Use
 `corepack pnpm phase7:staging:commands-record --include-hosted ...` on the same
 hosted staging runtime after private env values are filled. The recorder writes
-the 27 required command blocks to `commands.log`; keep that file in the private
+the 28 required command blocks to `commands.log`; keep that file in the private
 evidence workspace and do not commit it. Run
 `corepack pnpm phase7:staging:commands-status --brief
 split402-launch-evidence/phase7-staging-evidence/commands.log` before assembling

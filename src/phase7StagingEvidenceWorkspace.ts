@@ -207,7 +207,7 @@ function createReadmeText(input: {
     "# Confirm hosted control plane has SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc.",
     `corepack pnpm phase7:staging:collect-reads ${envOption}`,
     "corepack pnpm demo:mcp-gateway:smoke",
-    `corepack pnpm phase7:staging:commands-record --include-hosted --force --evidence-env-file ${input.envFilePath} --evidence-dir ${input.directory} --proof phase7-staging-proof.txt --output ${input.directory}/commands.log`,
+    `corepack pnpm phase7:staging:commands-record --include-hosted --force --evidence-env-file ${input.envFilePath} --evidence-dir ${input.directory} --proof phase7-staging-proof.txt --seed-output ${input.directory}/phase7-seed.json --output ${input.directory}/commands.log`,
     `corepack pnpm phase7:staging:commands-status --brief ${input.directory}/commands.log`,
     `corepack pnpm phase7:staging:manifest phase7-staging-proof.txt ${input.directory}/artifact-manifest.json`,
     `corepack pnpm phase7:staging:assemble ${envOption} phase7-staging-proof.txt`,

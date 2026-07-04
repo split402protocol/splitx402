@@ -44,6 +44,11 @@ export const PHASE7_STAGING_COMMANDS = [
     evidenceField: "commands_run",
   },
   {
+    gate: "hosted_staging_seed_env_apply",
+    command: "corepack pnpm phase7:staging:apply-seed-env",
+    evidenceField: "commands_run",
+  },
+  {
     gate: "proof_scaffold",
     command: "corepack pnpm phase7:staging-proof",
     evidenceField: "proof_id",
@@ -225,7 +230,7 @@ const PHASE7_MISSING_FIELD_ACTIONS: readonly Phase7MissingFieldAction[] = [
   {
     fields: ["commands_run"],
     createAction: () =>
-      "Capture commands_run with corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log, use corepack pnpm phase7:staging:commands-record --output split402-launch-evidence/phase7-staging-evidence/commands.log for safe local validation blocks, append hosted command blocks from the real staging run, then validate it with corepack pnpm phase7:staging:commands-status --brief split402-launch-evidence/phase7-staging-evidence/commands.log.",
+      "Capture commands_run with corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log, then run corepack pnpm phase7:staging:commands-record --include-hosted --force --evidence-env-file split402-launch-evidence/phase7-staging.env --evidence-dir split402-launch-evidence/phase7-staging-evidence --proof split402-launch-evidence/phase7-staging-proof.txt --seed-output split402-launch-evidence/phase7-seed.json --output split402-launch-evidence/phase7-staging-evidence/commands.log on the hosted staging runtime, then validate it with corepack pnpm phase7:staging:commands-status --brief split402-launch-evidence/phase7-staging-evidence/commands.log.",
   },
   {
     fields: ["approval_decision"],
@@ -3175,7 +3180,7 @@ function createNextActions(
     return [
       "Create the evidence workspace with corepack pnpm phase7:staging:init.",
       "Run Docker readiness with corepack pnpm phase7:docker:doctor --brief from the hosted staging runtime.",
-      "Seed the hosted staging demo state with SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed.",
+      "Seed the hosted staging demo state with SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed > split402-launch-evidence/phase7-seed.json, then apply allow-listed seed env with corepack pnpm phase7:staging:apply-seed-env --seed-output split402-launch-evidence/phase7-seed.json.",
       "Generate a proof scaffold with corepack pnpm phase7:staging-proof.",
       "Run the hosted staging preflight with corepack pnpm phase7:hosted:preflight.",
       "Capture read API evidence with corepack pnpm phase7:staging:collect-reads.",
@@ -3331,7 +3336,7 @@ function createCommandEvidenceAction(blockers: readonly string[]): string {
       : ` Missing commands include: ${missingCommands.slice(0, 5).join(", ")}${
           missingCommands.length > 5 ? `, and ${missingCommands.length - 5} more` : ""
         }.`;
-  return `Replace split402-launch-evidence/phase7-staging-evidence/commands.log with a real command transcript: run corepack pnpm phase7:staging:commands-template to get the checklist, run corepack pnpm phase7:staging:commands-record --output split402-launch-evidence/phase7-staging-evidence/commands.log to capture safe local validation blocks, append hosted command blocks from the real staging run with command lines uncommented, then run corepack pnpm phase7:staging:commands-status --brief split402-launch-evidence/phase7-staging-evidence/commands.log.${missingSummary}`;
+  return `Replace split402-launch-evidence/phase7-staging-evidence/commands.log with a real command transcript: run corepack pnpm phase7:staging:commands-template to get the checklist, run corepack pnpm phase7:staging:commands-record --include-hosted --force --evidence-env-file split402-launch-evidence/phase7-staging.env --evidence-dir split402-launch-evidence/phase7-staging-evidence --proof split402-launch-evidence/phase7-staging-proof.txt --seed-output split402-launch-evidence/phase7-seed.json --output split402-launch-evidence/phase7-staging-evidence/commands.log on the hosted staging runtime with command lines uncommented, then run corepack pnpm phase7:staging:commands-status --brief split402-launch-evidence/phase7-staging-evidence/commands.log.${missingSummary}`;
 }
 
 function isReadCollectorArtifactField(field: string): boolean {
@@ -3376,7 +3381,7 @@ function createMissingArtifactAction(field: string): string[] {
       ];
     case "commands_run":
       return [
-        "Capture commands_run with corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log, run corepack pnpm phase7:staging:commands-record --output split402-launch-evidence/phase7-staging-evidence/commands.log for safe local validation blocks, append hosted command blocks from the real staging run, then validate it with corepack pnpm phase7:staging:commands-status --brief split402-launch-evidence/phase7-staging-evidence/commands.log.",
+        "Capture commands_run with corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log, run corepack pnpm phase7:staging:commands-record --include-hosted --force --evidence-env-file split402-launch-evidence/phase7-staging.env --evidence-dir split402-launch-evidence/phase7-staging-evidence --proof split402-launch-evidence/phase7-staging-proof.txt --seed-output split402-launch-evidence/phase7-seed.json --output split402-launch-evidence/phase7-staging-evidence/commands.log on the hosted staging runtime, then validate it with corepack pnpm phase7:staging:commands-status --brief split402-launch-evidence/phase7-staging-evidence/commands.log.",
       ];
     default:
       return [`Capture ${field} and attach the local artifact before approval.`];
