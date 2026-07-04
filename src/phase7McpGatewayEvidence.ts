@@ -40,6 +40,7 @@ export interface Phase7McpGatewayEvidenceReport {
   quoteProviderRouteId?: string;
   quoteProviderReferrerWallet?: string;
   quoteProviderPayoutWallet?: string;
+  quoteProviderSource?: string;
   providerNetwork?: string;
   providerAsset?: string;
   providerMerchantOrigin?: string;
@@ -50,6 +51,7 @@ export interface Phase7McpGatewayEvidenceReport {
   providerRouteId?: string;
   providerReferrerWallet?: string;
   providerPayoutWallet?: string;
+  providerSource?: string;
   executeProviderNetwork?: string;
   executeProviderAsset?: string;
   executeProviderMerchantOrigin?: string;
@@ -60,6 +62,7 @@ export interface Phase7McpGatewayEvidenceReport {
   executeProviderRouteId?: string;
   executeProviderReferrerWallet?: string;
   executeProviderPayoutWallet?: string;
+  executeProviderSource?: string;
   amountPaidAtomic?: string;
   receiptId?: string;
   receiptVerificationStatus?: string;
@@ -497,6 +500,7 @@ export async function collectPhase7McpGatewayEvidence(
           quoteProviderRouteId: quoteSummary.provider.routeId,
           quoteProviderReferrerWallet: quoteSummary.provider.referrerWallet,
           quoteProviderPayoutWallet: quoteSummary.provider.payoutWallet,
+          quoteProviderSource: quoteSummary.provider.source,
         }),
     ...(providerSummary === undefined
       ? {}
@@ -511,6 +515,7 @@ export async function collectPhase7McpGatewayEvidence(
           providerRouteId: providerSummary.routeId,
           providerReferrerWallet: providerSummary.referrerWallet,
           providerPayoutWallet: providerSummary.payoutWallet,
+          providerSource: providerSummary.source,
         }),
     ...(executionSummary === undefined
       ? {}
@@ -531,6 +536,7 @@ export async function collectPhase7McpGatewayEvidence(
           executeProviderRouteId: executionSummary.provider.routeId,
           executeProviderReferrerWallet: executionSummary.provider.referrerWallet,
           executeProviderPayoutWallet: executionSummary.provider.payoutWallet,
+          executeProviderSource: executionSummary.provider.source,
         }),
     ...(receiptSummary === undefined
       ? {}
@@ -636,6 +642,7 @@ interface McpGatewayProviderSummary {
   routeId: string;
   referrerWallet: string;
   payoutWallet: string;
+  source: "static" | "control_plane" | "external_x402";
 }
 
 type McpGatewaySearchProviderSummary = McpGatewayProviderSummary;
@@ -906,6 +913,7 @@ function readSearchProviderSummary(
     const routeId = readNonEmptyString(capability.routeId);
     const referrerWallet = readNonEmptyString(capability.referrerWallet);
     const payoutWallet = readNonEmptyString(capability.payoutWallet);
+    const source = readProviderSource(capability.source);
     if (
       network === undefined ||
       asset === undefined ||
@@ -916,7 +924,8 @@ function readSearchProviderSummary(
       payToWallet === undefined ||
       routeId === undefined ||
       referrerWallet === undefined ||
-      payoutWallet === undefined
+      payoutWallet === undefined ||
+      source === undefined
     ) {
       return undefined;
     }
@@ -932,6 +941,7 @@ function readSearchProviderSummary(
       routeId,
       referrerWallet,
       payoutWallet,
+      source,
     };
   }
   return undefined;
@@ -951,6 +961,7 @@ function readProviderSummary(
   const routeId = readNonEmptyString(provider?.routeId);
   const referrerWallet = readNonEmptyString(provider?.referrerWallet);
   const payoutWallet = readNonEmptyString(provider?.payoutWallet);
+  const source = readProviderSource(provider?.source);
   if (
     providerId === undefined ||
     network === undefined ||
@@ -962,7 +973,8 @@ function readProviderSummary(
     payToWallet === undefined ||
     routeId === undefined ||
     referrerWallet === undefined ||
-    payoutWallet === undefined
+    payoutWallet === undefined ||
+    source === undefined
   ) {
     return undefined;
   }
@@ -978,6 +990,7 @@ function readProviderSummary(
     routeId,
     referrerWallet,
     payoutWallet,
+    source,
   };
 }
 
@@ -1000,6 +1013,7 @@ function compareProviderSummaries(
     "routeId",
     "referrerWallet",
     "payoutWallet",
+    "source",
   ] as const) {
     if (left[field] !== right[field]) {
       blockers.push(
@@ -1110,6 +1124,16 @@ function readRecord(value: unknown): Record<string, unknown> | undefined {
 
 function readNonEmptyString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function readProviderSource(
+  value: unknown,
+): "static" | "control_plane" | "external_x402" | undefined {
+  return value === "static" ||
+    value === "control_plane" ||
+    value === "external_x402"
+    ? value
+    : undefined;
 }
 
 function readBasisPoints(value: unknown): number | undefined {

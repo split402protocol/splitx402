@@ -123,16 +123,16 @@ report echoes those fields as `quoteProviderId`, `quotedAmountAtomic`,
 `quoteProviderAsset`, `quoteProviderAmountAtomic`, `quoteProviderMerchantOrigin`,
 `quoteProviderOperationId`, `quoteProviderCampaignId`, `quoteProviderPayToWallet`,
 `quoteProviderRouteId`, `quoteProviderReferrerWallet`,
-`quoteProviderPayoutWallet`, `providerId`, `providerNetwork`, `providerAsset`,
+`quoteProviderPayoutWallet`, `quoteProviderSource`, `providerId`, `providerNetwork`, `providerAsset`,
 `providerAmountAtomic`,
 `providerMerchantOrigin`, `providerOperationId`, `providerCampaignId`,
 `providerPayToWallet`, `providerRouteId`, `providerReferrerWallet`,
-`providerPayoutWallet`, matching `executeProviderNetwork`,
+`providerPayoutWallet`, `providerSource`, matching `executeProviderNetwork`,
 `executeProviderAsset`, `executeProviderMerchantOrigin`,
 `executeProviderOperationId`, `executeProviderCampaignId`,
 `executeProviderAmountAtomic`, `executeProviderPayToWallet`,
 `executeProviderRouteId`, `executeProviderReferrerWallet`, and
-`executeProviderPayoutWallet`, plus `amountPaidAtomic`, `receiptId`,
+`executeProviderPayoutWallet`, `executeProviderSource`, plus `amountPaidAtomic`, `receiptId`,
 `receiptVerificationStatus`, `executeExecutionMode`, and `referrerCreditAtomic`,
 plus receipt-side `network`, `asset`, `merchantOrigin`, `operationId`,
 `campaignId`, `requiredAmountAtomic`, `payToWallet`,
@@ -141,8 +141,8 @@ route id, commission bps, protocol-fee bps, and commission/protocol-fee amounts
 when receipt lookup succeeds. The collector rejects the report if the receipt
 amount, quoted amount, selected-provider payment details, quote-provider payment
 details, selected-provider merchant origin, operation id, campaign id, route id,
-referrer wallet, payout wallet, commission, protocol fee, or referrer credit
-arithmetic does not match. It also rejects quote or execute evidence with
+referrer wallet, payout wallet, provider source, commission, protocol fee, or
+referrer credit arithmetic does not match. It also rejects quote or execute evidence with
 missing required fields, missing or inconsistent provider summary fields,
 unsupported execution mode, unverified receipt status, or zero referrer credit.
 Demo mode is a local

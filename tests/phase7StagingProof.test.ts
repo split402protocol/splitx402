@@ -1887,6 +1887,7 @@ funding_balance_evidence: funding.json
           includeSearchProviderRouteId: false,
           includeSearchProviderReferrerWallet: false,
           includeSearchProviderPayoutWallet: false,
+          includeSearchProviderSource: false,
         }),
       ),
     );
@@ -1928,6 +1929,9 @@ funding_balance_evidence: funding.json
     );
     expect(report.mcpGatewayStatus.blockers).toContain(
       "mcp_gateway_evidence selected provider payoutWallet is missing",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence selected provider source is missing or unsupported",
     );
   });
 
@@ -1974,6 +1978,7 @@ funding_balance_evidence: funding.json
           includeExecuteProviderRouteId: false,
           includeExecuteProviderReferrerWallet: false,
           includeExecuteProviderPayoutWallet: false,
+          includeExecuteProviderSource: false,
         }),
       ),
     );
@@ -2018,6 +2023,42 @@ funding_balance_evidence: funding.json
     );
     expect(report.mcpGatewayStatus.blockers).toContain(
       "mcp_gateway_evidence execute provider payoutWallet is missing",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute provider source is missing or unsupported",
+    );
+  });
+
+  it("blocks staged proof status when MCP provider source changes across search, quote, and execute", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          searchProviderSource: "control_plane",
+          quoteProviderSource: "external_x402",
+          executeProviderSource: "static",
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute provider source does not match selected provider",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence quote provider source does not match selected provider",
+    );
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence quote provider source does not match execute provider",
     );
   });
 
@@ -3218,6 +3259,7 @@ function createValidMcpGatewayTranscript(
     quotedAmountAtomic?: string;
     quoteProviderIdValue?: string;
     quoteProviderAmountAtomic?: string;
+    quoteProviderSource?: string;
     quoteRankedProviderId?: string;
     quoteRankedAmountAtomic?: string;
     executeExecutionMode?: string;
@@ -3231,6 +3273,7 @@ function createValidMcpGatewayTranscript(
     includeSearchProviderRouteId?: boolean;
     includeSearchProviderReferrerWallet?: boolean;
     includeSearchProviderPayoutWallet?: boolean;
+    includeSearchProviderSource?: boolean;
     searchProviderNetwork?: string;
     searchProviderAsset?: string;
     searchProviderMerchantOrigin?: string;
@@ -3241,6 +3284,7 @@ function createValidMcpGatewayTranscript(
     searchProviderRouteId?: string;
     searchProviderReferrerWallet?: string;
     searchProviderPayoutWallet?: string;
+    searchProviderSource?: string;
     includeExecuteProvider?: boolean;
     includeExecuteProviderId?: boolean;
     executeProviderIdValue?: string;
@@ -3254,6 +3298,7 @@ function createValidMcpGatewayTranscript(
     includeExecuteProviderRouteId?: boolean;
     includeExecuteProviderReferrerWallet?: boolean;
     includeExecuteProviderPayoutWallet?: boolean;
+    includeExecuteProviderSource?: boolean;
     executeProviderNetwork?: string;
     executeProviderAsset?: string;
     executeProviderMerchantOrigin?: string;
@@ -3264,6 +3309,7 @@ function createValidMcpGatewayTranscript(
     executeProviderRouteId?: string;
     executeProviderReferrerWallet?: string;
     executeProviderPayoutWallet?: string;
+    executeProviderSource?: string;
     amountPaidAtomic?: string;
     executeReferrerCreditAtomic?: string;
     lookupReceiptId?: string;
@@ -3332,6 +3378,7 @@ function createValidMcpGatewayTranscript(
     options.includeSearchProviderReferrerWallet ?? true;
   const includeSearchProviderPayoutWallet =
     options.includeSearchProviderPayoutWallet ?? true;
+  const includeSearchProviderSource = options.includeSearchProviderSource ?? true;
   const searchProviderNetwork =
     options.searchProviderNetwork ?? "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
   const searchProviderAsset = options.searchProviderAsset ?? "usdc-devnet";
@@ -3351,6 +3398,7 @@ function createValidMcpGatewayTranscript(
     options.searchProviderReferrerWallet ?? "referrer-wallet";
   const searchProviderPayoutWallet =
     options.searchProviderPayoutWallet ?? "payout-wallet";
+  const searchProviderSource = options.searchProviderSource ?? "control_plane";
   const includeExecuteProvider = options.includeExecuteProvider ?? true;
   const includeExecuteProviderId = options.includeExecuteProviderId ?? true;
   const includeExecuteProviderNetwork =
@@ -3371,6 +3419,8 @@ function createValidMcpGatewayTranscript(
     options.includeExecuteProviderReferrerWallet ?? true;
   const includeExecuteProviderPayoutWallet =
     options.includeExecuteProviderPayoutWallet ?? true;
+  const includeExecuteProviderSource =
+    options.includeExecuteProviderSource ?? true;
   const executeProviderIdValue =
     options.executeProviderIdValue ?? executeProviderId;
   const quoteProviderIdValue =
@@ -3394,11 +3444,15 @@ function createValidMcpGatewayTranscript(
     options.executeProviderReferrerWallet ?? searchProviderReferrerWallet;
   const executeProviderPayoutWallet =
     options.executeProviderPayoutWallet ?? searchProviderPayoutWallet;
+  const executeProviderSource =
+    options.executeProviderSource ?? searchProviderSource;
   const executeReferrerCreditAtomic =
     options.executeReferrerCreditAtomic ?? "1800";
   const quotedAmountAtomic = options.quotedAmountAtomic ?? amountPaidAtomic;
   const quoteProviderAmountAtomic =
     options.quoteProviderAmountAtomic ?? searchProviderAmountAtomic;
+  const quoteProviderSource =
+    options.quoteProviderSource ?? searchProviderSource;
   const quoteRankedProviderId =
     options.quoteRankedProviderId ?? quoteProviderId;
   const quoteRankedAmountAtomic =
@@ -3525,6 +3579,9 @@ function createValidMcpGatewayTranscript(
                 ...(includeSearchProviderPayoutWallet
                   ? { payoutWallet: searchProviderPayoutWallet }
                   : {}),
+                ...(includeSearchProviderSource
+                  ? { source: searchProviderSource }
+                  : {}),
               },
             ],
           },
@@ -3573,6 +3630,7 @@ function createValidMcpGatewayTranscript(
                     routeId: searchProviderRouteId,
                     referrerWallet: searchProviderReferrerWallet,
                     payoutWallet: searchProviderPayoutWallet,
+                    source: quoteProviderSource,
                   },
                   rankedProviders: [
                     {
@@ -3655,6 +3713,9 @@ function createValidMcpGatewayTranscript(
                             : {}),
                           ...(includeExecuteProviderPayoutWallet
                             ? { payoutWallet: executeProviderPayoutWallet }
+                            : {}),
+                          ...(includeExecuteProviderSource
+                            ? { source: executeProviderSource }
                             : {}),
                         },
                       }
