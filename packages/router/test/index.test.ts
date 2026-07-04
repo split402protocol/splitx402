@@ -597,6 +597,104 @@ describe("Split402Router", () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
+  it("executes when provider output satisfies its outputSchema", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>().mockResolvedValue({
+      data: { risk: "low", score: 12 },
+      receipt
+    });
+    const router = new Split402Router({
+      providers: [
+        provider({
+          metadata: {
+            outputSchema: {
+              type: "object",
+              required: ["risk", "score"],
+              properties: {
+                risk: { type: "string", enum: ["low", "medium", "high"] },
+                score: { type: "integer", minimum: 0, maximum: 100 }
+              },
+              additionalProperties: false
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    const result = await router.execute<{ risk: string; score: number }>({
+      capability: "solana.wallet-risk",
+      input: { wallet: "wallet_1" },
+      budget: {
+        network: receipt.network,
+        asset: receipt.asset,
+        maxAmountAtomic: receipt.requiredAmountAtomic
+      }
+    });
+
+    expect(result.data).toEqual({ risk: "low", score: 12 });
+    expect(result.attempts).toEqual([
+      expect.objectContaining({
+        providerId: "provider-a",
+        status: "success",
+        receiptId: receipt.receiptId
+      })
+    ]);
+  });
+
+  it("rejects provider output that violates outputSchema without fallback", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>().mockResolvedValue({
+      data: { risk: "unknown", score: 120 },
+      receipt
+    });
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-invalid-output",
+          reliability: { successRateBps: 10_000 },
+          metadata: {
+            outputSchema: {
+              type: "object",
+              required: ["risk", "score"],
+              properties: {
+                risk: { type: "string", enum: ["low", "medium", "high"] },
+                score: { type: "integer", minimum: 0, maximum: 100 }
+              },
+              additionalProperties: false
+            }
+          }
+        }),
+        provider({ providerId: "provider-fallback" })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: { wallet: "wallet_1" },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "execution_failed",
+      message:
+        "provider provider-invalid-output failed with a non-retryable error: invalid provider output: output.risk must be one of the allowed enum values; output.score must be at most 100",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-invalid-output",
+          status: "failed",
+          retryable: false,
+          receiptId: receipt.receiptId,
+          error: expect.stringContaining("invalid provider output")
+        })
+      ]
+    });
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
   it("executes when input satisfies provider string formats", async () => {
     const execute = vi.fn<Split402RouterExecutor["execute"]>().mockResolvedValue({
       data: { risk: "low" },
@@ -3908,6 +4006,58 @@ describe("Split402ControlPlaneDiscoveryClient", () => {
         method: "GET",
         operationId: "price.btc",
         campaignId: receipt.campaignId
+      })
+    ]);
+  });
+
+  it("discovers provider output schemas from control-plane route metadata", async () => {
+    const outputSchema = {
+      type: "object",
+      required: ["risk"],
+      properties: {
+        risk: { type: "string", enum: ["low", "medium", "high"] }
+      },
+      additionalProperties: false
+    };
+    const discovery = new Split402ControlPlaneDiscoveryClient({
+      controlPlaneUrl: "https://control.example",
+      fetch: controlPlaneFetch([], {
+        resourceOverrides: {
+          metadata: {
+            method: "POST",
+            operationId: "risk.score",
+            input: {
+              schema: {
+                type: "object",
+                required: ["wallet"],
+                properties: { wallet: { type: "string" } }
+              }
+            },
+            output: { schema: outputSchema },
+            split402: {
+              routeId: "rte_1",
+              campaignId: receipt.campaignId,
+              referrerWallet: receipt.referrerWallet,
+              payoutWallet: receipt.payoutWallet
+            }
+          }
+        }
+      }),
+      capabilityMapper: (resource) =>
+        resource.metadata.operationId === "risk.score"
+          ? "solana.wallet-risk"
+          : undefined,
+      now: () => new Date("2026-06-24T00:03:00.000Z")
+    });
+
+    await expect(
+      discovery.discoverProviders({ capability: "solana.wallet-risk" })
+    ).resolves.toEqual([
+      expect.objectContaining({
+        providerId: "rte_1:risk.score",
+        metadata: expect.objectContaining({
+          outputSchema
+        })
       })
     ]);
   });

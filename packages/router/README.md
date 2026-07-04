@@ -111,6 +111,8 @@ until the route includes a valid Split402 offer extension.
   or `external_x402`) so gateways can show where a provider came from;
 - enriches paid MCP-style external candidates with public `/mcp/tools` catalog
   metadata when the catalog is available;
+- carries optional provider `outputSchema` metadata from static or
+  control-plane-discovered providers and validates returned data before success;
 - supports x402 `GET` and `POST` provider methods; object-shaped router input is
   passed as query parameters for `GET` providers and as JSON body for `POST`
   providers;
@@ -130,6 +132,8 @@ until the route includes a valid Split402 offer extension.
   payout metadata when that metadata is present;
 - requires returned receipts to match the supplied `referralClaim` route, claim
   hash, referrer wallet, and payout wallet;
+- treats output that violates a provider `outputSchema` as a non-retryable
+  execution failure after receipt verification to avoid silently spending again;
 - retries/falls back on network errors, HTTP 5xx, 408, 425, 429, missing
   receipts, and invalid receipts;
 - stops on non-retryable HTTP 4xx errors.

@@ -38,6 +38,7 @@ export interface Split402CapabilityProvider {
   metadata?: {
     discoverySource?: "static" | "control_plane" | "external_x402";
     inputSchema?: unknown;
+    outputSchema?: unknown;
     referrerWallet?: string;
     payoutWallet?: string;
     mcpTools?: Split402ExternalX402McpTool[];
@@ -252,6 +253,9 @@ export interface Split402BazaarResourceDiscoveryRecord {
     input?: {
       schema: unknown;
     };
+    output?: {
+      schema: unknown;
+    };
     split402: {
       routeId: string;
       campaignId: string;
@@ -310,12 +314,14 @@ export class Split402RouterError extends Error {
 export class Split402RouterProviderError extends Error {
   readonly statusCode?: number;
   readonly retryable?: boolean;
+  readonly receiptId?: string;
 
   constructor(
     message: string,
     options: {
       statusCode?: number;
       retryable?: boolean;
+      receiptId?: string;
     } = {}
   ) {
     super(message);
@@ -325,6 +331,9 @@ export class Split402RouterProviderError extends Error {
     }
     if (options.retryable !== undefined) {
       this.retryable = options.retryable;
+    }
+    if (options.receiptId !== undefined) {
+      this.receiptId = options.receiptId;
     }
   }
 }
@@ -528,6 +537,7 @@ export class Split402Router {
           result.receipt,
           input.referralClaim
         );
+        validateOutputAgainstProviderSchema(provider, result.data, receipt);
         attempts.push({
           providerId: provider.providerId,
           capability: provider.capability,
@@ -550,7 +560,11 @@ export class Split402Router {
           capability: provider.capability,
           status: "failed",
           retryable,
-          error: errorMessage(error)
+          error: errorMessage(error),
+          ...(error instanceof Split402RouterProviderError &&
+          error.receiptId !== undefined
+            ? { receiptId: error.receiptId }
+            : {})
         });
         if (!retryable) {
           throw new Split402RouterError(
@@ -737,6 +751,9 @@ export class Split402ControlPlaneDiscoveryClient {
         ...(resource.metadata.input === undefined
           ? {}
           : { inputSchema: resource.metadata.input.schema }),
+        ...(resource.metadata.output === undefined
+          ? {}
+          : { outputSchema: resource.metadata.output.schema }),
         ...(resource.metadata.split402.referrerWallet === undefined
           ? {}
           : { referrerWallet: resource.metadata.split402.referrerWallet }),
@@ -1899,6 +1916,30 @@ function validateInputAgainstProviderSchema(
   return validateJsonSchemaValue(input, provider.metadata.inputSchema, "input");
 }
 
+function validateOutputAgainstProviderSchema(
+  provider: Split402CapabilityProvider,
+  output: unknown,
+  receipt: Split402ReceiptV1
+): void {
+  if (provider.metadata?.outputSchema === undefined) {
+    return;
+  }
+  const errors = validateJsonSchemaValue(
+    output,
+    provider.metadata.outputSchema,
+    "output"
+  );
+  if (errors.length > 0) {
+    throw new Split402RouterProviderError(
+      `invalid provider output: ${errors.join("; ")}`,
+      {
+        retryable: false,
+        receiptId: receipt.receiptId
+      }
+    );
+  }
+}
+
 function validateJsonSchemaValue(
   value: unknown,
   schema: unknown,
@@ -2916,6 +2957,7 @@ function parseBazaarResource(
   const metadata = readRecord(resource.metadata);
   const split402 = readRecord(metadata?.split402);
   const input = readRecord(metadata?.input);
+  const output = readRecord(metadata?.output);
   const method = readOptionalString(metadata?.method);
   const operationId = readOptionalString(metadata?.operationId);
   const routeId = readOptionalString(split402?.routeId);
@@ -2961,6 +3003,9 @@ function parseBazaarResource(
       ...(input === undefined || input.schema === undefined
         ? {}
         : { input: { schema: input.schema } }),
+      ...(output === undefined || output.schema === undefined
+        ? {}
+        : { output: { schema: output.schema } }),
       split402: {
         routeId,
         campaignId,
