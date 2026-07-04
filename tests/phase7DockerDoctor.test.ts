@@ -117,6 +117,7 @@ describe("Phase 7 Docker doctor", () => {
   });
 
   it("fails closed when selected profile values are missing", () => {
+    const commands: string[] = [];
     const report = runPhase7DockerDoctor({
       profiles: ["demo", "workers"],
       exists: (path) =>
@@ -124,6 +125,7 @@ describe("Phase 7 Docker doctor", () => {
         path === "deploy/phase7-staging/phase7-staging.env",
       readText: () => filledDockerEnv(),
       execFile: (file, args) => {
+        commands.push([file, ...args].join(" "));
         if (args.join(" ") === "--version") {
           return "Docker version 27.0.0";
         }
@@ -147,6 +149,15 @@ describe("Phase 7 Docker doctor", () => {
         ok: false,
         detail:
           "deploy/phase7-staging/phase7-staging.env is not ready (missing required values: SPLIT402_MERCHANT_PAY_TO, SPLIT402_SERVICE_SEED_HEX, SPLIT402_WEBHOOK_WORKER_URL).",
+      }),
+    );
+    expect(commands).toEqual(["docker --version", "docker compose version"]);
+    expect(report.checks).toContainEqual(
+      expect.objectContaining({
+        name: "compose_config",
+        ok: false,
+        detail:
+          "Compose configuration could not be validated: Skipped until Docker, Compose, compose.yaml, phase7-staging.env, and required env values are ready.",
       }),
     );
   });
@@ -181,6 +192,7 @@ describe("Phase 7 Docker doctor", () => {
   });
 
   it("fails closed when the private env file still has template placeholders", () => {
+    const commands: string[] = [];
     const report = runPhase7DockerDoctor({
       exists: (path) =>
         path === "deploy/phase7-staging/compose.yaml" ||
@@ -191,6 +203,7 @@ describe("Phase 7 Docker doctor", () => {
         "SPLIT402_WEBHOOK_WORKER_SECRET=replace-with-staging-webhook-secret",
       ].join("\n"),
       execFile: (file, args) => {
+        commands.push([file, ...args].join(" "));
         if (args.join(" ") === "--version") {
           return "Docker version 27.0.0";
         }
@@ -219,6 +232,15 @@ describe("Phase 7 Docker doctor", () => {
     expect(report.nextActions).toContain(
       "Fill missing private runtime values and replace template placeholders in deploy/phase7-staging/phase7-staging.env; do not commit this file.",
     );
+    expect(commands).toEqual(["docker --version", "docker compose version"]);
+    expect(report.checks).toContainEqual(
+      expect.objectContaining({
+        name: "compose_config",
+        ok: false,
+        detail:
+          "Compose configuration could not be validated: Skipped until Docker, Compose, compose.yaml, phase7-staging.env, and required env values are ready.",
+      }),
+    );
   });
 
   it("does not validate compose config until the private env file exists", () => {
@@ -244,7 +266,7 @@ describe("Phase 7 Docker doctor", () => {
         name: "compose_config",
         ok: false,
         detail:
-          "Compose configuration could not be validated: Skipped until Docker, Compose, compose.yaml, and phase7-staging.env are available.",
+          "Compose configuration could not be validated: Skipped until Docker, Compose, compose.yaml, phase7-staging.env, and required env values are ready.",
       }),
     );
   });
