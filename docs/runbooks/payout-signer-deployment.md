@@ -233,14 +233,17 @@ from the current Phase 7 proof artifacts:
 
 ```bash
 corepack pnpm phase6:signer-policy:env-template \
+  --resolve-source-token-account \
   split402-launch-evidence/phase6-signer-policy.env
 ```
 
 The template pre-fills values that can be derived from public-alpha proof
 artifacts, such as network, funding wallet, mint, and observed payout amounts.
-It intentionally leaves custody-specific fields blank: source token account,
-destination amount-list hash, and signer reference. Fill those from the actual
-deployed signer policy before running `corepack pnpm phase6:signer-policy`.
+With `--resolve-source-token-account`, it also asks Solana RPC for the funding
+wallet token account for that mint and fails if the lookup returns zero or more
+than one initialized account. It intentionally leaves destination amount-list
+hash and signer reference blank. Fill those from the actual deployed signer
+policy before running `corepack pnpm phase6:signer-policy`.
 
 You can generate the correctly shaped signer policy review with:
 

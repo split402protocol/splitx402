@@ -595,7 +595,7 @@ marking anything production-ready.
 
 ```bash
 corepack pnpm phase6:image-provenance
-corepack pnpm phase6:signer-policy:env-template split402-launch-evidence/phase6-signer-policy.env
+corepack pnpm phase6:signer-policy:env-template --resolve-source-token-account split402-launch-evidence/phase6-signer-policy.env
 corepack pnpm phase6:signer-policy
 corepack pnpm phase6:key-custody
 corepack pnpm phase6:network-policy
