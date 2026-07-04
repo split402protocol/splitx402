@@ -1899,6 +1899,7 @@ function validateJsonSchemaValue(
   } else if (schemaTypes.length > 0 && !schemaTypes.some((type) => valueMatchesSchemaType(value, type))) {
     errors.push(`${path} must be ${schemaTypes.join(" or ")}`);
   }
+  errors.push(...validateJsonSchemaCombinators(value, record, path));
   const hasObjectShape =
     schemaTypes?.includes("object") === true ||
     record.properties !== undefined ||
@@ -2017,6 +2018,55 @@ function validateJsonArrayShape(
   return errors;
 }
 
+function validateJsonSchemaCombinators(
+  value: unknown,
+  schema: Record<string, unknown>,
+  path: string
+): string[] {
+  const errors: string[] = [];
+  if (schema.anyOf !== undefined) {
+    const variants = readSchemaArrayKeyword(schema.anyOf);
+    if (variants === undefined) {
+      errors.push(`${path} anyOf must be a non-empty array of schema objects`);
+    } else if (
+      !variants.some(
+        (variant) => validateJsonSchemaValue(value, variant, path).length === 0
+      )
+    ) {
+      errors.push(`${path} must match at least one anyOf schema`);
+    }
+  }
+  if (schema.oneOf !== undefined) {
+    const variants = readSchemaArrayKeyword(schema.oneOf);
+    if (variants === undefined) {
+      errors.push(`${path} oneOf must be a non-empty array of schema objects`);
+    } else {
+      const matchCount = variants.filter(
+        (variant) => validateJsonSchemaValue(value, variant, path).length === 0
+      ).length;
+      if (matchCount !== 1) {
+        errors.push(`${path} must match exactly one oneOf schema`);
+      }
+    }
+  }
+  if (schema.allOf !== undefined) {
+    const variants = readSchemaArrayKeyword(schema.allOf);
+    if (variants === undefined) {
+      errors.push(`${path} allOf must be a non-empty array of schema objects`);
+    } else {
+      for (const [index, variant] of variants.entries()) {
+        const variantErrors = validateJsonSchemaValue(value, variant, path);
+        if (variantErrors.length > 0) {
+          errors.push(
+            `${path} must match allOf schema ${index + 1}: ${variantErrors.join("; ")}`
+          );
+        }
+      }
+    }
+  }
+  return errors;
+}
+
 function readSchemaTypes(value: unknown): JsonSchemaType[] | undefined {
   if (value === undefined) {
     return [];
@@ -2037,6 +2087,18 @@ function readRequiredSchemaProperties(value: unknown): string[] | undefined {
   }
   return Array.isArray(value) && value.every((item) => typeof item === "string")
     ? value
+    : undefined;
+}
+
+function readSchemaArrayKeyword(
+  value: unknown
+): Record<string, unknown>[] | undefined {
+  if (!Array.isArray(value) || value.length === 0) {
+    return undefined;
+  }
+  const schemas = value.map(readSchemaRecord);
+  return schemas.every((schema) => schema !== undefined)
+    ? (schemas as Record<string, unknown>[])
     : undefined;
 }
 
