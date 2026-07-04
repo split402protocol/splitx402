@@ -2490,6 +2490,79 @@ describe("MCP demo gateway", () => {
     });
   });
 
+  it("rejects router execution when input is missing", async () => {
+    const context = createMcpGatewayContext(
+      createMcpDemoBundle({
+        generatedAt: "2026-06-26T00:00:00.000Z"
+      })
+    );
+
+    const response = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "execute-missing-input",
+        method: "tools/call",
+        params: {
+          name: "split402.execute",
+          arguments: {
+            capability: "solana.wallet-risk",
+            budget: {
+              maxAmountAtomic: "10000"
+            }
+          }
+        }
+      }),
+      context
+    );
+
+    expect(response).toEqual({
+      jsonrpc: "2.0",
+      id: "execute-missing-input",
+      error: {
+        code: -32602,
+        message: "input argument must be an object"
+      }
+    });
+    expect(context.receipts.size).toBe(0);
+  });
+
+  it("rejects router execution when input is not an object", async () => {
+    const context = createMcpGatewayContext(
+      createMcpDemoBundle({
+        generatedAt: "2026-06-26T00:00:00.000Z"
+      })
+    );
+
+    const response = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "execute-invalid-input",
+        method: "tools/call",
+        params: {
+          name: "split402.execute",
+          arguments: {
+            capability: "solana.wallet-risk",
+            input: "wallet-123",
+            budget: {
+              maxAmountAtomic: "10000"
+            }
+          }
+        }
+      }),
+      context
+    );
+
+    expect(response).toEqual({
+      jsonrpc: "2.0",
+      id: "execute-invalid-input",
+      error: {
+        code: -32602,
+        message: "input argument must be an object"
+      }
+    });
+    expect(context.receipts.size).toBe(0);
+  });
+
   it("stores distinct receipts for repeated demo executions", async () => {
     const context = createMcpGatewayContext(
       createMcpDemoBundle({
