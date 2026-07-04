@@ -1911,6 +1911,7 @@ function validateJsonSchemaValue(
     record.patternProperties !== undefined ||
     record.propertyNames !== undefined ||
     record.dependentRequired !== undefined ||
+    record.dependentSchemas !== undefined ||
     record.minProperties !== undefined ||
     record.maxProperties !== undefined;
   if (hasObjectShape) {
@@ -1978,6 +1979,10 @@ function validateJsonObjectShape(
       `${path} dependentRequired must be an object of string arrays`
     );
   }
+  const dependentSchemas = readDependentSchemas(schema.dependentSchemas);
+  if (schema.dependentSchemas !== undefined && dependentSchemas === undefined) {
+    errors.push(`${path} dependentSchemas must be an object of schema objects`);
+  }
   const additionalProperties = readAdditionalPropertiesSchema(
     schema.additionalProperties
   );
@@ -2010,6 +2015,22 @@ function validateJsonObjectShape(
               `${path}.${requiredProperty} is required when ${path}.${property} is present`
             );
           }
+        }
+      }
+    }
+  }
+  if (dependentSchemas !== undefined) {
+    for (const [property, dependentSchema] of Object.entries(dependentSchemas)) {
+      if (property in value) {
+        const dependentErrors = validateJsonSchemaValue(
+          value,
+          dependentSchema,
+          path
+        );
+        if (dependentErrors.length > 0) {
+          errors.push(
+            `${path} must satisfy dependentSchema for ${path}.${property}: ${dependentErrors.join("; ")}`
+          );
         }
       }
     }
@@ -2320,6 +2341,27 @@ function readDependentRequired(
       return undefined;
     }
     dependencies[property] = requiredProperties;
+  }
+  return dependencies;
+}
+
+function readDependentSchemas(
+  value: unknown
+): Record<string, Record<string, unknown>> | undefined {
+  if (value === undefined) {
+    return {};
+  }
+  const record = readSchemaRecord(value);
+  if (record === undefined) {
+    return undefined;
+  }
+  const dependencies: Record<string, Record<string, unknown>> = {};
+  for (const [property, schema] of Object.entries(record)) {
+    const schemaRecord = readSchemaRecord(schema);
+    if (schemaRecord === undefined) {
+      return undefined;
+    }
+    dependencies[property] = schemaRecord;
   }
   return dependencies;
 }
