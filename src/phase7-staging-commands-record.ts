@@ -34,6 +34,7 @@ const report = recordPhase7LocalCommandEvidence({
     ? {}
     : { seedOutputPath: args.seedOutputPath }),
   exists: existsSync,
+  sleep: sleepSync,
   writeText: (path, text) => {
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, text, "utf8");
@@ -129,4 +130,9 @@ function readOptionValue(
     throw new Error(`${USAGE}\n${option} requires a value`);
   }
   return value;
+}
+
+function sleepSync(milliseconds: number): void {
+  const buffer = new SharedArrayBuffer(4);
+  Atomics.wait(new Int32Array(buffer), 0, 0, milliseconds);
 }

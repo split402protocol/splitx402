@@ -90,6 +90,39 @@ describe("Phase 7 command recorder", () => {
     );
   });
 
+  it("retries Docker health before marking hosted command evidence failed", () => {
+    const writes: Array<{ path: string; text: string }> = [];
+    const sleeps: number[] = [];
+    let healthAttempts = 0;
+    const report = recordPhase7LocalCommandEvidence({
+      outputPath: "evidence/commands.log",
+      includeHosted: true,
+      exists: () => false,
+      sleep: (milliseconds) => sleeps.push(milliseconds),
+      writeText: (path, text) => writes.push({ path, text }),
+      runCommand: (file, args) => {
+        if (args.includes("phase7:docker:health")) {
+          healthAttempts += 1;
+          return healthAttempts < 3
+            ? { exitCode: 1, stdout: "dashboard is starting\n", stderr: "" }
+            : { exitCode: 0, stdout: "Docker health: ready\n", stderr: "" };
+        }
+        return {
+          exitCode: 0,
+          stdout: `${file} ${args.join(" ")} ok\n`,
+          stderr: "",
+        };
+      },
+    });
+
+    const transcript = writes.find((write) => write.path === "evidence/commands.log");
+    expect(report.ok).toBe(true);
+    expect(healthAttempts).toBe(3);
+    expect(sleeps).toEqual([5000, 5000]);
+    expect(transcript?.text).toContain("Docker health: ready");
+    expect(transcript?.text).not.toContain("dashboard is starting");
+  });
+
   it("redacts sensitive command output before writing transcripts", () => {
     const writes: Array<{ path: string; text: string }> = [];
     const report = recordPhase7LocalCommandEvidence({
