@@ -1582,6 +1582,254 @@ describe("Split402Router", () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
+  it("executes when input satisfies numeric and object property bounds", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>().mockResolvedValue({
+      data: { risk: "low" },
+      receipt
+    });
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-bounded-input",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              minProperties: 2,
+              maxProperties: 3,
+              required: ["score", "threshold"],
+              properties: {
+                score: {
+                  type: "integer",
+                  exclusiveMinimum: 0,
+                  exclusiveMaximum: 101,
+                  multipleOf: 5
+                },
+                threshold: {
+                  type: "number",
+                  minimum: 0,
+                  maximum: 1,
+                  multipleOf: 0.25
+                },
+                note: { type: "string" }
+              },
+              additionalProperties: false
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    const input = { score: 80, threshold: 0.5, note: "review" };
+    const result = await router.execute({
+      capability: "solana.wallet-risk",
+      input,
+      budget: {
+        network: receipt.network,
+        asset: receipt.asset,
+        maxAmountAtomic: receipt.requiredAmountAtomic
+      }
+    });
+
+    expect(result.providerId).toBe("provider-bounded-input");
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: expect.objectContaining({ providerId: "provider-bounded-input" }),
+        body: input
+      })
+    );
+  });
+
+  it("rejects before payment when input violates exclusive numeric bounds", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-exclusive-score",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["score"],
+              properties: {
+                score: {
+                  type: "integer",
+                  exclusiveMinimum: 0,
+                  exclusiveMaximum: 100
+                }
+              }
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: { score: 100 },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-exclusive-score",
+          retryable: false,
+          error: expect.stringContaining("input.score must be less than 100")
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("rejects before payment when input violates numeric multipleOf", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-multiple-score",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["score"],
+              properties: {
+                score: {
+                  type: "integer",
+                  multipleOf: 5
+                }
+              }
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: { score: 82 },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-multiple-score",
+          retryable: false,
+          error: expect.stringContaining("input.score must be a multiple of 5")
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("rejects before payment when input violates object property counts", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-property-count",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              minProperties: 2,
+              maxProperties: 2,
+              properties: {
+                wallet: { type: "string" },
+                mode: { type: "string" }
+              }
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: { wallet: "wallet_1" },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-property-count",
+          retryable: false,
+          error: expect.stringContaining(
+            "input must contain at least 2 properties"
+          )
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed numeric and property-count schemas before payment", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-malformed-bounds",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              minProperties: -1,
+              required: ["score"],
+              properties: {
+                score: {
+                  type: "number",
+                  exclusiveMinimum: "0",
+                  multipleOf: 0
+                }
+              }
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: { score: 10 },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-malformed-bounds",
+          retryable: false,
+          error: expect.stringContaining(
+            "input minProperties must be a non-negative integer"
+          )
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it("passes EVM signer config to provider execution", async () => {
     const evmReceipt = {
       ...receipt,
