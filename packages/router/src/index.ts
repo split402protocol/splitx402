@@ -1885,6 +1885,9 @@ function validateJsonSchemaValue(
     return [`${path} schema must be an object`];
   }
   const errors: string[] = [];
+  if (record.const !== undefined && !schemaValuesEqual(value, record.const)) {
+    errors.push(`${path} must equal the schema const value`);
+  }
   const enumValues = record.enum;
   if (enumValues !== undefined) {
     if (!Array.isArray(enumValues)) {
@@ -2003,6 +2006,13 @@ function validateJsonArrayShape(
       errors.push(`${path} maxItems must be a non-negative integer`);
     } else if (value.length > maxItems) {
       errors.push(`${path} must contain at most ${maxItems} items`);
+    }
+  }
+  if (schema.uniqueItems !== undefined) {
+    if (typeof schema.uniqueItems !== "boolean") {
+      errors.push(`${path} uniqueItems must be a boolean`);
+    } else if (schema.uniqueItems && !arrayItemsAreUnique(value)) {
+      errors.push(`${path} items must be unique`);
     }
   }
   if (schema.items !== undefined) {
@@ -2227,6 +2237,18 @@ function valueMatchesExplicitNonTargetType(
 
 function schemaValuesEqual(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function arrayItemsAreUnique(value: readonly unknown[]): boolean {
+  const seen = new Set<string>();
+  for (const item of value) {
+    const key = JSON.stringify(item);
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+  }
+  return true;
 }
 
 function readSchemaRecord(value: unknown): Record<string, unknown> | undefined {

@@ -1384,6 +1384,204 @@ describe("Split402Router", () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
+  it("executes when input satisfies provider const and uniqueItems constraints", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>().mockResolvedValue({
+      data: { risk: "low" },
+      receipt
+    });
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-const-unique",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["tool", "wallets"],
+              properties: {
+                tool: {
+                  type: "string",
+                  const: "risk.score"
+                },
+                wallets: {
+                  type: "array",
+                  uniqueItems: true,
+                  items: { type: "string" }
+                }
+              },
+              additionalProperties: false
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    const input = {
+      tool: "risk.score",
+      wallets: ["wallet_1", "wallet_2"]
+    };
+    const result = await router.execute({
+      capability: "solana.wallet-risk",
+      input,
+      budget: {
+        network: receipt.network,
+        asset: receipt.asset,
+        maxAmountAtomic: receipt.requiredAmountAtomic
+      }
+    });
+
+    expect(result.providerId).toBe("provider-const-unique");
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: expect.objectContaining({ providerId: "provider-const-unique" }),
+        body: input
+      })
+    );
+  });
+
+  it("rejects before payment when input violates provider const constraints", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-const",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["tool"],
+              properties: {
+                tool: {
+                  type: "string",
+                  const: "risk.score"
+                }
+              }
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: { tool: "risk.audit" },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-const",
+          retryable: false,
+          error: expect.stringContaining(
+            "input.tool must equal the schema const value"
+          )
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("rejects before payment when input violates provider uniqueItems constraints", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-unique-wallets",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["wallets"],
+              properties: {
+                wallets: {
+                  type: "array",
+                  uniqueItems: true,
+                  items: { type: "string" }
+                }
+              }
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: { wallets: ["wallet_1", "wallet_1"] },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-unique-wallets",
+          retryable: false,
+          error: expect.stringContaining("input.wallets items must be unique")
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed provider uniqueItems schemas before payment", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-malformed-unique-items",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["wallets"],
+              properties: {
+                wallets: {
+                  type: "array",
+                  uniqueItems: "yes"
+                }
+              }
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: { wallets: ["wallet_1"] },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-malformed-unique-items",
+          retryable: false,
+          error: expect.stringContaining(
+            "input.wallets uniqueItems must be a boolean"
+          )
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it("passes EVM signer config to provider execution", async () => {
     const evmReceipt = {
       ...receipt,
