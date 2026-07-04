@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { QueryResult, QueryResultRow } from "pg";
 
 import {
+  createPhase7StagingSeedProofEnv,
   readPhase7StagingSeedConfig,
   runPhase7StagingSeed,
   type Phase7StagingSeedConfig
@@ -99,6 +100,28 @@ describe("Phase 7 staging seed config", () => {
         SPLIT402_COMMISSION_BPS: "10001"
       })
     ).toThrow("SPLIT402_COMMISSION_BPS must be an integer from 0 to 10000");
+  });
+
+  it("prints copyable proof env values for Docker, hosted proof, and MCP setup", () => {
+    const config = readPhase7StagingSeedConfig(
+      {
+        SPLIT402_PHASE7_SEED_CONFIRM: "seed-hosted-staging"
+      },
+      new Date("2026-06-28T12:00:00Z")
+    );
+    const proofEnv = createPhase7StagingSeedProofEnv(config, {
+      accessToken: "merchant-session-token"
+    });
+
+    expect(proofEnv).toMatchObject({
+      SPLIT402_PHASE7_MERCHANT_ID: config.merchantId,
+      SPLIT402_PHASE7_REFERRER_WALLET: config.referrerWallet,
+      SPLIT402_PHASE7_CONTROL_PLANE_TOKEN: "merchant-session-token",
+      SPLIT402_DASHBOARD_CONTROL_PLANE_TOKEN: "merchant-session-token",
+      SPLIT402_MCP_CONTROL_PLANE_TOKEN: "merchant-session-token",
+      SPLIT402_MERCHANT_PAY_TO: config.payToWallet,
+      SPLIT402_MERCHANT_PUBLIC_KEY: config.servicePublicKey
+    });
   });
 });
 
