@@ -28,6 +28,7 @@ import {
 } from "@split402/router";
 
 import {
+  createEvmSignerFromPrivateKey,
   createMcpGatewayContext,
   createMcpGatewayContextFromEnv,
   createWalletRiskToolResult,
@@ -1891,7 +1892,7 @@ describe("MCP demo gateway", () => {
     ]);
   });
 
-  it("rejects invalid hosted execution signer configuration", async () => {
+  it("rejects invalid hosted Solana execution signer configuration", async () => {
     const bundle = createMcpDemoBundle({
       merchantOrigin: "https://merchant.example",
       generatedAt: "2026-06-26T00:00:00.000Z"
@@ -1909,6 +1910,53 @@ describe("MCP demo gateway", () => {
         fetch: mcpControlPlaneFetch([], bundle)
       })
     ).rejects.toThrow("invalid base58");
+  });
+
+  it("rejects invalid hosted EVM execution signer configuration", async () => {
+    const bundle = createMcpDemoBundle({
+      merchantOrigin: "https://merchant.example",
+      generatedAt: "2026-06-26T00:00:00.000Z"
+    });
+
+    await expect(
+      createMcpGatewayContextFromEnv({
+        bundle,
+        env: {
+          SPLIT402_MCP_CONTROL_PLANE_URL: "https://control.example",
+          SPLIT402_MCP_CONTROL_PLANE_TOKEN: "control-token",
+          SPLIT402_MCP_CAPABILITY: "base.research",
+          SPLIT402_MCP_EVM_PRIVATE_KEY: "not-a-hex-key"
+        },
+        fetch: mcpControlPlaneFetch([], bundle)
+      })
+    ).rejects.toThrow("EVM private key must be a 0x-prefixed 32-byte hex string");
+  });
+
+  it("builds live gateway context with an EVM signer only", async () => {
+    const calls: string[] = [];
+    const bundle = createMcpDemoBundle({
+      merchantOrigin: "https://merchant.example",
+      generatedAt: "2026-06-26T00:00:00.000Z"
+    });
+    const context = await createMcpGatewayContextFromEnv({
+      bundle,
+      env: {
+        SPLIT402_MCP_CONTROL_PLANE_URL: "https://control.example",
+        SPLIT402_MCP_CONTROL_PLANE_TOKEN: "control-token",
+        SPLIT402_MCP_CAPABILITY: "solana.wallet-risk",
+        SPLIT402_MCP_EVM_PRIVATE_KEY: sampleEvmPrivateKey()
+      },
+      fetch: mcpControlPlaneFetch(calls, bundle),
+      requireSigner: true
+    });
+
+    expect(context.executionMode).toBe("router-live-agent-sdk");
+    expect(calls).toEqual([
+      "https://control.example/v1/routes/search?status=active",
+      "https://control.example/v1/routes/rte_discovered/bazaar-resources",
+      "https://control.example/v1/campaigns/cmp_00000000000000000000000000000002",
+      "https://control.example/v1/merchants/mrc_00000000000000000000000000000001"
+    ]);
   });
 
   it("rejects missing hosted execution signer when required", async () => {
@@ -1930,7 +1978,7 @@ describe("MCP demo gateway", () => {
         requireSigner: true
       })
     ).rejects.toThrow(
-      "SPLIT402_MCP_SVM_PRIVATE_KEY or SVM_PRIVATE_KEY is required for live MCP gateway execution"
+      "SPLIT402_MCP_SVM_PRIVATE_KEY, SVM_PRIVATE_KEY, SPLIT402_MCP_EVM_PRIVATE_KEY, or EVM_PRIVATE_KEY is required for live MCP gateway execution"
     );
     expect(calls).toEqual([]);
   });
@@ -2000,9 +2048,49 @@ describe("MCP demo gateway", () => {
         fetch: mcpControlPlaneFetch(calls, bundle)
       })
     ).rejects.toThrow(
-      "SPLIT402_MCP_SVM_PRIVATE_KEY or SVM_PRIVATE_KEY is required for live MCP gateway execution"
+      "SPLIT402_MCP_SVM_PRIVATE_KEY, SVM_PRIVATE_KEY, SPLIT402_MCP_EVM_PRIVATE_KEY, or EVM_PRIVATE_KEY is required for live MCP gateway execution"
     );
     expect(calls).toEqual([]);
+  });
+
+  it("accepts an EVM signer for the live gateway CLI before control-plane discovery", async () => {
+    const bundle = createMcpDemoBundle({
+      merchantOrigin: "https://merchant.example",
+      generatedAt: "2026-06-26T00:00:00.000Z"
+    });
+    const calls: string[] = [];
+
+    await expect(
+      runMcpGateway(Readable.from([]), createWritableSink(), {
+        bundle,
+        env: {
+          SPLIT402_MCP_CONTROL_PLANE_URL: "https://control.example",
+          SPLIT402_MCP_CONTROL_PLANE_TOKEN: "control-token",
+          SPLIT402_MCP_CAPABILITY: "solana.wallet-risk",
+          SPLIT402_MCP_EVM_PRIVATE_KEY: sampleEvmPrivateKey()
+        },
+        fetch: mcpControlPlaneFetch(calls, bundle)
+      })
+    ).resolves.toBeUndefined();
+    expect(calls).toEqual([
+      "https://control.example/v1/routes/search?status=active",
+      "https://control.example/v1/routes/rte_discovered/bazaar-resources",
+      "https://control.example/v1/campaigns/cmp_00000000000000000000000000000002",
+      "https://control.example/v1/merchants/mrc_00000000000000000000000000000001"
+    ]);
+  });
+
+  it("creates EVM signers from private keys with optional RPC reads", () => {
+    const signer = createEvmSignerFromPrivateKey(sampleEvmPrivateKey());
+    expect(signer.address).toMatch(/^0x[0-9a-fA-F]{40}$/u);
+    expect(typeof signer.signTypedData).toBe("function");
+
+    const signerWithRpc = createEvmSignerFromPrivateKey(
+      sampleEvmPrivateKey(),
+      "https://base.example"
+    );
+    expect(signerWithRpc.address).toBe(signer.address);
+    expect(typeof signerWithRpc.readContract).toBe("function");
   });
 
   it("quotes router execution without creating a receipt", async () => {
@@ -2739,6 +2827,10 @@ function createWritableSink(): Writable {
 
 function sampleSvmPrivateKey(): string {
   return "2FrrUyzJ3TeEeDSCywX2uDDc9rY3QuRQzQTNweAW89cu";
+}
+
+function sampleEvmPrivateKey(): `0x${string}` {
+  return "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 }
 
 function mcpControlPlaneFetch(

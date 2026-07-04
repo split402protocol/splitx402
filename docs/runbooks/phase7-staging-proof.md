@@ -154,6 +154,9 @@ MCP gateway evidence must run in `router-live-agent-sdk` mode: set
 `SPLIT402_MCP_SVM_PRIVATE_KEY` or `SVM_PRIVATE_KEY` for the router-backed x402
 execution path. The launch preflight rejects other capability values so the
 hosted proof stays aligned to the public-alpha demo target.
+The gateway also supports `SPLIT402_MCP_EVM_PRIVATE_KEY` or `EVM_PRIVATE_KEY`
+with optional `SPLIT402_MCP_EVM_RPC_URL` for separate Base/EVM provider staging,
+but that is outside the current Solana public-alpha proof target.
 The status checker also compares `mcp_gateway_evidence` with
 `agent_discovery_evidence`: the selected provider route id must appear in route
 discovery, and the discovered campaign, referrer wallet, and payout wallet must

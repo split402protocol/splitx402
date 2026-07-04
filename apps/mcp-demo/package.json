@@ -22,7 +22,8 @@
   "dependencies": {
     "@split402/agent-sdk": "workspace:*",
     "@split402/protocol": "workspace:*",
-    "@split402/router": "workspace:*"
+    "@split402/router": "workspace:*",
+    "viem": "2.53.1"
   },
   "devDependencies": {
     "vitest": "^4.1.9"
