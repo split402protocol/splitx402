@@ -132,7 +132,11 @@ export function runPhase7DockerDoctor(
   });
 
   const shouldValidateComposeConfig =
-    dockerVersion.ok && composeVersion.ok && composeFileExists && envFileExists;
+    dockerVersion.ok &&
+    composeVersion.ok &&
+    composeFileExists &&
+    envFileExists &&
+    envValues.ok;
   const composeConfig = shouldValidateComposeConfig
     ? runCommand(
         input,
@@ -142,7 +146,8 @@ export function runPhase7DockerDoctor(
     : {
         ok: false as const,
         output: "",
-        error: "Skipped until Docker, Compose, compose.yaml, and phase7-staging.env are available.",
+        error:
+          "Skipped until Docker, Compose, compose.yaml, phase7-staging.env, and required env values are ready.",
       };
   checks.push({
     name: "compose_config",
