@@ -75,6 +75,36 @@ describe("Phase 7 seed env apply", () => {
     ).toThrow("proofEnv.BAD must be a string");
   });
 
+  it("extracts proofEnv from seed output captured through pnpm", () => {
+    const capturedOutput = [
+      "> split402@0.1.0 phase7:staging:seed C:\\repo",
+      "> corepack pnpm --filter @split402/control-plane run phase7:staging:seed",
+      "",
+      JSON.stringify(
+        {
+          schema: "split402.phase7_staging_seed.v1",
+          merchantId: "merchant-id",
+          authSession: {
+            issued: true,
+            wallet: "owner-wallet",
+          },
+          proofEnv: {
+            SPLIT402_PHASE7_MERCHANT_ID: "merchant-id",
+            SPLIT402_PHASE7_CONTROL_PLANE_TOKEN: "merchant-token",
+          },
+        },
+        null,
+        2,
+      ),
+      "Done in 1.1s",
+    ].join("\n");
+
+    expect(extractPhase7SeedProofEnv(capturedOutput)).toEqual({
+      SPLIT402_PHASE7_MERCHANT_ID: "merchant-id",
+      SPLIT402_PHASE7_CONTROL_PLANE_TOKEN: "merchant-token",
+    });
+  });
+
   it("uncomments and updates only allow-listed Phase 7 env keys", () => {
     const text = [
       "# SPLIT402_PHASE7_CONTROL_PLANE_TOKEN=<merchant-session-token>",

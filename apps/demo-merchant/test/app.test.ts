@@ -113,7 +113,7 @@ describe("Split402 demo merchant", () => {
       .get("/debug/receipts")
       .expect(200)
       .expect(({ body }) => {
-        expect(body).toEqual({ receipts: [] });
+        expect(body).toEqual({ receipts: [], receiptSubmissions: [] });
       });
   });
 

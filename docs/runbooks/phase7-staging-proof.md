@@ -26,17 +26,17 @@ SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:se
 corepack pnpm phase7:staging:apply-seed-env --seed-output split402-launch-evidence/phase7-seed.json
 corepack pnpm phase7:staging-proof --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-proof.txt
 corepack pnpm phase7:hosted:preflight --evidence-env-file split402-launch-evidence/phase7-staging.env
+corepack pnpm demo:mcp-bundle split402-launch-evidence/phase7-staging-evidence/mcp-bundle.json
+corepack pnpm demo:paid-suite split402-launch-evidence/phase7-staging-evidence/paid-suite.log
+corepack pnpm phase7:staging:derive-receipt-verification --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-evidence/paid-suite.log split402-launch-evidence/phase7-staging-evidence/receipt-verification.json
 # Confirm hosted control plane has SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc.
-corepack pnpm phase7:staging:collect-reads --evidence-env-file split402-launch-evidence/phase7-staging.env
 corepack pnpm phase7:staging:collect-mcp-gateway --evidence-env-file split402-launch-evidence/phase7-staging.env
+corepack pnpm phase7:staging:collect-reads --evidence-env-file split402-launch-evidence/phase7-staging.env
 corepack pnpm demo:mcp-gateway:smoke
 corepack pnpm phase7:staging:commands-template split402-launch-evidence/phase7-staging-evidence/commands.log
 corepack pnpm phase7:staging:commands-record --output split402-launch-evidence/phase7-staging-evidence/commands.log
 # Append hosted Docker, seed, collection, paid-suite, manifest, assemble, and status command output.
 corepack pnpm phase7:staging:commands-status --brief split402-launch-evidence/phase7-staging-evidence/commands.log
-corepack pnpm demo:mcp-bundle split402-launch-evidence/phase7-staging-evidence/mcp-bundle.json
-corepack pnpm demo:paid-suite split402-launch-evidence/phase7-staging-evidence/paid-suite.log
-corepack pnpm phase7:staging:derive-receipt-verification --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-evidence/paid-suite.log split402-launch-evidence/phase7-staging-evidence/receipt-verification.json
 corepack pnpm phase7:staging:manifest split402-launch-evidence/phase7-staging-proof.txt split402-launch-evidence/phase7-staging-evidence/artifact-manifest.json
 corepack pnpm phase7:staging:assemble --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-proof.txt
 corepack pnpm phase7:staging:status --brief split402-launch-evidence/phase7-staging-proof.txt

@@ -75,6 +75,11 @@ describe("Phase 7 command recorder", () => {
     expect(writes[0]).toContain("private/evidence/paid-suite.log");
     expect(writes[0]).toContain("private/phase7-proof.txt");
     expect(writes[0]).toContain("$ corepack pnpm audit --audit-level high");
+    expect(
+      writes[0]?.indexOf("$ corepack pnpm demo:paid-suite") ?? -1,
+    ).toBeLessThan(
+      writes[0]?.indexOf("$ corepack pnpm phase7:staging:collect-reads") ?? -1,
+    );
   });
 
   it("can include launch preflight when the operator opts in", () => {

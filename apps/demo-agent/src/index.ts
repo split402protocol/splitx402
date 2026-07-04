@@ -6,7 +6,7 @@ import {
   createReferralClaim,
   createSvmSignerFromBase58
 } from "@split402/agent-sdk";
-import { deriveEd25519PublicKey, hexToBytes } from "@split402/protocol";
+import { deriveEd25519PublicKey, hashProtocolObject, hexToBytes } from "@split402/protocol";
 
 import { checkMainnetPaymentGuards, readDemoNetwork } from "./network.js";
 
@@ -27,6 +27,17 @@ const PAYOUT_SEED = hexToBytes(
 const CAMPAIGN_ID = "cmp_00000000000000000000000000000002";
 const ROUTE_ID = "rte_00000000000000000000000000000003";
 const OPERATION_ID = "wallet-risk-score";
+const ROUTE_ISSUED_AT =
+  (process.env.SPLIT402_PHASE7_ROUTE_ISSUED_AT ??
+    "2026-06-28T00:00:00Z") as `${string}Z`;
+const ROUTE_EXPIRES_AT =
+  (process.env.SPLIT402_PHASE7_ROUTE_EXPIRES_AT ??
+    "2026-12-31T00:00:00Z") as `${string}Z`;
+const ROUTE_NONCE =
+  process.env.SPLIT402_PHASE7_ROUTE_NONCE ?? "phase7-staging-route-0001";
+const ROUTE_METADATA_HASH =
+  (process.env.SPLIT402_PHASE7_ROUTE_METADATA_HASH ??
+    hashProtocolObject({ label: "Split402 Phase 7 staging route" })) as `sha256:${string}`;
 
 await main();
 
@@ -116,10 +127,10 @@ function createDemoReferralClaim() {
     payoutWallet: deriveEd25519PublicKey(PAYOUT_SEED),
     resourceOrigin: MERCHANT_ORIGIN,
     operationIds: [OPERATION_ID],
-    issuedAt: "2026-06-24T00:00:00Z",
-    expiresAt: "2099-06-24T00:00:00Z",
-    nonce: "claim-nonce-000001",
-    metadata: { label: "demo referral" }
+    issuedAt: ROUTE_ISSUED_AT,
+    expiresAt: ROUTE_EXPIRES_AT,
+    nonce: ROUTE_NONCE,
+    metadataHash: ROUTE_METADATA_HASH
   });
 }
 

@@ -128,6 +128,7 @@ services:
     environment:
       CI: "true"
       SPLIT402_MERCHANT_ORIGIN: http://localhost:4023
+      SPLIT402_MERCHANT_CONTROL_PLANE_URL: http://control-plane:4021
       PORT: "4023"
     ports:
       - "${SPLIT402_PHASE7_DEMO_MERCHANT_PORT:-4023}:4023"

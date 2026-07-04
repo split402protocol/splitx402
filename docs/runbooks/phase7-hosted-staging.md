@@ -156,13 +156,16 @@ SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:se
 corepack pnpm phase7:staging:apply-seed-env --seed-output split402-launch-evidence/phase7-seed.json
 corepack pnpm phase7:staging-proof --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-proof.txt
 corepack pnpm phase7:hosted:preflight --evidence-env-file split402-launch-evidence/phase7-staging.env
-corepack pnpm phase7:staging:collect-reads --evidence-env-file split402-launch-evidence/phase7-staging.env
+corepack pnpm demo:mcp-bundle split402-launch-evidence/phase7-staging-evidence/mcp-bundle.json
+corepack pnpm demo:paid-suite split402-launch-evidence/phase7-staging-evidence/paid-suite.log
+corepack pnpm phase7:staging:derive-receipt-verification --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-evidence/paid-suite.log split402-launch-evidence/phase7-staging-evidence/receipt-verification.json
 SPLIT402_MCP_CONTROL_PLANE_URL="$SPLIT402_PHASE7_CONTROL_PLANE_URL" \
 SPLIT402_MCP_CONTROL_PLANE_TOKEN="$SPLIT402_PHASE7_CONTROL_PLANE_TOKEN" \
 SPLIT402_MCP_CAPABILITY=solana.wallet-risk \
 SPLIT402_MCP_SVM_PRIVATE_KEY="$SVM_PRIVATE_KEY" \
 SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 \
 corepack pnpm phase7:staging:collect-mcp-gateway --evidence-env-file split402-launch-evidence/phase7-staging.env
+corepack pnpm phase7:staging:collect-reads --evidence-env-file split402-launch-evidence/phase7-staging.env
 corepack pnpm demo:mcp-gateway:smoke
 corepack pnpm phase7:staging:commands-record \
   --include-hosted \
@@ -172,9 +175,6 @@ corepack pnpm phase7:staging:commands-record \
   --proof split402-launch-evidence/phase7-staging-proof.txt \
   --output split402-launch-evidence/phase7-staging-evidence/commands.log
 corepack pnpm phase7:staging:commands-status --brief split402-launch-evidence/phase7-staging-evidence/commands.log
-corepack pnpm demo:mcp-bundle split402-launch-evidence/phase7-staging-evidence/mcp-bundle.json
-corepack pnpm demo:paid-suite split402-launch-evidence/phase7-staging-evidence/paid-suite.log
-corepack pnpm phase7:staging:derive-receipt-verification --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-evidence/paid-suite.log split402-launch-evidence/phase7-staging-evidence/receipt-verification.json
 corepack pnpm phase7:staging:manifest split402-launch-evidence/phase7-staging-proof.txt split402-launch-evidence/phase7-staging-evidence/artifact-manifest.json
 corepack pnpm phase7:staging:assemble --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-proof.txt
 corepack pnpm phase7:staging:status --brief split402-launch-evidence/phase7-staging-proof.txt
