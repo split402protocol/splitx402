@@ -1135,7 +1135,10 @@ describe("MCP demo gateway", () => {
     expect(response?.jsonrpc).toBe("2.0");
     expect(response?.id).toBe(1);
     const result = response?.result as {
-      tools: { name: string; inputSchema?: { required?: string[] } }[];
+      tools: {
+        name: string;
+        inputSchema?: Record<string, unknown> & { required?: string[] };
+      }[];
     };
     expect(result.tools.map((tool) => tool.name)).toEqual([
       "split402.walletRiskScore",
@@ -1151,13 +1154,17 @@ describe("MCP demo gateway", () => {
     ]);
     expect(result.tools[0]?.inputSchema?.required).toEqual(["wallet"]);
     expect(result.tools[1]?.inputSchema).toMatchObject({
+      required: ["capability"],
       properties: {
         capability: { type: "string" },
         budget: {
           properties: {
             network: { type: "string" },
             asset: { type: "string" },
-            maxAmountAtomic: { type: "string" }
+            maxAmountAtomic: {
+              type: "string",
+              pattern: "^(0|[1-9][0-9]*)$"
+            }
           }
         }
       }
@@ -1168,8 +1175,15 @@ describe("MCP demo gateway", () => {
       properties: {
         referralClaim: { type: "object" },
         budget: {
-          required: ["maxAmountAtomic"]
-        }
+          required: ["maxAmountAtomic"],
+          properties: {
+            maxAmountAtomic: {
+              type: "string",
+              pattern: "^(0|[1-9][0-9]*)$"
+            }
+          }
+        },
+        maxAttempts: { type: "integer", minimum: 1 }
       }
     });
     const executeTool = result.tools.find(
@@ -1180,8 +1194,15 @@ describe("MCP demo gateway", () => {
       properties: {
         referralClaim: { type: "object" },
         budget: {
-          required: ["maxAmountAtomic"]
-        }
+          required: ["maxAmountAtomic"],
+          properties: {
+            maxAmountAtomic: {
+              type: "string",
+              pattern: "^(0|[1-9][0-9]*)$"
+            }
+          }
+        },
+        maxAttempts: { type: "integer", minimum: 1 }
       }
     });
     const externalDiscoveryTool = result.tools.find(
