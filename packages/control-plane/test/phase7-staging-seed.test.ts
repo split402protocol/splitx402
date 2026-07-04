@@ -38,6 +38,7 @@ describe("Phase 7 staging seed config", () => {
       now: "2026-06-28T12:00:00.000Z"
     });
     expect(config.servicePublicKey).toMatch(/^[1-9A-HJ-NP-Za-km-z]+$/u);
+    expect(config.ownerSeed).toBeInstanceOf(Uint8Array);
     expect(config.referrerWallet).toMatch(/^[1-9A-HJ-NP-Za-km-z]+$/u);
     expect(config.payoutWallet).toMatch(/^[1-9A-HJ-NP-Za-km-z]+$/u);
   });
@@ -61,6 +62,29 @@ describe("Phase 7 staging seed config", () => {
     expect(config.requiredAmountAtomic).toBe("50000");
     expect(config.commissionBps).toBe(2000);
     expect(config.protocolFeeBpsOfCommission).toBe(750);
+  });
+
+  it("allows an explicit owner wallet without a local seed for manual auth token setup", () => {
+    const config = readPhase7StagingSeedConfig(
+      {
+        SPLIT402_PHASE7_SEED_CONFIRM: "seed-hosted-staging",
+        SPLIT402_PHASE7_OWNER_WALLET: "11111111111111111111111111111111"
+      },
+      new Date("2026-06-28T12:00:00Z")
+    );
+
+    expect(config.ownerWallet).toBe("11111111111111111111111111111111");
+    expect(config.ownerSeed).toBeUndefined();
+  });
+
+  it("rejects an owner wallet that does not match the configured owner seed", () => {
+    expect(() =>
+      readPhase7StagingSeedConfig({
+        SPLIT402_PHASE7_OWNER_WALLET: "11111111111111111111111111111111",
+        SPLIT402_PHASE7_OWNER_SEED_HEX:
+          "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf"
+      })
+    ).toThrow("SPLIT402_PHASE7_OWNER_WALLET must match SPLIT402_PHASE7_OWNER_SEED_HEX");
   });
 
   it("rejects malformed seed and basis-point overrides", () => {

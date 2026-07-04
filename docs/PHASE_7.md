@@ -121,6 +121,10 @@ corepack pnpm phase7:docker:doctor --brief --profile demo --profile workers
 corepack pnpm phase7:docker:compose up --brief --profile demo --profile workers
 corepack pnpm phase7:docker:health --brief --profile demo --profile workers
 SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed
+# Copy the command's proofEnv values into private staging env/evidence files.
+# When an owner seed is available, proofEnv includes the private merchant-session token
+# for SPLIT402_PHASE7_CONTROL_PLANE_TOKEN, SPLIT402_DASHBOARD_CONTROL_PLANE_TOKEN,
+# and SPLIT402_MCP_CONTROL_PLANE_TOKEN. Never commit those token values.
 corepack pnpm phase7:staging-proof --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-proof.txt
 corepack pnpm phase7:hosted:preflight --evidence-env-file split402-launch-evidence/phase7-staging.env
 # Confirm hosted control plane has SPLIT402_FUNDING_BALANCE_PROVIDER=solana-rpc.
