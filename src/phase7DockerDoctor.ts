@@ -319,7 +319,7 @@ function createNextActions(
   }
   if (actions.length === 0) {
     actions.push(
-      `Run \`${createComposeUpCommand(composeFile, profiles)}\`, then wait for healthy services.`,
+      `Run \`${createComposeUpCommand(composeFile, envFile, profiles)}\`, then wait for healthy services.`,
     );
   }
 
@@ -413,6 +413,7 @@ function dedupeProfiles(
 
 function createComposeUpCommand(
   composeFile: string,
+  envFile: string,
   profiles: readonly Phase7DockerProfile[],
 ): string {
   const profileArgs = profiles
@@ -427,7 +428,7 @@ function createComposeUpCommand(
       ? ["chain-worker", "webhook-worker", "payout-finality-worker"]
       : []),
   ].join(" ");
-  return `docker compose -f ${composeFile}${
+  return `docker compose --env-file ${envFile} -f ${composeFile}${
     profileArgs.length === 0 ? "" : ` ${profileArgs}`
   } up -d ${services}`;
 }
