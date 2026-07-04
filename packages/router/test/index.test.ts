@@ -313,6 +313,151 @@ describe("Split402Router", () => {
     );
   });
 
+  it("skips providers whose inputSchema does not accept the request", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>().mockResolvedValue({
+      data: { risk: "low" },
+      receipt
+    });
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-price",
+          amountAtomic: "9000",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["symbol"],
+              properties: {
+                symbol: { type: "string" }
+              },
+              additionalProperties: false
+            }
+          }
+        }),
+        provider({
+          providerId: "provider-wallet",
+          amountAtomic: receipt.requiredAmountAtomic,
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["wallet"],
+              properties: {
+                wallet: { type: "string" }
+              },
+              additionalProperties: false
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    const result = await router.execute({
+      capability: "solana.wallet-risk",
+      input: { wallet: "wallet_1" },
+      budget: {
+        network: receipt.network,
+        asset: receipt.asset,
+        maxAmountAtomic: receipt.requiredAmountAtomic
+      }
+    });
+
+    expect(result.providerId).toBe("provider-wallet");
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: expect.objectContaining({ providerId: "provider-wallet" }),
+        body: { wallet: "wallet_1" }
+      })
+    );
+  });
+
+  it("rejects before payment when no provider inputSchema accepts the request", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-wallet",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["wallet"],
+              properties: {
+                wallet: { type: "string" }
+              },
+              additionalProperties: false
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: { wallet: 123 },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      message: "input does not match any provider inputSchema for solana.wallet-risk",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-wallet",
+          retryable: false,
+          error: expect.stringContaining("input.wallet must be string")
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("fails closed before payment when a provider inputSchema is malformed", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-malformed-schema",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["wallet"],
+              properties: "wallet"
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: { wallet: "wallet_1" },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-malformed-schema",
+          retryable: false,
+          error: expect.stringContaining("input properties must be an object")
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it("passes EVM signer config to provider execution", async () => {
     const evmReceipt = {
       ...receipt,
