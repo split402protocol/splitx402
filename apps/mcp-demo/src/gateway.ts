@@ -688,6 +688,7 @@ function handleRouterQuoteTool(
     const quote = context.router.quoteExecution({
       capability: prepared.capability,
       budget: prepared.budget,
+      ...(prepared.input === undefined ? {} : { input: prepared.input }),
       ...(prepared.referralClaim === undefined
         ? {}
         : { referralClaim: prepared.referralClaim }),
@@ -748,6 +749,7 @@ function readRouterExecutionPlanInput(
       };
       referralClaim?: ReferralClaimV1;
       maxAttempts?: number;
+      input?: Record<string, unknown>;
     }
   | { message: string } {
   if (typeof args !== "object" || args === null) {
@@ -797,12 +799,20 @@ function readRouterExecutionPlanInput(
   if (typeof maxAttempts === "object") {
     return maxAttempts;
   }
+  const input =
+    record.input === undefined
+      ? undefined
+      : readRequiredObjectArgument(record.input, "input");
+  if (input !== undefined && !input.ok) {
+    return { message: input.message };
+  }
 
   return {
     capability,
     budget,
     ...(referralClaim === undefined ? {} : { referralClaim }),
-    ...(maxAttempts === undefined ? {} : { maxAttempts })
+    ...(maxAttempts === undefined ? {} : { maxAttempts }),
+    ...(input === undefined ? {} : { input: input.value })
   };
 }
 
@@ -969,6 +979,7 @@ function routerToolCards() {
         type: "object",
         properties: {
           capability: { type: "string" },
+          input: { type: "object" },
           referralClaim: { type: "object" },
           budget: {
             type: "object",

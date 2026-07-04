@@ -1173,6 +1173,7 @@ describe("MCP demo gateway", () => {
     expect(quoteTool?.inputSchema).toMatchObject({
       required: ["capability", "budget"],
       properties: {
+        input: { type: "object" },
         referralClaim: { type: "object" },
         budget: {
           required: ["maxAmountAtomic"],
@@ -2381,6 +2382,103 @@ describe("MCP demo gateway", () => {
               rank: 1,
               providerId: "split402-demo-merchant",
               amountAtomic: "10000"
+            })
+          ]
+        },
+        isError: false
+      }
+    });
+    expect(context.receipts.size).toBe(0);
+  });
+
+  it("quotes router execution using supplied input schema preflight", async () => {
+    const bundle = createMcpDemoBundle({
+      generatedAt: "2026-06-26T00:00:00.000Z"
+    });
+    const sample = createSampleProtocolArtifacts();
+    const baseProvider = {
+      capability: "solana.wallet-risk",
+      merchantOrigin: "https://merchant.example",
+      path: "/v1/risk",
+      method: "POST",
+      operationId: "wallet-risk-score",
+      campaignId: sample.artifacts.receipt.campaignId,
+      merchantPublicKey: bundle.merchant.servicePublicKey,
+      network: sample.artifacts.receipt.network,
+      asset: sample.artifacts.receipt.asset,
+      payToWallet: sample.artifacts.receipt.payToWallet
+    } satisfies Omit<Split402CapabilityProvider, "providerId" | "amountAtomic">;
+    const context = createMcpGatewayContext(
+      bundle,
+      new Split402Router({
+        providers: [
+          {
+            ...baseProvider,
+            providerId: "provider-price",
+            amountAtomic: "9000",
+            metadata: {
+              inputSchema: {
+                type: "object",
+                required: ["symbol"],
+                properties: {
+                  symbol: { type: "string" }
+                },
+                additionalProperties: false
+              }
+            }
+          },
+          {
+            ...baseProvider,
+            providerId: "provider-wallet",
+            amountAtomic: "10000",
+            metadata: {
+              inputSchema: {
+                type: "object",
+                required: ["wallet"],
+                properties: {
+                  wallet: { type: "string" }
+                },
+                additionalProperties: false
+              }
+            }
+          }
+        ]
+      })
+    );
+
+    const response = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "quote-with-input",
+        method: "tools/call",
+        params: {
+          name: "split402.quote",
+          arguments: {
+            capability: "solana.wallet-risk",
+            input: {
+              wallet: "wallet-123"
+            },
+            budget: {
+              maxAmountAtomic: "10000"
+            }
+          }
+        }
+      }),
+      context
+    );
+
+    expect(response).toMatchObject({
+      jsonrpc: "2.0",
+      id: "quote-with-input",
+      result: {
+        structuredContent: {
+          status: "quoted",
+          providerId: "provider-wallet",
+          quotedAmountAtomic: "10000",
+          rankedProviders: [
+            expect.objectContaining({
+              rank: 1,
+              providerId: "provider-wallet"
             })
           ]
         },
