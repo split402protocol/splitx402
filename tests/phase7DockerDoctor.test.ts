@@ -122,7 +122,41 @@ describe("Phase 7 Docker doctor", () => {
       "Profiles: demo, workers",
     );
     expect(report.nextActions).toContain(
-      "Run `docker compose -f deploy/phase7-staging/compose.yaml --profile demo --profile workers up -d postgres control-plane dashboard demo-merchant chain-worker webhook-worker payout-finality-worker`, then wait for healthy services.",
+      "Run `docker compose --env-file deploy/phase7-staging/phase7-staging.env -f deploy/phase7-staging/compose.yaml --profile demo --profile workers up -d postgres control-plane dashboard demo-merchant chain-worker webhook-worker payout-finality-worker`, then wait for healthy services.",
+    );
+  });
+
+  it("includes custom env files in the ready compose-up guidance", () => {
+    const report = runPhase7DockerDoctor({
+      envFile: "split402-launch-evidence/docker.env",
+      profiles: ["demo"],
+      exists: (path) =>
+        path === "deploy/phase7-staging/compose.yaml" ||
+        path === "split402-launch-evidence/docker.env",
+      readText: () => filledDockerEnvWithProfiles(),
+      execFile: (file, args) => {
+        if (args.join(" ") === "--version") {
+          return "Docker version 27.0.0";
+        }
+        if (args.join(" ") === "info --format {{.ServerVersion}}") {
+          return "27.0.0";
+        }
+        if (args.join(" ") === "compose version") {
+          return "Docker Compose version v2.29.1";
+        }
+        if (
+          args.join(" ") ===
+          "compose --env-file split402-launch-evidence/docker.env -f deploy/phase7-staging/compose.yaml --profile demo config --quiet"
+        ) {
+          return "";
+        }
+        throw new Error(`unexpected command ${file} ${args.join(" ")}`);
+      },
+    });
+
+    expect(report.ready).toBe(true);
+    expect(report.nextActions).toContain(
+      "Run `docker compose --env-file split402-launch-evidence/docker.env -f deploy/phase7-staging/compose.yaml --profile demo up -d postgres control-plane dashboard demo-merchant`, then wait for healthy services.",
     );
   });
 
