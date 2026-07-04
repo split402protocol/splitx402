@@ -332,6 +332,26 @@ export function createDemoProvider(
     },
     metadata: {
       discoverySource: "static",
+      inputSchema: {
+        type: "object",
+        required: ["wallet"],
+        properties: {
+          wallet: { type: "string" }
+        },
+        additionalProperties: false
+      },
+      outputSchema: {
+        type: "object",
+        required: ["executionMode", "wallet", "referralClaimHash", "riskScore", "risk"],
+        properties: {
+          executionMode: { type: "string", const: "router-demo-mock" },
+          wallet: { type: ["string", "null"] },
+          referralClaimHash: { type: ["string", "null"] },
+          riskScore: { type: "integer", minimum: 0, maximum: 100 },
+          risk: { type: "string", enum: ["low", "medium", "high"] }
+        },
+        additionalProperties: false
+      },
       referrerWallet: sample.artifacts.receipt.referrerWallet!,
       payoutWallet: sample.artifacts.receipt.payoutWallet!
     }
@@ -1276,6 +1296,9 @@ function publicProviderView(provider: Split402CapabilityProvider) {
     ...(provider.metadata?.inputSchema === undefined
       ? {}
       : { inputSchema: provider.metadata.inputSchema }),
+    ...(provider.metadata?.outputSchema === undefined
+      ? {}
+      : { outputSchema: provider.metadata.outputSchema }),
     ...(mcpTools === undefined || mcpTools.length === 0 ? {} : { mcpTools }),
     reliability: provider.reliability ?? null
   };

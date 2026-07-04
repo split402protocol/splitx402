@@ -1415,6 +1415,14 @@ describe("MCP demo gateway", () => {
           },
           required: ["tool"]
         },
+        outputSchema: {
+          type: "object",
+          required: ["result"],
+          properties: {
+            result: { type: "string" }
+          },
+          additionalProperties: false
+        },
         mcpTools: [
           {
             name: "scan_revenue_surfaces",
@@ -1467,6 +1475,9 @@ describe("MCP demo gateway", () => {
               source: "external_x402",
               inputSchema: expect.objectContaining({
                 required: ["tool"]
+              }),
+              outputSchema: expect.objectContaining({
+                required: ["result"]
               }),
               mcpTools: [
                 expect.objectContaining({
@@ -2367,7 +2378,10 @@ describe("MCP demo gateway", () => {
           provider: {
             providerId: "split402-demo-merchant",
             capability: "solana.wallet-risk",
-            amountAtomic: "10000"
+            amountAtomic: "10000",
+            outputSchema: expect.objectContaining({
+              required: expect.arrayContaining(["wallet", "risk", "riskScore"])
+            })
           },
           capability: "solana.wallet-risk",
           budget: {
@@ -2381,7 +2395,12 @@ describe("MCP demo gateway", () => {
             expect.objectContaining({
               rank: 1,
               providerId: "split402-demo-merchant",
-              amountAtomic: "10000"
+              amountAtomic: "10000",
+              provider: expect.objectContaining({
+                outputSchema: expect.objectContaining({
+                  required: expect.arrayContaining(["wallet", "risk", "riskScore"])
+                })
+              })
             })
           ]
         },
@@ -2537,6 +2556,9 @@ describe("MCP demo gateway", () => {
             amountAtomic: "10000",
             referrerWallet: expect.any(String),
             payoutWallet: expect.any(String),
+            outputSchema: expect.objectContaining({
+              required: expect.arrayContaining(["wallet", "risk", "riskScore"])
+            }),
             reliability: {
               successRateBps: 9500,
               medianLatencyMs: 250
