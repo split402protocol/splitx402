@@ -149,7 +149,7 @@ describe("Split402 launch preflight", () => {
     ).toMatchObject({
       ok: true,
       details: [
-        "deploy/phase7-staging/phase7-staging.env exists for Docker Compose runtime values.",
+        "deploy/phase7-staging/phase7-staging.env has required Docker runtime values for base, demo, and worker profiles.",
       ],
     });
     expect(report.checks.find((check) => check.id === "phase6_evidence_env_values"))
@@ -235,6 +235,67 @@ describe("Split402 launch preflight", () => {
     });
     expect(report.nextActions).toContain(
       "Run corepack pnpm phase7:docker:env:init --generate-secrets, then fill remaining deploy/phase7-staging/phase7-staging.env values for hosted URLs, wallets, service keys, buyer keys, and control-plane tokens before running phase7:docker:doctor.",
+    );
+  });
+
+  it("requires filled Phase 7 Docker runtime env values before evidence collection", () => {
+    const workspace = createSplit402ProductEvidenceWorkspace({
+      sourceCommit: "abc1234",
+    });
+    const files = createWorkspaceFileMap(
+      [
+        workspace.phase7.envText,
+        "SPLIT402_PHASE7_PROOF_ID=phase7-staging-2026-06-29",
+        "SPLIT402_PHASE7_PROOF_REVIEWERS=Split402 operators",
+        "SPLIT402_PHASE7_STAGING_ENVIRONMENT=hosted-devnet-public-alpha",
+        "SPLIT402_PHASE7_CONTROL_PLANE_URL=https://control.staging.example",
+        "SPLIT402_PHASE7_DASHBOARD_URL=https://dashboard.staging.example",
+        "SPLIT402_PHASE7_DEMO_MERCHANT_URL=https://merchant.staging.example",
+        "SPLIT402_PHASE7_WEBHOOK_RECEIVER_URL=https://webhook.staging.example",
+        "SPLIT402_PHASE7_CONTROL_PLANE_TOKEN=merchant-session-token",
+        "SPLIT402_PHASE7_MERCHANT_ID=mrc_123",
+        "SPLIT402_PHASE7_REFERRER_WALLET=referrer-wallet",
+        "SPLIT402_MCP_CONTROL_PLANE_URL=https://control.staging.example",
+        "SPLIT402_MCP_CONTROL_PLANE_TOKEN=merchant-session-token",
+        "SPLIT402_MCP_CAPABILITY=solana.wallet-risk",
+        "SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1",
+        "SPLIT402_MCP_SVM_PRIVATE_KEY=funded-devnet-buyer-key",
+      ].join("\n"),
+      createFilledPhase6EnvText(workspace.phase6EnvText),
+      workspace,
+    );
+    files.set(
+      "deploy/phase7-staging/phase7-staging.env",
+      [
+        "SPLIT402_DASHBOARD_VIEWER_TOKEN=replace-with-staging-viewer-token",
+        "SPLIT402_DASHBOARD_CONTROL_PLANE_TOKEN=",
+        "SPLIT402_MERCHANT_PAY_TO=merchant-wallet",
+        "SPLIT402_SERVICE_SEED_HEX=",
+        "SPLIT402_WEBHOOK_WORKER_URL=https://webhook-worker.staging.example",
+        "SPLIT402_WEBHOOK_WORKER_SECRET=replace-with-staging-webhook-secret",
+      ].join("\n"),
+    );
+
+    const report = createSplit402LaunchPreflightReport({
+      currentSourceCommit: "abc1234",
+      exists: (path) => files.has(path),
+      readText: (path) => files.get(path) ?? "",
+    });
+
+    expect(report.readyToCollectEvidence).toBe(false);
+    expect(
+      report.checks.find((check) => check.id === "phase7_docker_runtime_env"),
+    ).toMatchObject({
+      ok: false,
+      severity: "required",
+      details: [
+        "Run corepack pnpm phase7:docker:env:init --generate-secrets to replace generated Docker runtime secret placeholders for SPLIT402_DASHBOARD_VIEWER_TOKEN, SPLIT402_WEBHOOK_WORKER_SECRET while preserving existing filled values.",
+        "Fill Phase 7 Docker runtime env values in deploy/phase7-staging/phase7-staging.env: SPLIT402_DASHBOARD_VIEWER_TOKEN, SPLIT402_DASHBOARD_CONTROL_PLANE_TOKEN, SPLIT402_SERVICE_SEED_HEX, SPLIT402_WEBHOOK_WORKER_SECRET.",
+        "Replace template placeholders in deploy/phase7-staging/phase7-staging.env: SPLIT402_DASHBOARD_VIEWER_TOKEN, SPLIT402_WEBHOOK_WORKER_SECRET.",
+      ],
+    });
+    expect(report.nextActions).toContain(
+      "Run corepack pnpm phase7:docker:env:init --generate-secrets to replace generated Docker runtime secret placeholders for SPLIT402_DASHBOARD_VIEWER_TOKEN, SPLIT402_WEBHOOK_WORKER_SECRET while preserving existing filled values.",
     );
   });
 
@@ -1065,7 +1126,7 @@ function createWorkspaceFileMap(
   return new Map([
     [
       "deploy/phase7-staging/phase7-staging.env",
-      "SPLIT402_PHASE7_DOCKER_RUNTIME_ENV=present",
+      createFilledDockerRuntimeEnvText(),
     ],
     [join(workspace.directory, workspace.readmeFileName), workspace.readmeText],
     [
@@ -1102,6 +1163,17 @@ function createWorkspaceFileMap(
       workspace.phase7.readmeText,
     ],
   ]);
+}
+
+function createFilledDockerRuntimeEnvText(): string {
+  return [
+    "SPLIT402_DASHBOARD_VIEWER_TOKEN=viewer-token",
+    "SPLIT402_DASHBOARD_CONTROL_PLANE_TOKEN=control-plane-token",
+    "SPLIT402_MERCHANT_PAY_TO=merchant-wallet",
+    "SPLIT402_SERVICE_SEED_HEX=abcdef1234567890",
+    "SPLIT402_WEBHOOK_WORKER_URL=https://webhook-worker.staging.example",
+    "SPLIT402_WEBHOOK_WORKER_SECRET=webhook-secret",
+  ].join("\n");
 }
 
 function createFilledPhase6EnvText(template: string): string {
