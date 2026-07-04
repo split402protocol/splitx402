@@ -712,10 +712,14 @@ async function handleRouterExecuteTool(
   }
 
   const record = args as Record<string, unknown>;
+  const input = readRequiredObjectArgument(record.input, "input");
+  if (!input.ok) {
+    return createErrorResponse(id, -32602, input.message);
+  }
   try {
     const result = await context.router.execute({
       capability: prepared.capability,
-      input: record.input ?? {},
+      input: input.value,
       budget: prepared.budget,
       ...(prepared.referralClaim === undefined
         ? {}
@@ -1636,6 +1640,16 @@ function readRequiredStringArgument(
     return { message: `${label} argument is required` };
   }
   return value.trim();
+}
+
+function readRequiredObjectArgument(
+  value: unknown,
+  label: string,
+): { ok: true; value: Record<string, unknown> } | { ok: false; message: string } {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return { ok: false, message: `${label} argument must be an object` };
+  }
+  return { ok: true, value: value as Record<string, unknown> };
 }
 
 function readOptionalPositiveIntegerArgument(
