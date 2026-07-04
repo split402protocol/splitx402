@@ -1830,6 +1830,249 @@ describe("Split402Router", () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
+  it("executes when input satisfies patternProperties and propertyNames", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>().mockResolvedValue({
+      data: { risk: "low" },
+      receipt
+    });
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-dynamic-filters",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              propertyNames: {
+                type: "string",
+                pattern: "^(wallet|metric\\.[a-z]+)$"
+              },
+              properties: {
+                wallet: { type: "string" }
+              },
+              patternProperties: {
+                "^metric\\.": {
+                  type: "number",
+                  minimum: 0
+                }
+              },
+              additionalProperties: false
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    const input = {
+      wallet: "wallet_1",
+      "metric.latency": 120,
+      "metric.score": 0.9
+    };
+    const result = await router.execute({
+      capability: "solana.wallet-risk",
+      input,
+      budget: {
+        network: receipt.network,
+        asset: receipt.asset,
+        maxAmountAtomic: receipt.requiredAmountAtomic
+      }
+    });
+
+    expect(result.providerId).toBe("provider-dynamic-filters");
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: expect.objectContaining({ providerId: "provider-dynamic-filters" }),
+        body: input
+      })
+    );
+  });
+
+  it("rejects before payment when dynamic property values violate patternProperties", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-dynamic-filters",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              patternProperties: {
+                "^metric\\.": {
+                  type: "number",
+                  minimum: 0
+                }
+              },
+              additionalProperties: false
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: { "metric.latency": -1 },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-dynamic-filters",
+          retryable: false,
+          error: expect.stringContaining("input.metric.latency must be at least 0")
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("rejects before payment when propertyNames rejects an input key", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-property-names",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              propertyNames: {
+                type: "string",
+                pattern: "^metric\\."
+              },
+              patternProperties: {
+                "^metric\\.": { type: "number" }
+              },
+              additionalProperties: false
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: { wallet: "wallet_1" },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-property-names",
+          retryable: false,
+          error: expect.stringContaining(
+            "input.wallet name must match pattern ^metric\\."
+          )
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("rejects before payment when additionalProperties blocks non-pattern keys", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-pattern-only",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              patternProperties: {
+                "^metric\\.": { type: "number" }
+              },
+              additionalProperties: false
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: {
+          "metric.latency": 100,
+          wallet: "wallet_1"
+        },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-pattern-only",
+          retryable: false,
+          error: expect.stringContaining("input.wallet is not allowed")
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed dynamic property schemas before payment", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-malformed-dynamic",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              propertyNames: "metric",
+              patternProperties: {
+                "[": { type: "number" }
+              }
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: { "metric.latency": 100 },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-malformed-dynamic",
+          retryable: false,
+          error: expect.stringContaining(
+            "input patternProperties must be an object of schema objects"
+          )
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it("passes EVM signer config to provider execution", async () => {
     const evmReceipt = {
       ...receipt,

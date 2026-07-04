@@ -1908,6 +1908,8 @@ function validateJsonSchemaValue(
     record.properties !== undefined ||
     record.required !== undefined ||
     record.additionalProperties !== undefined ||
+    record.patternProperties !== undefined ||
+    record.propertyNames !== undefined ||
     record.minProperties !== undefined ||
     record.maxProperties !== undefined;
   if (hasObjectShape) {
@@ -1955,6 +1957,17 @@ function validateJsonObjectShape(
   if (schema.properties !== undefined && properties === undefined) {
     errors.push(`${path} properties must be an object`);
   }
+  const patternProperties = readPatternProperties(schema.patternProperties);
+  if (schema.patternProperties !== undefined && patternProperties === undefined) {
+    errors.push(`${path} patternProperties must be an object of schema objects`);
+  }
+  const propertyNames =
+    schema.propertyNames === undefined
+      ? undefined
+      : readSchemaRecord(schema.propertyNames);
+  if (schema.propertyNames !== undefined && propertyNames === undefined) {
+    errors.push(`${path} propertyNames must be a schema object`);
+  }
   const required = readRequiredSchemaProperties(schema.required);
   if (required === undefined) {
     errors.push(`${path} required must be an array of strings`);
@@ -1963,6 +1976,13 @@ function validateJsonObjectShape(
       if (!(property in value)) {
         errors.push(`${path}.${property} is required`);
       }
+    }
+  }
+  if (propertyNames !== undefined) {
+    for (const property of Object.keys(value)) {
+      errors.push(
+        ...validateJsonSchemaValue(property, propertyNames, `${path}.${property} name`)
+      );
     }
   }
   if (schema.minProperties !== undefined) {
@@ -1981,6 +2001,21 @@ function validateJsonObjectShape(
       errors.push(`${path} must contain at most ${maxProperties} properties`);
     }
   }
+  if (patternProperties !== undefined) {
+    for (const [property, propertyValue] of Object.entries(value)) {
+      for (const pattern of patternProperties) {
+        if (pattern.regex.test(property)) {
+          errors.push(
+            ...validateJsonSchemaValue(
+              propertyValue,
+              pattern.schema,
+              `${path}.${property}`
+            )
+          );
+        }
+      }
+    }
+  }
   if (properties !== undefined) {
     for (const [property, propertySchema] of Object.entries(properties)) {
       if (property in value) {
@@ -1993,11 +2028,14 @@ function validateJsonObjectShape(
         );
       }
     }
-    if (schema.additionalProperties === false) {
-      for (const property of Object.keys(value)) {
-        if (!(property in properties)) {
-          errors.push(`${path}.${property} is not allowed`);
-        }
+  }
+  if (schema.additionalProperties === false) {
+    for (const property of Object.keys(value)) {
+      if (
+        (properties === undefined || !(property in properties)) &&
+        !propertyMatchesPatternProperties(property, patternProperties)
+      ) {
+        errors.push(`${path}.${property} is not allowed`);
       }
     }
   }
@@ -2128,6 +2166,40 @@ function readSchemaArrayKeyword(
   return schemas.every((schema) => schema !== undefined)
     ? (schemas as Record<string, unknown>[])
     : undefined;
+}
+
+function readPatternProperties(
+  value: unknown
+): Array<{ regex: RegExp; schema: Record<string, unknown> }> | undefined {
+  if (value === undefined) {
+    return [];
+  }
+  const record = readSchemaRecord(value);
+  if (record === undefined) {
+    return undefined;
+  }
+  const patterns: Array<{ regex: RegExp; schema: Record<string, unknown> }> = [];
+  for (const [pattern, schemaValue] of Object.entries(record)) {
+    const schema = readSchemaRecord(schemaValue);
+    if (schema === undefined) {
+      return undefined;
+    }
+    try {
+      patterns.push({ regex: new RegExp(pattern, "u"), schema });
+    } catch {
+      return undefined;
+    }
+  }
+  return patterns;
+}
+
+function propertyMatchesPatternProperties(
+  property: string,
+  patternProperties:
+    | Array<{ regex: RegExp; schema: Record<string, unknown> }>
+    | undefined
+): boolean {
+  return patternProperties?.some((pattern) => pattern.regex.test(property)) ?? false;
 }
 
 function validateJsonStringConstraints(
