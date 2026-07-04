@@ -19,6 +19,7 @@ export interface Phase7DockerDoctorInput {
 export interface Phase7DockerDoctorCheck {
   name:
     | "docker_cli"
+    | "docker_daemon"
     | "docker_compose_plugin"
     | "compose_file"
     | "compose_env_file"
@@ -76,6 +77,26 @@ export function runPhase7DockerDoctor(
     detail: dockerVersion.ok
       ? dockerVersion.output
       : formatCommandFailure("Docker CLI is not available", dockerVersion.error),
+  });
+
+  const dockerDaemon = dockerVersion.ok
+    ? runCommand(input, "docker", ["info", "--format", "{{.ServerVersion}}"])
+    : {
+        ok: false as const,
+        output: "",
+        error: "Docker CLI check failed first.",
+      };
+  checks.push({
+    name: "docker_daemon",
+    ok: dockerDaemon.ok,
+    required: true,
+    command: "docker info --format {{.ServerVersion}}",
+    detail: dockerDaemon.ok
+      ? `Docker daemon is running (server ${dockerDaemon.output}).`
+      : formatCommandFailure(
+          "Docker daemon is not reachable; start Docker Desktop or Docker Engine",
+          dockerDaemon.error,
+        ),
   });
 
   const composeVersion = dockerVersion.ok
@@ -136,6 +157,7 @@ export function runPhase7DockerDoctor(
 
   const shouldValidateComposeConfig =
     dockerVersion.ok &&
+    dockerDaemon.ok &&
     composeVersion.ok &&
     composeFileExists &&
     envFileExists &&
@@ -150,7 +172,7 @@ export function runPhase7DockerDoctor(
         ok: false as const,
         output: "",
         error:
-          "Skipped until Docker, Compose, compose.yaml, phase7-staging.env, and required env values are ready.",
+          "Skipped until Docker CLI, Docker daemon, Compose, compose.yaml, phase7-staging.env, and required env values are ready.",
       };
   checks.push({
     name: "compose_config",
@@ -256,11 +278,17 @@ function createNextActions(
     checks.filter((check) => check.required && !check.ok).map((check) => check.name),
   );
   const actions: string[] = [];
+  const dockerCliFailed = failed.has("docker_cli");
 
-  if (failed.has("docker_cli")) {
+  if (dockerCliFailed) {
     actions.push("Install Docker Engine or Docker Desktop on the host that will run Phase 7 staging.");
   }
-  if (failed.has("docker_compose_plugin")) {
+  if (!dockerCliFailed && failed.has("docker_daemon")) {
+    actions.push(
+      "Start Docker Desktop or Docker Engine, then rerun `corepack pnpm phase7:docker:doctor --brief`.",
+    );
+  }
+  if (!dockerCliFailed && failed.has("docker_compose_plugin")) {
     actions.push("Install Docker Compose v2 so `docker compose version` succeeds.");
   }
   if (failed.has("compose_env_file")) {
