@@ -169,6 +169,18 @@ const REQUIRED_PHASE7_DOCKER_RUNTIME_ENV_KEYS = [
   "SPLIT402_WEBHOOK_WORKER_URL",
   "SPLIT402_WEBHOOK_WORKER_SECRET",
 ] as const;
+const PHASE7_SEED_APPLIED_DOCKER_KEYS = [
+  "SPLIT402_DASHBOARD_CONTROL_PLANE_TOKEN",
+  "SPLIT402_MERCHANT_PAY_TO",
+] as const;
+const PHASE7_SEED_APPLIED_HOSTED_KEYS = [
+  "SPLIT402_PHASE7_CONTROL_PLANE_TOKEN",
+  "SPLIT402_PHASE7_MERCHANT_ID",
+  "SPLIT402_PHASE7_REFERRER_WALLET",
+] as const;
+const PHASE7_SEED_APPLIED_MCP_KEYS = [
+  "SPLIT402_MCP_CONTROL_PLANE_TOKEN",
+] as const;
 
 export function createSplit402LaunchPreflightReport(
   input: Split402LaunchPreflightInput,
@@ -555,7 +567,7 @@ export function createSplit402LaunchPreflightReport(
     readyToCollectEvidence,
     readyForMainnet: false,
     checks,
-    nextActions: createNextActions(checks),
+    nextActions: createNextActions(checks, workspace.directory),
   };
 }
 
@@ -581,7 +593,10 @@ export function formatSplit402LaunchPreflightBrief(
   ].join("\n");
 }
 
-function createNextActions(checks: readonly Split402LaunchPreflightCheck[]): string[] {
+function createNextActions(
+  checks: readonly Split402LaunchPreflightCheck[],
+  directory: string,
+): string[] {
   const missingWorkspaceCheck = checks.find(
     (check) => check.id === "launch_workspace_files" && !check.ok,
   );
@@ -593,7 +608,7 @@ function createNextActions(checks: readonly Split402LaunchPreflightCheck[]): str
 
   const requiredActions = checks
     .filter((check) => check.severity === "required" && !check.ok)
-    .flatMap((check) => createCheckNextActions(check))
+    .flatMap((check) => createCheckNextActions(check, directory))
     .filter(
       (detail) =>
         detail.startsWith("Run ") ||
@@ -603,7 +618,7 @@ function createNextActions(checks: readonly Split402LaunchPreflightCheck[]): str
         detail.startsWith("Regenerate "),
     );
   if (requiredActions.length > 0) {
-    return requiredActions;
+    return [...new Set(requiredActions)];
   }
 
   return checks
@@ -619,20 +634,61 @@ function createPublicPrivateLicenseReviewAction(input: {
   return `Run corepack pnpm product:github-settings-review --from-github --output ${input.directory}/${input.fileName} to generate the live no-go GitHub API snapshot; use --template only for a blank manual form, and keep review_decision=no-go until human review approves the live GitHub settings evidence.`;
 }
 
-function createCheckNextActions(check: Split402LaunchPreflightCheck): string[] {
+function createCheckNextActions(
+  check: Split402LaunchPreflightCheck,
+  directory: string,
+): string[] {
   switch (check.id) {
     case "phase6_evidence_env_values":
       return createGroupedEnvActions("Fill Phase 6 custody env values", check.details);
+    case "phase7_docker_runtime_env":
+      return [
+        ...createSeedApplyActionsForDetails({
+          details: check.details,
+          directory,
+          appliedKeys: PHASE7_SEED_APPLIED_DOCKER_KEYS,
+        }),
+        ...check.details,
+      ];
     case "phase7_hosted_env_values":
-      return createGroupedEnvActions("Fill Phase 7 hosted proof env values", check.details);
+      return [
+        ...createSeedApplyActionsForDetails({
+          details: check.details,
+          directory,
+          appliedKeys: PHASE7_SEED_APPLIED_HOSTED_KEYS,
+        }),
+        ...createGroupedEnvActions("Fill Phase 7 hosted proof env values", check.details),
+      ];
     case "phase7_mcp_live_execution_env":
-      return createGroupedEnvActions(
-        "Fill Phase 7 MCP live execution env values",
-        check.details,
-      );
+      return [
+        ...createSeedApplyActionsForDetails({
+          details: check.details,
+          directory,
+          appliedKeys: PHASE7_SEED_APPLIED_MCP_KEYS,
+        }),
+        ...createGroupedEnvActions(
+          "Fill Phase 7 MCP live execution env values",
+          check.details,
+        ),
+      ];
     default:
       return check.details;
   }
+}
+
+function createSeedApplyActionsForDetails(input: {
+  details: readonly string[];
+  directory: string;
+  appliedKeys: readonly string[];
+}): string[] {
+  const detailText = input.details.join("\n");
+  if (!input.appliedKeys.some((key) => detailText.includes(key))) {
+    return [];
+  }
+  const seedOutput = `${input.directory}/phase7-seed.json`;
+  return [
+    `Run SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed > ${seedOutput}, then run corepack pnpm phase7:staging:apply-seed-env --seed-output ${seedOutput} to copy seed-derived env values safely.`,
+  ];
 }
 
 function createGroupedEnvActions(
