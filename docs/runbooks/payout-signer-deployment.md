@@ -26,6 +26,18 @@ docker build \
 The image starts `apps/payout-signer/dist/index.js` and listens on
 `SPLIT402_PAYOUT_SIGNER_SERVICE_PORT`, defaulting to `4022`.
 
+Build the matching control-plane image from the same source commit:
+
+```bash
+docker build \
+  -f packages/control-plane/Dockerfile \
+  -t ghcr.io/split402protocol/splitx402/control-plane:<git-sha> \
+  .
+```
+
+The image starts `packages/control-plane/dist/server.js` and listens on `PORT`
+or `SPLIT402_CONTROL_PLANE_PORT`, defaulting to `4021`.
+
 Before approving custody, copy
 [`docs/templates/phase6-image-provenance.txt`](../templates/phase6-image-provenance.txt)
 and record the exact source commit, immutable image digests, build command,
@@ -41,6 +53,7 @@ SPLIT402_PHASE6_IMAGE_REVIEW_ID=phase6-image-review-001 \
 SPLIT402_PHASE6_IMAGE_REVIEWERS="security, operations" \
 SPLIT402_SIGNER_IMAGE_DIGEST=sha256:<signer-image-digest> \
 SPLIT402_CONTROL_PLANE_IMAGE_DIGEST=sha256:<control-plane-image-digest> \
+SPLIT402_PHASE6_IMAGE_REVIEW_NOTES="Signer and control-plane images were built from the same source commit." \
 SPLIT402_DEPENDENCY_AUDIT_OUTPUT="attached: signer-image-audit-001.log" \
 SPLIT402_BUILD_LOG_RECORD="attached: signer-image-build-001.log" \
 SPLIT402_SBOM_RECORD="attached: signer-image-sbom-001.spdx.json" \
