@@ -337,8 +337,9 @@ Current slice:
 - background payout finality worker (`corepack pnpm worker:payout-finality`)
   that sweeps submitted and confirmed payout transactions, persists
   chain-observed outcomes, optionally closes fully finalized batches to paid
-  accruals after transfer-content verification, and never signs, broadcasts, or
-  replaces transaction bytes;
+  accruals after transfer-content verification, retries finalized batches that
+  are still missing payout-batch ledger closure, and never signs, broadcasts,
+  or replaces transaction bytes;
 - finalized payout transfer-content verification before ledger closure;
 - payout batch and item status rollup from transaction finality;
 - safe payout allocation release for draft, planned, signing, failed, and
@@ -398,7 +399,8 @@ Current hardening:
   `SPLIT402_PAYOUT_LEDGER_CLOSURE_FUNDING_WALLET` and
   `SPLIT402_PAYOUT_LEDGER_CLOSURE_SOURCE_TOKEN_ACCOUNT`. The payout finality
   worker can run the same verifier-backed closure automatically only when
-  `SPLIT402_PAYOUT_FINALITY_WORKER_CLOSE_LEDGER=true`.
+  `SPLIT402_PAYOUT_FINALITY_WORKER_CLOSE_LEDGER=true`, and it retries finalized
+  batches that remain unclosed after a transient verifier or RPC failure.
 - dead-letter webhook events can be requeued to pending through
   `POST /v1/merchants/:merchantId/webhook-events/:eventId/requeue` after a
   merchant fixes their receiver, instead of manual outbox updates.

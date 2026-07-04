@@ -236,10 +236,29 @@ export interface ClosePayoutBatchLedgerInput {
   finalizedTransferVerifier: PayoutFinalizedTransferVerifier;
 }
 
+export interface ListFinalizedPayoutBatchesPendingLedgerClosureInput {
+  limit?: number;
+}
+
 export interface PayoutLedgerClosureStore {
+  listFinalizedPayoutBatchesPendingLedgerClosure(
+    input?: ListFinalizedPayoutBatchesPendingLedgerClosureInput
+  ): Promise<PayoutBatchRecord[]> | PayoutBatchRecord[];
   closeFinalizedPayoutBatchLedger(
     input: ClosePayoutBatchLedgerInput
   ): Promise<LedgerTransaction | undefined> | LedgerTransaction | undefined;
+}
+
+export function normalizePayoutLedgerClosureLimit(
+  limit: number | undefined
+): number {
+  const normalized = limit ?? 25;
+  if (!Number.isInteger(normalized) || normalized <= 0 || normalized > 100) {
+    throw new PayoutBatchValidationError(
+      "payout ledger closure limit must be between 1 and 100"
+    );
+  }
+  return normalized;
 }
 
 export interface PayoutFinalizedTransferVerifier {

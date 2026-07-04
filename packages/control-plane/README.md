@@ -142,7 +142,8 @@ GET  /v1/referrers/:referrerWallet/routes
 - payout batch and item status rollup from transaction finality;
 - idempotent payout-batch ledger closure for finalized payouts, either through
   the owner-authorized close-ledger endpoint or the opt-in finality worker
-  auto-close path when finalized-transfer verifier env is configured;
+  auto-close path when finalized-transfer verifier env is configured; finalized
+  batches missing ledger closure remain retryable on later worker sweeps;
 - payout submitted, confirmed, finalized, failed, and outcome-unknown internal
   and webhook outbox events.
 - optional Solana RPC merchant funding-balance provider for covered/deficit
@@ -172,7 +173,9 @@ persists chain outcomes. Set `SPLIT402_PAYOUT_FINALITY_WORKER_CLOSE_LEDGER=true`
 only after configuring `SPLIT402_PAYOUT_LEDGER_CLOSURE_FUNDING_WALLET` and
 `SPLIT402_PAYOUT_LEDGER_CLOSURE_SOURCE_TOKEN_ACCOUNT`; then finalized batches
 are closed to paid accruals automatically after transfer-content verification
-passes.
+passes. If closure fails because the verifier or RPC is temporarily unavailable,
+the worker keeps retrying finalized batches that do not yet have a payout-batch
+ledger transaction.
 
 ## Local-Dev Payout Signer
 

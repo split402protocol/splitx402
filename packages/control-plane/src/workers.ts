@@ -10,7 +10,6 @@ import type {
   ReceiptIngestionSnapshot
 } from "./index.js";
 import type {
-  PayoutBatchStore,
   PayoutFinalizedTransferVerifier,
   PayoutLedgerClosureStore,
   PayoutTransactionRecord,
@@ -105,7 +104,6 @@ export interface PayoutFinalityWorkerOptions {
 }
 
 export interface PayoutFinalizedLedgerClosureOptions {
-  batchStore: Pick<PayoutBatchStore, "getPayoutBatch">;
   finalizedTransferVerifier: PayoutFinalizedTransferVerifier;
   ledgerClosureStore: PayoutLedgerClosureStore;
 }
@@ -116,7 +114,7 @@ export interface PayoutFinalityProcessor {
 
 export interface PayoutFinalitySweepError {
   payoutBatchId?: string;
-  transactionId: string;
+  transactionId?: string;
   error: string;
 }
 
@@ -265,15 +263,10 @@ export class PayoutFinalityWorker implements PayoutFinalityProcessor {
           ? {}
           : { limit: this.options.sweepLimit }
       );
-    if (candidates.length === 0) {
-      return { status: "idle" };
-    }
-
     const updatedTransactions: PayoutTransactionRecord[] = [];
     const closedLedgerTransactions: LedgerTransaction[] = [];
     const pendingTransactionIds: string[] = [];
     const errors: PayoutFinalitySweepError[] = [];
-    const finalizedTransactionByBatchId = new Map<string, PayoutTransactionRecord>();
     for (const transaction of candidates) {
       try {
         const result = await this.monitor.monitor({ transaction });
@@ -303,9 +296,6 @@ export class PayoutFinalityWorker implements PayoutFinalityProcessor {
           pendingTransactionIds.push(transaction.id);
           continue;
         }
-        if (updated.status === "finalized") {
-          finalizedTransactionByBatchId.set(updated.payoutBatchId, updated);
-        }
         updatedTransactions.push(updated);
       } catch (error) {
         errors.push({
@@ -315,19 +305,14 @@ export class PayoutFinalityWorker implements PayoutFinalityProcessor {
       }
     }
 
-    for (const [payoutBatchId, transaction] of finalizedTransactionByBatchId) {
-      try {
-        const closed = await this.closeFinalizedLedgerIfReady(payoutBatchId);
-        if (closed !== undefined) {
-          closedLedgerTransactions.push(closed);
-        }
-      } catch (error) {
-        errors.push({
-          transactionId: transaction.id,
-          payoutBatchId,
-          error: error instanceof Error ? error.message : "unknown error"
-        });
-      }
+    await this.closeFinalizedLedgers(closedLedgerTransactions, errors);
+
+    if (
+      candidates.length === 0 &&
+      closedLedgerTransactions.length === 0 &&
+      errors.length === 0
+    ) {
+      return { status: "idle" };
     }
 
     return {
@@ -349,15 +334,40 @@ export class PayoutFinalityWorker implements PayoutFinalityProcessor {
     if (closure === undefined) {
       return undefined;
     }
-    const batch = await closure.batchStore.getPayoutBatch(payoutBatchId);
-    if (batch?.status !== "finalized") {
-      return undefined;
-    }
     return closure.ledgerClosureStore.closeFinalizedPayoutBatchLedger({
       payoutBatchId,
       now: this.now(),
       finalizedTransferVerifier: closure.finalizedTransferVerifier
     });
+  }
+
+  private async closeFinalizedLedgers(
+    closedLedgerTransactions: LedgerTransaction[],
+    errors: PayoutFinalitySweepError[]
+  ): Promise<void> {
+    const closure = this.options.finalizedLedgerClosure;
+    if (closure === undefined) {
+      return;
+    }
+    const batches =
+      await closure.ledgerClosureStore.listFinalizedPayoutBatchesPendingLedgerClosure(
+        this.options.sweepLimit === undefined
+          ? {}
+          : { limit: this.options.sweepLimit }
+      );
+    for (const batch of batches) {
+      try {
+        const closed = await this.closeFinalizedLedgerIfReady(batch.id);
+        if (closed !== undefined) {
+          closedLedgerTransactions.push(closed);
+        }
+      } catch (error) {
+        errors.push({
+          payoutBatchId: batch.id,
+          error: error instanceof Error ? error.message : "unknown error"
+        });
+      }
+    }
   }
 
   private now(): string {

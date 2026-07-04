@@ -107,6 +107,7 @@ import {
   isPayoutTransactionOutcomeUnknown,
   isPayoutTransactionPendingFinality,
   comparePayoutTransactionsPendingFinality,
+  normalizePayoutLedgerClosureLimit,
   normalizePayoutPendingFinalityLimit,
   releasePayoutBatchAllocationsForBatch,
   summarizePayoutBatchTransactionItemFinality,
@@ -132,6 +133,7 @@ import {
   type MarkPayoutTransactionSubmittedInput,
   type MarkPayoutTransactionFinalityInput,
   type ClosePayoutBatchLedgerInput,
+  type ListFinalizedPayoutBatchesPendingLedgerClosureInput,
   type PayoutLedgerClosureStore,
   type PayoutFinalizedTransferVerifier,
   type PayoutReconciliationStore,
@@ -914,6 +916,21 @@ export class InMemoryReceiptIngestionStore
         status: updatedItemsById.get(item.id) ?? item.status
       }))
     });
+  }
+
+  listFinalizedPayoutBatchesPendingLedgerClosure(
+    input: ListFinalizedPayoutBatchesPendingLedgerClosureInput = {}
+  ): PayoutBatchRecord[] {
+    const limit = normalizePayoutLedgerClosureLimit(input.limit);
+    return Array.from(this.payoutBatchesById.values())
+      .filter((batch) => batch.status === "finalized")
+      .filter((batch) => !this.payoutLedgerTransactionsByBatchId.has(batch.id))
+      .sort(
+        (left, right) =>
+          left.updatedAt.localeCompare(right.updatedAt) ||
+          left.id.localeCompare(right.id)
+      )
+      .slice(0, limit);
   }
 
   async closeFinalizedPayoutBatchLedger(

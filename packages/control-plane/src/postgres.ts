@@ -135,6 +135,7 @@ import type {
   PayoutReconciliationItem,
   PayoutReconciliationStore,
   ListPayoutReconciliationItemsInput,
+  ListFinalizedPayoutBatchesPendingLedgerClosureInput,
   ListPayoutTransactionsPendingFinalityInput,
   ReferrerBalanceSummary,
   ReferrerPayoutHistoryItem,
@@ -156,6 +157,7 @@ import {
   createReferrerPayoutHistoryItems,
   createSignedPayoutTransactionRecords,
   isOutcomeUnknownPayoutBatchReleaseProven,
+  normalizePayoutLedgerClosureLimit,
   normalizePayoutPendingFinalityLimit,
   releasePayoutBatchAllocationsForBatch,
   summarizePayoutBatchTransactionItemFinality,
@@ -792,6 +794,32 @@ export class PostgresReceiptIngestionStore
       result.rows,
       await this.listPayoutTransactionItems(result.rows.map((row) => row.id))
     );
+  }
+
+  async listFinalizedPayoutBatchesPendingLedgerClosure(
+    input: ListFinalizedPayoutBatchesPendingLedgerClosureInput = {}
+  ): Promise<PayoutBatchRecord[]> {
+    const limit = normalizePayoutLedgerClosureLimit(input.limit);
+    const result = await this.db.query<Pick<PayoutBatchRow, "id">>(
+      `select pb.id
+         from payout_batches pb
+         left join ledger_transactions lt
+           on lt.source_type = 'payout_batch'
+          and lt.source_id = pb.id
+        where pb.status = 'finalized'
+          and lt.id is null
+        order by pb.updated_at asc, pb.id asc
+        limit $1`,
+      [limit]
+    );
+    const batches: PayoutBatchRecord[] = [];
+    for (const row of result.rows) {
+      const batch = await loadPayoutBatch(this.db, row.id);
+      if (batch !== undefined) {
+        batches.push(batch);
+      }
+    }
+    return batches;
   }
 
   async listPayoutReconciliationItems(
