@@ -230,6 +230,9 @@ describe("Phase 7 Docker doctor", () => {
       }),
     );
     expect(report.nextActions).toContain(
+      "Regenerate local Docker runtime secrets with `corepack pnpm phase7:docker:env:init --generate-secrets --force`; this replaces generated placeholders for SPLIT402_DASHBOARD_VIEWER_TOKEN, SPLIT402_WEBHOOK_WORKER_SECRET but still requires hosted URLs, wallets, control-plane tokens, and keys to be filled privately.",
+    );
+    expect(report.nextActions).toContain(
       "Fill missing private runtime values and replace template placeholders in deploy/phase7-staging/phase7-staging.env; do not commit this file.",
     );
     expect(commands).toEqual(["docker --version", "docker compose version"]);
@@ -268,6 +271,35 @@ describe("Phase 7 Docker doctor", () => {
         detail:
           "Compose configuration could not be validated: Skipped until Docker, Compose, compose.yaml, phase7-staging.env, and required env values are ready.",
       }),
+    );
+  });
+
+  it("points custom env files at forced generated-secret repair only for generated placeholders", () => {
+    const report = runPhase7DockerDoctor({
+      envFile: "split402-launch-evidence/docker.env",
+      exists: (path) =>
+        path === "deploy/phase7-staging/compose.yaml" ||
+        path === "split402-launch-evidence/docker.env",
+      readText: () =>
+        [
+          "SPLIT402_DASHBOARD_VIEWER_TOKEN=replace-with-staging-viewer-token",
+          "SPLIT402_DASHBOARD_CONTROL_PLANE_TOKEN=control-plane-token",
+          "SPLIT402_WEBHOOK_WORKER_SECRET=webhook-secret",
+        ].join("\n"),
+      execFile: (file, args) => {
+        if (args.join(" ") === "--version") {
+          return "Docker version 27.0.0";
+        }
+        if (args.join(" ") === "compose version") {
+          return "Docker Compose version v2.29.1";
+        }
+        throw new Error(`unexpected command ${file} ${args.join(" ")}`);
+      },
+    });
+
+    expect(report.ready).toBe(false);
+    expect(report.nextActions).toContain(
+      "Regenerate local Docker runtime secrets with `corepack pnpm phase7:docker:env:init --generate-secrets --force --target split402-launch-evidence/docker.env`; this replaces generated placeholders for SPLIT402_DASHBOARD_VIEWER_TOKEN but still requires hosted URLs, wallets, control-plane tokens, and keys to be filled privately.",
     );
   });
 });
