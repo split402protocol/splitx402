@@ -23,6 +23,7 @@
     "vectors:check": "corepack pnpm --filter @split402/protocol vectors:check",
     "phase6:evidence:bundle": "tsx src/phase6-evidence-bundle.ts",
     "phase6:evidence:env-template": "tsx src/phase6-evidence-env-template.ts",
+    "phase6:evidence:collect": "tsx src/phase6-evidence-collect.ts",
     "phase6:evidence:assemble": "tsx src/phase6-evidence-assemble.ts",
     "phase6:custody:check": "tsx src/phase6-custody-check.ts",
     "phase6:evidence:status": "tsx src/phase6-evidence-status.ts",

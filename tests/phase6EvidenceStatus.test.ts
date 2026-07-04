@@ -26,6 +26,9 @@ describe("Phase 6 evidence status", () => {
       "corepack pnpm phase6:evidence:env-template split402-launch-evidence split402-launch-evidence/phase6-evidence.env",
     );
     expect(report.commands.map((item) => item.command)).toContain(
+      "corepack pnpm phase6:evidence:collect --evidence-env-file split402-launch-evidence/phase6-evidence.env",
+    );
+    expect(report.commands.map((item) => item.command)).toContain(
       "corepack pnpm phase6:network-policy",
     );
     expect(report.commands.map((item) => item.command)).toContain(
@@ -45,6 +48,9 @@ describe("Phase 6 evidence status", () => {
     );
     expect(report.nextActions).toContain(
       "Review generated split402-launch-evidence/phase6-evidence.env before editing; regenerate only if missing with corepack pnpm phase6:evidence:env-template split402-launch-evidence split402-launch-evidence/phase6-evidence.env.",
+    );
+    expect(report.nextActions).toContain(
+      "Run corepack pnpm phase6:evidence:collect --evidence-env-file split402-launch-evidence/phase6-evidence.env to write generated custody records to private evidence files.",
     );
   });
 
@@ -80,7 +86,7 @@ approval_decision: no-go
       "Keep approval_decision=no-go until all Phase 6 custody evidence fields and reviews are complete",
     );
     expect(report.nextActions.join("\n")).toContain(
-      "Reassemble with corepack pnpm phase6:evidence:assemble",
+      "Collect with corepack pnpm phase6:evidence:collect",
     );
     expect(report.nextActions.join("\n")).not.toContain("Fill missing fields:");
     expect(report.nextActions.join("\n")).not.toContain(

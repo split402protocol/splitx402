@@ -304,6 +304,7 @@ function createPhase6Section(
       "corepack pnpm phase6:reconciliation-drill",
       "corepack pnpm payout:finality:failover-drill",
       "corepack pnpm phase6:rpc-failover",
+      "corepack pnpm phase6:evidence:collect --evidence-env-file split402-launch-evidence/phase6-evidence.env",
       "corepack pnpm phase6:evidence:assemble --evidence-env-file split402-launch-evidence/phase6-evidence.env split402-launch-evidence/phase6-custody-evidence.txt",
       "corepack pnpm phase6:evidence:status --brief split402-launch-evidence/phase6-custody-evidence.txt",
     ],

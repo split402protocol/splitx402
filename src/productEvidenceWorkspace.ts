@@ -269,6 +269,7 @@ function createNextCommands(input: {
     `corepack pnpm phase7:staging:manifest ${input.directory}/${input.phase7ProofFileName} ${input.directory}/phase7-staging-evidence/artifact-manifest.json`,
     `corepack pnpm phase7:staging:assemble ${phase7EnvOption} ${input.directory}/${input.phase7ProofFileName}`,
     `corepack pnpm phase7:staging:status --brief ${input.directory}/${input.phase7ProofFileName}`,
+    `corepack pnpm phase6:evidence:collect --evidence-env-file ${phase6EnvFile}`,
     `corepack pnpm phase6:evidence:assemble --evidence-env-file ${phase6EnvFile} ${input.directory}/${input.phase6EvidenceFileName}`,
     `corepack pnpm phase6:evidence:status --brief ${input.directory}/${input.phase6EvidenceFileName}`,
     `corepack pnpm product:status --brief --workspace ${input.directory}`,
