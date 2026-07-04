@@ -853,6 +853,184 @@ describe("Split402Router", () => {
     );
   });
 
+  it("executes when input satisfies nullable provider schema branches", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>().mockResolvedValue({
+      data: { risk: "low" },
+      receipt
+    });
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-nullable-input",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["wallet", "tags", "memo", "details", "score"],
+              properties: {
+                wallet: { type: "string" },
+                tags: {
+                  type: ["array", "null"],
+                  minItems: 1,
+                  items: { type: "string" }
+                },
+                memo: {
+                  type: ["string", "null"],
+                  minLength: 3
+                },
+                details: {
+                  type: ["object", "null"],
+                  properties: {
+                    chain: { type: "string" }
+                  },
+                  additionalProperties: false
+                },
+                score: {
+                  type: ["integer", "null"],
+                  minimum: 1,
+                  maximum: 100
+                }
+              },
+              additionalProperties: false
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    const input = {
+      wallet: "wallet_1",
+      tags: null,
+      memo: null,
+      details: null,
+      score: null
+    };
+    const result = await router.execute({
+      capability: "solana.wallet-risk",
+      input,
+      budget: {
+        network: receipt.network,
+        asset: receipt.asset,
+        maxAmountAtomic: receipt.requiredAmountAtomic
+      }
+    });
+
+    expect(result.providerId).toBe("provider-nullable-input");
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: expect.objectContaining({ providerId: "provider-nullable-input" }),
+        body: input
+      })
+    );
+  });
+
+  it("rejects before payment when input violates nullable array/object branches", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-nullable-input",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["wallet", "tags", "details"],
+              properties: {
+                wallet: { type: "string" },
+                tags: {
+                  type: ["array", "null"],
+                  items: { type: "string" }
+                },
+                details: {
+                  type: ["object", "null"],
+                  properties: {
+                    chain: { type: "string" }
+                  },
+                  additionalProperties: false
+                }
+              },
+              additionalProperties: false
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: {
+          wallet: "wallet_1",
+          tags: "wallet_2",
+          details: "solana"
+        },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-nullable-input",
+          retryable: false,
+          error: expect.stringContaining("input.tags must be array or null")
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("keeps numeric constraints on nullable integer branches", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-nullable-score",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["score"],
+              properties: {
+                score: {
+                  type: ["integer", "null"],
+                  minimum: 1,
+                  maximum: 100
+                }
+              },
+              additionalProperties: false
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: { score: 0 },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-nullable-score",
+          retryable: false,
+          error: expect.stringContaining("input.score must be at least 1")
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it("passes EVM signer config to provider execution", async () => {
     const evmReceipt = {
       ...receipt,

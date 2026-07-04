@@ -1905,11 +1905,12 @@ function validateJsonSchemaValue(
     record.required !== undefined ||
     record.additionalProperties !== undefined;
   if (hasObjectShape) {
-    if (!isJsonObject(value)) {
+    if (isJsonObject(value)) {
+      errors.push(...validateJsonObjectShape(value, record, path));
+    } else if (!valueMatchesExplicitNonTargetType(value, schemaTypes, "object")) {
       errors.push(`${path} must be an object`);
       return errors;
     }
-    errors.push(...validateJsonObjectShape(value, record, path));
   }
   const hasArrayShape =
     schemaTypes?.includes("array") === true ||
@@ -1917,14 +1918,23 @@ function validateJsonSchemaValue(
     record.minItems !== undefined ||
     record.maxItems !== undefined;
   if (hasArrayShape) {
-    if (!Array.isArray(value)) {
+    if (Array.isArray(value)) {
+      errors.push(...validateJsonArrayShape(value, record, path));
+    } else if (!valueMatchesExplicitNonTargetType(value, schemaTypes, "array")) {
       errors.push(`${path} must be an array`);
       return errors;
     }
-    errors.push(...validateJsonArrayShape(value, record, path));
   }
-  errors.push(...validateJsonStringConstraints(value, record, path));
-  errors.push(...validateJsonNumberConstraints(value, record, path));
+  if (!valueMatchesExplicitNonTargetType(value, schemaTypes, "string")) {
+    errors.push(...validateJsonStringConstraints(value, record, path));
+  }
+  if (
+    typeof value === "number" ||
+    (!valueMatchesExplicitNonTargetType(value, schemaTypes, "number") &&
+      !valueMatchesExplicitNonTargetType(value, schemaTypes, "integer"))
+  ) {
+    errors.push(...validateJsonNumberConstraints(value, record, path));
+  }
   return errors;
 }
 
@@ -2137,6 +2147,20 @@ function valueMatchesSchemaType(value: unknown, type: JsonSchemaType): boolean {
     case "string":
       return typeof value === "string";
   }
+}
+
+function valueMatchesExplicitNonTargetType(
+  value: unknown,
+  schemaTypes: JsonSchemaType[] | undefined,
+  targetType: JsonSchemaType
+): boolean {
+  return (
+    schemaTypes !== undefined &&
+    schemaTypes.length > 0 &&
+    schemaTypes.some(
+      (type) => type !== targetType && valueMatchesSchemaType(value, type)
+    )
+  );
 }
 
 function schemaValuesEqual(left: unknown, right: unknown): boolean {
