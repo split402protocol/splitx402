@@ -945,11 +945,15 @@ function routerToolCards() {
             properties: {
               network: { type: "string" },
               asset: { type: "string" },
-              maxAmountAtomic: { type: "string" }
+              maxAmountAtomic: {
+                type: "string",
+                pattern: "^(0|[1-9][0-9]*)$"
+              }
             },
             additionalProperties: false
           }
         },
+        required: ["capability"],
         additionalProperties: false
       }
     },
@@ -967,12 +971,15 @@ function routerToolCards() {
             properties: {
               network: { type: "string" },
               asset: { type: "string" },
-              maxAmountAtomic: { type: "string" }
+              maxAmountAtomic: {
+                type: "string",
+                pattern: "^(0|[1-9][0-9]*)$"
+              }
             },
             required: ["maxAmountAtomic"],
             additionalProperties: false
           },
-          maxAttempts: { type: "number" }
+          maxAttempts: { type: "integer", minimum: 1 }
         },
         required: ["capability", "budget"],
         additionalProperties: false
@@ -993,12 +1000,15 @@ function routerToolCards() {
             properties: {
               network: { type: "string" },
               asset: { type: "string" },
-              maxAmountAtomic: { type: "string" }
+              maxAmountAtomic: {
+                type: "string",
+                pattern: "^(0|[1-9][0-9]*)$"
+              }
             },
             required: ["maxAmountAtomic"],
             additionalProperties: false
           },
-          maxAttempts: { type: "number" }
+          maxAttempts: { type: "integer", minimum: 1 }
         },
         required: ["capability", "input", "budget"],
         additionalProperties: false
