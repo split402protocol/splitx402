@@ -2251,6 +2251,13 @@ function validateJsonSchemaCombinators(
       }
     }
   }
+  if (
+    schema.if !== undefined ||
+    schema.then !== undefined ||
+    schema.else !== undefined
+  ) {
+    errors.push(...validateJsonSchemaConditionals(value, schema, path));
+  }
   if (schema.not !== undefined) {
     const excluded = readSchemaRecord(schema.not);
     if (excluded === undefined) {
@@ -2258,6 +2265,47 @@ function validateJsonSchemaCombinators(
     } else if (validateJsonSchemaValue(value, excluded, path).length === 0) {
       errors.push(`${path} must not match not schema`);
     }
+  }
+  return errors;
+}
+
+function validateJsonSchemaConditionals(
+  value: unknown,
+  schema: Record<string, unknown>,
+  path: string
+): string[] {
+  const errors: string[] = [];
+  const ifSchema = readSchemaRecord(schema.if);
+  if (schema.if === undefined) {
+    errors.push(`${path} if is required when then or else is present`);
+  } else if (ifSchema === undefined) {
+    errors.push(`${path} if must be a schema object`);
+  }
+  const thenSchema = readSchemaRecord(schema.then);
+  if (schema.then !== undefined && thenSchema === undefined) {
+    errors.push(`${path} then must be a schema object`);
+  }
+  const elseSchema = readSchemaRecord(schema.else);
+  if (schema.else !== undefined && elseSchema === undefined) {
+    errors.push(`${path} else must be a schema object`);
+  }
+  if (
+    ifSchema === undefined ||
+    (schema.then !== undefined && thenSchema === undefined) ||
+    (schema.else !== undefined && elseSchema === undefined)
+  ) {
+    return errors;
+  }
+  const conditionMatches = validateJsonSchemaValue(value, ifSchema, path).length === 0;
+  const branch = conditionMatches ? thenSchema : elseSchema;
+  if (branch === undefined) {
+    return errors;
+  }
+  const branchErrors = validateJsonSchemaValue(value, branch, path);
+  if (branchErrors.length > 0) {
+    errors.push(
+      `${path} must satisfy ${conditionMatches ? "then" : "else"} schema: ${branchErrors.join("; ")}`
+    );
   }
   return errors;
 }

@@ -1803,6 +1803,185 @@ describe("Split402Router", () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
+  it("executes when input satisfies provider conditional then schema", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>().mockResolvedValue({
+      data: { risk: "low" },
+      receipt
+    });
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-conditional-input",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["mode", "wallet"],
+              properties: {
+                mode: { type: "string" },
+                wallet: { type: "string" },
+                evidenceUrl: { type: "string", format: "url" }
+              },
+              if: {
+                properties: {
+                  mode: { const: "deep" }
+                }
+              },
+              then: {
+                required: ["evidenceUrl"]
+              },
+              else: {
+                properties: {
+                  evidenceUrl: false
+                }
+              }
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    const input = {
+      mode: "deep",
+      wallet: "wallet_1",
+      evidenceUrl: "https://agent.example/evidence"
+    };
+    const result = await router.execute({
+      capability: "solana.wallet-risk",
+      input,
+      budget: {
+        network: receipt.network,
+        asset: receipt.asset,
+        maxAmountAtomic: receipt.requiredAmountAtomic
+      }
+    });
+
+    expect(result.providerId).toBe("provider-conditional-input");
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: expect.objectContaining({
+          providerId: "provider-conditional-input"
+        }),
+        body: input
+      })
+    );
+  });
+
+  it("rejects before payment when input violates provider conditional then schema", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-conditional-input",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["mode", "wallet"],
+              properties: {
+                mode: { type: "string" },
+                wallet: { type: "string" },
+                evidenceUrl: { type: "string", format: "url" }
+              },
+              if: {
+                properties: {
+                  mode: { const: "deep" }
+                }
+              },
+              then: {
+                required: ["evidenceUrl"]
+              }
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: {
+          mode: "deep",
+          wallet: "wallet_1"
+        },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-conditional-input",
+          retryable: false,
+          error: expect.stringContaining("input must satisfy then schema")
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("rejects before payment when input violates provider conditional else schema", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-conditional-input",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["mode", "wallet"],
+              properties: {
+                mode: { type: "string" },
+                wallet: { type: "string" },
+                evidenceUrl: { type: "string", format: "url" }
+              },
+              if: {
+                properties: {
+                  mode: { const: "deep" }
+                }
+              },
+              else: {
+                not: {
+                  required: ["evidenceUrl"]
+                }
+              }
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: {
+          mode: "quick",
+          wallet: "wallet_1",
+          evidenceUrl: "https://agent.example/evidence"
+        },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-conditional-input",
+          retryable: false,
+          error: expect.stringContaining("input must satisfy else schema")
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it("rejects malformed provider combinator schemas before payment", async () => {
     const execute = vi.fn<Split402RouterExecutor["execute"]>();
     const router = new Split402Router({
@@ -1837,6 +2016,50 @@ describe("Split402Router", () => {
           retryable: false,
           error: expect.stringContaining(
             "input anyOf must be a non-empty array of schema objects"
+          )
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed provider conditional schemas before payment", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-malformed-conditional",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              then: {
+                required: ["evidenceUrl"]
+              }
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: { wallet: "wallet_1" },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-malformed-conditional",
+          retryable: false,
+          error: expect.stringContaining(
+            "input if is required when then or else is present"
           )
         })
       ]
