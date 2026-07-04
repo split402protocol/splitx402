@@ -1911,6 +1911,18 @@ function validateJsonSchemaValue(
     }
     errors.push(...validateJsonObjectShape(value, record, path));
   }
+  const hasArrayShape =
+    schemaTypes?.includes("array") === true ||
+    record.items !== undefined ||
+    record.minItems !== undefined ||
+    record.maxItems !== undefined;
+  if (hasArrayShape) {
+    if (!Array.isArray(value)) {
+      errors.push(`${path} must be an array`);
+      return errors;
+    }
+    errors.push(...validateJsonArrayShape(value, record, path));
+  }
   errors.push(...validateJsonStringConstraints(value, record, path));
   errors.push(...validateJsonNumberConstraints(value, record, path));
   return errors;
@@ -1954,6 +1966,41 @@ function validateJsonObjectShape(
         if (!(property in properties)) {
           errors.push(`${path}.${property} is not allowed`);
         }
+      }
+    }
+  }
+  return errors;
+}
+
+function validateJsonArrayShape(
+  value: unknown[],
+  schema: Record<string, unknown>,
+  path: string
+): string[] {
+  const errors: string[] = [];
+  if (schema.minItems !== undefined) {
+    const minItems = readNonNegativeIntegerSchemaKeyword(schema.minItems);
+    if (minItems === undefined) {
+      errors.push(`${path} minItems must be a non-negative integer`);
+    } else if (value.length < minItems) {
+      errors.push(`${path} must contain at least ${minItems} items`);
+    }
+  }
+  if (schema.maxItems !== undefined) {
+    const maxItems = readNonNegativeIntegerSchemaKeyword(schema.maxItems);
+    if (maxItems === undefined) {
+      errors.push(`${path} maxItems must be a non-negative integer`);
+    } else if (value.length > maxItems) {
+      errors.push(`${path} must contain at most ${maxItems} items`);
+    }
+  }
+  if (schema.items !== undefined) {
+    const itemSchema = readSchemaRecord(schema.items);
+    if (itemSchema === undefined) {
+      errors.push(`${path} items must be a schema object`);
+    } else {
+      for (const [index, item] of value.entries()) {
+        errors.push(...validateJsonSchemaValue(item, itemSchema, `${path}[${index}]`));
       }
     }
   }
