@@ -36,6 +36,7 @@ interface CommandSpec {
   command: string;
   file: string;
   args: readonly string[];
+  outputPath?: string;
 }
 
 const safeLocalCommands: readonly CommandSpec[] = [
@@ -152,6 +153,13 @@ export function recordPhase7LocalCommandEvidence(
 
   for (const command of commands) {
     const result = input.runCommand(command.file, command.args);
+    if (
+      command.outputPath !== undefined &&
+      result.exitCode === 0 &&
+      result.stdout.length > 0
+    ) {
+      input.writeText(command.outputPath, result.stdout);
+    }
     blocks.push(formatCommandBlock(command.command, result));
     if (result.exitCode !== 0) {
       failedCommands.push(command.command);
@@ -262,6 +270,7 @@ function createHostedStagingCommands(
       command: "corepack pnpm phase7:staging:seed",
       file: "corepack",
       args: ["pnpm", "phase7:staging:seed"],
+      outputPath: seedOutputPath,
     },
     {
       command: `corepack pnpm phase7:staging:apply-seed-env --seed-output ${seedOutputPath}`,

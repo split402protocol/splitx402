@@ -41,7 +41,7 @@ const report = recordPhase7LocalCommandEvidence({
   runCommand: (file, commandArgs) => {
     const result = spawnSync(file, [...commandArgs], {
       encoding: "utf8",
-      shell: false,
+      shell: process.platform === "win32",
       stdio: ["ignore", "pipe", "pipe"],
     });
     return {
