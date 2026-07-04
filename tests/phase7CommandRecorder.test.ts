@@ -123,6 +123,68 @@ describe("Phase 7 command recorder", () => {
     expect(transcript?.text).not.toContain("dashboard is starting");
   });
 
+  it("accepts the final Phase 7 no-go approval status as valid command evidence", () => {
+    const writes: Array<{ path: string; text: string }> = [];
+    const report = recordPhase7LocalCommandEvidence({
+      outputPath: "evidence/commands.log",
+      includeHosted: true,
+      exists: () => false,
+      writeText: (path, text) => writes.push({ path, text }),
+      runCommand: (file, args) =>
+        args.includes("phase7:staging:status")
+          ? {
+              exitCode: 1,
+              stdout: [
+                "Phase 7 hosted staging proof: checked, blocked",
+                "Ready gates: 18/19",
+                "Launch posture: public-alpha approval remains no-go until hosted proof gates pass.",
+                "Reassemble with corepack pnpm phase7:staging:assemble --evidence-env-file split402-launch-evidence/phase7-staging.env split402-launch-evidence/phase7-staging-proof.txt, then rerun corepack pnpm phase7:staging:status --brief split402-launch-evidence/phase7-staging-proof.txt.",
+                "",
+              ].join("\n"),
+              stderr: "",
+            }
+          : {
+              exitCode: 0,
+              stdout: `${file} ${args.join(" ")} ok\n`,
+              stderr: "",
+            },
+    });
+
+    const transcript = writes.find((write) => write.path === "evidence/commands.log");
+    expect(report.ok).toBe(true);
+    expect(report.failedCommands).toEqual([]);
+    expect(transcript?.text).toContain(
+      "# exit_code: 1 (accepted: expected Phase 7 no-go status)",
+    );
+  });
+
+  it("still fails the final Phase 7 status when evidence gates are missing", () => {
+    const report = recordPhase7LocalCommandEvidence({
+      outputPath: "evidence/commands.log",
+      includeHosted: true,
+      exists: () => false,
+      writeText: () => {},
+      runCommand: (_file, args) =>
+        args.includes("phase7:staging:status")
+          ? {
+              exitCode: 1,
+              stdout: [
+                "Phase 7 hosted staging proof: checked, blocked",
+                "Ready gates: 9/19",
+                "commands_run Docker health output must be ready",
+                "",
+              ].join("\n"),
+              stderr: "",
+            }
+          : { exitCode: 0, stdout: "ok\n", stderr: "" },
+    });
+
+    expect(report.ok).toBe(false);
+    expect(report.failedCommands).toEqual([
+      "corepack pnpm phase7:staging:status --brief split402-launch-evidence/phase7-staging-proof.txt",
+    ]);
+  });
+
   it("redacts sensitive command output before writing transcripts", () => {
     const writes: Array<{ path: string; text: string }> = [];
     const report = recordPhase7LocalCommandEvidence({

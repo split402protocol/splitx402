@@ -42,6 +42,7 @@ interface CommandSpec {
     attempts: number;
     delayMs: number;
   };
+  acceptableNonZeroMarkers?: readonly string[];
 }
 
 const safeLocalCommands: readonly CommandSpec[] = [
@@ -165,8 +166,9 @@ export function recordPhase7LocalCommandEvidence(
     ) {
       input.writeText(command.outputPath, result.stdout);
     }
-    blocks.push(formatCommandBlock(command.command, result));
-    if (result.exitCode !== 0) {
+    const acceptableNonZero = isAcceptableNonZeroResult(command, result);
+    blocks.push(formatCommandBlock(command.command, result, acceptableNonZero));
+    if (result.exitCode !== 0 && !acceptableNonZero) {
       failedCommands.push(command.command);
     }
   }
@@ -206,16 +208,34 @@ function runCommandWithRetry(
 function formatCommandBlock(
   command: string,
   result: Phase7RecordedCommandResult,
+  acceptableNonZero = false,
 ): string {
   return [
     `$ ${command}`,
     redactSensitiveCommandOutput(result.stdout).trimEnd(),
     redactSensitiveCommandOutput(result.stderr).trimEnd(),
-    result.exitCode === 0 ? "" : `# exit_code: ${result.exitCode}`,
+    result.exitCode === 0
+      ? ""
+      : acceptableNonZero
+        ? `# exit_code: ${result.exitCode} (accepted: expected Phase 7 no-go status)`
+        : `# exit_code: ${result.exitCode}`,
     "",
   ]
     .filter((line, index) => index === 0 || line.length > 0)
     .join("\n");
+}
+
+function isAcceptableNonZeroResult(
+  command: CommandSpec,
+  result: Phase7RecordedCommandResult,
+): boolean {
+  if (result.exitCode === 0 || command.acceptableNonZeroMarkers === undefined) {
+    return false;
+  }
+  const output = `${result.stdout}\n${result.stderr}`;
+  return command.acceptableNonZeroMarkers.every((marker) =>
+    output.includes(marker),
+  );
 }
 
 function createHostedStagingCommands(
@@ -379,6 +399,10 @@ function createHostedStagingCommands(
       command: `corepack pnpm phase7:staging:status --brief ${proofPath}`,
       file: "corepack",
       args: ["pnpm", "phase7:staging:status", "--brief", proofPath],
+      acceptableNonZeroMarkers: [
+        "public-alpha approval remains no-go",
+        "Reassemble with corepack pnpm phase7:staging:assemble",
+      ],
     },
   ];
 }
