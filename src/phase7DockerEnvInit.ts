@@ -17,6 +17,7 @@ export interface Phase7DockerEnvInitArgs {
 export interface Phase7DockerEnvInitPlan {
   source: string;
   target: string;
+  writeSource: "source" | "target";
   shouldWrite: boolean;
   refused: boolean;
   message: string;
@@ -88,10 +89,25 @@ export function createPhase7DockerEnvInitPlan(input: {
 }): Phase7DockerEnvInitPlan {
   const sourceExists = input.exists(input.args.source);
   const targetExists = input.exists(input.args.target);
+  if (targetExists && input.args.generateSecrets && !input.args.force) {
+    return {
+      source: input.args.source,
+      target: input.args.target,
+      writeSource: "target",
+      shouldWrite: true,
+      refused: false,
+      message: `${input.args.target} will be updated in place with generated local runtime secrets where placeholders are still present.`,
+      nextActions: [
+        `Generated private runtime secrets in ${input.args.target} while preserving existing filled values; fill the remaining URLs, wallets, control-plane tokens, and keys manually.`,
+        "Run corepack pnpm phase7:docker:doctor --brief.",
+      ],
+    };
+  }
   if (!sourceExists) {
     return {
       source: input.args.source,
       target: input.args.target,
+      writeSource: "source",
       shouldWrite: false,
       refused: true,
       message: `${input.args.source} is missing.`,
@@ -104,6 +120,7 @@ export function createPhase7DockerEnvInitPlan(input: {
     return {
       source: input.args.source,
       target: input.args.target,
+      writeSource: "source",
       shouldWrite: false,
       refused: true,
       message: `${input.args.target} already exists; refusing to overwrite private runtime values.`,
@@ -115,6 +132,7 @@ export function createPhase7DockerEnvInitPlan(input: {
   return {
     source: input.args.source,
     target: input.args.target,
+    writeSource: "source",
     shouldWrite: true,
     refused: false,
     message: targetExists
