@@ -1,5 +1,3 @@
-import "./env.js";
-
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { setTimeout as delay } from "node:timers/promises";
@@ -13,8 +11,13 @@ import {
   type Split402ReceiptV1
 } from "@split402/protocol";
 
-import { WORKSPACE_ROOT } from "./env.js";
+import { loadOptionalWorkspaceEnv, WORKSPACE_ROOT } from "./env.js";
 import { MAINNET_DEMO_CONFIRMATION, readDemoNetwork } from "./network.js";
+
+loadOptionalWorkspaceEnv(
+  process.env.SPLIT402_PAID_SUITE_ENV_FILE ??
+    "split402-launch-evidence/phase7-staging.env"
+);
 
 const NETWORK = readDemoNetwork();
 const DEFAULT_MERCHANT_SEED_HEX =
@@ -57,7 +60,7 @@ async function main(): Promise<void> {
     );
   }
 
-  const merchant = startMerchant();
+  const merchant = await startMerchant();
   try {
     await waitForHealth(MERCHANT_ORIGIN, 20_000);
     writeStdout(`merchant ready at ${MERCHANT_ORIGIN}\n`);
@@ -113,7 +116,17 @@ async function main(): Promise<void> {
   }
 }
 
-function startMerchant(): ChildProcessWithoutNullStreams {
+interface ManagedMerchantProcess {
+  child?: ChildProcessWithoutNullStreams;
+  external: boolean;
+}
+
+async function startMerchant(): Promise<ManagedMerchantProcess> {
+  if (await isHealthy(MERCHANT_ORIGIN)) {
+    writeStdout(`using existing merchant at ${MERCHANT_ORIGIN}\n`);
+    return { external: true };
+  }
+
   const origin = new URL(MERCHANT_ORIGIN);
   const port = origin.port || (origin.protocol === "https:" ? "443" : "80");
   const child = spawn(process.execPath, [path.join(WORKSPACE_ROOT, "apps/demo-merchant/dist/index.js")], {
@@ -131,7 +144,7 @@ function startMerchant(): ChildProcessWithoutNullStreams {
   child.stderr.on("data", (chunk: Buffer) => {
     process.stderr.write(`[merchant] ${chunk.toString()}`);
   });
-  return child;
+  return { child, external: false };
 }
 
 async function runStep(
@@ -197,6 +210,15 @@ async function waitForHealth(origin: string, timeoutMs: number): Promise<void> {
   throw new Error(`merchant did not become healthy within ${timeoutMs}ms`);
 }
 
+async function isHealthy(origin: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${origin}/health`);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 async function getReceipts(origin: string): Promise<Split402ReceiptV1[]> {
   const response = await fetch(`${origin}/debug/receipts`);
   if (!response.ok) {
@@ -252,7 +274,11 @@ function summarizeReceipt(receipt: Split402ReceiptV1): Record<string, unknown> {
   };
 }
 
-async function stopMerchant(child: ChildProcessWithoutNullStreams): Promise<void> {
+async function stopMerchant(merchant: ManagedMerchantProcess): Promise<void> {
+  if (merchant.external || merchant.child === undefined) {
+    return;
+  }
+  const child = merchant.child;
   if (child.exitCode !== null) {
     return;
   }
