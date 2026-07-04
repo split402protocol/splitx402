@@ -36,6 +36,7 @@ export interface Split402CapabilityProvider {
     medianLatencyMs?: number;
   };
   metadata?: {
+    discoverySource?: "static" | "control_plane" | "external_x402";
     inputSchema?: unknown;
     referrerWallet?: string;
     payoutWallet?: string;
@@ -709,6 +710,7 @@ export class Split402ControlPlaneDiscoveryClient {
       payToWallet: accept.payTo,
       amountAtomic: accept.amount,
       metadata: {
+        discoverySource: "control_plane",
         ...(resource.metadata.input === undefined
           ? {}
           : { inputSchema: resource.metadata.input.schema }),
@@ -961,6 +963,7 @@ export class Split402ExternalX402DiscoveryClient {
       payToWallet: input.split402Offer.payToWallet,
       amountAtomic: input.split402Offer.requiredAmountAtomic,
       metadata: {
+        discoverySource: "external_x402",
         ...(input.route.inputSchema === undefined
           ? {}
           : { inputSchema: input.route.inputSchema }),

@@ -72,13 +72,14 @@ claim of production MCP hosting or mainnet-ready payment execution.
 gateway never silently spends against a provider default. Agents can call
 `split402.quote` first to see the selected provider, quoted amount, normalized
 budget, and ranked fallback set without creating a receipt or making a payment.
-Capability search results include each provider's advertised `payToWallet`,
-merchant origin, operation id, campaign id, route attribution, referrer wallet,
-and payout wallet when available, and router execution rejects merchant offers
-or receipts that do not match that destination. Successful execution responses
-also include the selected provider summary so agents can audit the exact
-merchant origin, operation, campaign, route, asset, pay-to wallet, and amount
-used for the paid call.
+Capability search results include each provider's source (`static`,
+`control_plane`, or `external_x402`), advertised `payToWallet`, merchant origin,
+operation id, campaign id, route attribution, referrer wallet, payout wallet,
+input schema, and public MCP tool catalog when available. Router execution
+rejects merchant offers or receipts that do not match that destination.
+Successful execution responses also include the selected provider summary so
+agents can audit the exact merchant origin, operation, campaign, route, asset,
+pay-to wallet, amount, and discovery source used for the paid call.
 
 Example `tools/call` request:
 

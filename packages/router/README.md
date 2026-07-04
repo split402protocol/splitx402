@@ -107,6 +107,8 @@ until the route includes a valid Split402 offer extension.
 - discovers active control-plane routes into provider records;
 - discovers external x402 provider candidates for onboarding without treating
   plain x402 payment requirements as Split402 referral routes;
+- tags discovered provider metadata with its source (`static`, `control_plane`,
+  or `external_x402`) so gateways can show where a provider came from;
 - enriches paid MCP-style external candidates with public `/mcp/tools` catalog
   metadata when the catalog is available;
 - supports x402 `GET` and `POST` provider methods; object-shaped router input is
