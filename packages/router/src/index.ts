@@ -1910,6 +1910,7 @@ function validateJsonSchemaValue(
     record.additionalProperties !== undefined ||
     record.patternProperties !== undefined ||
     record.propertyNames !== undefined ||
+    record.dependentRequired !== undefined ||
     record.minProperties !== undefined ||
     record.maxProperties !== undefined;
   if (hasObjectShape) {
@@ -1968,6 +1969,15 @@ function validateJsonObjectShape(
   if (schema.propertyNames !== undefined && propertyNames === undefined) {
     errors.push(`${path} propertyNames must be a schema object`);
   }
+  const dependentRequired = readDependentRequired(schema.dependentRequired);
+  if (
+    schema.dependentRequired !== undefined &&
+    dependentRequired === undefined
+  ) {
+    errors.push(
+      `${path} dependentRequired must be an object of string arrays`
+    );
+  }
   const additionalProperties = readAdditionalPropertiesSchema(
     schema.additionalProperties
   );
@@ -1986,6 +1996,21 @@ function validateJsonObjectShape(
     for (const property of required) {
       if (!(property in value)) {
         errors.push(`${path}.${property} is required`);
+      }
+    }
+  }
+  if (dependentRequired !== undefined) {
+    for (const [property, requiredProperties] of Object.entries(
+      dependentRequired
+    )) {
+      if (property in value) {
+        for (const requiredProperty of requiredProperties) {
+          if (!(requiredProperty in value)) {
+            errors.push(
+              `${path}.${requiredProperty} is required when ${path}.${property} is present`
+            );
+          }
+        }
       }
     }
   }
@@ -2274,6 +2299,29 @@ function readPatternProperties(
     }
   }
   return patterns;
+}
+
+function readDependentRequired(
+  value: unknown
+): Record<string, string[]> | undefined {
+  if (value === undefined) {
+    return {};
+  }
+  const record = readSchemaRecord(value);
+  if (record === undefined) {
+    return undefined;
+  }
+  const dependencies: Record<string, string[]> = {};
+  for (const [property, requiredProperties] of Object.entries(record)) {
+    if (
+      !Array.isArray(requiredProperties) ||
+      !requiredProperties.every((item) => typeof item === "string")
+    ) {
+      return undefined;
+    }
+    dependencies[property] = requiredProperties;
+  }
+  return dependencies;
 }
 
 function propertyMatchesPatternProperties(
