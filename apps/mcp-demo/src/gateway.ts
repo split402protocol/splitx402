@@ -331,6 +331,7 @@ export function createDemoProvider(
       medianLatencyMs: 250
     },
     metadata: {
+      discoverySource: "static",
       referrerWallet: sample.artifacts.receipt.referrerWallet!,
       payoutWallet: sample.artifacts.receipt.payoutWallet!
     }
@@ -1224,6 +1225,7 @@ function createDeterministicDemoId(
 }
 
 function publicProviderView(provider: Split402CapabilityProvider) {
+  const mcpTools = provider.metadata?.mcpTools;
   return {
     providerId: provider.providerId,
     capability: provider.capability,
@@ -1243,6 +1245,13 @@ function publicProviderView(provider: Split402CapabilityProvider) {
     ...(provider.metadata?.payoutWallet === undefined
       ? {}
       : { payoutWallet: provider.metadata.payoutWallet }),
+    ...(provider.metadata?.discoverySource === undefined
+      ? {}
+      : { source: provider.metadata.discoverySource }),
+    ...(provider.metadata?.inputSchema === undefined
+      ? {}
+      : { inputSchema: provider.metadata.inputSchema }),
+    ...(mcpTools === undefined || mcpTools.length === 0 ? {} : { mcpTools }),
     reliability: provider.reliability ?? null
   };
 }

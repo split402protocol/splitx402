@@ -1350,11 +1350,116 @@ describe("MCP demo gateway", () => {
             expect.objectContaining({
               providerId: "split402-demo-merchant",
               capability: "solana.wallet-risk",
+              source: "static",
               routeId: sample.artifacts.receipt.routeId,
               referrerWallet: sample.artifacts.receipt.referrerWallet,
               payoutWallet: sample.artifacts.receipt.payoutWallet,
               payToWallet: bundle.mcp.tools[0].x402.payToWallet,
               amountAtomic: "10000"
+            })
+          ]
+        },
+        isError: false
+      }
+    });
+  });
+
+  it("exposes router provider schemas and MCP tool catalogs through capability search", async () => {
+    const bundle = createMcpDemoBundle({
+      generatedAt: "2026-06-26T00:00:00.000Z"
+    });
+    const provider: Split402CapabilityProvider = {
+      providerId: "external-mcp:post.mcp.call",
+      capability: "mcp.revenue-tools",
+      merchantOrigin: "https://x402.example",
+      path: "/mcp/call",
+      method: "POST",
+      operationId: "post.mcp.call",
+      campaignId: "cmp_10000000000000000000000000000001",
+      merchantPublicKey: bundle.merchant.servicePublicKey,
+      network: "eip155:8453",
+      asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      payToWallet: "0x68614873C5d624c07DCAA3aFF5243DD5027c3910",
+      amountAtomic: "20000",
+      metadata: {
+        discoverySource: "external_x402",
+        inputSchema: {
+          type: "object",
+          properties: {
+            tool: {
+              type: "string",
+              enum: ["scan_revenue_surfaces", "audit_x402_endpoint"]
+            }
+          },
+          required: ["tool"]
+        },
+        mcpTools: [
+          {
+            name: "scan_revenue_surfaces",
+            description: "Rank current monetization surfaces.",
+            inputSchema: {
+              type: "object",
+              properties: { focus: { type: "string" } }
+            }
+          },
+          {
+            name: "audit_x402_endpoint",
+            description: "Audit an x402 endpoint.",
+            inputSchema: {
+              type: "object",
+              properties: { url: { type: "string" } },
+              required: ["url"]
+            }
+          }
+        ]
+      }
+    };
+    const context = createMcpGatewayContext(
+      bundle,
+      new Split402Router({ providers: [provider] })
+    );
+
+    const response = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "search-mcp-catalog",
+        method: "tools/call",
+        params: {
+          name: "split402.searchCapabilities",
+          arguments: {
+            capability: "mcp.revenue-tools"
+          }
+        }
+      }),
+      context
+    );
+
+    expect(response).toMatchObject({
+      jsonrpc: "2.0",
+      id: "search-mcp-catalog",
+      result: {
+        structuredContent: {
+          capabilities: [
+            expect.objectContaining({
+              providerId: "external-mcp:post.mcp.call",
+              source: "external_x402",
+              inputSchema: expect.objectContaining({
+                required: ["tool"]
+              }),
+              mcpTools: [
+                expect.objectContaining({
+                  name: "scan_revenue_surfaces",
+                  inputSchema: expect.objectContaining({
+                    properties: { focus: { type: "string" } }
+                  })
+                }),
+                expect.objectContaining({
+                  name: "audit_x402_endpoint",
+                  inputSchema: expect.objectContaining({
+                    required: ["url"]
+                  })
+                })
+              ]
             })
           ]
         },
@@ -1876,6 +1981,7 @@ describe("MCP demo gateway", () => {
             expect.objectContaining({
               providerId: "rte_discovered:wallet-risk-score",
               capability: "solana.wallet-risk",
+              source: "control_plane",
               merchantOrigin: "https://merchant.example",
               amountAtomic: "10000"
             })
@@ -1938,6 +2044,7 @@ describe("MCP demo gateway", () => {
             expect.objectContaining({
               providerId: "external-live:get.price.coin",
               capability: "crypto.price",
+              source: "external_x402",
               merchantOrigin: "https://x402.example",
               path: "/price/btc",
               method: "GET",
