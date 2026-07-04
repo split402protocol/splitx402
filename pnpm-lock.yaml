@@ -139,6 +139,9 @@ importers:
       '@split402/express':
         specifier: workspace:*
         version: link:../../packages/express
+      '@split402/merchant-sdk':
+        specifier: workspace:*
+        version: link:../../packages/merchant-sdk
       '@split402/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol

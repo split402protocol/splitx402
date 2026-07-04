@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from "node:fs";
+import { delimiter } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -54,6 +56,11 @@ const DEFAULT_MERCHANT_ORIGIN = "http://localhost:4023";
 const DEFAULT_ROUTE_ISSUED_AT = "2026-06-28T00:00:00Z";
 const DEFAULT_ROUTE_EXPIRES_AT = "2026-12-31T00:00:00Z";
 const DEFAULT_CAMPAIGN_STARTS_AT = "2026-06-28T00:00:00Z";
+const DEFAULT_PHASE7_STAGING_SEED_ENV_FILES = [
+  "../../../deploy/phase7-staging/phase7-staging.env",
+  "../../../split402-launch-evidence/phase7-staging.env",
+  "../../../phase7-staging-evidence/phase7-staging.env"
+] as const;
 
 export interface Phase7StagingSeedConfig {
   confirmed: boolean;
@@ -116,6 +123,40 @@ export interface Phase7StagingSeedResult {
   authSession: Phase7StagingSeedAuthSessionSummary;
   proofEnv: Record<string, string>;
   notes: string[];
+}
+
+export interface Phase7StagingSeedEnvLoadResult {
+  loadedFiles: string[];
+  args: string[];
+}
+
+export function loadPhase7StagingSeedEnvFiles(
+  argv: readonly string[] = [],
+  env: NodeJS.ProcessEnv = process.env
+): Phase7StagingSeedEnvLoadResult {
+  const parsed = parsePhase7StagingSeedEnvFileArgs(argv);
+  const defaultFiles = DEFAULT_PHASE7_STAGING_SEED_ENV_FILES.map((path) =>
+    fileURLToPath(new URL(path, import.meta.url))
+  );
+  const envFiles = [
+    ...splitEnvFileList(env.SPLIT402_ENV_FILE),
+    ...parsed.envFiles,
+    ...defaultFiles.filter((path) => existsSync(path))
+  ];
+  const loadedFiles: string[] = [];
+  for (const path of [...new Set(envFiles)]) {
+    if (!existsSync(path)) {
+      throw new Error(`seed env file does not exist: ${path}`);
+    }
+    const values = parseSeedEnvFile(readFileSync(path, "utf8"));
+    for (const [key, value] of Object.entries(values)) {
+      if (env[key] === undefined) {
+        env[key] = value;
+      }
+    }
+    loadedFiles.push(path);
+  }
+  return { loadedFiles, args: parsed.args };
 }
 
 export function readPhase7StagingSeedConfig(
@@ -649,7 +690,93 @@ function readBasisPoints(value: string, label: string): number {
   return parsed;
 }
 
+function parsePhase7StagingSeedEnvFileArgs(argv: readonly string[]): {
+  args: string[];
+  envFiles: string[];
+} {
+  const args: string[] = [];
+  const envFiles: string[] = [];
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === undefined) {
+      continue;
+    }
+    if (arg === "--evidence-env-file" || arg === "--env-file") {
+      const path = argv[index + 1];
+      if (path === undefined || path.startsWith("--")) {
+        throw new Error(`${arg} requires a path`);
+      }
+      envFiles.push(path);
+      index += 1;
+      continue;
+    }
+    const envFileEqualsArg = readEnvFileEqualsArg(arg);
+    if (envFileEqualsArg !== undefined) {
+      if (envFileEqualsArg.path.trim().length === 0) {
+        throw new Error(`${envFileEqualsArg.flag} requires a path`);
+      }
+      envFiles.push(envFileEqualsArg.path);
+      continue;
+    }
+    args.push(arg);
+  }
+  return { args, envFiles };
+}
+
+function readEnvFileEqualsArg(
+  arg: string
+): { flag: string; path: string } | undefined {
+  for (const flag of ["--evidence-env-file", "--env-file"]) {
+    const prefix = `${flag}=`;
+    if (arg.startsWith(prefix)) {
+      return { flag, path: arg.slice(prefix.length) };
+    }
+  }
+  return undefined;
+}
+
+function splitEnvFileList(value: string | undefined): string[] {
+  if (value === undefined || value.trim().length === 0) {
+    return [];
+  }
+  return value
+    .split(delimiter)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+function parseSeedEnvFile(text: string): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const rawLine of text.split(/\r?\n/u)) {
+    const line = rawLine.trim();
+    if (line.length === 0 || line.startsWith("#")) {
+      continue;
+    }
+    const separatorIndex = line.indexOf("=");
+    if (separatorIndex <= 0) {
+      continue;
+    }
+    const key = line.slice(0, separatorIndex).trim();
+    if (!/^[A-Z0-9_]+$/u.test(key)) {
+      continue;
+    }
+    values[key] = parseSeedEnvValue(line.slice(separatorIndex + 1).trim());
+  }
+  return values;
+}
+
+function parseSeedEnvValue(value: string): string {
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return value.slice(1, -1);
+  }
+  return value;
+}
+
 async function main(): Promise<void> {
+  loadPhase7StagingSeedEnvFiles(process.argv.slice(2));
   const config = readPhase7StagingSeedConfig();
   if (!config.confirmed) {
     throw new Error(

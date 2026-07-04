@@ -7,6 +7,10 @@ import { paymentMiddleware, x402ResourceServer } from "@x402/express";
 import { ExactSvmScheme } from "@x402/svm/exact/server";
 import { split402RequestContext } from "@split402/express";
 import {
+  ControlPlaneReceiptSubmitter,
+  type MerchantReceiptSubmitter
+} from "@split402/merchant-sdk";
+import {
   SOLANA_DEVNET_NETWORK_ID,
   SOLANA_DEVNET_USDC_MINT,
   SOLANA_MAINNET_DEMO_MAX_GROSS_AMOUNT_ATOMIC,
@@ -51,6 +55,8 @@ export interface DemoMerchantConfig {
   syncFacilitator: boolean;
   facilitatorUrl: string;
   receipts: Split402ReceiptV1[];
+  receiptSubmitter?: MerchantReceiptSubmitter;
+  receiptSubmissionResults: DemoMerchantReceiptSubmissionResult[];
 }
 
 export interface DemoMerchantRuntime {
@@ -66,6 +72,14 @@ export interface DemoMerchantOptions
   merchantPayTo?: string;
   mainnetCanaryConfirmation?: string;
   facilitatorClient?: FacilitatorClient;
+  receiptSubmitter?: MerchantReceiptSubmitter;
+}
+
+export interface DemoMerchantReceiptSubmissionResult {
+  receiptId: string;
+  status: string;
+  statusCode?: number;
+  error?: string;
 }
 
 export function createDemoMerchantApp(
@@ -90,6 +104,7 @@ export function createDemoMerchantApp(
     resolveCampaign: () => campaign,
     receiptSink: (receipt: Split402ReceiptV1) => {
       config.receipts.push(receipt);
+      submitReceiptToControlPlane(config, receipt);
     }
   });
   const x402Server = new x402ResourceServer(facilitator)
@@ -121,7 +136,8 @@ export function createDemoMerchantApp(
       requiredAmountAtomic: config.requiredAmountAtomic,
       commissionBps: config.commissionBps,
       split402ServicePublicKey: servicePublicKey,
-      receipts: config.receipts.length
+      receipts: config.receipts.length,
+      receiptSubmissions: config.receiptSubmissionResults.length
     });
   });
 
@@ -155,7 +171,10 @@ export function createDemoMerchantApp(
   });
 
   app.get("/debug/receipts", (_req, res) => {
-    res.json({ receipts: config.receipts });
+    res.json({
+      receipts: config.receipts,
+      receiptSubmissions: config.receiptSubmissionResults
+    });
   });
 
   app.use(split402RequestContext("/v1/risk"));
@@ -222,7 +241,58 @@ function readDemoMerchantConfig(
       overrides.facilitatorUrl ??
       process.env.X402_FACILITATOR_URL ??
       "https://x402.org/facilitator",
-    receipts: overrides.receipts ?? []
+    receipts: overrides.receipts ?? [],
+    ...(overrides.receiptSubmitter !== undefined
+      ? { receiptSubmitter: overrides.receiptSubmitter }
+      : createReceiptSubmitterFromEnv()),
+    receiptSubmissionResults: overrides.receiptSubmissionResults ?? []
+  };
+}
+
+function submitReceiptToControlPlane(
+  config: DemoMerchantConfig,
+  receipt: Split402ReceiptV1
+): void {
+  if (config.receiptSubmitter === undefined) {
+    return;
+  }
+  void Promise.resolve()
+    .then(() => config.receiptSubmitter?.submitReceipt(receipt))
+    .then((result) => {
+      if (result === undefined) {
+        return;
+      }
+      config.receiptSubmissionResults.push({
+        receiptId: receipt.receiptId,
+        status: result.status,
+        ...(result.statusCode === undefined ? {} : { statusCode: result.statusCode }),
+        ...(!("error" in result) || result.error === undefined
+          ? {}
+          : { error: result.error })
+      });
+    })
+    .catch((error: unknown) => {
+      config.receiptSubmissionResults.push({
+        receiptId: receipt.receiptId,
+        status: "error",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    });
+}
+
+function createReceiptSubmitterFromEnv(): Pick<
+  DemoMerchantConfig,
+  "receiptSubmitter"
+> {
+  const controlPlaneUrl = readOptionalString(
+    process.env.SPLIT402_MERCHANT_CONTROL_PLANE_URL ??
+      process.env.SPLIT402_CONTROL_PLANE_URL
+  );
+  if (controlPlaneUrl === undefined) {
+    return {};
+  }
+  return {
+    receiptSubmitter: new ControlPlaneReceiptSubmitter({ controlPlaneUrl })
   };
 }
 
@@ -297,6 +367,13 @@ function assertMainnetDemoGuards(
 
 function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function readOptionalString(value: string | undefined): string | undefined {
+  if (value === undefined || value.trim().length === 0) {
+    return undefined;
+  }
+  return value.trim();
 }
 
 function readMerchantOrigin(): string {

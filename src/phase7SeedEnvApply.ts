@@ -101,7 +101,7 @@ export function parsePhase7SeedEnvApplyArgs(
 }
 
 export function extractPhase7SeedProofEnv(seedOutputText: string): Record<string, string> {
-  const parsed = JSON.parse(seedOutputText) as unknown;
+  const parsed = parseSeedOutputJson(seedOutputText);
   if (!isRecord(parsed)) {
     throw new Error("seed output must be a JSON object");
   }
@@ -117,6 +117,88 @@ export function extractPhase7SeedProofEnv(seedOutputText: string): Record<string
     result[key] = value;
   }
   return result;
+}
+
+function parseSeedOutputJson(seedOutputText: string): unknown {
+  try {
+    return JSON.parse(seedOutputText) as unknown;
+  } catch {
+    const jsonText = extractJsonObjectAroundProofEnv(seedOutputText);
+    return JSON.parse(jsonText) as unknown;
+  }
+}
+
+function extractJsonObjectAroundProofEnv(seedOutputText: string): string {
+  const markerIndex = seedOutputText.indexOf('"proofEnv"');
+  if (markerIndex < 0) {
+    throw new Error(
+      "seed output must contain a JSON object with a proofEnv object",
+    );
+  }
+
+  for (
+    let startIndex = seedOutputText.indexOf("{");
+    startIndex >= 0 && startIndex < markerIndex;
+    startIndex = seedOutputText.indexOf("{", startIndex + 1)
+  ) {
+    const candidate = extractJsonObjectFromStart(seedOutputText, startIndex);
+    if (candidate === undefined) {
+      continue;
+    }
+    try {
+      const parsed = JSON.parse(candidate) as unknown;
+      if (isRecord(parsed) && isRecord(parsed.proofEnv)) {
+        return candidate;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  throw new Error(
+    "seed output must contain a JSON object with a proofEnv object",
+  );
+}
+
+function extractJsonObjectFromStart(
+  seedOutputText: string,
+  startIndex: number,
+): string | undefined {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = startIndex; index < seedOutputText.length; index += 1) {
+    const char = seedOutputText[index];
+    if (char === undefined) {
+      continue;
+    }
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+    if (char === "{") {
+      depth += 1;
+      continue;
+    }
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return seedOutputText.slice(startIndex, index + 1);
+      }
+    }
+  }
+
+  return undefined;
 }
 
 export function applyPhase7SeedProofEnvToText(input: {

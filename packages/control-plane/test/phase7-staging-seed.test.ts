@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { QueryResult, QueryResultRow } from "pg";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 import {
   createPhase7StagingSeedProofEnv,
+  loadPhase7StagingSeedEnvFiles,
   readPhase7StagingSeedConfig,
   runPhase7StagingSeed,
   type Phase7StagingSeedConfig
@@ -63,6 +67,34 @@ describe("Phase 7 staging seed config", () => {
     expect(config.requiredAmountAtomic).toBe("50000");
     expect(config.commissionBps).toBe(2000);
     expect(config.protocolFeeBpsOfCommission).toBe(750);
+  });
+
+  it("loads seed settings from env files without overriding explicit env", () => {
+    const directory = mkdtempSync(join(tmpdir(), "split402-seed-env-"));
+    const envFile = join(directory, "phase7.env");
+    writeFileSync(
+      envFile,
+      [
+        "SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging",
+        "SPLIT402_SERVICE_SEED_HEX=1111111111111111111111111111111111111111111111111111111111111111",
+        "SPLIT402_REQUIRED_AMOUNT_ATOMIC=50000",
+        "SPLIT402_COMMISSION_BPS=2500",
+        "",
+      ].join("\n")
+    );
+    const env: NodeJS.ProcessEnv = {
+      SPLIT402_REQUIRED_AMOUNT_ATOMIC: "70000"
+    };
+
+    const result = loadPhase7StagingSeedEnvFiles(["--env-file", envFile], env);
+
+    expect(result.loadedFiles).toContain(envFile);
+    expect(env.SPLIT402_PHASE7_SEED_CONFIRM).toBe("seed-hosted-staging");
+    expect(env.SPLIT402_SERVICE_SEED_HEX).toBe(
+      "1111111111111111111111111111111111111111111111111111111111111111"
+    );
+    expect(env.SPLIT402_REQUIRED_AMOUNT_ATOMIC).toBe("70000");
+    expect(readPhase7StagingSeedConfig(env).commissionBps).toBe(2500);
   });
 
   it("allows an explicit owner wallet without a local seed for manual auth token setup", () => {

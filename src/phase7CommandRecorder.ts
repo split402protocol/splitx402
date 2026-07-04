@@ -271,18 +271,6 @@ function createHostedStagingCommands(
       args: ["pnpm", "phase7:hosted:preflight", ...evidenceEnvArgs],
     },
     {
-      command: withEvidenceEnv("corepack pnpm phase7:staging:collect-reads"),
-      file: "corepack",
-      args: ["pnpm", "phase7:staging:collect-reads", ...evidenceEnvArgs],
-    },
-    {
-      command: withEvidenceEnv(
-        "corepack pnpm phase7:staging:collect-mcp-gateway",
-      ),
-      file: "corepack",
-      args: ["pnpm", "phase7:staging:collect-mcp-gateway", ...evidenceEnvArgs],
-    },
-    {
       command: `corepack pnpm demo:mcp-bundle ${artifact("mcp-bundle.json")}`,
       file: "corepack",
       args: ["pnpm", "demo:mcp-bundle", artifact("mcp-bundle.json")],
@@ -306,6 +294,18 @@ function createHostedStagingCommands(
         artifact("paid-suite.log"),
         artifact("receipt-verification.json"),
       ],
+    },
+    {
+      command: withEvidenceEnv(
+        "corepack pnpm phase7:staging:collect-mcp-gateway",
+      ),
+      file: "corepack",
+      args: ["pnpm", "phase7:staging:collect-mcp-gateway", ...evidenceEnvArgs],
+    },
+    {
+      command: withEvidenceEnv("corepack pnpm phase7:staging:collect-reads"),
+      file: "corepack",
+      args: ["pnpm", "phase7:staging:collect-reads", ...evidenceEnvArgs],
     },
     {
       command: [
