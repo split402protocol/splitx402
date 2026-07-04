@@ -24,6 +24,7 @@ import {
   type Split402DiscoveryFetch,
   type Split402ExternalX402DiscoveryFetch,
   type Split402RouterExecuteResult,
+  type Split402RouterQuoteResult,
   type Split402RouterExecutor
 } from "@split402/router";
 
@@ -379,6 +380,9 @@ async function handleToolCallAsync(
       isError: false
     });
   }
+  if (record.name === "split402.quote") {
+    return handleRouterQuoteTool(id, record.arguments, context);
+  }
   if (record.name === "split402.execute") {
     return handleRouterExecuteTool(id, record.arguments, context);
   }
@@ -560,25 +564,92 @@ async function handleExternalX402DiscoveryTool(
   }
 }
 
+function handleRouterQuoteTool(
+  id: string | number | null,
+  args: unknown,
+  context: McpGatewayContext,
+): McpGatewayResponse {
+  const prepared = readRouterExecutionPlanInput(args, context);
+  if ("message" in prepared) {
+    return createErrorResponse(id, -32602, prepared.message);
+  }
+
+  try {
+    const quote = context.router.quoteExecution({
+      capability: prepared.capability,
+      budget: prepared.budget,
+      ...(prepared.referralClaim === undefined
+        ? {}
+        : { referralClaim: prepared.referralClaim }),
+      ...(prepared.maxAttempts === undefined
+        ? {}
+        : { maxAttempts: prepared.maxAttempts })
+    });
+    return createRouterQuoteResponse(id, quote, context.executionMode);
+  } catch (error) {
+    return createErrorResponse(id, -32000, errorMessage(error));
+  }
+}
+
 async function handleRouterExecuteTool(
   id: string | number | null,
   args: unknown,
   context: McpGatewayContext,
 ): Promise<McpGatewayResponse> {
+  const prepared = readRouterExecutionPlanInput(args, context);
+  if ("message" in prepared) {
+    return createErrorResponse(id, -32602, prepared.message);
+  }
+
+  const record = args as Record<string, unknown>;
+  try {
+    const result = await context.router.execute({
+      capability: prepared.capability,
+      input: record.input ?? {},
+      budget: prepared.budget,
+      ...(prepared.referralClaim === undefined
+        ? {}
+        : { referralClaim: prepared.referralClaim }),
+      ...(prepared.maxAttempts === undefined
+        ? {}
+        : { maxAttempts: prepared.maxAttempts })
+    });
+    context.receipts.set(result.receipt.receiptId, result.receipt);
+    return createRouterExecuteResponse(id, result, context.executionMode);
+  } catch (error) {
+    return createErrorResponse(id, -32000, errorMessage(error));
+  }
+}
+
+function readRouterExecutionPlanInput(
+  args: unknown,
+  context: McpGatewayContext,
+):
+  | {
+      capability: string;
+      budget: {
+        network: string;
+        asset: string;
+        maxAmountAtomic: string;
+      };
+      referralClaim?: ReferralClaimV1;
+      maxAttempts?: number;
+    }
+  | { message: string } {
   if (typeof args !== "object" || args === null) {
-    return createErrorResponse(id, -32602, "Tool arguments are required");
+    return { message: "Tool arguments are required" };
   }
   const record = args as Record<string, unknown>;
   const capability = readRequiredStringArgument(record.capability, "capability");
   if (typeof capability !== "string") {
-    return createErrorResponse(id, -32602, capability.message);
+    return capability;
   }
   const budgetFilter = readOptionalBudgetFilter(record.budget);
   if (budgetFilter !== undefined && "message" in budgetFilter) {
-    return createErrorResponse(id, -32602, budgetFilter.message);
+    return budgetFilter;
   }
   if (record.budget === undefined) {
-    return createErrorResponse(id, -32602, "budget argument is required");
+    return { message: "budget argument is required" };
   }
   const matchingProviders = context.router.searchCapabilities({
     capability,
@@ -590,43 +661,35 @@ async function handleRouterExecuteTool(
       ? context.router.searchCapabilities(capability)[0]
       : undefined);
   if (provider === undefined) {
-    return createErrorResponse(
-      id,
-      -32602,
-      budgetFilter === undefined
-        ? `unknown capability: ${capability}`
-        : `no providers match capability and budget: ${capability}`
-    );
+    return {
+      message:
+        budgetFilter === undefined
+          ? `unknown capability: ${capability}`
+          : `no providers match capability and budget: ${capability}`
+    };
   }
   const budget = readBudget(record.budget, provider);
   if ("message" in budget) {
-    return createErrorResponse(id, -32602, budget.message);
+    return budget;
   }
   const referralClaim = readOptionalReferralClaim(record.referralClaim);
   if (referralClaim !== undefined && "message" in referralClaim) {
-    return createErrorResponse(id, -32602, referralClaim.message);
+    return referralClaim;
   }
   const maxAttempts = readOptionalPositiveIntegerArgument(
     record.maxAttempts,
     "maxAttempts"
   );
   if (typeof maxAttempts === "object") {
-    return createErrorResponse(id, -32602, maxAttempts.message);
+    return maxAttempts;
   }
 
-  try {
-    const result = await context.router.execute({
-      capability,
-      input: record.input ?? {},
-      budget,
-      ...(referralClaim === undefined ? {} : { referralClaim }),
-      ...(maxAttempts === undefined ? {} : { maxAttempts })
-    });
-    context.receipts.set(result.receipt.receiptId, result.receipt);
-    return createRouterExecuteResponse(id, result, context.executionMode);
-  } catch (error) {
-    return createErrorResponse(id, -32000, errorMessage(error));
-  }
+  return {
+    capability,
+    budget,
+    ...(referralClaim === undefined ? {} : { referralClaim }),
+    ...(maxAttempts === undefined ? {} : { maxAttempts })
+  };
 }
 
 function handleGetReceiptTool(
@@ -708,6 +771,30 @@ function createRouterExecuteResponse(
   });
 }
 
+function createRouterQuoteResponse(
+  id: string | number | null,
+  quote: Split402RouterQuoteResult,
+  executionMode: McpGatewayContext["executionMode"],
+): McpGatewayResponse {
+  return createToolResultResponse(id, {
+    status: "quoted",
+    executionMode,
+    providerId: quote.selectedProviderId,
+    provider: publicProviderView(quote.selectedProvider),
+    capability: quote.capability,
+    budget: quote.budget,
+    quotedAmountAtomic: quote.quotedAmountAtomic,
+    maxAttempts: quote.maxAttempts,
+    rankedProviders: quote.rankedProviders.map((item) => ({
+      rank: item.rank,
+      providerId: item.providerId,
+      amountAtomic: item.amountAtomic,
+      reliability: item.reliability,
+      provider: publicProviderView(item.provider)
+    }))
+  });
+}
+
 function createResultResponse(
   id: string | number | null,
   result: unknown,
@@ -753,6 +840,31 @@ function routerToolCards() {
             additionalProperties: false
           }
         },
+        additionalProperties: false
+      }
+    },
+    {
+      name: "split402.quote",
+      description:
+        "Preflight a paid capability through the Split402 router without making a payment.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          capability: { type: "string" },
+          referralClaim: { type: "object" },
+          budget: {
+            type: "object",
+            properties: {
+              network: { type: "string" },
+              asset: { type: "string" },
+              maxAmountAtomic: { type: "string" }
+            },
+            required: ["maxAmountAtomic"],
+            additionalProperties: false
+          },
+          maxAttempts: { type: "number" }
+        },
+        required: ["capability", "budget"],
         additionalProperties: false
       }
     },

@@ -41,7 +41,6 @@ describe("Split402Router", () => {
       router
         .rankProviders({
           capability: "solana.wallet-risk",
-          input: {},
           budget: {
             network: receipt.network,
             asset: receipt.asset,
@@ -72,7 +71,6 @@ describe("Split402Router", () => {
       router
         .rankProviders({
           capability: "solana.wallet-risk",
-          input: {},
           budget: {
             network: receipt.network,
             asset: receipt.asset,
@@ -81,6 +79,116 @@ describe("Split402Router", () => {
         })
         .map((item) => item.providerId)
     ).toEqual(["provider-reliable", "provider-cheaper"]);
+  });
+
+  it("quotes selected provider and attempted fallback set before execution", () => {
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-cheaper",
+          amountAtomic: "10000",
+          reliability: { successRateBps: 9000, medianLatencyMs: 50 }
+        }),
+        provider({
+          providerId: "provider-reliable",
+          amountAtomic: "20000",
+          reliability: { successRateBps: 9900, medianLatencyMs: 200 }
+        }),
+        provider({
+          providerId: "provider-third",
+          amountAtomic: "30000",
+          reliability: { successRateBps: 8000, medianLatencyMs: 10 }
+        })
+      ]
+    });
+
+    expect(
+      router.quoteExecution({
+        capability: "solana.wallet-risk",
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: "50000"
+        },
+        maxAttempts: 2
+      })
+    ).toMatchObject({
+      capability: "solana.wallet-risk",
+      selectedProviderId: "provider-reliable",
+      quotedAmountAtomic: "20000",
+      maxAttempts: 2,
+      rankedProviders: [
+        {
+          rank: 1,
+          providerId: "provider-reliable",
+          amountAtomic: "20000",
+          reliability: { successRateBps: 9900, medianLatencyMs: 200 }
+        },
+        {
+          rank: 2,
+          providerId: "provider-cheaper",
+          amountAtomic: "10000",
+          reliability: { successRateBps: 9000, medianLatencyMs: 50 }
+        }
+      ]
+    });
+  });
+
+  it("quotes only providers that match the supplied referral claim", () => {
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-wrong-route",
+          routeId: "rte_ffffffffffffffffffffffffffffffff",
+          reliability: { successRateBps: 10_000 }
+        }),
+        provider({
+          providerId: "provider-matching-route",
+          routeId: referralClaim.routeId,
+          metadata: {
+            referrerWallet: referralClaim.referrerWallet,
+            payoutWallet: referralClaim.payoutWallet
+          },
+          reliability: { successRateBps: 9000 }
+        })
+      ]
+    });
+
+    expect(
+      router.quoteExecution({
+        capability: "solana.wallet-risk",
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        },
+        referralClaim
+      })
+    ).toMatchObject({
+      selectedProviderId: "provider-matching-route",
+      rankedProviders: [
+        expect.objectContaining({
+          providerId: "provider-matching-route"
+        })
+      ]
+    });
+  });
+
+  it("rejects quotes when every provider exceeds budget", () => {
+    const router = new Split402Router({
+      providers: [provider({ providerId: "provider-expensive", amountAtomic: "50001" })]
+    });
+
+    expect(() =>
+      router.quoteExecution({
+        capability: "solana.wallet-risk",
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: "50000"
+        }
+      })
+    ).toThrowError(/exceed the requested budget/u);
   });
 
   it("searches capabilities with optional budget filters", () => {

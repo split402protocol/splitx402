@@ -19,6 +19,23 @@ const result = await split402.execute({
 });
 ```
 
+Agents can also quote the route before executing:
+
+```ts
+const quote = split402.quoteExecution({
+  capability: "solana.wallet-risk",
+  budget: {
+    network: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+    asset: DEVNET_USDC_MINT,
+    maxAmountAtomic: "50000"
+  },
+  referralClaim
+});
+```
+
+The quote is read-only. It returns the selected provider, quoted amount, budget,
+and ranked fallback set without making an x402 payment or creating a receipt.
+
 The result includes the selected provider record, the normalized output, the
 verified receipt, and an attempt log so agents can audit which provider was
 used without correlating a separate search response.
@@ -78,6 +95,7 @@ providers.
 - filters providers by capability, network, asset, and maximum amount;
 - searches providers by capability plus optional network, asset, and maximum
   amount budget filters;
+- quotes the selected provider and fallback set before payment;
 - ignores provider records with malformed atomic prices during search and
   execution ranking;
 - discovers active control-plane routes into provider records;
