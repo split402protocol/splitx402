@@ -562,6 +562,11 @@ corepack pnpm phase7:staging:assemble --evidence-env-file split402-launch-eviden
 corepack pnpm phase7:staging:status --brief split402-launch-evidence/phase7-staging-proof.txt
 ```
 
+For separate Base/EVM provider staging, the live MCP gateway can use
+`SPLIT402_MCP_EVM_PRIVATE_KEY` or `EVM_PRIVATE_KEY` with optional
+`SPLIT402_MCP_EVM_RPC_URL`. The public Phase 7 proof target remains
+`solana.wallet-risk` until the proof validators are intentionally changed.
+
 The Phase 7 collection and assembly commands auto-load
 `split402-launch-evidence/phase7-staging.env` or
 `phase7-staging-evidence/phase7-staging.env` when present. Use

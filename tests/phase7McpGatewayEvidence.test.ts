@@ -191,7 +191,7 @@ describe("Phase 7 MCP gateway evidence collector", () => {
         writeArtifact: () => undefined,
       }),
     ).rejects.toThrow(
-      "SPLIT402_MCP_SVM_PRIVATE_KEY or SVM_PRIVATE_KEY is required for live MCP gateway execution",
+      "SPLIT402_MCP_SVM_PRIVATE_KEY, SVM_PRIVATE_KEY, SPLIT402_MCP_EVM_PRIVATE_KEY, or EVM_PRIVATE_KEY is required for live MCP gateway execution",
     );
   });
 

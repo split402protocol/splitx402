@@ -139,6 +139,11 @@ corepack pnpm phase7:staging:status --brief split402-launch-evidence/phase7-stag
 corepack pnpm product:status --brief --workspace split402-launch-evidence
 ```
 
+For separate Base/EVM provider staging, the live MCP gateway can use
+`SPLIT402_MCP_EVM_PRIVATE_KEY` or `EVM_PRIVATE_KEY` with optional
+`SPLIT402_MCP_EVM_RPC_URL`. The public Phase 7 proof target remains
+`solana.wallet-risk` until the proof validators are intentionally changed.
+
 `SPLIT402_PHASE7_WEBHOOK_STATUS` is optional for read collection. When set, it
 must be one of `pending`, `processing`, `delivered`, or `dead_letter`; malformed
 values fail before hosted read requests are made.

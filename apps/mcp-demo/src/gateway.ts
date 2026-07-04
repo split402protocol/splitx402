@@ -1,7 +1,10 @@
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 
-import { createSvmSignerFromBase58 } from "@split402/agent-sdk";
+import {
+  createSvmSignerFromBase58,
+  type Split402EvmSigner
+} from "@split402/agent-sdk";
 import {
   buildReceiptSigningBytes,
   calculateCommission,
@@ -27,6 +30,9 @@ import {
   type Split402RouterQuoteResult,
   type Split402RouterExecutor
 } from "@split402/router";
+import { toClientEvmSigner } from "@x402/evm";
+import { createPublicClient, http } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 
 import {
   MCP_DEMO_DEFAULT_SERVICE_SEED_HEX,
@@ -89,6 +95,7 @@ export interface McpGatewayRuntimeOptions {
   bundle?: McpDemoBundle;
   env?: NodeJS.ProcessEnv;
   fetch?: Split402DiscoveryFetch & Split402ExternalX402DiscoveryFetch;
+  evmSigner?: Split402EvmSigner;
   requireControlPlaneToken?: boolean;
   requireSigner?: boolean;
 }
@@ -141,12 +148,20 @@ export async function createMcpGatewayContextFromEnv(
   if (controlPlaneUrl === undefined) {
     return createMcpGatewayContext(bundle);
   }
-  const signerSecret =
+  const svmSignerSecret =
     readOptionalEnvString(env.SPLIT402_MCP_SVM_PRIVATE_KEY) ??
     readOptionalEnvString(env.SVM_PRIVATE_KEY);
-  if (options.requireSigner === true && signerSecret === undefined) {
+  const evmSignerSecret =
+    readOptionalEnvString(env.SPLIT402_MCP_EVM_PRIVATE_KEY) ??
+    readOptionalEnvString(env.EVM_PRIVATE_KEY);
+  if (
+    options.requireSigner === true &&
+    svmSignerSecret === undefined &&
+    evmSignerSecret === undefined &&
+    options.evmSigner === undefined
+  ) {
     throw new Error(
-      "SPLIT402_MCP_SVM_PRIVATE_KEY or SVM_PRIVATE_KEY is required for live MCP gateway execution"
+      "SPLIT402_MCP_SVM_PRIVATE_KEY, SVM_PRIVATE_KEY, SPLIT402_MCP_EVM_PRIVATE_KEY, or EVM_PRIVATE_KEY is required for live MCP gateway execution"
     );
   }
 
@@ -175,18 +190,41 @@ export async function createMcpGatewayContextFromEnv(
     ...(limit === undefined ? {} : { limit })
   });
   const signer =
-    signerSecret === undefined
+    svmSignerSecret === undefined
       ? undefined
-      : await createSvmSignerFromBase58(signerSecret);
+      : await createSvmSignerFromBase58(svmSignerSecret);
+  const evmSigner =
+    options.evmSigner ??
+    (evmSignerSecret === undefined
+      ? undefined
+      : createEvmSignerFromPrivateKey(
+          evmSignerSecret,
+          readOptionalEnvString(env.SPLIT402_MCP_EVM_RPC_URL)
+        ));
   return createMcpGatewayContext(
     bundle,
     new Split402Router({
       providers,
-      ...(signer === undefined ? {} : { signer })
+      ...(signer === undefined ? {} : { signer }),
+      ...(evmSigner === undefined ? {} : { evmSigner })
     }),
     "router-live-agent-sdk",
     options.fetch
   );
+}
+
+export function createEvmSignerFromPrivateKey(
+  privateKey: string,
+  rpcUrl?: string
+): Split402EvmSigner {
+  const account = privateKeyToAccount(normalizeEvmPrivateKey(privateKey));
+  if (rpcUrl === undefined) {
+    return account;
+  }
+  const publicClient = createPublicClient({
+    transport: http(rpcUrl)
+  });
+  return toClientEvmSigner(account, publicClient);
 }
 
 export function createMcpDemoRouter(
@@ -1553,6 +1591,16 @@ function readOptionalEnvString(value: string | undefined): string | undefined {
   return value === undefined || value.trim().length === 0
     ? undefined
     : value.trim();
+}
+
+function normalizeEvmPrivateKey(value: string): `0x${string}` {
+  const normalized = value.trim();
+  if (!/^0x[0-9a-fA-F]{64}$/u.test(normalized)) {
+    throw new Error(
+      "EVM private key must be a 0x-prefixed 32-byte hex string"
+    );
+  }
+  return normalized as `0x${string}`;
 }
 
 function readOptionalPositiveInteger(value: string | undefined): number | undefined {

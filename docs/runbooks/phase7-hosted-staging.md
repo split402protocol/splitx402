@@ -211,7 +211,12 @@ closure also requires `split402.execute` and `split402.getReceipt` in
 enabled only after the same staging run has live x402 buyer configuration. Set
 `SPLIT402_MCP_SVM_PRIVATE_KEY` or `SVM_PRIVATE_KEY` to the funded buyer key, and
 set `SPLIT402_MCP_WALLET` and `SPLIT402_MCP_MAX_AMOUNT_ATOMIC` for the execution
-input and budget. The status validator requires the search, quote, and execute
+input and budget. The public-alpha Phase 7 proof target remains
+`solana.wallet-risk`; for separate Base/EVM provider staging, the MCP gateway
+can use `SPLIT402_MCP_EVM_PRIVATE_KEY` or `EVM_PRIVATE_KEY` with optional
+`SPLIT402_MCP_EVM_RPC_URL`, but do not substitute that for the Solana Phase 7
+proof unless the proof target and validators are intentionally changed. The
+status validator requires the search, quote, and execute
 budgets to match; the selected quote provider and amount to match execution;
 the provider network/asset/merchant origin/operation id/campaign
 id/amount/pay-to wallet/route id/referrer wallet/payout wallet to match the
