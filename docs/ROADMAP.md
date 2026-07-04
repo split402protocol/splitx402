@@ -445,11 +445,14 @@ Current slice:
 - `@split402/router` public-alpha package with static providers, control-plane
   route discovery, external x402 onboarding discovery, quote preflight, budget
   enforcement, deterministic ranking, retry/fallback, pay-to wallet checks, and
-  fail-closed receipt verification.
+  fail-closed receipt verification, plus optional verified-receipt recording to
+  the control plane without retrying another provider after a paid receipt is
+  already returned.
 - Router-backed MCP demo tools for capability search, demo execution results,
   and session receipt lookup, plus optional control-plane route discovery for
-  live staging providers. The default execution path is explicitly demo/mock
-  mode, not production MCP hosting.
+  live staging providers and live control-plane receipt recording when
+  configured. The default execution path is explicitly demo/mock mode; it is
+  not production MCP hosting.
 - merchant/referrer dashboard UI with a narrow control-plane read proxy for
   summaries, reliability profiles, webhook delivery, routes, balances, and
   payouts.

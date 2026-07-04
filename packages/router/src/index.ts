@@ -124,6 +124,39 @@ export interface Split402RouterOptions {
   evmSchemeOptions?: Split402EvmSchemeOptions;
   executor?: Split402RouterExecutor;
   verifyReceipts?: boolean;
+  receiptRecorder?: Split402ReceiptRecorder;
+}
+
+export type Split402ReceiptIngestSource =
+  | "buyer"
+  | "merchant"
+  | "relay"
+  | "unknown";
+
+export interface Split402ReceiptRecorderInput {
+  provider: Split402CapabilityProvider;
+  receipt: Split402ReceiptV1;
+  referralClaim?: ReferralClaimV1;
+}
+
+export interface Split402ReceiptRecorder {
+  record(input: Split402ReceiptRecorderInput): Promise<void> | void;
+}
+
+export type Split402ReceiptRecorderFetch = (
+  url: string,
+  init?: {
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string;
+  }
+) => Promise<Split402DiscoveryFetchResponse>;
+
+export interface Split402ControlPlaneReceiptRecorderOptions {
+  controlPlaneUrl: string;
+  fetch?: Split402ReceiptRecorderFetch;
+  bearerToken?: string;
+  source?: Split402ReceiptIngestSource;
 }
 
 export type Split402DiscoveryFetch = (
@@ -346,11 +379,15 @@ export class Split402Router {
   private readonly evmNetworks?: `${string}:${string}`[];
   private readonly evmSchemeOptions?: Split402EvmSchemeOptions;
   private readonly verifyReceipts: boolean;
+  private readonly receiptRecorder?: Split402ReceiptRecorder;
 
   constructor(options: Split402RouterOptions) {
     this.providers = [...options.providers];
     this.executor = options.executor ?? new Split402AgentSdkExecutor();
     this.verifyReceipts = options.verifyReceipts ?? true;
+    if (options.receiptRecorder !== undefined) {
+      this.receiptRecorder = options.receiptRecorder;
+    }
     if (options.signer !== undefined) {
       this.signer = options.signer;
     }
@@ -537,6 +574,7 @@ export class Split402Router {
           result.receipt,
           input.referralClaim
         );
+        await this.recordProviderReceipt(provider, receipt, input.referralClaim);
         validateOutputAgainstProviderSchema(provider, result.data, receipt);
         attempts.push({
           providerId: provider.providerId,
@@ -626,6 +664,31 @@ export class Split402Router {
       );
     }
     return receipt;
+  }
+
+  private async recordProviderReceipt(
+    provider: Split402CapabilityProvider,
+    receipt: Split402ReceiptV1,
+    referralClaim: ReferralClaimV1 | undefined
+  ): Promise<void> {
+    if (this.receiptRecorder === undefined) {
+      return;
+    }
+    try {
+      await this.receiptRecorder.record({
+        provider,
+        receipt,
+        ...(referralClaim === undefined ? {} : { referralClaim })
+      });
+    } catch (error) {
+      throw new Split402RouterProviderError(
+        `failed to record Split402 receipt: ${errorMessage(error)}`,
+        {
+          retryable: false,
+          receiptId: receipt.receiptId
+        }
+      );
+    }
   }
 }
 
@@ -819,6 +882,48 @@ export class Split402ControlPlaneDiscoveryClient {
     } catch (error) {
       throw new Split402DiscoveryError(
         `control plane returned invalid JSON for ${url.pathname}: ${errorMessage(error)}`
+      );
+    }
+  }
+}
+
+export class Split402ControlPlaneReceiptRecorder
+  implements Split402ReceiptRecorder
+{
+  private readonly controlPlaneUrl: string;
+  private readonly fetchJson: Split402ReceiptRecorderFetch;
+  private readonly source: Split402ReceiptIngestSource;
+  private readonly bearerToken?: string;
+
+  constructor(options: Split402ControlPlaneReceiptRecorderOptions) {
+    this.controlPlaneUrl = normalizeBaseUrl(options.controlPlaneUrl);
+    this.fetchJson = options.fetch ?? defaultDiscoveryFetch;
+    this.source = options.source ?? "buyer";
+    if (options.bearerToken !== undefined) {
+      this.bearerToken = options.bearerToken;
+    }
+  }
+
+  async record(input: Split402ReceiptRecorderInput): Promise<void> {
+    const url = new URL("/v1/receipts", this.controlPlaneUrl);
+    const headers: Record<string, string> = {
+      "content-type": "application/json"
+    };
+    if (this.bearerToken !== undefined) {
+      headers.authorization = `Bearer ${this.bearerToken}`;
+    }
+    const response = await this.fetchJson(url.toString(), {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        receipt: input.receipt,
+        source: this.source
+      })
+    });
+    if (response.status < 200 || response.status >= 300) {
+      const body = await response.text();
+      throw new Error(
+        `control-plane receipt ingestion failed with HTTP ${response.status}${formatReceiptRecorderErrorBody(body)}`
       );
     }
   }
@@ -3079,4 +3184,9 @@ function parseUrl(value: string): URL | undefined {
   } catch {
     return undefined;
   }
+}
+
+function formatReceiptRecorderErrorBody(body: string): string {
+  const trimmed = body.trim();
+  return trimmed.length === 0 ? "" : `: ${trimmed}`;
 }
