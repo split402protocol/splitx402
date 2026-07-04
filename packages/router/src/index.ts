@@ -60,6 +60,7 @@ export interface Split402RouterExecuteInput {
 
 export interface Split402RouterQuoteInput {
   capability: string;
+  input?: unknown;
   budget: {
     network: string;
     asset: string;
@@ -452,11 +453,32 @@ export class Split402Router {
       );
     }
 
+    const inputEligibleProviders =
+      input.input === undefined
+        ? eligibleProviders
+        : eligibleProviders.filter(
+            (provider) =>
+              validateInputAgainstProviderSchema(provider, input.input).length === 0
+          );
+    if (inputEligibleProviders.length === 0) {
+      throw new Split402RouterError(
+        "invalid_request",
+        `input does not match any provider inputSchema for ${input.capability}`,
+        eligibleProviders.map((provider) => ({
+          providerId: provider.providerId,
+          capability: provider.capability,
+          status: "failed",
+          retryable: false,
+          error: validateInputAgainstProviderSchema(provider, input.input).join("; ")
+        }))
+      );
+    }
+
     const maxAttempts = normalizeMaxAttempts(
       input.maxAttempts,
-      eligibleProviders.length
+      inputEligibleProviders.length
     );
-    const rankedProviders = eligibleProviders
+    const rankedProviders = inputEligibleProviders
       .slice(0, maxAttempts)
       .map((provider, index) => ({
         rank: index + 1,
@@ -483,25 +505,8 @@ export class Split402Router {
   ): Promise<Split402RouterExecuteResult<T>> {
     assertExecuteInput(input);
     const quote = this.quoteExecution(input);
-    const rankedProviders = filterProvidersByInputSchema(
-      quote.rankedProviders,
-      input.input
-    );
-    if (rankedProviders.length === 0) {
-      throw new Split402RouterError(
-        "invalid_request",
-        `input does not match any provider inputSchema for ${input.capability}`,
-        quote.rankedProviders.map(({ provider }) => ({
-          providerId: provider.providerId,
-          capability: provider.capability,
-          status: "failed",
-          retryable: false,
-          error: validateInputAgainstProviderSchema(provider, input.input).join("; ")
-        }))
-      );
-    }
     const attempts: Split402RouterAttempt[] = [];
-    for (const { provider } of rankedProviders) {
+    for (const { provider } of quote.rankedProviders) {
       try {
         const result = await this.executor.execute({
           provider,
@@ -1858,15 +1863,6 @@ function validateReceiptMatchesReferralClaim(
     errors.push("receipt payoutWallet does not match referralClaim payoutWallet");
   }
   return errors;
-}
-
-function filterProvidersByInputSchema(
-  providers: Split402RouterQuoteProvider[],
-  input: unknown
-): Split402RouterQuoteProvider[] {
-  return providers.filter(
-    ({ provider }) => validateInputAgainstProviderSchema(provider, input).length === 0
-  );
 }
 
 function validateInputAgainstProviderSchema(

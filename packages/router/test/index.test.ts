@@ -174,6 +174,94 @@ describe("Split402Router", () => {
     });
   });
 
+  it("quotes only providers whose inputSchema accepts supplied input", () => {
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-price",
+          amountAtomic: "9000",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["symbol"],
+              properties: {
+                symbol: { type: "string" }
+              },
+              additionalProperties: false
+            }
+          }
+        }),
+        provider({
+          providerId: "provider-wallet",
+          amountAtomic: receipt.requiredAmountAtomic,
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["wallet"],
+              properties: {
+                wallet: { type: "string" }
+              },
+              additionalProperties: false
+            }
+          }
+        })
+      ]
+    });
+
+    expect(
+      router.quoteExecution({
+        capability: "solana.wallet-risk",
+        input: { wallet: "wallet_1" },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).toMatchObject({
+      selectedProviderId: "provider-wallet",
+      rankedProviders: [
+        expect.objectContaining({
+          providerId: "provider-wallet"
+        })
+      ]
+    });
+  });
+
+  it("rejects quotes before payment when input matches no provider schema", () => {
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-wallet",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["wallet"],
+              properties: {
+                wallet: { type: "string" }
+              },
+              additionalProperties: false
+            }
+          }
+        })
+      ]
+    });
+
+    expect(() =>
+      router.quoteExecution({
+        capability: "solana.wallet-risk",
+        input: { wallet: 123 },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).toThrow(
+      "input does not match any provider inputSchema for solana.wallet-risk"
+    );
+  });
+
   it("rejects quotes when every provider exceeds budget", () => {
     const router = new Split402Router({
       providers: [provider({ providerId: "provider-expensive", amountAtomic: "50001" })]
