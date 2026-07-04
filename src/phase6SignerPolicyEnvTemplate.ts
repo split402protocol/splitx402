@@ -6,10 +6,19 @@ import { parsePhase7ProofRecord } from "./phase7StagingProof.js";
 const SPL_TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 
 type JsonRecord = Record<string, unknown>;
+type RpcFetch = (
+  url: string,
+  init: {
+    method: "POST";
+    headers: Record<string, string>;
+    body: string;
+  },
+) => Promise<{ json(): Promise<unknown> }>;
 
 export interface Phase6SignerPolicyEnvTemplateInput {
   phase7ProofPath?: string;
   phase7ProofText?: string;
+  sourceTokenAccount?: string;
   readFile?: (path: string) => string;
   exists?: (path: string) => boolean;
   now?: Date;
@@ -18,9 +27,23 @@ export interface Phase6SignerPolicyEnvTemplateInput {
 export interface Phase6SignerPolicyEnvTemplateDerivations {
   network?: string;
   fundingWallet?: string;
+  sourceTokenAccount?: string;
   mint?: string;
   maxTransactionAmountAtomic?: string;
   maxBatchAmountAtomic?: string;
+}
+
+export interface ResolveSolanaSourceTokenAccountInput {
+  rpcUrl: string;
+  fundingWallet: string;
+  mint: string;
+  fetch?: RpcFetch;
+}
+
+export interface ResolveSolanaSourceTokenAccountResult {
+  ok: boolean;
+  sourceTokenAccount?: string;
+  errors: string[];
 }
 
 export function createPhase6SignerPolicyEnvTemplate(
@@ -45,8 +68,10 @@ export function createPhase6SignerPolicyEnvTemplate(
     "",
     `SPLIT402_SIGNER_POLICY_NETWORK=${derivations.network ?? ""}`,
     `SPLIT402_SIGNER_POLICY_FUNDING_WALLET=${derivations.fundingWallet ?? ""}`,
-    "# Fill from the actual payout funding token account controlled by the signer.",
-    "SPLIT402_SIGNER_POLICY_SOURCE_TOKEN_ACCOUNT=",
+    derivations.sourceTokenAccount === undefined
+      ? "# Fill from the actual payout funding token account controlled by the signer."
+      : "# Resolved from Solana RPC; review that this token account is controlled by the deployed signer.",
+    `SPLIT402_SIGNER_POLICY_SOURCE_TOKEN_ACCOUNT=${derivations.sourceTokenAccount ?? ""}`,
     `SPLIT402_SIGNER_POLICY_MINT=${derivations.mint ?? ""}`,
     `SPLIT402_SIGNER_POLICY_ALLOWED_TOKEN_PROGRAM_IDS=${SPL_TOKEN_PROGRAM_ID}`,
     `SPLIT402_SIGNER_POLICY_MAX_TRANSACTION_AMOUNT_ATOMIC=${derivations.maxTransactionAmountAtomic ?? ""}`,
@@ -115,10 +140,105 @@ export function derivePhase6SignerPolicyValues(
   return {
     network,
     fundingWallet,
+    sourceTokenAccount: input.sourceTokenAccount,
     mint,
     maxTransactionAmountAtomic: maxAmount,
     maxBatchAmountAtomic: maxAmount,
   };
+}
+
+export async function resolveSolanaSourceTokenAccount(
+  input: ResolveSolanaSourceTokenAccountInput,
+): Promise<ResolveSolanaSourceTokenAccountResult> {
+  const fetchImpl = input.fetch ?? fetch;
+  const body = {
+    jsonrpc: "2.0",
+    id: 1,
+    method: "getTokenAccountsByOwner",
+    params: [
+      input.fundingWallet,
+      { mint: input.mint },
+      { encoding: "jsonParsed", commitment: "confirmed" },
+    ],
+  };
+  let response: unknown;
+  try {
+    response = await (
+      await fetchImpl(input.rpcUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      })
+    ).json();
+  } catch (error) {
+    return {
+      ok: false,
+      errors: [`Solana RPC token-account lookup failed: ${readError(error)}`],
+    };
+  }
+
+  const values = readPathArray(response, ["result", "value"]);
+  if (values === undefined) {
+    const rpcError = readPathString(response, ["error", "message"]);
+    return {
+      ok: false,
+      errors: [
+        rpcError === undefined
+          ? "Solana RPC token-account lookup did not return result.value"
+          : `Solana RPC token-account lookup failed: ${rpcError}`,
+      ],
+    };
+  }
+
+  const accounts = values
+    .map(asRecord)
+    .filter((record) => record !== undefined)
+    .filter(
+      (record) =>
+        readPathString(record, ["account", "owner"]) === SPL_TOKEN_PROGRAM_ID &&
+        readPathString(record, [
+          "account",
+          "data",
+          "parsed",
+          "info",
+          "owner",
+        ]) === input.fundingWallet &&
+        readPathString(record, [
+          "account",
+          "data",
+          "parsed",
+          "info",
+          "mint",
+        ]) === input.mint &&
+        readPathString(record, [
+          "account",
+          "data",
+          "parsed",
+          "info",
+          "state",
+        ]) === "initialized",
+    );
+
+  if (accounts.length !== 1) {
+    return {
+      ok: false,
+      errors: [
+        accounts.length === 0
+          ? "No initialized SPL token account found for funding wallet and mint"
+          : `Expected exactly one funding token account, found ${accounts.length}`,
+      ],
+    };
+  }
+
+  const sourceTokenAccount = readPathString(accounts[0], ["pubkey"]);
+  if (sourceTokenAccount === undefined) {
+    return {
+      ok: false,
+      errors: ["Resolved SPL token account is missing pubkey"],
+    };
+  }
+
+  return { ok: true, sourceTokenAccount, errors: [] };
 }
 
 function readAttachedArtifact(input: {
@@ -298,4 +418,8 @@ function readFirstPositiveAtomic(values: unknown[]): string | undefined {
 
 function isoDate(date: Date): string {
   return date.toISOString().slice(0, 10);
+}
+
+function readError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
