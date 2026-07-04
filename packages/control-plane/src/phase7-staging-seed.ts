@@ -11,6 +11,11 @@ import {
 import { Pool } from "pg";
 
 import {
+  buildWalletAuthSigningBytes,
+  WalletAuthenticator,
+  type WalletAuthSessionResult
+} from "./auth.js";
+import {
   buildCampaignTermsSigningBytes,
   createCampaignVersionRecord,
   type CampaignProfile,
@@ -20,6 +25,7 @@ import { readControlPlaneMigrationPoolConfig } from "./migrate.js";
 import {
   PostgresCampaignRegistry,
   PostgresMerchantRegistry,
+  PostgresWalletAuthStore,
   PostgresRouteRegistry,
   type PostgresQueryExecutor
 } from "./postgres.js";
@@ -58,6 +64,7 @@ export interface Phase7StagingSeedConfig {
   merchantSlug: string;
   merchantDisplayName: string;
   merchantOrigin: string;
+  ownerSeed?: Uint8Array;
   ownerWallet: string;
   serviceKid: string;
   serviceSeed: Uint8Array;
@@ -81,6 +88,14 @@ export interface Phase7StagingSeedConfig {
   now: string;
 }
 
+export interface Phase7StagingSeedAuthSessionSummary {
+  issued: boolean;
+  wallet: string;
+  expiresAt?: string;
+  refreshTokenExpiresAt?: string;
+  reason?: string;
+}
+
 export interface Phase7StagingSeedResult {
   schema: "split402.phase7_staging_seed.v1";
   merchantId: string;
@@ -98,6 +113,7 @@ export interface Phase7StagingSeedResult {
   protocolFeeBpsOfCommission: number;
   campaignTermsHash: string;
   referralClaimHash: string;
+  authSession: Phase7StagingSeedAuthSessionSummary;
   proofEnv: Record<string, string>;
   notes: string[];
 }
@@ -119,14 +135,35 @@ export function readPhase7StagingSeedConfig(
     env.SPLIT402_PAYOUT_SEED_HEX ?? DEFAULT_PAYOUT_SEED_HEX,
     "SPLIT402_PAYOUT_SEED_HEX"
   );
-  const ownerWallet =
-    readOptionalString(env.SPLIT402_PHASE7_OWNER_WALLET) ??
-    deriveEd25519PublicKey(
-      readSeedHex(
-        env.SPLIT402_PHASE7_OWNER_SEED_HEX ?? DEFAULT_OWNER_SEED_HEX,
-        "SPLIT402_PHASE7_OWNER_SEED_HEX"
-      )
+  const configuredOwnerWallet = readOptionalString(env.SPLIT402_PHASE7_OWNER_WALLET);
+  const ownerSeed = readOptionalSeed(
+    env.SPLIT402_PHASE7_OWNER_SEED_HEX,
+    "SPLIT402_PHASE7_OWNER_SEED_HEX"
+  );
+  const effectiveOwnerSeed =
+    ownerSeed ??
+    (configuredOwnerWallet === undefined
+      ? readSeedHex(DEFAULT_OWNER_SEED_HEX, "SPLIT402_PHASE7_OWNER_SEED_HEX")
+      : undefined);
+  const derivedOwnerWallet =
+    effectiveOwnerSeed === undefined
+      ? undefined
+      : deriveEd25519PublicKey(effectiveOwnerSeed);
+  if (
+    configuredOwnerWallet !== undefined &&
+    derivedOwnerWallet !== undefined &&
+    configuredOwnerWallet !== derivedOwnerWallet
+  ) {
+    throw new Error(
+      "SPLIT402_PHASE7_OWNER_WALLET must match SPLIT402_PHASE7_OWNER_SEED_HEX"
     );
+  }
+  const ownerWallet = configuredOwnerWallet ?? derivedOwnerWallet;
+  if (ownerWallet === undefined) {
+    throw new Error(
+      "SPLIT402_PHASE7_OWNER_WALLET or SPLIT402_PHASE7_OWNER_SEED_HEX is required"
+    );
+  }
   const payToWallet =
     readOptionalString(env.SPLIT402_MERCHANT_PAY_TO) ??
     deriveEd25519PublicKey(
@@ -153,6 +190,7 @@ export function readPhase7StagingSeedConfig(
       readOptionalString(env.SPLIT402_PHASE7_MERCHANT_ORIGIN) ??
       readOptionalString(env.SPLIT402_MERCHANT_ORIGIN) ??
       DEFAULT_MERCHANT_ORIGIN,
+    ...(effectiveOwnerSeed === undefined ? {} : { ownerSeed: effectiveOwnerSeed }),
     ownerWallet,
     serviceKid: readOptionalString(env.SPLIT402_PHASE7_SERVICE_KID) ?? "kid_demo_merchant_1",
     serviceSeed,
@@ -214,6 +252,8 @@ export async function runPhase7StagingSeed(
   });
   const campaign = await ensureCampaign(campaignRegistry, config);
   const route = await ensureRoute(routeRegistry, config);
+  const authSession = await createSeededOwnerAuthSession(db, config);
+  const proofEnv = createProofEnv(config, authSession.session);
 
   return {
     schema: "split402.phase7_staging_seed.v1",
@@ -232,22 +272,87 @@ export async function runPhase7StagingSeed(
     protocolFeeBpsOfCommission: config.protocolFeeBpsOfCommission,
     campaignTermsHash: campaign.current.termsHash,
     referralClaimHash: route.claimHash,
-    proofEnv: {
-      SPLIT402_PHASE7_MERCHANT_ID: config.merchantId,
-      SPLIT402_PHASE7_REFERRER_WALLET: config.referrerWallet,
-      SPLIT402_DASHBOARD_MERCHANT_ID: config.merchantId,
-      SPLIT402_DASHBOARD_REFERRER_WALLET: config.referrerWallet,
-      SPLIT402_MCP_CAPABILITY: "solana.wallet-risk",
-      SPLIT402_MCP_WALLET: config.referrerWallet,
-      SPLIT402_MCP_MAX_AMOUNT_ATOMIC: config.requiredAmountAtomic,
-      SPLIT402_MERCHANT_ORIGIN: config.merchantOrigin,
-      SPLIT402_MERCHANT_PUBLIC_KEY: config.servicePublicKey
-    },
+    authSession: authSession.summary,
+    proofEnv,
     notes: [
       "Operator-only staging seed; this is not a public self-approval endpoint.",
       "Use only for Devnet/public-alpha hosted proof preparation.",
+      authSession.session === undefined
+        ? "No owner auth token was generated because the owner private seed was not available; create a merchant-session token through the wallet auth flow and keep it private."
+        : "The generated control-plane token is private staging evidence; store it only in private env files or GitHub Secrets and never commit it.",
       "Production and mainnet readiness still require Phase 6 custody approval."
     ]
+  };
+}
+
+async function createSeededOwnerAuthSession(
+  db: PostgresQueryExecutor,
+  config: Phase7StagingSeedConfig
+): Promise<{
+  session?: WalletAuthSessionResult;
+  summary: Phase7StagingSeedAuthSessionSummary;
+}> {
+  if (config.ownerSeed === undefined) {
+    return {
+      summary: {
+        issued: false,
+        wallet: config.ownerWallet,
+        reason: "owner_seed_unavailable"
+      }
+    };
+  }
+  const authenticator = new WalletAuthenticator(new PostgresWalletAuthStore(db), {
+    now: () => new Date(config.now)
+  });
+  const challenge = await authenticator.createChallenge({
+    wallet: config.ownerWallet,
+    network: config.network,
+    purpose: "merchant-session"
+  });
+  const signed = signEd25519Message(
+    buildWalletAuthSigningBytes(challenge),
+    config.ownerSeed
+  );
+  if (signed.publicKey !== config.ownerWallet) {
+    throw new Error("derived owner seed does not match configured owner wallet");
+  }
+  const session = await authenticator.createSession({
+    challengeId: challenge.challengeId,
+    signature: signed.signature,
+    publicKey: config.ownerWallet
+  });
+  return {
+    session,
+    summary: {
+      issued: true,
+      wallet: config.ownerWallet,
+      expiresAt: session.expiresAt,
+      refreshTokenExpiresAt: session.refreshTokenExpiresAt
+    }
+  };
+}
+
+function createProofEnv(
+  config: Phase7StagingSeedConfig,
+  authSession: WalletAuthSessionResult | undefined
+): Record<string, string> {
+  return {
+    SPLIT402_PHASE7_MERCHANT_ID: config.merchantId,
+    SPLIT402_PHASE7_REFERRER_WALLET: config.referrerWallet,
+    ...(authSession === undefined
+      ? {}
+      : {
+          SPLIT402_PHASE7_CONTROL_PLANE_TOKEN: authSession.accessToken,
+          SPLIT402_DASHBOARD_CONTROL_PLANE_TOKEN: authSession.accessToken,
+          SPLIT402_MCP_CONTROL_PLANE_TOKEN: authSession.accessToken
+        }),
+    SPLIT402_DASHBOARD_MERCHANT_ID: config.merchantId,
+    SPLIT402_DASHBOARD_REFERRER_WALLET: config.referrerWallet,
+    SPLIT402_MCP_CAPABILITY: "solana.wallet-risk",
+    SPLIT402_MCP_WALLET: config.referrerWallet,
+    SPLIT402_MCP_MAX_AMOUNT_ATOMIC: config.requiredAmountAtomic,
+    SPLIT402_MERCHANT_ORIGIN: config.merchantOrigin,
+    SPLIT402_MERCHANT_PUBLIC_KEY: config.servicePublicKey
   };
 }
 
@@ -515,6 +620,13 @@ function readOptionalString(value: string | undefined): string | undefined {
     return undefined;
   }
   return value.trim();
+}
+
+function readOptionalSeed(value: string | undefined, label: string): Uint8Array | undefined {
+  if (value === undefined || value.trim().length === 0) {
+    return undefined;
+  }
+  return readSeedHex(value, label);
 }
 
 function readSeedHex(value: string, label: string): Uint8Array {

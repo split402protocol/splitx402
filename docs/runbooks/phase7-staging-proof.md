@@ -99,7 +99,10 @@ status check.
 `phase7:staging:seed` is an operator-only PostgreSQL seed for hosted Devnet
 staging. It creates or verifies the active demo merchant, verified origin,
 offer/receipt key, payout wallet, active campaign, and active referral route
-without adding a public self-approval endpoint. Set `SPLIT402_DATABASE_URL` or
+without adding a public self-approval endpoint. When the staging owner seed is
+available, its JSON output includes private `proofEnv` token values for hosted
+proof, dashboard, and MCP control-plane access; copy them only into private env
+or evidence files and never commit them. Set `SPLIT402_DATABASE_URL` or
 `DATABASE_URL` before running it, and keep
 `SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging` out of production
 environments.
