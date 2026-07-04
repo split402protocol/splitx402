@@ -90,8 +90,11 @@ export interface McpGatewayContext {
   router: Split402Router;
   receipts: Map<string, Split402ReceiptV1>;
   executionMode: "router-demo-mock" | "router-live-agent-sdk";
+  toolSurface: McpGatewayToolSurface;
   externalDiscoveryFetch?: Split402ExternalX402DiscoveryFetch;
 }
+
+export type McpGatewayToolSurface = "all" | "execution" | "onboarding";
 
 export interface McpGatewayRuntimeOptions {
   bundle?: McpDemoBundle;
@@ -129,12 +132,14 @@ export function createMcpGatewayContext(
   router: Split402Router = createMcpDemoRouter(bundle),
   executionMode: McpGatewayContext["executionMode"] = "router-demo-mock",
   externalDiscoveryFetch?: Split402ExternalX402DiscoveryFetch,
+  toolSurface: McpGatewayToolSurface = "all",
 ): McpGatewayContext {
   return {
     bundle,
     router,
     receipts: new Map(),
     executionMode,
+    toolSurface,
     ...(externalDiscoveryFetch === undefined ? {} : { externalDiscoveryFetch })
   };
 }
@@ -150,8 +155,15 @@ export async function createMcpGatewayContextFromEnv(
   const externalX402Origin = readOptionalEnvString(
     env.SPLIT402_MCP_EXTERNAL_X402_ORIGIN
   );
+  const toolSurface = readMcpToolSurface(env.SPLIT402_MCP_TOOL_SURFACE);
   if (controlPlaneUrl === undefined && externalX402Origin === undefined) {
-    return createMcpGatewayContext(bundle);
+    return createMcpGatewayContext(
+      bundle,
+      createMcpDemoRouter(bundle),
+      "router-demo-mock",
+      undefined,
+      toolSurface
+    );
   }
   const svmSignerSecret =
     readOptionalEnvString(env.SPLIT402_MCP_SVM_PRIVATE_KEY) ??
@@ -235,7 +247,8 @@ export async function createMcpGatewayContextFromEnv(
       ...(evmSigner === undefined ? {} : { evmSigner })
     }),
     "router-live-agent-sdk",
-    options.fetch
+    options.fetch,
+    toolSurface
   );
 }
 
@@ -445,17 +458,21 @@ function handleParsedGatewayRequest(
   if (request.method === "tools/list") {
     return createResultResponse(id, {
       tools: [
-        ...context.bundle.mcp.tools.map((tool) => ({
-          name: tool.name,
-          description: tool.description,
-          inputSchema: tool.inputSchema
-        })),
-        ...routerToolCards()
+        ...mcpDemoToolCards(context),
+        ...routerToolCards(context.toolSurface)
       ]
     });
   }
 
   if (request.method === "tools/call") {
+    const disabledTool = readDisabledToolName(request.params, context.toolSurface);
+    if (disabledTool !== undefined) {
+      return createErrorResponse(
+        id,
+        -32602,
+        `Tool ${disabledTool} is not enabled for MCP tool surface ${context.toolSurface}`
+      );
+    }
     return allowAsync
       ? handleToolCallAsync(id, request.params, context)
       : handleToolCall(id, request.params, context.bundle);
@@ -1014,7 +1031,24 @@ function readRouterErrorData(
   };
 }
 
-function routerToolCards() {
+function mcpDemoToolCards(context: McpGatewayContext) {
+  if (!toolIsEnabled("split402.walletRiskScore", context.toolSurface)) {
+    return [];
+  }
+  return context.bundle.mcp.tools.map((tool) => ({
+    name: tool.name,
+    description: tool.description,
+    inputSchema: tool.inputSchema
+  }));
+}
+
+function routerToolCards(toolSurface: McpGatewayToolSurface) {
+  return allRouterToolCards().filter((tool) =>
+    toolIsEnabled(tool.name, toolSurface)
+  );
+}
+
+function allRouterToolCards() {
   return [
     {
       name: "split402.searchCapabilities",
@@ -1205,6 +1239,49 @@ function routerToolCards() {
     }
   ];
 }
+
+function toolIsEnabled(
+  toolName: string,
+  toolSurface: McpGatewayToolSurface
+): boolean {
+  if (toolSurface === "all") {
+    return true;
+  }
+  if (toolSurface === "execution") {
+    return executionToolNames.has(toolName);
+  }
+  return onboardingToolNames.has(toolName);
+}
+
+function readDisabledToolName(
+  params: unknown,
+  toolSurface: McpGatewayToolSurface
+): string | undefined {
+  if (typeof params !== "object" || params === null) {
+    return undefined;
+  }
+  const toolName = (params as Record<string, unknown>).name;
+  if (typeof toolName !== "string") {
+    return undefined;
+  }
+  return toolIsEnabled(toolName, toolSurface) ? undefined : toolName;
+}
+
+const executionToolNames = new Set([
+  "split402.walletRiskScore",
+  "split402.searchCapabilities",
+  "split402.quote",
+  "split402.execute",
+  "split402.getReceipt"
+]);
+
+const onboardingToolNames = new Set([
+  "split402.discoverExternalX402",
+  "split402.prepareExternalX402Offer",
+  "split402.prepareExternalX402Receipt",
+  "split402.attachExternalX402Signature",
+  "split402.validateExternalX402Artifacts"
+]);
 
 function createDemoRouterExecutor(bundle: McpDemoBundle): Split402RouterExecutor {
   let receiptSequence = 0;
@@ -1782,6 +1859,25 @@ function readOptionalEnvString(value: string | undefined): string | undefined {
   return value === undefined || value.trim().length === 0
     ? undefined
     : value.trim();
+}
+
+function readMcpToolSurface(
+  value: string | undefined
+): McpGatewayToolSurface {
+  const normalized = readOptionalEnvString(value);
+  if (normalized === undefined) {
+    return "all";
+  }
+  if (
+    normalized === "all" ||
+    normalized === "execution" ||
+    normalized === "onboarding"
+  ) {
+    return normalized;
+  }
+  throw new Error(
+    "SPLIT402_MCP_TOOL_SURFACE must be one of all, execution, or onboarding"
+  );
 }
 
 function normalizeEvmPrivateKey(value: string): `0x${string}` {

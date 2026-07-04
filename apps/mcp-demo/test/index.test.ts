@@ -1271,6 +1271,125 @@ describe("MCP demo gateway", () => {
     });
   });
 
+  it("can expose an execution-only MCP tool surface", async () => {
+    const context = await createMcpGatewayContextFromEnv({
+      env: {
+        SPLIT402_MCP_TOOL_SURFACE: "execution"
+      }
+    });
+
+    const listResponse = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "execution-tools",
+        method: "tools/list"
+      }),
+      context
+    );
+
+    const listResult = listResponse?.result as {
+      tools: Array<{ name: string }>;
+    };
+    expect(listResult.tools.map((tool) => tool.name)).toEqual([
+      "split402.walletRiskScore",
+      "split402.searchCapabilities",
+      "split402.quote",
+      "split402.execute",
+      "split402.getReceipt"
+    ]);
+
+    const blockedResponse = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "blocked-onboarding-tool",
+        method: "tools/call",
+        params: {
+          name: "split402.prepareExternalX402Offer",
+          arguments: {
+            campaignTerms: {},
+            unsignedOffer: {}
+          }
+        }
+      }),
+      context
+    );
+
+    expect(blockedResponse).toEqual({
+      jsonrpc: "2.0",
+      id: "blocked-onboarding-tool",
+      error: {
+        code: -32602,
+        message:
+          "Tool split402.prepareExternalX402Offer is not enabled for MCP tool surface execution"
+      }
+    });
+  });
+
+  it("can expose an onboarding-only MCP tool surface", async () => {
+    const context = await createMcpGatewayContextFromEnv({
+      env: {
+        SPLIT402_MCP_TOOL_SURFACE: "onboarding"
+      }
+    });
+
+    const response = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "onboarding-tools",
+        method: "tools/list"
+      }),
+      context
+    );
+
+    const result = response?.result as {
+      tools: Array<{ name: string }>;
+    };
+    expect(result.tools.map((tool) => tool.name)).toEqual([
+      "split402.discoverExternalX402",
+      "split402.prepareExternalX402Offer",
+      "split402.prepareExternalX402Receipt",
+      "split402.attachExternalX402Signature",
+      "split402.validateExternalX402Artifacts"
+    ]);
+
+    const blockedResponse = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "blocked-execution-tool",
+        method: "tools/call",
+        params: {
+          name: "split402.walletRiskScore",
+          arguments: {
+            wallet: "wallet-123"
+          }
+        }
+      }),
+      context
+    );
+
+    expect(blockedResponse).toEqual({
+      jsonrpc: "2.0",
+      id: "blocked-execution-tool",
+      error: {
+        code: -32602,
+        message:
+          "Tool split402.walletRiskScore is not enabled for MCP tool surface onboarding"
+      }
+    });
+  });
+
+  it("rejects unknown MCP tool-surface modes", async () => {
+    await expect(
+      createMcpGatewayContextFromEnv({
+        env: {
+          SPLIT402_MCP_TOOL_SURFACE: "wide-open"
+        }
+      })
+    ).rejects.toThrow(
+      "SPLIT402_MCP_TOOL_SURFACE must be one of all, execution, or onboarding"
+    );
+  });
+
   it("returns x402 and Split402 payment context for tool calls", () => {
     const response = handleMcpGatewayLine(
       JSON.stringify({

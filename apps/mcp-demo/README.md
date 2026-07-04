@@ -85,6 +85,14 @@ Router failures include structured JSON-RPC `error.data` with the router error
 code and provider attempts; when a failure happens after receipt verification,
 the failed attempt includes the receipt id for audit and follow-up.
 
+Hosted operators can narrow the exposed MCP tool surface with
+`SPLIT402_MCP_TOOL_SURFACE`. The default `all` mode lists execution and
+external-provider onboarding tools. Set `SPLIT402_MCP_TOOL_SURFACE=execution`
+for a hosted router gateway that only lists and accepts
+`split402.walletRiskScore`, `split402.searchCapabilities`, `split402.quote`,
+`split402.execute`, and `split402.getReceipt`. Set it to `onboarding` for a
+metadata-only provider onboarding session.
+
 Example `tools/call` request:
 
 ```json
@@ -387,6 +395,7 @@ active Split402 routes exposed by the control plane:
 SPLIT402_MCP_CONTROL_PLANE_URL=https://control.staging.example \
 SPLIT402_MCP_CONTROL_PLANE_TOKEN=... \
 SPLIT402_MCP_CAPABILITY=solana.wallet-risk \
+SPLIT402_MCP_TOOL_SURFACE=execution \
 SPLIT402_MCP_SVM_PRIVATE_KEY=<funded-buyer-key-base58> \
 corepack pnpm demo:mcp-gateway
 ```
@@ -397,6 +406,7 @@ For Base/EVM providers, use an EVM buyer key instead:
 SPLIT402_MCP_CONTROL_PLANE_URL=https://control.staging.example \
 SPLIT402_MCP_CONTROL_PLANE_TOKEN=... \
 SPLIT402_MCP_CAPABILITY=base.research \
+SPLIT402_MCP_TOOL_SURFACE=execution \
 SPLIT402_MCP_EVM_PRIVATE_KEY=<0x-prefixed-funded-buyer-private-key> \
 SPLIT402_MCP_EVM_RPC_URL=https://base-mainnet.example \
 corepack pnpm demo:mcp-gateway
@@ -437,6 +447,7 @@ SPLIT402_MCP_EXTERNAL_X402_MERCHANT_PUBLIC_KEY=<merchant-offer-receipt-public-ke
 SPLIT402_MCP_EXTERNAL_X402_PROVIDER_ID_PREFIX=partner \
 SPLIT402_MCP_EXTERNAL_X402_MATCH_PATH=/price \
 SPLIT402_MCP_CAPABILITY=crypto.price \
+SPLIT402_MCP_TOOL_SURFACE=execution \
 SPLIT402_MCP_EVM_PRIVATE_KEY=<0x-prefixed-funded-buyer-private-key> \
 corepack pnpm demo:mcp-gateway
 ```
