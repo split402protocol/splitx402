@@ -3764,6 +3764,50 @@ describe("Split402Router", () => {
     });
   });
 
+  it("accepts duplicate control-plane receiptId conflicts as idempotent success", async () => {
+    const recorder = new Split402ControlPlaneReceiptRecorder({
+      controlPlaneUrl: "https://control.example",
+      fetch: async () =>
+        jsonResponse(
+          {
+            status: "conflict",
+            statusCode: 409,
+            conflictField: "receiptId",
+            existingReceiptId: receipt.receiptId,
+            receiptHash: "sha256:a88b29d4fa5e2e9c2e5624e2fcc43d35baeb26c22bc55fd84caad29ec1d00cac"
+          },
+          409
+        )
+    });
+
+    await expect(
+      recorder.record({ provider: provider(), receipt })
+    ).resolves.toEqual({
+      status: "duplicate",
+      source: "buyer"
+    });
+  });
+
+  it("rejects non-receiptId control-plane conflicts", async () => {
+    const recorder = new Split402ControlPlaneReceiptRecorder({
+      controlPlaneUrl: "https://control.example",
+      fetch: async () =>
+        jsonResponse(
+          {
+            status: "conflict",
+            statusCode: 409,
+            conflictField: "paymentId",
+            existingReceiptId: receipt.receiptId
+          },
+          409
+        )
+    });
+
+    await expect(recorder.record({ provider: provider(), receipt })).rejects.toThrow(
+      "control-plane receipt ingestion failed with HTTP 409"
+    );
+  });
+
   it("rejects unexpected successful control-plane receipt responses", async () => {
     const recorder = new Split402ControlPlaneReceiptRecorder({
       controlPlaneUrl: "https://control.example",

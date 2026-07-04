@@ -966,6 +966,12 @@ export class Split402ControlPlaneReceiptRecorder
     });
     const body = await response.text();
     if (response.status < 200 || response.status >= 300) {
+      if (
+        response.status === 409 &&
+        isDuplicateReceiptIdConflict(body, input.receipt.receiptId)
+      ) {
+        return { status: "duplicate", source: this.source };
+      }
       throw new Error(
         `control-plane receipt ingestion failed with HTTP ${response.status}${formatReceiptRecorderErrorBody(body)}`
       );
@@ -3254,5 +3260,26 @@ function readReceiptRecorderResponseStatus(
     return status === "created" || status === "duplicate" ? status : undefined;
   } catch {
     return undefined;
+  }
+}
+
+function isDuplicateReceiptIdConflict(body: string, receiptId: string): boolean {
+  try {
+    const parsed = JSON.parse(body) as unknown;
+    if (typeof parsed !== "object" || parsed === null) {
+      return false;
+    }
+    const record = parsed as {
+      status?: unknown;
+      conflictField?: unknown;
+      existingReceiptId?: unknown;
+    };
+    return (
+      record.status === "conflict" &&
+      record.conflictField === "receiptId" &&
+      record.existingReceiptId === receiptId
+    );
+  } catch {
+    return false;
   }
 }
