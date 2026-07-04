@@ -20,6 +20,11 @@ corepack pnpm demo:discover-external-x402 https://x402.example \
 The report lists candidate route paths, HTTP methods, network, asset,
 amountAtomic, pay-to wallet, readiness, blockers, required Split402 offer
 fields, and provider next actions.
+For OpenAPI path parameters, discovery probes concrete sample paths from
+parameter examples, schema examples, defaults, constants, or enum values before
+falling back to conservative placeholder values. This keeps onboarding useful
+for real routes such as `/price/{coin}` or `/research/{topic}` without sending a
+paid request.
 
 When `--artifacts-dir` is supplied, discovery also writes per-candidate provider
 files:

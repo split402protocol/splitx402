@@ -88,7 +88,9 @@ OpenAPI `x-payment-info`, probe unpaid routes for the authoritative
 `Payment-Required` header, and return onboarding candidates. Candidates are
 marked `requires_split402_campaign` until the x402 response includes a Split402
 offer extension; only `router_ready` candidates produce receipt-verified router
-providers.
+providers. OpenAPI path parameters are probed with concrete examples, defaults,
+constants, or enum values when available, so discovery can inspect real unpaid
+routes without replacing `{param}` with a weak placeholder.
 
 ## Current Behavior
 
