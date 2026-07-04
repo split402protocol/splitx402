@@ -813,6 +813,7 @@ export function releasePayoutBatchAllocationsForBatch(input: {
   reason: string;
   now?: string;
   override?: PayoutBatchAllocationReleaseOverride;
+  allowOutcomeUnknown?: boolean;
 }): PayoutBatchRecord {
   const reason = assertNonEmptyString(input.reason, "reason");
   const overrideReason =
@@ -820,7 +821,10 @@ export function releasePayoutBatchAllocationsForBatch(input: {
       ? undefined
       : assertNonEmptyString(input.override.reason, "override.reason");
   const updatedAt = normalizeTimestamp(input.now ?? new Date().toISOString(), "now");
-  if (!isPayoutBatchAllocationReleaseAllowed(input.batch.status)) {
+  if (
+    !isPayoutBatchAllocationReleaseAllowed(input.batch.status) &&
+    !(input.batch.status === "outcome_unknown" && input.allowOutcomeUnknown === true)
+  ) {
     throw new PayoutBatchConflictError(
       `payout batch status ${input.batch.status} cannot release allocations`
     );
@@ -894,6 +898,25 @@ export function assertPayoutBatchAllocationsReleasable(input: {
       };
     })
   );
+}
+
+export function isOutcomeUnknownPayoutBatchReleaseProven(input: {
+  transactions: readonly PayoutBatchAllocationReleaseGuardTransaction[];
+  chainChecks?: readonly PayoutBatchReleaseChainCheck[];
+}): boolean {
+  if (input.transactions.length === 0) {
+    return false;
+  }
+  const chainStatusByTransactionId = new Map(
+    (input.chainChecks ?? []).map((check) => [check.transactionId, check.status])
+  );
+  return input.transactions.every((transaction) => {
+    if (transaction.status === "failed" || transaction.status === "expired") {
+      return true;
+    }
+    const chainStatus = chainStatusByTransactionId.get(transaction.id);
+    return chainStatus === "failed" || chainStatus === "expired";
+  });
 }
 
 export function isPayoutBatchAllocationReleaseAllowed(

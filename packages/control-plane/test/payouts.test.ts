@@ -13,6 +13,7 @@ import {
   createReferrerPayoutHistoryItems,
   createSignedPayoutTransactionRecords,
   filterPayoutEligibleAccruals,
+  isOutcomeUnknownPayoutBatchReleaseProven,
   isPayoutTransactionPendingFinality,
   listPayoutBatchAllocationReleaseHazards,
   normalizePayoutPendingFinalityLimit,
@@ -648,6 +649,57 @@ describe("payout allocation release", () => {
         reason: "manual release"
       })
     ).toThrow("payout batch status outcome_unknown cannot release allocations");
+  });
+
+  it("releases outcome-unknown batches only after terminal chain proof", () => {
+    const batch = finalizedBatch({ status: "outcome_unknown" });
+    const transactions = [
+      payoutTransaction({
+        id: "ptx_unknown",
+        status: "outcome_unknown",
+        expectedSignature: "expected_sig_0"
+      })
+    ];
+
+    expect(
+      isOutcomeUnknownPayoutBatchReleaseProven({ transactions })
+    ).toBe(false);
+    expect(
+      isOutcomeUnknownPayoutBatchReleaseProven({
+        transactions,
+        chainChecks: [{ transactionId: "ptx_unknown", status: "retry" }]
+      })
+    ).toBe(false);
+    expect(
+      isOutcomeUnknownPayoutBatchReleaseProven({
+        transactions,
+        chainChecks: [{ transactionId: "ptx_unknown", status: "expired" }]
+      })
+    ).toBe(true);
+    expect(() =>
+      releasePayoutBatchAllocationsForBatch({
+        batch,
+        reason: "signature expired"
+      })
+    ).toThrow("payout batch status outcome_unknown cannot release allocations");
+
+    const released = releasePayoutBatchAllocationsForBatch({
+      batch,
+      reason: "signature expired",
+      allowOutcomeUnknown: true
+    });
+
+    expect(released).toEqual(
+      expect.objectContaining({
+        status: "cancelled",
+        failureCode: "allocations_released",
+        failureMessage: "signature expired"
+      })
+    );
+    expect(released.items.map((item) => item.status)).toEqual([
+      "released",
+      "released"
+    ]);
   });
 
   it("records the operator override reason on the released batch", () => {

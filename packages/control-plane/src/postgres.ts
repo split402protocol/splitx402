@@ -155,6 +155,7 @@ import {
   createReferrerBalanceSummary,
   createReferrerPayoutHistoryItems,
   createSignedPayoutTransactionRecords,
+  isOutcomeUnknownPayoutBatchReleaseProven,
   normalizePayoutPendingFinalityLimit,
   releasePayoutBatchAllocationsForBatch,
   summarizePayoutBatchTransactionItemFinality,
@@ -663,28 +664,47 @@ export class PostgresReceiptIngestionStore
       if (batch === undefined) {
         return undefined;
       }
-      // Compute first so non-releasable batch statuses keep conflict
-      // precedence over the broadcast-hazard guard.
-      const released = releasePayoutBatchAllocationsForBatch({
-        batch,
-        reason: input.reason,
-        ...(input.now === undefined ? {} : { now: input.now }),
-        ...(input.override === undefined ? {} : { override: input.override })
-      });
       const guardRows = await client.query<PayoutTransactionReleaseGuardRow>(
         `select id, status, expected_signature
            from payout_transactions
           where payout_batch_id = $1`,
         [batch.id]
       );
-      assertPayoutBatchAllocationsReleasable({
-        transactions: guardRows.rows.map((row) => ({
-          id: row.id,
-          status: readPayoutTransactionStatus(row.status),
-          ...(row.expected_signature === null
+      const guardTransactions = guardRows.rows.map((row) => ({
+        id: row.id,
+        status: readPayoutTransactionStatus(row.status),
+        ...(row.expected_signature === null
+          ? {}
+          : { expectedSignature: row.expected_signature })
+      }));
+      const allowOutcomeUnknown =
+        batch.status === "outcome_unknown" &&
+        isOutcomeUnknownPayoutBatchReleaseProven({
+          transactions: guardTransactions,
+          ...(input.chainChecks === undefined
             ? {}
-            : { expectedSignature: row.expected_signature })
-        })),
+            : { chainChecks: input.chainChecks })
+        });
+      if (batch.status === "outcome_unknown" && !allowOutcomeUnknown) {
+        assertPayoutBatchAllocationsReleasable({
+          transactions: guardTransactions,
+          ...(input.chainChecks === undefined
+            ? {}
+            : { chainChecks: input.chainChecks })
+        });
+      }
+      // Compute first so non-releasable batch statuses keep conflict
+      // precedence over the broadcast-hazard guard, except when
+      // outcome_unknown has terminal chain proof.
+      const released = releasePayoutBatchAllocationsForBatch({
+        batch,
+        reason: input.reason,
+        ...(input.now === undefined ? {} : { now: input.now }),
+        ...(input.override === undefined ? {} : { override: input.override }),
+        ...(allowOutcomeUnknown ? { allowOutcomeUnknown } : {})
+      });
+      assertPayoutBatchAllocationsReleasable({
+        transactions: guardTransactions,
         ...(input.chainChecks === undefined
           ? {}
           : { chainChecks: input.chainChecks }),

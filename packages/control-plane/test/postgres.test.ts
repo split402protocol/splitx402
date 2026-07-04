@@ -1046,12 +1046,49 @@ describe("PostgresReceiptIngestionStore", () => {
         reason: "manual release",
         now: "2026-06-24T00:09:00Z"
       })
-    ).rejects.toBeInstanceOf(PayoutBatchConflictError);
+    ).rejects.toBeInstanceOf(PayoutBatchReleaseBlockedError);
     await expect(
       unknown.store.getByReceiptId(unknown.bundle.artifacts.receipt.receiptId)
     ).resolves.toEqual(
       expect.objectContaining({
         accrual: expect.objectContaining({ status: "allocated" })
+      })
+    );
+  });
+
+  it("releases outcome-unknown allocations after terminal expiry proof", async () => {
+    const fixture = await createPostgresPayoutTransactionFixture();
+    await fixture.store.markPayoutTransactionSubmitted({
+      id: fixture.transaction.id,
+      submittedAt: "2026-06-24T00:07:00Z",
+      expectedSignature: "expected_sig_0"
+    });
+    await fixture.store.markPayoutTransactionFinality({
+      id: fixture.transaction.id,
+      status: "outcome_unknown",
+      observedAt: "2026-06-24T00:08:00Z"
+    });
+
+    const released = await fixture.store.releasePayoutBatchAllocations({
+      payoutBatchId: fixture.batch.id,
+      reason: "signature expired",
+      now: "2026-06-24T00:09:00Z",
+      chainChecks: [{ transactionId: fixture.transaction.id, status: "expired" }]
+    });
+
+    expect(released).toEqual(
+      expect.objectContaining({
+        id: fixture.batch.id,
+        status: "cancelled",
+        failureCode: "allocations_released",
+        failureMessage: "signature expired"
+      })
+    );
+    await expect(
+      fixture.store.getByReceiptId(fixture.bundle.artifacts.receipt.receiptId)
+    ).resolves.toEqual(
+      expect.objectContaining({
+        accrual: expect.objectContaining({ status: "available" })
       })
     );
   });
