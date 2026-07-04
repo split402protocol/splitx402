@@ -1915,6 +1915,8 @@ function validateJsonSchemaValue(
     }
     errors.push(...validateJsonObjectShape(value, record, path));
   }
+  errors.push(...validateJsonStringConstraints(value, record, path));
+  errors.push(...validateJsonNumberConstraints(value, record, path));
   return errors;
 }
 
@@ -1981,6 +1983,75 @@ function readRequiredSchemaProperties(value: unknown): string[] | undefined {
     return [];
   }
   return Array.isArray(value) && value.every((item) => typeof item === "string")
+    ? value
+    : undefined;
+}
+
+function validateJsonStringConstraints(
+  value: unknown,
+  schema: Record<string, unknown>,
+  path: string
+): string[] {
+  const errors: string[] = [];
+  if (schema.pattern !== undefined) {
+    if (typeof schema.pattern !== "string") {
+      errors.push(`${path} pattern must be a string`);
+    } else if (typeof value !== "string") {
+      errors.push(`${path} must be a string matching pattern`);
+    } else {
+      try {
+        if (!new RegExp(schema.pattern, "u").test(value)) {
+          errors.push(`${path} must match pattern ${schema.pattern}`);
+        }
+      } catch {
+        errors.push(`${path} pattern must be a valid regular expression`);
+      }
+    }
+  }
+  if (schema.minLength !== undefined) {
+    const minLength = readNonNegativeIntegerSchemaKeyword(schema.minLength);
+    if (minLength === undefined) {
+      errors.push(`${path} minLength must be a non-negative integer`);
+    } else if (typeof value !== "string" || value.length < minLength) {
+      errors.push(`${path} length must be at least ${minLength}`);
+    }
+  }
+  if (schema.maxLength !== undefined) {
+    const maxLength = readNonNegativeIntegerSchemaKeyword(schema.maxLength);
+    if (maxLength === undefined) {
+      errors.push(`${path} maxLength must be a non-negative integer`);
+    } else if (typeof value !== "string" || value.length > maxLength) {
+      errors.push(`${path} length must be at most ${maxLength}`);
+    }
+  }
+  return errors;
+}
+
+function validateJsonNumberConstraints(
+  value: unknown,
+  schema: Record<string, unknown>,
+  path: string
+): string[] {
+  const errors: string[] = [];
+  if (schema.minimum !== undefined) {
+    if (typeof schema.minimum !== "number" || !Number.isFinite(schema.minimum)) {
+      errors.push(`${path} minimum must be a finite number`);
+    } else if (typeof value !== "number" || value < schema.minimum) {
+      errors.push(`${path} must be at least ${schema.minimum}`);
+    }
+  }
+  if (schema.maximum !== undefined) {
+    if (typeof schema.maximum !== "number" || !Number.isFinite(schema.maximum)) {
+      errors.push(`${path} maximum must be a finite number`);
+    } else if (typeof value !== "number" || value > schema.maximum) {
+      errors.push(`${path} must be at most ${schema.maximum}`);
+    }
+  }
+  return errors;
+}
+
+function readNonNegativeIntegerSchemaKeyword(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0
     ? value
     : undefined;
 }
