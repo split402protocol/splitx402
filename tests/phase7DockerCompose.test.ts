@@ -81,7 +81,7 @@ describe("Phase 7 Docker compose runner", () => {
         }
         if (
           args.join(" ") ===
-          "compose --env-file deploy/phase7-staging/phase7-staging.env -f deploy/phase7-staging/compose.yaml --profile demo --profile workers up -d postgres control-plane dashboard demo-merchant chain-worker webhook-worker payout-finality-worker"
+          "compose --env-file deploy/phase7-staging/phase7-staging.env -f deploy/phase7-staging/compose.yaml --profile demo --profile workers up -d postgres control-plane dashboard demo-merchant webhook-receiver chain-worker webhook-worker payout-finality-worker"
         ) {
           return "started";
         }
@@ -92,7 +92,7 @@ describe("Phase 7 Docker compose runner", () => {
     expect(report.ok).toBe(true);
     expect(report.command).toContain("--profile demo --profile workers");
     expect(report.command).toContain(
-      "demo-merchant chain-worker webhook-worker payout-finality-worker",
+      "demo-merchant webhook-receiver chain-worker webhook-worker payout-finality-worker",
     );
   });
 

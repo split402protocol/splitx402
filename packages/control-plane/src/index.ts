@@ -1134,7 +1134,7 @@ export class ReceiptIngestor {
     }
 
     return {
-      id: this.nextId("acr"),
+      id: this.nextId("acr", receipt.receiptId, "accrual"),
       receiptId: receipt.receiptId,
       merchantId: receipt.merchantId,
       campaignId: receipt.campaignId,
@@ -1153,10 +1153,10 @@ export class ReceiptIngestor {
     accrual: CommissionAccrual,
     createdAt: string
   ): LedgerTransaction {
-    const transactionId = this.nextId("ldg");
+    const transactionId = this.nextId("ldg", receipt.receiptId, "commission_accrual");
     const entries: LedgerEntry[] = [
       {
-        id: this.nextId("lde"),
+        id: this.nextId("lde", receipt.receiptId, "merchant_commission_liability"),
         transactionId,
         accountType: "merchant_commission_liability",
         accountReference: receipt.merchantId,
@@ -1164,7 +1164,7 @@ export class ReceiptIngestor {
         amountAtomic: negateAtomic(receipt.commissionAmountAtomic)
       },
       {
-        id: this.nextId("lde"),
+        id: this.nextId("lde", receipt.receiptId, "referrer_payable"),
         transactionId,
         accountType: "referrer_payable",
         accountReference: accrual.payoutWallet,
@@ -1172,7 +1172,7 @@ export class ReceiptIngestor {
         amountAtomic: receipt.referrerCreditAtomic
       },
       {
-        id: this.nextId("lde"),
+        id: this.nextId("lde", receipt.receiptId, "protocol_fee_payable"),
         transactionId,
         accountType: "protocol_fee_payable",
         accountReference: "split402",
@@ -1191,9 +1191,20 @@ export class ReceiptIngestor {
     };
   }
 
-  private nextId(prefix: "acr" | "ldg" | "lde"): string {
+  private nextId(
+    prefix: "acr" | "ldg" | "lde",
+    receiptId?: string,
+    purpose?: string
+  ): string {
     if (this.options.idFactory !== undefined) {
       return this.options.idFactory(prefix);
+    }
+    if (receiptId !== undefined && purpose !== undefined) {
+      const digest = createHash("sha256")
+        .update(`${prefix}:${purpose}:${receiptId}`)
+        .digest("hex")
+        .slice(0, 32);
+      return `${prefix}_${digest}`;
     }
     this.sequence += 1;
     return `${prefix}_${this.sequence.toString().padStart(32, "0")}`;

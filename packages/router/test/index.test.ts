@@ -3814,6 +3814,44 @@ describe("Split402Router", () => {
     expect(result.receipt.referralClaimHash).toBe(receipt.referralClaimHash);
   });
 
+  it("uses a provider-attached referral claim when execute input omits one", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>().mockResolvedValue({
+      data: { risk: "low" },
+      receipt
+    });
+    const router = new Split402Router({
+      providers: [
+        provider({
+          routeId: referralClaim.routeId,
+          referralClaim,
+          metadata: {
+            referrerWallet: referralClaim.referrerWallet,
+            payoutWallet: referralClaim.payoutWallet
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    const result = await router.execute({
+      capability: "solana.wallet-risk",
+      input: { wallet: "wallet_1" },
+      budget: {
+        network: receipt.network,
+        asset: receipt.asset,
+        maxAmountAtomic: receipt.requiredAmountAtomic
+      },
+      maxAttempts: 1
+    });
+
+    expect(result.receipt.referralClaimHash).toBe(receipt.referralClaimHash);
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        referralClaim
+      })
+    );
+  });
+
   it("skips providers whose route metadata conflicts with the supplied referral claim", async () => {
     const execute = vi.fn<Split402RouterExecutor["execute"]>().mockResolvedValue({
       data: { risk: "low" },
@@ -4109,6 +4147,7 @@ describe("Split402ControlPlaneDiscoveryClient", () => {
         method: "POST",
         operationId: "risk.score",
         campaignId: receipt.campaignId,
+        referralClaim,
         merchantPublicKey,
         network: receipt.network,
         asset: receipt.asset,
@@ -4135,6 +4174,10 @@ describe("Split402ControlPlaneDiscoveryClient", () => {
       },
       {
         url: `https://control.example/v1/merchants/${receipt.merchantId}`,
+        authorization: "Bearer control-token"
+      },
+      {
+        url: "https://control.example/v1/routes/rte_1",
         authorization: "Bearer control-token"
       }
     ]);
@@ -4800,6 +4843,14 @@ function controlPlaneFetch(
             ...(options.resourceOverrides ?? {})
           }
         ]
+      });
+    }
+    if (parsed.pathname === "/v1/routes/rte_1") {
+      return jsonResponse({
+        route: {
+          id: "rte_1",
+          claim: referralClaim
+        }
       });
     }
     if (parsed.pathname === `/v1/campaigns/${receipt.campaignId}`) {

@@ -44,6 +44,9 @@ export interface DemoMerchantConfig {
   requiredAmountAtomic: string;
   commissionBps: number;
   protocolFeeBpsOfCommission: number;
+  payoutThresholdAtomic: string;
+  campaignStartsAt: string;
+  campaignEndsAt: string | null;
   serviceSeed: Uint8Array;
   syncFacilitator: boolean;
   facilitatorUrl: string;
@@ -205,6 +208,12 @@ function readDemoMerchantConfig(
     protocolFeeBpsOfCommission:
       overrides.protocolFeeBpsOfCommission ??
       readCommissionBps(process.env.SPLIT402_PROTOCOL_FEE_BPS_OF_COMMISSION ?? "0"),
+    payoutThresholdAtomic: overrides.payoutThresholdAtomic ??
+      process.env.SPLIT402_PHASE7_PAYOUT_THRESHOLD_ATOMIC ?? "1",
+    campaignStartsAt: overrides.campaignStartsAt ??
+      process.env.SPLIT402_PHASE7_CAMPAIGN_STARTS_AT ?? "2026-06-28T00:00:00Z",
+    campaignEndsAt:
+      overrides.campaignEndsAt ?? process.env.SPLIT402_PHASE7_CAMPAIGN_ENDS_AT ?? null,
     serviceSeed,
     syncFacilitator:
       overrides.syncFacilitator ??
@@ -316,7 +325,13 @@ function createCampaign(
       campaignVersion: 1,
       merchantId: MERCHANT_ID,
       resourceOrigin: config.merchantOrigin,
-      operationIds: [OPERATION_ID],
+      operations: [
+        {
+          operationId: OPERATION_ID,
+          method: "POST",
+          pathTemplate: "/v1/risk"
+        }
+      ],
       network: config.network.networkId,
       asset: config.paymentAsset,
       requiredAmountAtomic: config.requiredAmountAtomic,
@@ -324,7 +339,12 @@ function createCampaign(
       commissionBps: config.commissionBps,
       protocolFeeBpsOfCommission: config.protocolFeeBpsOfCommission,
       commissionBase: "required_amount",
-      settlementMode: "accrual"
+      settlementMode: "accrual",
+      attributionRequired: false,
+      allowSelfReferral: false,
+      payoutThresholdAtomic: config.payoutThresholdAtomic,
+      startsAt: config.campaignStartsAt,
+      endsAt: config.campaignEndsAt
     }),
     commissionBps: config.commissionBps,
     protocolFeeBpsOfCommission: config.protocolFeeBpsOfCommission,

@@ -90,6 +90,21 @@ describe("chain-verification worker entrypoint", () => {
     });
   });
 
+  it("falls back when the comma-separated RPC provider list is blank", () => {
+    expect(
+      readChainWorkerConfig({
+        SPLIT402_CHAIN_WORKER_SOLANA_RPC_URLS: "",
+        SPLIT402_CHAIN_WORKER_SOLANA_RPC_URL: "https://rpc.example",
+        SPLIT402_CHAIN_WORKER_NETWORK: "solana:devnet"
+      })
+    ).toEqual({
+      rpcUrl: "https://rpc.example",
+      rpcUrls: ["https://rpc.example"],
+      network: "solana:devnet",
+      commitment: "confirmed"
+    });
+  });
+
   it("rejects invalid worker environment configuration", () => {
     expect(() => readChainWorkerConfig({})).toThrow(
       "SPLIT402_CHAIN_WORKER_SOLANA_RPC_URLS or SPLIT402_CHAIN_WORKER_SOLANA_RPC_URL or SPLIT402_SOLANA_RPC_URL is required"
