@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import { toDisplayPath } from "./displayPath.js";
 import { verifyGitHubRepositorySettingsReviewRecord } from "./githubRepositorySettingsReview.js";
 import { createPhase6EvidenceAssemblyEnvMappings } from "./phase6EvidenceAssemblyEnv.js";
+import { PHASE7_DOCKER_GENERATED_SECRET_KEYS } from "./phase7DockerEnvInit.js";
 import { createSplit402ProductEvidenceWorkspace } from "./productEvidenceWorkspace.js";
 
 export interface Split402LaunchPreflightInput {
@@ -160,6 +161,14 @@ const PRE_COLLECTION_APPROVAL_ENV_KEYS = [
 
 const PHASE7_DOCKER_RUNTIME_ENV_FILE =
   "deploy/phase7-staging/phase7-staging.env";
+const REQUIRED_PHASE7_DOCKER_RUNTIME_ENV_KEYS = [
+  "SPLIT402_DASHBOARD_VIEWER_TOKEN",
+  "SPLIT402_DASHBOARD_CONTROL_PLANE_TOKEN",
+  "SPLIT402_MERCHANT_PAY_TO",
+  "SPLIT402_SERVICE_SEED_HEX",
+  "SPLIT402_WEBHOOK_WORKER_URL",
+  "SPLIT402_WEBHOOK_WORKER_SECRET",
+] as const;
 
 export function createSplit402LaunchPreflightReport(
   input: Split402LaunchPreflightInput,
@@ -262,6 +271,23 @@ export function createSplit402LaunchPreflightReport(
         phase7Env.get(attachment.key) !== attachment.expectedPath,
     );
   const dockerRuntimeEnvExists = input.exists(PHASE7_DOCKER_RUNTIME_ENV_FILE);
+  const dockerRuntimeEnvText = dockerRuntimeEnvExists
+    ? input.readText(PHASE7_DOCKER_RUNTIME_ENV_FILE)
+    : "";
+  const dockerRuntimeEnv = parseEnvText(dockerRuntimeEnvText);
+  const missingDockerRuntimeKeys = REQUIRED_PHASE7_DOCKER_RUNTIME_ENV_KEYS.filter(
+    (key) => !hasConfiguredEnvValue(dockerRuntimeEnv, key),
+  );
+  const dockerRuntimePlaceholderKeys = REQUIRED_PHASE7_DOCKER_RUNTIME_ENV_KEYS.filter(
+    (key) => {
+      const value = dockerRuntimeEnv.get(key);
+      return (
+        value !== undefined &&
+        value.trim().length > 0 &&
+        isPlaceholderEnvValue(value)
+      );
+    },
+  );
   const missingHostedKeys = REQUIRED_PHASE7_HOSTED_ENV_KEYS.filter(
     (key) => !hasConfiguredEnvValue(phase7Env, key),
   );
@@ -400,16 +426,14 @@ export function createSplit402LaunchPreflightReport(
     },
     {
       id: "phase7_docker_runtime_env",
-      label: "Phase 7 Docker runtime env file exists",
-      ok: dockerRuntimeEnvExists,
+      label: "Phase 7 Docker runtime env values are filled",
+      ok: dockerRuntimeEnvExists && missingDockerRuntimeKeys.length === 0,
       severity: "required",
-      details: dockerRuntimeEnvExists
-        ? [
-            `${PHASE7_DOCKER_RUNTIME_ENV_FILE} exists for Docker Compose runtime values.`,
-          ]
-        : [
-            `Run corepack pnpm phase7:docker:env:init --generate-secrets, then fill remaining ${PHASE7_DOCKER_RUNTIME_ENV_FILE} values for hosted URLs, wallets, service keys, buyer keys, and control-plane tokens before running phase7:docker:doctor.`,
-          ],
+      details: createDockerRuntimeEnvDetails({
+        dockerRuntimeEnvExists,
+        missingDockerRuntimeKeys,
+        placeholderKeys: dockerRuntimePlaceholderKeys,
+      }),
     },
     {
       id: "phase7_hosted_env_values",
@@ -762,6 +786,52 @@ function createMissingPhase6KeyDetails(input: {
       ? `Set SPLIT402_PHASE6_EVIDENCE_NETWORK=${EXPECTED_PHASE6_EVIDENCE_NETWORK} in ${toDisplayPath(input.envPath)} for launch evidence collection.`
       : `Fill ${key} in ${toDisplayPath(input.envPath)}.`,
   );
+}
+
+function createDockerRuntimeEnvDetails(input: {
+  dockerRuntimeEnvExists: boolean;
+  missingDockerRuntimeKeys: readonly string[];
+  placeholderKeys: readonly string[];
+}): string[] {
+  if (!input.dockerRuntimeEnvExists) {
+    return [
+      `Run corepack pnpm phase7:docker:env:init --generate-secrets, then fill remaining ${PHASE7_DOCKER_RUNTIME_ENV_FILE} values for hosted URLs, wallets, service keys, buyer keys, and control-plane tokens before running phase7:docker:doctor.`,
+    ];
+  }
+  if (input.missingDockerRuntimeKeys.length === 0) {
+    return [
+      `${PHASE7_DOCKER_RUNTIME_ENV_FILE} has required Docker runtime values for base, demo, and worker profiles.`,
+    ];
+  }
+
+  const generatedSecretPlaceholders = input.placeholderKeys.filter((key) =>
+    PHASE7_DOCKER_GENERATED_SECRET_KEYS.includes(
+      key as (typeof PHASE7_DOCKER_GENERATED_SECRET_KEYS)[number],
+    ),
+  );
+  return [
+    ...(generatedSecretPlaceholders.length === 0
+      ? []
+      : [
+          `Run corepack pnpm phase7:docker:env:init --generate-secrets to replace generated Docker runtime secret placeholders for ${generatedSecretPlaceholders.join(
+            ", ",
+          )} while preserving existing filled values.`,
+        ]),
+    ...(input.missingDockerRuntimeKeys.length === 0
+      ? []
+      : [
+          `Fill Phase 7 Docker runtime env values in ${PHASE7_DOCKER_RUNTIME_ENV_FILE}: ${input.missingDockerRuntimeKeys.join(
+            ", ",
+          )}.`,
+        ]),
+    ...(input.placeholderKeys.length === 0
+      ? []
+      : [
+          `Replace template placeholders in ${PHASE7_DOCKER_RUNTIME_ENV_FILE}: ${input.placeholderKeys.join(
+            ", ",
+          )}.`,
+        ]),
+  ];
 }
 
 function createPhase6NetworkDetails(input: {
