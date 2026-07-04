@@ -2073,6 +2073,199 @@ describe("Split402Router", () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
+  it("executes when additionalProperties schema accepts extra fields", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>().mockResolvedValue({
+      data: { risk: "low" },
+      receipt
+    });
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-extra-filter-map",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              properties: {
+                wallet: { type: "string" }
+              },
+              additionalProperties: {
+                type: "number",
+                minimum: 0
+              }
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    const input = {
+      wallet: "wallet_1",
+      latency: 120,
+      score: 0.9
+    };
+    const result = await router.execute({
+      capability: "solana.wallet-risk",
+      input,
+      budget: {
+        network: receipt.network,
+        asset: receipt.asset,
+        maxAmountAtomic: receipt.requiredAmountAtomic
+      }
+    });
+
+    expect(result.providerId).toBe("provider-extra-filter-map");
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: expect.objectContaining({ providerId: "provider-extra-filter-map" }),
+        body: input
+      })
+    );
+  });
+
+  it("rejects before payment when extra fields violate additionalProperties schema", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-extra-filter-map",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              properties: {
+                wallet: { type: "string" }
+              },
+              additionalProperties: {
+                type: "number",
+                minimum: 0
+              }
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: {
+          wallet: "wallet_1",
+          latency: -1
+        },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-extra-filter-map",
+          retryable: false,
+          error: expect.stringContaining("input.latency must be at least 0")
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("does not apply additionalProperties schema to explicit or pattern properties", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>().mockResolvedValue({
+      data: { risk: "low" },
+      receipt
+    });
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-mixed-properties",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              properties: {
+                wallet: { type: "string" }
+              },
+              patternProperties: {
+                "^metric\\.": { type: "number" }
+              },
+              additionalProperties: {
+                type: "boolean"
+              }
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    const input = {
+      wallet: "wallet_1",
+      "metric.latency": 100,
+      includeHistory: true
+    };
+    const result = await router.execute({
+      capability: "solana.wallet-risk",
+      input,
+      budget: {
+        network: receipt.network,
+        asset: receipt.asset,
+        maxAmountAtomic: receipt.requiredAmountAtomic
+      }
+    });
+
+    expect(result.providerId).toBe("provider-mixed-properties");
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: expect.objectContaining({ providerId: "provider-mixed-properties" }),
+        body: input
+      })
+    );
+  });
+
+  it("rejects malformed additionalProperties schemas before payment", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-malformed-additional-properties",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              additionalProperties: "number"
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: { latency: 100 },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-malformed-additional-properties",
+          retryable: false,
+          error: expect.stringContaining(
+            "input additionalProperties must be a boolean or schema object"
+          )
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it("passes EVM signer config to provider execution", async () => {
     const evmReceipt = {
       ...receipt,
