@@ -629,6 +629,96 @@ describe("control-plane HTTP API", () => {
     );
   });
 
+  it("releases outcome-unknown allocations after reconciliation proves expiry", async () => {
+    const monitor = new FakePayoutFinalityMonitor([
+      {
+        transactionId: "ignored-by-fake",
+        status: "expired",
+        signature: "expected_sig_0",
+        rpcUrl: "https://rpc.example",
+        error: "blockhash expired before confirmation"
+      }
+    ]);
+    const { app, store, receipt, batch, transaction } =
+      await createMaybeBroadcastPayoutBatchFixture({
+        payoutFinalityMonitor: monitor
+      });
+    store.markPayoutTransactionSubmitted({
+      id: transaction.id,
+      submittedAt: "2026-06-24T00:07:00Z",
+      expectedSignature: "expected_sig_0"
+    });
+    store.markPayoutTransactionFinality({
+      id: transaction.id,
+      status: "outcome_unknown",
+      observedAt: "2026-06-24T00:08:00Z"
+    });
+
+    const response = await request(app)
+      .post(`/v1/payout-batches/${batch.id}/release-allocations`)
+      .send({ reason: "signature expired", now: "2026-06-24T00:09:00Z" })
+      .expect(200);
+
+    expect(response.body.batch).toEqual(
+      expect.objectContaining({
+        id: batch.id,
+        status: "cancelled",
+        failureCode: "allocations_released",
+        failureMessage: "signature expired"
+      })
+    );
+    expect(store.getByReceiptId(receipt.receiptId)?.accrual?.status).toBe(
+      "available"
+    );
+  });
+
+  it("blocks outcome-unknown release when requery is still ambiguous", async () => {
+    const monitor = new FakePayoutFinalityMonitor([
+      {
+        transactionId: "ignored-by-fake",
+        status: "retry",
+        signature: "expected_sig_0",
+        rpcUrl: "https://rpc.example",
+        error: "Solana RPC request failed: timeout",
+        retryAt: "2026-06-24T00:10:30.000Z"
+      }
+    ]);
+    const { app, store, receipt, batch, transaction } =
+      await createMaybeBroadcastPayoutBatchFixture({
+        payoutFinalityMonitor: monitor
+      });
+    store.markPayoutTransactionSubmitted({
+      id: transaction.id,
+      submittedAt: "2026-06-24T00:07:00Z",
+      expectedSignature: "expected_sig_0"
+    });
+    store.markPayoutTransactionFinality({
+      id: transaction.id,
+      status: "outcome_unknown",
+      observedAt: "2026-06-24T00:08:00Z"
+    });
+
+    const response = await request(app)
+      .post(`/v1/payout-batches/${batch.id}/release-allocations`)
+      .send({ reason: "signature expired", now: "2026-06-24T00:10:00Z" })
+      .expect(409);
+
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        error: "payout_batch_release_blocked",
+        hazards: [
+          expect.objectContaining({
+            transactionId: transaction.id,
+            chainStatus: "retry"
+          })
+        ]
+      })
+    );
+    expect(store.getByReceiptId(receipt.receiptId)?.accrual?.status).toBe(
+      "allocated"
+    );
+  });
+
   it("rejects an operator override without a reason", async () => {
     const { app, store, receipt, batch } =
       await createMaybeBroadcastPayoutBatchFixture();

@@ -74,6 +74,17 @@ curl -s -X POST \
 | `manual_review_before_retry` | The transaction failed onchain. Review funding, blockhash, and signer policy before creating a new attempt. |
 | `requery_chain_before_retry` | The outcome is still ambiguous. Do not rebuild or retry with new bytes. Requery later. |
 
+If the requery proves every signed payout transaction for an `outcome_unknown`
+batch is `expired` or `failed`, release allocations instead of using an
+operator override:
+
+```bash
+curl -s -X POST \
+  "$SPLIT402_CONTROL_PLANE_URL/v1/payout-batches/$PAYOUT_BATCH_ID/release-allocations" \
+  -H "content-type: application/json" \
+  -d '{"reason":"reconciliation proved signed payout bytes can no longer land"}'
+```
+
 Before production payout custody, copy
 [`docs/templates/phase6-reconciliation-drill.txt`](../templates/phase6-reconciliation-drill.txt)
 or generate the correctly shaped unknown-outcome reconciliation record:
@@ -103,6 +114,9 @@ custody evidence bundle.
   the observed status.
 - Retry with new signed bytes is unsafe while the batch remains
   `outcome_unknown`.
+- Allocation release for `outcome_unknown` is safe only after finality requery
+  proves every signed transaction is `expired` or `failed`; otherwise the
+  endpoint stays blocked.
 - A retry before blockhash expiry must resend the exact same persisted signed
   bytes.
 - If RPC providers disagree, prefer waiting and requerying over rebuilding the

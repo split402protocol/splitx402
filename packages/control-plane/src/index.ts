@@ -102,6 +102,7 @@ import {
   createPayoutPreview,
   attachPayoutTransactionItemMappings,
   filterPayoutEligibleAccruals,
+  isOutcomeUnknownPayoutBatchReleaseProven,
   isPayoutBatchAllocationReleaseAllowed,
   isPayoutTransactionOutcomeUnknown,
   isPayoutTransactionPendingFinality,
@@ -643,16 +644,34 @@ export class InMemoryReceiptIngestionStore
     if (batch === undefined) {
       return undefined;
     }
+    const transactions = this.listPayoutTransactions(batch.id);
+    const allowOutcomeUnknown =
+      batch.status === "outcome_unknown" &&
+      isOutcomeUnknownPayoutBatchReleaseProven({
+        transactions,
+        ...(input.chainChecks === undefined
+          ? {}
+          : { chainChecks: input.chainChecks })
+      });
+    if (batch.status === "outcome_unknown" && !allowOutcomeUnknown) {
+      assertPayoutBatchAllocationsReleasable({
+        transactions,
+        ...(input.chainChecks === undefined
+          ? {}
+          : { chainChecks: input.chainChecks })
+      });
+    }
     // Compute first so non-releasable batch statuses keep conflict precedence
     // over the broadcast-hazard guard.
     const released = releasePayoutBatchAllocationsForBatch({
       batch,
       reason: input.reason,
       ...(input.now === undefined ? {} : { now: input.now }),
-      ...(input.override === undefined ? {} : { override: input.override })
+      ...(input.override === undefined ? {} : { override: input.override }),
+      ...(allowOutcomeUnknown ? { allowOutcomeUnknown } : {})
     });
     assertPayoutBatchAllocationsReleasable({
-      transactions: this.listPayoutTransactions(batch.id),
+      transactions,
       ...(input.chainChecks === undefined
         ? {}
         : { chainChecks: input.chainChecks }),
@@ -2306,7 +2325,7 @@ export function createPayoutRouter(
         if (
           override === undefined &&
           options.payoutTransactionStore !== undefined &&
-          isPayoutBatchAllocationReleaseAllowed(batch.status)
+          isPayoutBatchAllocationReleaseCheckable(batch.status)
         ) {
           const transactions =
             await options.payoutTransactionStore.listPayoutTransactions(batch.id);
@@ -4248,6 +4267,14 @@ function readOptionalPayoutReleaseOverride(
     throw new MerchantRegistryValidationError("override must be an object");
   }
   return { reason: readRequiredString(override.reason, "override.reason") };
+}
+
+function isPayoutBatchAllocationReleaseCheckable(
+  status: PayoutBatchStatus
+): boolean {
+  return (
+    isPayoutBatchAllocationReleaseAllowed(status) || status === "outcome_unknown"
+  );
 }
 
 function createPayoutReconciliationError(
