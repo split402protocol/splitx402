@@ -2280,6 +2280,162 @@ describe("Split402Router", () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
+  it("executes when input satisfies dependentRequired constraints", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>().mockResolvedValue({
+      data: { risk: "low" },
+      receipt
+    });
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-dependent-required",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["wallet"],
+              properties: {
+                wallet: { type: "string" },
+                callbackUrl: { type: "string", format: "url" },
+                callbackSecretId: { type: "string" }
+              },
+              dependentRequired: {
+                callbackUrl: ["callbackSecretId"]
+              },
+              additionalProperties: false
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    const input = {
+      wallet: "wallet_1",
+      callbackUrl: "https://agent.example/callback",
+      callbackSecretId: "secret_123"
+    };
+    const result = await router.execute({
+      capability: "solana.wallet-risk",
+      input,
+      budget: {
+        network: receipt.network,
+        asset: receipt.asset,
+        maxAmountAtomic: receipt.requiredAmountAtomic
+      }
+    });
+
+    expect(result.providerId).toBe("provider-dependent-required");
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: expect.objectContaining({
+          providerId: "provider-dependent-required"
+        }),
+        body: input
+      })
+    );
+  });
+
+  it("rejects before payment when input violates dependentRequired constraints", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-dependent-required",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["wallet"],
+              properties: {
+                wallet: { type: "string" },
+                callbackUrl: { type: "string", format: "url" },
+                callbackSecretId: { type: "string" }
+              },
+              dependentRequired: {
+                callbackUrl: ["callbackSecretId"]
+              },
+              additionalProperties: false
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: {
+          wallet: "wallet_1",
+          callbackUrl: "https://agent.example/callback"
+        },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-dependent-required",
+          retryable: false,
+          error: expect.stringContaining(
+            "input.callbackSecretId is required when input.callbackUrl is present"
+          )
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed dependentRequired schemas before payment", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-malformed-dependent-required",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              dependentRequired: {
+                callbackUrl: "callbackSecretId"
+              }
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: {
+          wallet: "wallet_1",
+          callbackUrl: "https://agent.example/callback"
+        },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-malformed-dependent-required",
+          retryable: false,
+          error: expect.stringContaining(
+            "input dependentRequired must be an object of string arrays"
+          )
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it("rejects malformed numeric and property-count schemas before payment", async () => {
     const execute = vi.fn<Split402RouterExecutor["execute"]>();
     const router = new Split402Router({
