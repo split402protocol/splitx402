@@ -31,6 +31,7 @@ export interface ExternalX402OnboardingCandidateView {
   asset?: string;
   payToWallet?: string;
   amountAtomic?: string;
+  mcpTools?: ExternalX402McpToolView[];
   readiness: string;
   blockers: string[];
   split402OfferErrors?: string[];
@@ -44,6 +45,12 @@ export interface ExternalX402OnboardingCandidateView {
     paymentRequiredHeader: boolean;
   };
   routerReady: boolean;
+}
+
+export interface ExternalX402McpToolView {
+  name: string;
+  description?: string;
+  inputSchema?: unknown;
 }
 
 export interface ExternalX402OfferTemplateView {
@@ -539,6 +546,9 @@ export function publicCandidateView(
     ...(candidate.amountAtomic === undefined
       ? {}
       : { amountAtomic: candidate.amountAtomic }),
+    ...(candidate.mcpTools === undefined || candidate.mcpTools.length === 0
+      ? {}
+      : { mcpTools: candidate.mcpTools }),
     readiness: candidate.readiness,
     blockers: candidate.blockers,
     ...(candidate.split402OfferErrors === undefined
@@ -768,6 +778,16 @@ function writeProviderReadme(
     `Provider: \`${candidate.providerId}\``,
     "",
     `Route: \`${candidate.method} ${candidate.path}\``,
+    ...(candidate.mcpTools === undefined || candidate.mcpTools.length === 0
+      ? []
+      : [
+          "",
+          "MCP tools:",
+          ...candidate.mcpTools.map(
+            (tool) =>
+              `- \`${tool.name}\`${tool.description === undefined ? "" : ` - ${tool.description}`}`
+          )
+        ]),
     "",
     `Readiness: \`${candidate.readiness}\``,
     "",

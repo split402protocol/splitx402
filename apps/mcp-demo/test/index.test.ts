@@ -329,6 +329,50 @@ describe("external x402 onboarding CLI", () => {
     expect(report.candidates[0]).toHaveProperty("split402ReceiptTemplate");
   });
 
+  it("renders external paid MCP tool catalogs in onboarding reports", async () => {
+    const report = await discoverExternalX402Onboarding({
+      merchantOrigin: "https://x402.example",
+      capability: "mcp.revenue-tools",
+      matchPath: "/mcp/call",
+      providerIdPrefix: "issue-131",
+      fetch: mcpExternalX402Fetch({ includeMcpCatalog: true }),
+      generatedAt: "2026-07-01T00:00:00.000Z"
+    });
+
+    expect(report).toMatchObject({
+      candidateCount: 1,
+      routerReadyCount: 0,
+      candidates: [
+        expect.objectContaining({
+          providerId: "issue-131:post.mcp.call",
+          path: "/mcp/call",
+          method: "POST",
+          mcpTools: [
+            {
+              name: "scan_revenue_surfaces",
+              description: "Rank current agent monetization surfaces.",
+              inputSchema: {
+                type: "object",
+                properties: { focus: { type: "string" } }
+              }
+            },
+            {
+              name: "audit_x402_endpoint",
+              description: "Audit an x402 endpoint.",
+              inputSchema: {
+                type: "object",
+                properties: { url: { type: "string" } },
+                required: ["url"]
+              }
+            }
+          ],
+          readiness: "requires_split402_campaign",
+          routerReady: false
+        })
+      ]
+    });
+  });
+
   it("writes external x402 onboarding reports as UTF-8 JSON", async () => {
     const directory = mkdtempSync(join(tmpdir(), "split402-x402-onboarding-"));
     const outputPath = join(directory, "external-x402.json");
@@ -2778,6 +2822,7 @@ const EXTERNAL_MERCHANT_SEED = hexToBytes(
 
 function mcpExternalX402Fetch(options: {
   split402Offer?: Split402OfferV1;
+  includeMcpCatalog?: boolean;
 } = {}): Split402ExternalX402DiscoveryFetch {
   return async (url) => {
     const parsed = new URL(url);
@@ -2791,7 +2836,19 @@ function mcpExternalX402Fetch(options: {
             price: "$0.02",
             description: "Specific coin USD price.",
             example_unpaid_curl: "curl -i https://x402.example/price/btc"
-          }
+          },
+          ...(options.includeMcpCatalog === true
+            ? [
+                {
+                  method: "POST",
+                  path: "/mcp/call",
+                  price: "$0.05",
+                  description: "Paid MCP-style tool execution gateway.",
+                  example_unpaid_curl:
+                    "curl -i -X POST https://x402.example/mcp/call"
+                }
+              ]
+            : [])
         ]
       });
     }
@@ -2829,12 +2886,58 @@ function mcpExternalX402Fetch(options: {
         }
       });
     }
+    if (parsed.pathname === "/mcp/tools" && options.includeMcpCatalog === true) {
+      return mcpJsonResponse({
+        schema_version: "revenue.paid_mcp.catalog.v1",
+        payment: {
+          protocol: "x402",
+          paid_call_route: "https://x402.example/mcp/call",
+          price_usdc: 0.05
+        },
+        tools: [
+          {
+            name: "scan_revenue_surfaces",
+            description: "Rank current agent monetization surfaces.",
+            input_schema: {
+              type: "object",
+              properties: { focus: { type: "string" } }
+            }
+          },
+          {
+            name: "audit_x402_endpoint",
+            description: "Audit an x402 endpoint.",
+            inputSchema: {
+              type: "object",
+              properties: { url: { type: "string" } },
+              required: ["url"]
+            }
+          }
+        ]
+      });
+    }
     if (parsed.pathname === "/price/btc") {
       return mcpTextResponse("", {
         status: 402,
         headers: {
           "Payment-Required": encodePaymentRequiredHeader(
             externalX402PaymentRequired(options.split402Offer)
+          )
+        }
+      });
+    }
+    if (parsed.pathname === "/mcp/call" && options.includeMcpCatalog === true) {
+      return mcpTextResponse("", {
+        status: 402,
+        headers: {
+          "Payment-Required": encodePaymentRequiredHeader(
+            {
+              ...externalX402PaymentRequired(options.split402Offer),
+              resource: {
+                url: "https://x402.example/mcp/call",
+                description: "Paid MCP-style tool execution gateway",
+                mimeType: "application/json"
+              }
+            }
           )
         }
       });

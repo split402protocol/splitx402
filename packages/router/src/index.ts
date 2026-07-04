@@ -39,6 +39,7 @@ export interface Split402CapabilityProvider {
     inputSchema?: unknown;
     referrerWallet?: string;
     payoutWallet?: string;
+    mcpTools?: Split402ExternalX402McpTool[];
   };
 }
 
@@ -185,10 +186,17 @@ export interface Split402ExternalX402RouteDescriptor {
   description?: string;
   price?: string;
   inputSchema?: unknown;
+  mcpTools?: Split402ExternalX402McpTool[];
   source: {
     manifest: boolean;
     openapi: boolean;
   };
+}
+
+export interface Split402ExternalX402McpTool {
+  name: string;
+  description?: string;
+  inputSchema?: unknown;
 }
 
 export interface Split402ExternalX402ProviderCandidate {
@@ -206,6 +214,7 @@ export interface Split402ExternalX402ProviderCandidate {
   amountAtomic?: string;
   facilitator?: string;
   inputSchema?: unknown;
+  mcpTools?: Split402ExternalX402McpTool[];
   split402Offer?: Split402OfferV1;
   split402OfferErrors?: string[];
   readiness:
@@ -800,9 +809,11 @@ export class Split402ExternalX402DiscoveryClient {
   ): Promise<Split402ExternalX402ProviderCandidate[]> {
     const manifest = await this.getOptionalJson("/.well-known/x402");
     const openapi = await this.getOptionalJson("/openapi.json");
+    const mcpToolCatalog = await this.getOptionalJson("/mcp/tools");
     const routes = collectExternalX402Routes({
       manifest,
       openapi,
+      mcpToolCatalog,
       includeFreeRoutes: input.includeFreeRoutes === true
     });
     const candidates: Split402ExternalX402ProviderCandidate[] = [];
@@ -910,6 +921,9 @@ export class Split402ExternalX402DiscoveryClient {
       ...(amountAtomic === undefined ? {} : { amountAtomic }),
       ...(facilitator === undefined ? {} : { facilitator }),
       ...(route.inputSchema === undefined ? {} : { inputSchema: route.inputSchema }),
+      ...(route.mcpTools === undefined || route.mcpTools.length === 0
+        ? {}
+        : { mcpTools: route.mcpTools }),
       ...(split402Offer === undefined ? {} : { split402Offer }),
       ...(split402OfferResult.errors.length === 0
         ? {}
@@ -949,7 +963,10 @@ export class Split402ExternalX402DiscoveryClient {
       metadata: {
         ...(input.route.inputSchema === undefined
           ? {}
-          : { inputSchema: input.route.inputSchema })
+          : { inputSchema: input.route.inputSchema }),
+        ...(input.route.mcpTools === undefined || input.route.mcpTools.length === 0
+          ? {}
+          : { mcpTools: input.route.mcpTools })
       }
     };
   }
@@ -1078,6 +1095,7 @@ export class Split402AgentSdkExecutor implements Split402RouterExecutor {
 function collectExternalX402Routes(input: {
   manifest: unknown;
   openapi: unknown;
+  mcpToolCatalog: unknown;
   includeFreeRoutes: boolean;
 }): Split402ExternalX402RouteDescriptor[] {
   const byKey = new Map<string, Split402ExternalX402RouteDescriptor>();
@@ -1110,7 +1128,98 @@ function collectExternalX402Routes(input: {
       }
     });
   }
+  const mcpGateway = readExternalMcpToolCatalog(input.mcpToolCatalog);
+  if (mcpGateway !== undefined) {
+    for (const [key, route] of byKey.entries()) {
+      if (!routeMatchesMcpPaidCall(route, mcpGateway.paidCallPath)) {
+        continue;
+      }
+      byKey.set(key, {
+        ...route,
+        ...(route.description === undefined
+          ? { description: `Paid MCP gateway with ${mcpGateway.tools.length} tools.` }
+          : {}),
+        inputSchema: route.inputSchema ?? createMcpToolCallInputSchema(mcpGateway.tools),
+        mcpTools: mcpGateway.tools
+      });
+    }
+  }
   return [...byKey.values()];
+}
+
+function routeMatchesMcpPaidCall(
+  route: Split402ExternalX402RouteDescriptor,
+  paidCallPath: string | undefined
+): boolean {
+  if (paidCallPath !== undefined && route.path === paidCallPath) {
+    return true;
+  }
+  return route.method === "POST" && route.path.toLowerCase() === "/mcp/call";
+}
+
+function readExternalMcpToolCatalog(
+  value: unknown
+): { paidCallPath?: string; tools: Split402ExternalX402McpTool[] } | undefined {
+  const catalog = readRecord(value);
+  const tools = Array.isArray(catalog?.tools)
+    ? catalog.tools.map(readExternalMcpTool).filter(isDefined)
+    : [];
+  if (tools.length === 0) {
+    return undefined;
+  }
+  const payment = readRecord(catalog?.payment);
+  const paidCallRoute = readOptionalString(payment?.paid_call_route);
+  const paidCallPath =
+    paidCallRoute === undefined
+      ? undefined
+      : normalizeExternalPathname(paidCallRoute);
+  return {
+    ...(paidCallPath === undefined ? {} : { paidCallPath }),
+    tools
+  };
+}
+
+function readExternalMcpTool(value: unknown): Split402ExternalX402McpTool | undefined {
+  const tool = readRecord(value);
+  const name = readOptionalString(tool?.name);
+  if (name === undefined) {
+    return undefined;
+  }
+  const description = readOptionalString(tool?.description);
+  const inputSchema = tool?.input_schema ?? tool?.inputSchema;
+  return {
+    name,
+    ...(description === undefined ? {} : { description }),
+    ...(inputSchema === undefined ? {} : { inputSchema })
+  };
+}
+
+function createMcpToolCallInputSchema(
+  tools: readonly Split402ExternalX402McpTool[]
+): unknown {
+  return {
+    type: "object",
+    properties: {
+      tool: {
+        type: "string",
+        enum: tools.map((tool) => tool.name)
+      },
+      arguments: {
+        type: "object",
+        additionalProperties: true
+      }
+    },
+    required: ["tool"],
+    additionalProperties: true
+  };
+}
+
+function normalizeExternalPathname(value: string): string | undefined {
+  try {
+    return new URL(value).pathname;
+  } catch {
+    return normalizeOpenApiPath(value);
+  }
 }
 
 function readManifestPaidRoutes(
@@ -2005,6 +2114,10 @@ function readRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null
     ? (value as Record<string, unknown>)
     : undefined;
+}
+
+function isDefined<T>(value: T | undefined): value is T {
+  return value !== undefined;
 }
 
 function readOptionalString(value: unknown): string | undefined {

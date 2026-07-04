@@ -26,6 +26,13 @@ falling back to conservative placeholder values. This keeps onboarding useful
 for real routes such as `/price/{coin}` or `/research/{topic}` without sending a
 paid request.
 
+If an external provider exposes a free `/mcp/tools` catalog and a paid
+`/mcp/call` route, discovery also attaches the public tool names, descriptions,
+and input schemas to the onboarding candidate. This helps agents understand
+which paid MCP-style tools are available, but it does not make the route
+router-ready until the unpaid x402 response also includes a valid Split402 offer
+extension.
+
 When `--artifacts-dir` is supplied, discovery also writes per-candidate provider
 files:
 
