@@ -133,7 +133,7 @@ describe("Phase 7 staging evidence workspace", () => {
     expect(workspace.readmeText).toContain("mcp-gateway.jsonl");
     expect(workspace.readmeText).toContain("artifact-manifest.json");
     expect(workspace.readmeText).toContain(
-      "router-backed discovery, execution, and receipt lookup",
+      "router-backed discovery, quote preflight, execution, and receipt lookup",
     );
     expect(workspace.readmeText).toContain(
       "SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging corepack pnpm phase7:staging:seed",

@@ -2155,6 +2155,7 @@ function validateMcpGatewayTranscript(
     );
     for (const requiredTool of [
       "split402.searchCapabilities",
+      "split402.quote",
       "split402.execute",
       "split402.getReceipt",
     ]) {
@@ -2210,6 +2211,205 @@ function validateMcpGatewayTranscript(
       }
     }
   }
+  const searchBudget =
+    searchRequest === undefined
+      ? undefined
+      : readRecord(readToolCallArguments(searchRequest.message)?.budget);
+  const searchMaxAmountAtomic = readNonEmptyString(searchBudget?.maxAmountAtomic);
+
+  const quoteRequest = findRequest(
+    lines,
+    (message) => readToolCallName(message) === "split402.quote",
+  );
+  let quoteProviderId: string | undefined;
+  let quotedAmountAtomic: bigint | undefined;
+  let quoteProvider: Record<string, unknown> | undefined;
+  let quoteProviderIdValue: string | undefined;
+  let quoteProviderNetwork: string | undefined;
+  let quoteProviderAsset: string | undefined;
+  let quoteProviderMerchantOrigin: string | undefined;
+  let quoteProviderOperationId: string | undefined;
+  let quoteProviderCampaignId: string | undefined;
+  let quoteProviderPayToWallet: string | undefined;
+  let quoteProviderRouteId: string | undefined;
+  let quoteProviderReferrerWallet: string | undefined;
+  let quoteProviderPayoutWallet: string | undefined;
+  let quoteProviderAmount: bigint | undefined;
+  if (quoteRequest === undefined) {
+    blockers.push("mcp_gateway_evidence missing split402.quote request");
+  } else {
+    const quoteArguments = readToolCallArguments(quoteRequest.message);
+    const quoteCapability = readNonEmptyString(quoteArguments?.capability);
+    if (quoteCapability === undefined) {
+      blockers.push("mcp_gateway_evidence quote request missing capability");
+    } else if (
+      searchCapability !== undefined &&
+      quoteCapability !== searchCapability
+    ) {
+      blockers.push(
+        "mcp_gateway_evidence quote capability does not match search capability",
+      );
+    }
+    const quoteBudget = readRecord(quoteArguments?.budget);
+    const quoteMaxAmountAtomic = readNonEmptyString(
+      quoteBudget?.maxAmountAtomic,
+    );
+    if (quoteMaxAmountAtomic === undefined) {
+      blockers.push(
+        "mcp_gateway_evidence quote request missing budget.maxAmountAtomic",
+      );
+    } else if (
+      searchMaxAmountAtomic !== undefined &&
+      quoteMaxAmountAtomic !== searchMaxAmountAtomic
+    ) {
+      blockers.push(
+        "mcp_gateway_evidence quote budget.maxAmountAtomic does not match search budget",
+      );
+    }
+
+    const quoteResponse = findResponse(lines, quoteRequest.message.id);
+    const quoteContent = readStructuredContent(quoteResponse);
+    if (quoteContent === undefined) {
+      blockers.push("mcp_gateway_evidence quote response is missing structuredContent");
+    } else {
+      quoteProviderId = readNonEmptyString(quoteContent.providerId);
+      quotedAmountAtomic = readPositiveAtomicString(
+        quoteContent.quotedAmountAtomic,
+      );
+      quoteProvider = readRecord(quoteContent.provider);
+      quoteProviderIdValue = readNonEmptyString(quoteProvider?.providerId);
+      quoteProviderNetwork = readNonEmptyString(quoteProvider?.network);
+      quoteProviderAsset = readNonEmptyString(quoteProvider?.asset);
+      quoteProviderMerchantOrigin = readNonEmptyString(
+        quoteProvider?.merchantOrigin,
+      );
+      quoteProviderOperationId = readNonEmptyString(quoteProvider?.operationId);
+      quoteProviderCampaignId = readNonEmptyString(quoteProvider?.campaignId);
+      quoteProviderPayToWallet = readNonEmptyString(quoteProvider?.payToWallet);
+      quoteProviderRouteId = readNonEmptyString(quoteProvider?.routeId);
+      quoteProviderReferrerWallet = readNonEmptyString(
+        quoteProvider?.referrerWallet,
+      );
+      quoteProviderPayoutWallet = readNonEmptyString(
+        quoteProvider?.payoutWallet,
+      );
+      quoteProviderAmount = readPositiveAtomicString(quoteProvider?.amountAtomic);
+      for (const [field, value] of [
+        ["providerId", quoteContent.providerId],
+        ["quotedAmountAtomic", quoteContent.quotedAmountAtomic],
+      ] as const) {
+        if (readNonEmptyString(value) === undefined) {
+          blockers.push(`mcp_gateway_evidence quote response missing ${field}`);
+        }
+      }
+      if (quoteContent.executionMode !== "router-live-agent-sdk") {
+        blockers.push(
+          "mcp_gateway_evidence quote response executionMode must be router-live-agent-sdk",
+        );
+      }
+      if (readNonNegativeInteger(quoteContent.maxAttempts) === undefined) {
+        blockers.push("mcp_gateway_evidence quote response maxAttempts is missing");
+      }
+      if (quoteProvider === undefined) {
+        blockers.push(
+          "mcp_gateway_evidence quote response missing selected provider summary",
+        );
+      } else {
+        if (quoteProviderIdValue === undefined) {
+          blockers.push("mcp_gateway_evidence quote provider providerId is missing");
+        } else if (
+          quoteProviderId !== undefined &&
+          quoteProviderIdValue !== quoteProviderId
+        ) {
+          blockers.push(
+            "mcp_gateway_evidence quote provider providerId does not match quote providerId",
+          );
+        }
+        if (quoteProviderNetwork === undefined) {
+          blockers.push("mcp_gateway_evidence quote provider network is missing");
+        }
+        if (quoteProviderAsset === undefined) {
+          blockers.push("mcp_gateway_evidence quote provider asset is missing");
+        }
+        if (quoteProviderMerchantOrigin === undefined) {
+          blockers.push(
+            "mcp_gateway_evidence quote provider merchantOrigin is missing",
+          );
+        }
+        if (quoteProviderOperationId === undefined) {
+          blockers.push("mcp_gateway_evidence quote provider operationId is missing");
+        }
+        if (quoteProviderCampaignId === undefined) {
+          blockers.push("mcp_gateway_evidence quote provider campaignId is missing");
+        }
+        if (quoteProviderPayToWallet === undefined) {
+          blockers.push("mcp_gateway_evidence quote provider payToWallet is missing");
+        }
+        if (quoteProviderAmount === undefined) {
+          blockers.push(
+            "mcp_gateway_evidence quote provider amountAtomic must be a positive atomic amount",
+          );
+        }
+        if (quoteProviderRouteId === undefined) {
+          blockers.push("mcp_gateway_evidence quote provider routeId is missing");
+        }
+        if (quoteProviderReferrerWallet === undefined) {
+          blockers.push(
+            "mcp_gateway_evidence quote provider referrerWallet is missing",
+          );
+        }
+        if (quoteProviderPayoutWallet === undefined) {
+          blockers.push(
+            "mcp_gateway_evidence quote provider payoutWallet is missing",
+          );
+        }
+      }
+      if (
+        quotedAmountAtomic !== undefined &&
+        quoteProviderAmount !== undefined &&
+        quotedAmountAtomic !== quoteProviderAmount
+      ) {
+        blockers.push(
+          "mcp_gateway_evidence quote amount does not match quote provider amountAtomic",
+        );
+      }
+      const rankedProviders = readStructuredArray(quoteResponse, "rankedProviders");
+      const firstRankedProvider = rankedProviders
+        ?.map(readRecord)
+        .find((provider) => provider?.rank === 1);
+      if (rankedProviders === undefined || rankedProviders.length === 0) {
+        blockers.push("mcp_gateway_evidence quote response missing rankedProviders");
+      } else if (firstRankedProvider === undefined) {
+        blockers.push(
+          "mcp_gateway_evidence quote selected provider must be first ranked provider",
+        );
+      } else {
+        const firstRankedProviderId = readNonEmptyString(
+          firstRankedProvider.providerId,
+        );
+        const firstRankedAmount = readPositiveAtomicString(
+          firstRankedProvider.amountAtomic,
+        );
+        if (
+          quoteProviderId !== undefined &&
+          firstRankedProviderId !== quoteProviderId
+        ) {
+          blockers.push(
+            "mcp_gateway_evidence quote selected provider is missing from rankedProviders",
+          );
+        }
+        if (
+          quotedAmountAtomic !== undefined &&
+          firstRankedAmount !== undefined &&
+          firstRankedAmount !== quotedAmountAtomic
+        ) {
+          blockers.push(
+            "mcp_gateway_evidence quote first ranked amountAtomic does not match quotedAmountAtomic",
+          );
+        }
+      }
+    }
+  }
 
   const executeRequest = findRequest(
     lines,
@@ -2219,11 +2419,6 @@ function validateMcpGatewayTranscript(
     blockers.push("mcp_gateway_evidence missing split402.execute request");
     return;
   }
-  const searchBudget =
-    searchRequest === undefined
-      ? undefined
-      : readRecord(readToolCallArguments(searchRequest.message)?.budget);
-  const searchMaxAmountAtomic = readNonEmptyString(searchBudget?.maxAmountAtomic);
   const executeArguments = readToolCallArguments(executeRequest.message);
   const executeCapability = readNonEmptyString(executeArguments?.capability);
   if (executeCapability === undefined) {
@@ -2480,6 +2675,72 @@ function validateMcpGatewayTranscript(
       );
     }
   }
+  if (quoteProvider !== undefined && selectedProvider !== undefined) {
+    for (const [field, quoteValue, selectedValue] of [
+      ["providerId", quoteProviderIdValue, providerId],
+      ["network", quoteProviderNetwork, selectedProviderNetwork],
+      ["asset", quoteProviderAsset, selectedProviderAsset],
+      ["merchantOrigin", quoteProviderMerchantOrigin, selectedProviderMerchantOrigin],
+      ["operationId", quoteProviderOperationId, selectedProviderOperationId],
+      ["campaignId", quoteProviderCampaignId, selectedProviderCampaignId],
+      ["payToWallet", quoteProviderPayToWallet, selectedProviderPayToWallet],
+      ["routeId", quoteProviderRouteId, selectedProviderRouteId],
+      ["referrerWallet", quoteProviderReferrerWallet, selectedProviderReferrerWallet],
+      ["payoutWallet", quoteProviderPayoutWallet, selectedProviderPayoutWallet],
+    ] as const) {
+      if (
+        quoteValue !== undefined &&
+        selectedValue !== undefined &&
+        quoteValue !== selectedValue
+      ) {
+        blockers.push(
+          `mcp_gateway_evidence quote provider ${field} does not match selected provider`,
+        );
+      }
+    }
+    if (
+      quoteProviderAmount !== undefined &&
+      selectedProviderAmount !== undefined &&
+      quoteProviderAmount !== selectedProviderAmount
+    ) {
+      blockers.push(
+        "mcp_gateway_evidence quote provider amountAtomic does not match selected provider",
+      );
+    }
+  }
+  if (quoteProvider !== undefined && executeProvider !== undefined) {
+    for (const [field, quoteValue, executeValue] of [
+      ["providerId", quoteProviderIdValue, executeProviderId],
+      ["network", quoteProviderNetwork, executeProviderNetwork],
+      ["asset", quoteProviderAsset, executeProviderAsset],
+      ["merchantOrigin", quoteProviderMerchantOrigin, executeProviderMerchantOrigin],
+      ["operationId", quoteProviderOperationId, executeProviderOperationId],
+      ["campaignId", quoteProviderCampaignId, executeProviderCampaignId],
+      ["payToWallet", quoteProviderPayToWallet, executeProviderPayToWallet],
+      ["routeId", quoteProviderRouteId, executeProviderRouteId],
+      ["referrerWallet", quoteProviderReferrerWallet, executeProviderReferrerWallet],
+      ["payoutWallet", quoteProviderPayoutWallet, executeProviderPayoutWallet],
+    ] as const) {
+      if (
+        quoteValue !== undefined &&
+        executeValue !== undefined &&
+        quoteValue !== executeValue
+      ) {
+        blockers.push(
+          `mcp_gateway_evidence quote provider ${field} does not match execute provider`,
+        );
+      }
+    }
+    if (
+      quoteProviderAmount !== undefined &&
+      executeProviderAmount !== undefined &&
+      quoteProviderAmount !== executeProviderAmount
+    ) {
+      blockers.push(
+        "mcp_gateway_evidence quote provider amountAtomic does not match execute provider",
+      );
+    }
+  }
   const amountPaidAtomic = readNonNegativeAtomicString(
     executeContent.amountPaidAtomic,
   );
@@ -2491,6 +2752,24 @@ function validateMcpGatewayTranscript(
   ) {
     blockers.push(
       "mcp_gateway_evidence execute response amountPaidAtomic exceeds budget.maxAmountAtomic",
+    );
+  }
+  if (
+    quoteProviderId !== undefined &&
+    providerId !== undefined &&
+    quoteProviderId !== providerId
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence execute providerId does not match quote providerId",
+    );
+  }
+  if (
+    quotedAmountAtomic !== undefined &&
+    amountPaidAtomic !== undefined &&
+    quotedAmountAtomic !== amountPaidAtomic
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence execute amountPaidAtomic does not match quote quotedAmountAtomic",
     );
   }
   if (receiptId === undefined) {

@@ -21,10 +21,25 @@ export interface Phase7McpGatewayEvidenceReport {
   capability: string;
   proofReady: boolean;
   blockers: string[];
+  quoteCaptured: boolean;
   executionCaptured: boolean;
   receiptLookupCaptured: boolean;
   providerId?: string;
   maxAmountAtomic?: string;
+  quoteProviderId?: string;
+  quotedAmountAtomic?: string;
+  quoteExecutionMode?: string;
+  quoteMaxAttempts?: number;
+  quoteProviderNetwork?: string;
+  quoteProviderAsset?: string;
+  quoteProviderMerchantOrigin?: string;
+  quoteProviderOperationId?: string;
+  quoteProviderCampaignId?: string;
+  quoteProviderAmountAtomic?: string;
+  quoteProviderPayToWallet?: string;
+  quoteProviderRouteId?: string;
+  quoteProviderReferrerWallet?: string;
+  quoteProviderPayoutWallet?: string;
   providerNetwork?: string;
   providerAsset?: string;
   providerMerchantOrigin?: string;
@@ -126,9 +141,11 @@ export async function collectPhase7McpGatewayEvidence(
   ];
   const transcript: TranscriptLine[] = [];
   let responseCount = 0;
+  let quoteCaptured = false;
   let executionCaptured = false;
   let receiptLookupCaptured = false;
   let searchResponse: McpGatewayResponse | undefined;
+  let quoteSummary: McpGatewayQuoteSummary | undefined;
   let executionSummary: McpGatewayExecutionSummary | undefined;
   let receiptSummary: McpGatewayReceiptSummary | undefined;
   const blockers: string[] = [];
@@ -147,6 +164,36 @@ export async function collectPhase7McpGatewayEvidence(
     }
   }
   if (shouldCaptureExecution(context.executionMode, env)) {
+    const quoteRequest: JsonRpcRequest = {
+      jsonrpc: "2.0",
+      id: "quote",
+      method: "tools/call",
+      params: {
+        name: "split402.quote",
+        arguments: {
+          capability,
+          budget: { maxAmountAtomic },
+        },
+      },
+    };
+    transcript.push({ direction: "request", message: quoteRequest });
+    const quoteResponse = await handleMcpGatewayLineAsync(
+      JSON.stringify(quoteRequest),
+      context,
+    );
+    if (quoteResponse !== undefined) {
+      responseCount += 1;
+      transcript.push({ direction: "response", message: quoteResponse });
+      quoteCaptured = quoteResponse.error === undefined;
+      if (quoteResponse.error !== undefined) {
+        blockers.push(`split402.quote failed: ${quoteResponse.error.message}`);
+      }
+      quoteSummary = readQuoteSummary(quoteResponse);
+      if (quoteResponse.error === undefined && quoteSummary === undefined) {
+        addQuoteSummaryBlockers(quoteResponse, blockers);
+      }
+    }
+
     const executeRequest: JsonRpcRequest = {
       jsonrpc: "2.0",
       id: "execute",
@@ -220,6 +267,9 @@ export async function collectPhase7McpGatewayEvidence(
     blockers.push(
       "mcp_gateway_evidence requires split402.execute; set SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 for hosted mode",
     );
+  }
+  if (!quoteCaptured) {
+    blockers.push("mcp_gateway_evidence did not capture successful split402.quote");
   }
   if (!executionCaptured) {
     blockers.push("mcp_gateway_evidence did not capture successful split402.execute");
@@ -349,6 +399,56 @@ export async function collectPhase7McpGatewayEvidence(
         }
       }
     }
+    if (quoteSummary !== undefined) {
+      if (quoteSummary.executionMode !== context.executionMode) {
+        blockers.push(
+          "mcp_gateway_evidence quote response executionMode does not match collector execution mode",
+        );
+      }
+      if (quoteSummary.provider.providerId !== quoteSummary.providerId) {
+        blockers.push(
+          "mcp_gateway_evidence quote provider providerId does not match quote providerId",
+        );
+      }
+      if (quoteSummary.quotedAmountAtomic !== quoteSummary.provider.amountAtomic) {
+        blockers.push(
+          "mcp_gateway_evidence quote amount does not match quote provider amountAtomic",
+        );
+      }
+      if (quoteSummary.providerId !== executionSummary.providerId) {
+        blockers.push(
+          "mcp_gateway_evidence execute providerId does not match quote providerId",
+        );
+      }
+      if (quoteSummary.quotedAmountAtomic !== executionSummary.amountPaidAtomic) {
+        blockers.push(
+          "mcp_gateway_evidence execute amountPaidAtomic does not match quote quotedAmountAtomic",
+        );
+      }
+      compareProviderSummaries(
+        quoteSummary.provider,
+        executionSummary.provider,
+        "quote provider",
+        "execute provider",
+        blockers,
+      );
+      const rankedProvider = quoteSummary.rankedProviders.find(
+        (provider) => provider.providerId === quoteSummary.providerId,
+      );
+      if (rankedProvider === undefined) {
+        blockers.push(
+          "mcp_gateway_evidence quote selected provider is missing from rankedProviders",
+        );
+      } else if (rankedProvider.rank !== 1) {
+        blockers.push(
+          "mcp_gateway_evidence quote selected provider must be first ranked provider",
+        );
+      } else if (rankedProvider.amountAtomic !== quoteSummary.quotedAmountAtomic) {
+        blockers.push(
+          "mcp_gateway_evidence quote first ranked amountAtomic does not match quotedAmountAtomic",
+        );
+      }
+    }
     const amountPaid = readAtomicAmount(executionSummary.amountPaidAtomic);
     const maxAmount = readAtomicAmount(maxAmountAtomic);
     if (amountPaid === undefined || maxAmount === undefined) {
@@ -376,9 +476,28 @@ export async function collectPhase7McpGatewayEvidence(
     capability,
     proofReady: blockers.length === 0,
     blockers,
+    quoteCaptured,
     executionCaptured,
     receiptLookupCaptured,
     maxAmountAtomic,
+    ...(quoteSummary === undefined
+      ? {}
+      : {
+          quoteProviderId: quoteSummary.providerId,
+          quotedAmountAtomic: quoteSummary.quotedAmountAtomic,
+          quoteExecutionMode: quoteSummary.executionMode,
+          quoteMaxAttempts: quoteSummary.maxAttempts,
+          quoteProviderNetwork: quoteSummary.provider.network,
+          quoteProviderAsset: quoteSummary.provider.asset,
+          quoteProviderMerchantOrigin: quoteSummary.provider.merchantOrigin,
+          quoteProviderOperationId: quoteSummary.provider.operationId,
+          quoteProviderCampaignId: quoteSummary.provider.campaignId,
+          quoteProviderAmountAtomic: quoteSummary.provider.amountAtomic,
+          quoteProviderPayToWallet: quoteSummary.provider.payToWallet,
+          quoteProviderRouteId: quoteSummary.provider.routeId,
+          quoteProviderReferrerWallet: quoteSummary.provider.referrerWallet,
+          quoteProviderPayoutWallet: quoteSummary.provider.payoutWallet,
+        }),
     ...(providerSummary === undefined
       ? {}
       : {
@@ -472,6 +591,21 @@ interface McpGatewayExecutionSummary {
   provider: McpGatewayProviderSummary;
 }
 
+interface McpGatewayQuoteSummary {
+  providerId: string;
+  quotedAmountAtomic: string;
+  executionMode: Phase7McpGatewayEvidenceReport["executionMode"];
+  maxAttempts: number;
+  provider: McpGatewayProviderSummary;
+  rankedProviders: McpGatewayRankedProviderSummary[];
+}
+
+interface McpGatewayRankedProviderSummary {
+  rank: number;
+  providerId: string;
+  amountAtomic: string;
+}
+
 interface McpGatewayReceiptSummary {
   routeId: string;
   network: string;
@@ -505,6 +639,86 @@ interface McpGatewayProviderSummary {
 }
 
 type McpGatewaySearchProviderSummary = McpGatewayProviderSummary;
+
+function readQuoteSummary(
+  response: McpGatewayResponse,
+): McpGatewayQuoteSummary | undefined {
+  const result = readRecord(response.result);
+  const structuredContent = readRecord(result?.structuredContent);
+  const providerId = readNonEmptyString(structuredContent?.providerId);
+  const quotedAmountAtomic = readNonEmptyString(
+    structuredContent?.quotedAmountAtomic,
+  );
+  const executionMode = readExecutionMode(structuredContent?.executionMode);
+  const maxAttempts = readNonNegativeInteger(structuredContent?.maxAttempts);
+  const provider = readProviderSummary(readRecord(structuredContent?.provider));
+  const rankedProviders = Array.isArray(structuredContent?.rankedProviders)
+    ? structuredContent.rankedProviders
+        .map(readRankedProviderSummary)
+        .filter(
+          (rankedProvider): rankedProvider is McpGatewayRankedProviderSummary =>
+            rankedProvider !== undefined,
+        )
+    : undefined;
+  if (
+    providerId === undefined ||
+    quotedAmountAtomic === undefined ||
+    executionMode === undefined ||
+    maxAttempts === undefined ||
+    provider === undefined ||
+    rankedProviders === undefined ||
+    rankedProviders.length === 0
+  ) {
+    return undefined;
+  }
+  return {
+    providerId,
+    quotedAmountAtomic,
+    executionMode,
+    maxAttempts,
+    provider,
+    rankedProviders,
+  };
+}
+
+function addQuoteSummaryBlockers(
+  response: McpGatewayResponse,
+  blockers: string[],
+): void {
+  const result = readRecord(response.result);
+  const structuredContent = readRecord(result?.structuredContent);
+  if (structuredContent === undefined) {
+    blockers.push("mcp_gateway_evidence quote response is missing structuredContent");
+    return;
+  }
+  for (const [field, value] of [
+    ["providerId", structuredContent.providerId],
+    ["quotedAmountAtomic", structuredContent.quotedAmountAtomic],
+  ] as const) {
+    if (readNonEmptyString(value) === undefined) {
+      blockers.push(`mcp_gateway_evidence quote response missing ${field}`);
+    }
+  }
+  if (readExecutionMode(structuredContent.executionMode) === undefined) {
+    blockers.push(
+      "mcp_gateway_evidence quote response executionMode is missing or unsupported",
+    );
+  }
+  if (readNonNegativeInteger(structuredContent.maxAttempts) === undefined) {
+    blockers.push("mcp_gateway_evidence quote response maxAttempts is missing");
+  }
+  if (readProviderSummary(readRecord(structuredContent.provider)) === undefined) {
+    blockers.push(
+      "mcp_gateway_evidence quote response missing selected provider summary",
+    );
+  }
+  const rankedProviders = Array.isArray(structuredContent.rankedProviders)
+    ? structuredContent.rankedProviders
+    : undefined;
+  if (rankedProviders === undefined || rankedProviders.length === 0) {
+    blockers.push("mcp_gateway_evidence quote response missing rankedProviders");
+  }
+}
 
 function readExecutionSummary(
   response: McpGatewayResponse,
@@ -590,6 +804,19 @@ function addExecutionSummaryBlockers(
       "mcp_gateway_evidence execute response referrerCreditAtomic must be positive",
     );
   }
+}
+
+function readRankedProviderSummary(
+  value: unknown,
+): McpGatewayRankedProviderSummary | undefined {
+  const record = readRecord(value);
+  const rank = readNonNegativeInteger(record?.rank);
+  const providerId = readNonEmptyString(record?.providerId);
+  const amountAtomic = readNonEmptyString(record?.amountAtomic);
+  if (rank === undefined || providerId === undefined || amountAtomic === undefined) {
+    return undefined;
+  }
+  return { rank, providerId, amountAtomic };
 }
 
 function readReceiptSummary(
@@ -890,6 +1117,12 @@ function readBasisPoints(value: unknown): number | undefined {
     typeof value === "number" &&
     value >= 0 &&
     value <= 10_000
+    ? value
+    : undefined;
+}
+
+function readNonNegativeInteger(value: unknown): number | undefined {
+  return Number.isInteger(value) && typeof value === "number" && value >= 0
     ? value
     : undefined;
 }

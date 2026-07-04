@@ -202,31 +202,32 @@ uncommitted source changes. Generated proof artifacts remain local and do not
 block the status check.
 Attach `split402-launch-evidence/phase7-staging-evidence/mcp-gateway.jsonl`
 as `mcp_gateway_evidence`.
-The collector runs the gateway with JSON-RPC `initialize`, `tools/list`, and
-budget-filtered `split402.searchCapabilities` requests using
-`SPLIT402_MCP_MAX_AMOUNT_ATOMIC`. Set `SPLIT402_MCP_CONTROL_PLANE_URL` for
-hosted route discovery. Phase 7 proof closure also requires
-`split402.execute` and `split402.getReceipt` in `router-live-agent-sdk` mode, so
-keep `SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1` enabled only after the same staging
-run has live x402 buyer configuration. Set `SPLIT402_MCP_SVM_PRIVATE_KEY` or
-`SVM_PRIVATE_KEY` to the funded buyer key, and set `SPLIT402_MCP_WALLET` and
-`SPLIT402_MCP_MAX_AMOUNT_ATOMIC` for the execution input and budget. The status
-validator requires the search and execute budgets to match, the selected
-provider network/asset/merchant origin/operation id/campaign id/amount/pay-to
-wallet/route id/referrer wallet/payout wallet to match the receipt, and the
-reported paid amount to stay within that budget. It also compares
+The collector runs the gateway with JSON-RPC `initialize`, `tools/list`,
+budget-filtered `split402.searchCapabilities`, and budgeted `split402.quote`
+requests using `SPLIT402_MCP_MAX_AMOUNT_ATOMIC`. Set
+`SPLIT402_MCP_CONTROL_PLANE_URL` for hosted route discovery. Phase 7 proof
+closure also requires `split402.execute` and `split402.getReceipt` in
+`router-live-agent-sdk` mode, so keep `SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1`
+enabled only after the same staging run has live x402 buyer configuration. Set
+`SPLIT402_MCP_SVM_PRIVATE_KEY` or `SVM_PRIVATE_KEY` to the funded buyer key, and
+set `SPLIT402_MCP_WALLET` and `SPLIT402_MCP_MAX_AMOUNT_ATOMIC` for the execution
+input and budget. The status validator requires the search, quote, and execute
+budgets to match; the selected quote provider and amount to match execution;
+the provider network/asset/merchant origin/operation id/campaign
+id/amount/pay-to wallet/route id/referrer wallet/payout wallet to match the
+receipt; and the reported paid amount to stay within that budget. It also compares
 receipt-verification evidence with the paid-suite valid and invalid-claim
 receipt summaries, so stale receipt artifacts from another run keep the proof
 no-go. If hosted execution is enabled without a buyer signer, the collector
 fails before producing misleading partial evidence. If the gateway falls back to
 `router-demo-mock`, the collector remains no-go.
-The collector JSON report should echo the provider id, paid amount, receipt id,
-receipt verification status, referrer credit, provider route id, receipt route
-id, provider merchant origin, receipt merchant origin, provider operation id,
-receipt operation id, provider campaign id, receipt campaign id, provider
-referrer wallet, receipt referrer wallet, provider payout wallet, receipt payout
-wallet, commission bps, protocol-fee bps, commission amount, and protocol-fee
-amount from the executed router call.
+The collector JSON report should echo the quoted provider id, quoted amount,
+provider id, paid amount, receipt id, receipt verification status, referrer
+credit, provider route id, receipt route id, provider merchant origin, receipt
+merchant origin, provider operation id, receipt operation id, provider campaign
+id, receipt campaign id, provider referrer wallet, receipt referrer wallet,
+provider payout wallet, receipt payout wallet, commission bps, protocol-fee bps,
+commission amount, and protocol-fee amount from the executed router call.
 The selected MCP provider route id must also appear in the collected
 `agent-discovery.json`, with matching campaign id, referrer wallet, and payout
 wallet.

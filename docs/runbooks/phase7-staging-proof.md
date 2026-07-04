@@ -114,11 +114,17 @@ collection. The collector writes the read artifact files only after every read
 artifact has passed validation, avoiding partial evidence directories from
 failed runs.
 `phase7:staging:collect-mcp-gateway` captures `mcp-gateway.jsonl` by sending
-`initialize`, `tools/list`, `split402.searchCapabilities`, `split402.execute`,
-and `split402.getReceipt` requests through the MCP gateway. The transcript must
-include provider used, amount paid, receipt id, receipt verification status, and
-referrer credit, and the collector's JSON report echoes those fields as
-`providerId`, `providerNetwork`, `providerAsset`, `providerAmountAtomic`,
+`initialize`, `tools/list`, `split402.searchCapabilities`, `split402.quote`,
+`split402.execute`, and `split402.getReceipt` requests through the MCP gateway.
+The transcript must include provider used, quoted amount, amount paid, receipt
+id, receipt verification status, and referrer credit, and the collector's JSON
+report echoes those fields as `quoteProviderId`, `quotedAmountAtomic`,
+`quoteExecutionMode`, `quoteMaxAttempts`, `quoteProviderNetwork`,
+`quoteProviderAsset`, `quoteProviderAmountAtomic`, `quoteProviderMerchantOrigin`,
+`quoteProviderOperationId`, `quoteProviderCampaignId`, `quoteProviderPayToWallet`,
+`quoteProviderRouteId`, `quoteProviderReferrerWallet`,
+`quoteProviderPayoutWallet`, `providerId`, `providerNetwork`, `providerAsset`,
+`providerAmountAtomic`,
 `providerMerchantOrigin`, `providerOperationId`, `providerCampaignId`,
 `providerPayToWallet`, `providerRouteId`, `providerReferrerWallet`,
 `providerPayoutWallet`, matching `executeProviderNetwork`,
@@ -133,12 +139,13 @@ plus receipt-side `network`, `asset`, `merchantOrigin`, `operationId`,
 `receiptReferrerCreditAtomic`, `receiptReferrerWallet`, `receiptPayoutWallet`,
 route id, commission bps, protocol-fee bps, and commission/protocol-fee amounts
 when receipt lookup succeeds. The collector rejects the report if the receipt
-amount, selected-provider payment details, selected-provider merchant origin,
-operation id, campaign id, route id, referrer wallet, payout wallet, commission,
-protocol fee, or referrer credit arithmetic does not match. It also rejects
-execute evidence with missing required fields, missing or inconsistent
-execute-provider summary fields, unsupported execution mode, unverified receipt
-status, or zero referrer credit. Demo mode is a local
+amount, quoted amount, selected-provider payment details, quote-provider payment
+details, selected-provider merchant origin, operation id, campaign id, route id,
+referrer wallet, payout wallet, commission, protocol fee, or referrer credit
+arithmetic does not match. It also rejects quote or execute evidence with
+missing required fields, missing or inconsistent provider summary fields,
+unsupported execution mode, unverified receipt status, or zero referrer credit.
+Demo mode is a local
 contract check only and remains no-go for hosted Phase 7 proof. Proof-ready
 MCP gateway evidence must run in `router-live-agent-sdk` mode: set
 `SPLIT402_MCP_CONTROL_PLANE_URL` for hosted route discovery, set
@@ -165,8 +172,8 @@ hash every artifact. Attach the generated `artifact-manifest.json` locally; the
 status checker will not close the proof against a remote manifest URL. Generate
 it after the evidence files exist and before the final assemble/status check.
 The MCP gateway transcript is attached as `mcp_gateway_evidence`; it proves
-gateway discovery, execution, and receipt lookup in addition to the stable
-`mcp-bundle.json` evidence.
+gateway discovery, quote preflight, execution, and receipt lookup in addition
+to the stable `mcp-bundle.json` evidence.
 Attach `mcp-bundle.json` locally as `mcp_bundle_evidence`; the status checker
 parses it to verify the paid MCP tool, x402 price, Split402 campaign metadata,
 protocol fee basis points, and expected referral economics.
@@ -298,14 +305,18 @@ The validator requires:
   `split402.searchCapabilities` request/response pairs. The search request must
   include `budget.maxAmountAtomic` so the proof demonstrates budget-filtered
   capability discovery. The tools/list response must advertise
-  `split402.searchCapabilities`, `split402.execute`, and `split402.getReceipt`.
-  The transcript must include `split402.execute` for the same capability and
-  `budget.maxAmountAtomic`, using a provider id returned by the search response,
-  selected provider network, asset, amount, and `payToWallet`, amount paid at
-  or below that budget, verified receipt status, positive referrer credit, and a
-  matching `split402.getReceipt` response whose receipt payload has the same
-  receipt id, required amount, referrer credit, selected-provider payment
-  details, selected-provider merchant origin, selected-provider operation id,
+  `split402.searchCapabilities`, `split402.quote`, `split402.execute`, and
+  `split402.getReceipt`. The transcript must include `split402.quote` for the
+  same capability and `budget.maxAmountAtomic`; the quote response must name the
+  selected provider, quoted amount, selected-provider summary, and first ranked
+  provider. The transcript must then include `split402.execute` for the same
+  capability and budget, using the same provider id and amount returned by quote
+  and a provider id returned by the search response, selected provider network,
+  asset, amount, and `payToWallet`, amount paid at or below that budget,
+  verified receipt status, positive referrer credit, and a matching
+  `split402.getReceipt` response whose receipt payload has the same receipt id,
+  required amount, referrer credit, selected-provider payment details,
+  selected-provider merchant origin, selected-provider operation id,
   selected-provider campaign id, selected-provider route attribution,
   selected-provider referrer wallet, and selected-provider payout wallet. The
   selected provider route id must also be present in

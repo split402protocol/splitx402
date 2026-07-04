@@ -37,9 +37,11 @@ describe("Phase 7 MCP gateway evidence collector", () => {
       proofReady: false,
       blockers: [
         "mcp_gateway_evidence requires split402.execute; set SPLIT402_PHASE7_MCP_GATEWAY_EXECUTE=1 for hosted mode",
+        "mcp_gateway_evidence did not capture successful split402.quote",
         "mcp_gateway_evidence did not capture successful split402.execute",
         "mcp_gateway_evidence did not capture successful split402.getReceipt",
       ],
+      quoteCaptured: false,
       executionCaptured: false,
       receiptLookupCaptured: false,
       maxAmountAtomic: "50000",
@@ -86,10 +88,25 @@ describe("Phase 7 MCP gateway evidence collector", () => {
       blockers: [
         "mcp_gateway_evidence requires router-live-agent-sdk execution mode for Phase 7 hosted proof",
       ],
+      quoteCaptured: true,
       executionCaptured: true,
       receiptLookupCaptured: true,
       providerId: "split402-demo-merchant",
       maxAmountAtomic: "50000",
+      quoteProviderId: "split402-demo-merchant",
+      quotedAmountAtomic: "10000",
+      quoteExecutionMode: "router-demo-mock",
+      quoteMaxAttempts: 1,
+      quoteProviderNetwork: bundle.mcp.tools[0].x402.network,
+      quoteProviderAsset: bundle.mcp.tools[0].x402.asset,
+      quoteProviderMerchantOrigin: bundle.merchant.origin,
+      quoteProviderOperationId: bundle.mcp.tools[0].split402.operationId,
+      quoteProviderCampaignId: bundle.mcp.tools[0].split402.campaignId,
+      quoteProviderAmountAtomic: "10000",
+      quoteProviderPayToWallet: bundle.mcp.tools[0].x402.payToWallet,
+      quoteProviderRouteId: "rte_00000000000000000000000000000003",
+      quoteProviderReferrerWallet: sample.artifacts.receipt.referrerWallet,
+      quoteProviderPayoutWallet: sample.artifacts.receipt.payoutWallet,
       providerNetwork: bundle.mcp.tools[0].x402.network,
       providerAsset: bundle.mcp.tools[0].x402.asset,
       providerMerchantOrigin: bundle.merchant.origin,
@@ -129,11 +146,12 @@ describe("Phase 7 MCP gateway evidence collector", () => {
       protocolFeeBpsOfCommission: 1000,
       commissionAmountAtomic: "2000",
       protocolFeeAtomic: "200",
-      requestCount: 5,
-      responseCount: 5,
+      requestCount: 6,
+      responseCount: 6,
     });
     expect(report.receiptId).toMatch(/^rcp_[0-9a-f]{32}$/u);
     const transcript = writes.get("evidence/mcp-gateway.jsonl");
+    expect(transcript).toContain('"split402.quote"');
     expect(transcript).toContain('"split402.execute"');
     expect(transcript).toContain('"split402.getReceipt"');
     expect(transcript).toContain('"budget":{"maxAmountAtomic":"50000"}');

@@ -152,15 +152,15 @@ For the combined launch workspace, the command transcript may use
 `corepack pnpm product:evidence:init` as the workspace-initialization command;
 the status checker treats it as equivalent to
 `corepack pnpm phase7:staging:init`.
-The MCP gateway collection report must identify the provider used, paid amount,
-receipt id, verification status, referrer credit, provider route id, receipt
-route id, provider merchant origin, receipt merchant origin, provider operation
-id, receipt operation id, provider campaign id, receipt campaign id, provider
-referrer wallet, receipt referrer wallet, provider payout wallet, receipt payout
-wallet, commission bps, protocol-fee bps, commission amount, and protocol-fee
-amount for the executed router call. Demo-mode MCP collection remains no-go;
-proof-ready MCP evidence must come from `router-live-agent-sdk` execution
-against hosted route discovery.
+The MCP gateway collection report must identify the quoted provider, quoted
+amount, provider used, paid amount, receipt id, verification status, referrer
+credit, provider route id, receipt route id, provider merchant origin, receipt
+merchant origin, provider operation id, receipt operation id, provider campaign
+id, receipt campaign id, provider referrer wallet, receipt referrer wallet,
+provider payout wallet, receipt payout wallet, commission bps, protocol-fee bps,
+commission amount, and protocol-fee amount for the executed router call.
+Demo-mode MCP collection remains no-go; proof-ready MCP evidence must come from
+`router-live-agent-sdk` execution against hosted route discovery.
 `SPLIT402_MCP_MAX_AMOUNT_ATOMIC` must be a non-negative atomic amount string
 without decimals or leading zeroes; the collector stops before route discovery
 or execution if that budget is malformed.
@@ -175,9 +175,9 @@ referrer wallet, and merchant id. The paid-suite log and receipt-verification
 JSON are checked for a successful paid request, a verified commission-bearing
 receipt, the invalid-claim zero-commission path, and matching valid/invalid
 receipt summaries across both artifacts. The MCP gateway transcript must
-prove budget-filtered capability discovery, live router execution, matching
-provider network/asset/merchant origin/operation id/campaign id/amount/pay-to
-wallet/route id, matching receipt lookup, selected-provider
+prove budget-filtered capability discovery, quote preflight, live router
+execution, matching provider network/asset/merchant origin/operation
+id/campaign id/amount/pay-to wallet/route id, matching receipt lookup, selected-provider
 merchant/campaign/operation/route/referrer/payout attribution, and
 commission/protocol-fee amounts derived from the receipt
 `commissionBps` and `protocolFeeBpsOfCommission` fields. It must also connect
