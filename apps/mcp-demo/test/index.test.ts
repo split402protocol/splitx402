@@ -29,6 +29,7 @@ import {
 
 import {
   createEvmSignerFromPrivateKey,
+  createMcpDemoRouter,
   createMcpGatewayContext,
   createMcpGatewayContextFromEnv,
   createWalletRiskToolResult,
@@ -2723,6 +2724,61 @@ describe("MCP demo gateway", () => {
           receipt: expect.objectContaining({
             referrerCreditAtomic: "1800"
           })
+        },
+        isError: false
+      }
+    });
+  });
+
+  it("reports control-plane receipt recording status when the router records a receipt", async () => {
+    const bundle = createMcpDemoBundle({
+      generatedAt: "2026-06-26T00:00:00.000Z"
+    });
+    const router = createMcpDemoRouter(bundle, {
+      receiptRecorder: {
+        record: async () => ({
+          status: "created",
+          source: "buyer"
+        })
+      }
+    });
+    const context = createMcpGatewayContext(
+      bundle,
+      router,
+      "router-live-agent-sdk"
+    );
+
+    const executeResponse = await handleMcpGatewayLineAsync(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: "execute-recorded",
+        method: "tools/call",
+        params: {
+          name: "split402.execute",
+          arguments: {
+            capability: "solana.wallet-risk",
+            input: {
+              wallet: "wallet-123"
+            },
+            budget: {
+              maxAmountAtomic: "10000"
+            }
+          }
+        }
+      }),
+      context
+    );
+
+    expect(executeResponse).toMatchObject({
+      jsonrpc: "2.0",
+      id: "execute-recorded",
+      result: {
+        structuredContent: {
+          status: "executed",
+          executionMode: "router-live-agent-sdk",
+          receiptVerificationStatus: "verified",
+          receiptRecordingStatus: "created",
+          receiptRecordingSource: "buyer"
         },
         isError: false
       }

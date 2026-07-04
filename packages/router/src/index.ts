@@ -77,6 +77,7 @@ export interface Split402RouterExecuteResult<T = unknown> {
   capability: string;
   data: T;
   receipt: Split402ReceiptV1;
+  receiptRecording?: Split402ReceiptRecordingResult;
   attempts: Split402RouterAttempt[];
 }
 
@@ -139,8 +140,17 @@ export interface Split402ReceiptRecorderInput {
   referralClaim?: ReferralClaimV1;
 }
 
+export type Split402ReceiptRecordingStatus = "created" | "duplicate";
+
+export interface Split402ReceiptRecordingResult {
+  status: Split402ReceiptRecordingStatus;
+  source: Split402ReceiptIngestSource;
+}
+
 export interface Split402ReceiptRecorder {
-  record(input: Split402ReceiptRecorderInput): Promise<void> | void;
+  record(
+    input: Split402ReceiptRecorderInput
+  ): Promise<Split402ReceiptRecordingResult | void> | Split402ReceiptRecordingResult | void;
 }
 
 export type Split402ReceiptRecorderFetch = (
@@ -574,7 +584,11 @@ export class Split402Router {
           result.receipt,
           input.referralClaim
         );
-        await this.recordProviderReceipt(provider, receipt, input.referralClaim);
+        const receiptRecording = await this.recordProviderReceipt(
+          provider,
+          receipt,
+          input.referralClaim
+        );
         validateOutputAgainstProviderSchema(provider, result.data, receipt);
         attempts.push({
           providerId: provider.providerId,
@@ -589,6 +603,7 @@ export class Split402Router {
           capability: provider.capability,
           data: result.data as T,
           receipt,
+          ...(receiptRecording === undefined ? {} : { receiptRecording }),
           attempts
         };
       } catch (error) {
@@ -670,16 +685,17 @@ export class Split402Router {
     provider: Split402CapabilityProvider,
     receipt: Split402ReceiptV1,
     referralClaim: ReferralClaimV1 | undefined
-  ): Promise<void> {
+  ): Promise<Split402ReceiptRecordingResult | undefined> {
     if (this.receiptRecorder === undefined) {
-      return;
+      return undefined;
     }
     try {
-      await this.receiptRecorder.record({
+      const result = await this.receiptRecorder.record({
         provider,
         receipt,
         ...(referralClaim === undefined ? {} : { referralClaim })
       });
+      return result === undefined ? undefined : result;
     } catch (error) {
       throw new Split402RouterProviderError(
         `failed to record Split402 receipt: ${errorMessage(error)}`,
@@ -904,7 +920,9 @@ export class Split402ControlPlaneReceiptRecorder
     }
   }
 
-  async record(input: Split402ReceiptRecorderInput): Promise<void> {
+  async record(
+    input: Split402ReceiptRecorderInput
+  ): Promise<Split402ReceiptRecordingResult> {
     const url = new URL("/v1/receipts", this.controlPlaneUrl);
     const headers: Record<string, string> = {
       "content-type": "application/json"
@@ -932,6 +950,7 @@ export class Split402ControlPlaneReceiptRecorder
         `control-plane receipt ingestion returned unexpected status${formatReceiptRecorderErrorBody(body)}`
       );
     }
+    return { status, source: this.source };
   }
 }
 
@@ -3197,14 +3216,16 @@ function formatReceiptRecorderErrorBody(body: string): string {
   return trimmed.length === 0 ? "" : `: ${trimmed}`;
 }
 
-function readReceiptRecorderResponseStatus(body: string): string | undefined {
+function readReceiptRecorderResponseStatus(
+  body: string
+): Split402ReceiptRecordingStatus | undefined {
   try {
     const parsed = JSON.parse(body) as unknown;
     if (typeof parsed !== "object" || parsed === null) {
       return undefined;
     }
     const status = (parsed as { status?: unknown }).status;
-    return typeof status === "string" ? status : undefined;
+    return status === "created" || status === "duplicate" ? status : undefined;
   } catch {
     return undefined;
   }

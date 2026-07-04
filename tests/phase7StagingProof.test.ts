@@ -1795,6 +1795,56 @@ funding_balance_evidence: funding.json
     );
   });
 
+  it("blocks staged proof status when MCP execution omits receipt recording proof", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          includeReceiptRecordingStatus: false,
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute response receiptRecordingStatus must be created or duplicate",
+    );
+  });
+
+  it("blocks staged proof status when MCP receipt recording source is not buyer", () => {
+    const proofText = createManifestProof();
+    const artifacts = createManifestArtifacts(proofText);
+    artifacts.set(
+      "evidence/mcp-gateway.jsonl",
+      encode(
+        createValidMcpGatewayTranscript({
+          receiptRecordingSource: "merchant",
+        }),
+      ),
+    );
+
+    const report = createPhase7StagingStatusReport(proofText, {
+      artifactBaseDir: "evidence",
+      artifactExists: (path) => artifacts.has(path),
+      readArtifact: (path) => readTestArtifact(artifacts, path),
+      resolveArtifactPath: (path, baseDir) => `${baseDir}/${path}`,
+    });
+
+    expect(report.readyForPublicAlphaDemo).toBe(false);
+    expect(report.mcpGatewayStatus.blockers).toContain(
+      "mcp_gateway_evidence execute response receiptRecordingSource must be buyer",
+    );
+  });
+
   it("blocks staged proof status when MCP execute capability differs from search", () => {
     const proofText = createManifestProof();
     const artifacts = createManifestArtifacts(proofText);
@@ -3312,6 +3362,10 @@ function createValidMcpGatewayTranscript(
     executeProviderSource?: string;
     amountPaidAtomic?: string;
     executeReferrerCreditAtomic?: string;
+    includeReceiptRecordingStatus?: boolean;
+    receiptRecordingStatus?: string;
+    includeReceiptRecordingSource?: boolean;
+    receiptRecordingSource?: string;
     lookupReceiptId?: string;
     lookupReferrerCreditAtomic?: string;
     lookupRequiredAmountAtomic?: string;
@@ -3448,6 +3502,12 @@ function createValidMcpGatewayTranscript(
     options.executeProviderSource ?? searchProviderSource;
   const executeReferrerCreditAtomic =
     options.executeReferrerCreditAtomic ?? "1800";
+  const includeReceiptRecordingStatus =
+    options.includeReceiptRecordingStatus ?? true;
+  const receiptRecordingStatus = options.receiptRecordingStatus ?? "created";
+  const includeReceiptRecordingSource =
+    options.includeReceiptRecordingSource ?? true;
+  const receiptRecordingSource = options.receiptRecordingSource ?? "buyer";
   const quotedAmountAtomic = options.quotedAmountAtomic ?? amountPaidAtomic;
   const quoteProviderAmountAtomic =
     options.quoteProviderAmountAtomic ?? searchProviderAmountAtomic;
@@ -3677,6 +3737,12 @@ function createValidMcpGatewayTranscript(
                   amountPaidAtomic,
                   receiptId,
                   receiptVerificationStatus: "verified",
+                  ...(includeReceiptRecordingStatus
+                    ? { receiptRecordingStatus }
+                    : {}),
+                  ...(includeReceiptRecordingSource
+                    ? { receiptRecordingSource }
+                    : {}),
                   referrerCreditAtomic: executeReferrerCreditAtomic,
                   ...(includeExecuteProvider
                     ? {

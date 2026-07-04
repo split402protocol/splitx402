@@ -66,6 +66,8 @@ export interface Phase7McpGatewayEvidenceReport {
   amountPaidAtomic?: string;
   receiptId?: string;
   receiptVerificationStatus?: string;
+  receiptRecordingStatus?: string;
+  receiptRecordingSource?: string;
   executeExecutionMode?: string;
   referrerCreditAtomic?: string;
   routeId?: string;
@@ -308,6 +310,21 @@ export async function collectPhase7McpGatewayEvidence(
         "mcp_gateway_evidence execute response receiptVerificationStatus is not verified",
       );
     }
+    if (context.executionMode === "router-live-agent-sdk") {
+      if (
+        executionSummary.receiptRecordingStatus !== "created" &&
+        executionSummary.receiptRecordingStatus !== "duplicate"
+      ) {
+        blockers.push(
+          "mcp_gateway_evidence execute response receiptRecordingStatus must be created or duplicate",
+        );
+      }
+      if (executionSummary.receiptRecordingSource !== "buyer") {
+        blockers.push(
+          "mcp_gateway_evidence execute response receiptRecordingSource must be buyer",
+        );
+      }
+    }
     if (
       readPositiveAtomicAmount(executionSummary.referrerCreditAtomic) ===
       undefined
@@ -524,6 +541,18 @@ export async function collectPhase7McpGatewayEvidence(
           amountPaidAtomic: executionSummary.amountPaidAtomic,
           receiptId: executionSummary.receiptId,
           receiptVerificationStatus: executionSummary.receiptVerificationStatus,
+          ...(executionSummary.receiptRecordingStatus === undefined
+            ? {}
+            : {
+                receiptRecordingStatus:
+                  executionSummary.receiptRecordingStatus,
+              }),
+          ...(executionSummary.receiptRecordingSource === undefined
+            ? {}
+            : {
+                receiptRecordingSource:
+                  executionSummary.receiptRecordingSource,
+              }),
           executeExecutionMode: executionSummary.executionMode,
           referrerCreditAtomic: executionSummary.referrerCreditAtomic,
           executeProviderNetwork: executionSummary.provider.network,
@@ -592,6 +621,8 @@ interface McpGatewayExecutionSummary {
   amountPaidAtomic: string;
   receiptId: string;
   receiptVerificationStatus: string;
+  receiptRecordingStatus?: string;
+  receiptRecordingSource?: string;
   executionMode: Phase7McpGatewayEvidenceReport["executionMode"];
   referrerCreditAtomic: string;
   provider: McpGatewayProviderSummary;
@@ -738,6 +769,12 @@ function readExecutionSummary(
   const receiptVerificationStatus = readNonEmptyString(
     structuredContent?.receiptVerificationStatus,
   );
+  const receiptRecordingStatus = readNonEmptyString(
+    structuredContent?.receiptRecordingStatus,
+  );
+  const receiptRecordingSource = readNonEmptyString(
+    structuredContent?.receiptRecordingSource,
+  );
   const executionMode = readExecutionMode(structuredContent?.executionMode);
   const referrerCreditAtomic = readNonEmptyString(
     structuredContent?.referrerCreditAtomic,
@@ -759,6 +796,8 @@ function readExecutionSummary(
     amountPaidAtomic,
     receiptId,
     receiptVerificationStatus,
+    ...(receiptRecordingStatus === undefined ? {} : { receiptRecordingStatus }),
+    ...(receiptRecordingSource === undefined ? {} : { receiptRecordingSource }),
     executionMode,
     referrerCreditAtomic,
     provider,
@@ -788,6 +827,19 @@ function addExecutionSummaryBlockers(
   if (structuredContent.receiptVerificationStatus !== "verified") {
     blockers.push(
       "mcp_gateway_evidence execute response receiptVerificationStatus is not verified",
+    );
+  }
+  if (
+    structuredContent.receiptRecordingStatus !== "created" &&
+    structuredContent.receiptRecordingStatus !== "duplicate"
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence execute response receiptRecordingStatus must be created or duplicate",
+    );
+  }
+  if (structuredContent.receiptRecordingSource !== "buyer") {
+    blockers.push(
+      "mcp_gateway_evidence execute response receiptRecordingSource must be buyer",
     );
   }
   if (readExecutionMode(structuredContent.executionMode) === undefined) {

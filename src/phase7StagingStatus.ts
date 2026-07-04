@@ -2485,6 +2485,19 @@ function validateMcpGatewayTranscript(
       "mcp_gateway_evidence execute response receiptVerificationStatus is not verified",
     );
   }
+  if (
+    executeContent.receiptRecordingStatus !== "created" &&
+    executeContent.receiptRecordingStatus !== "duplicate"
+  ) {
+    blockers.push(
+      "mcp_gateway_evidence execute response receiptRecordingStatus must be created or duplicate",
+    );
+  }
+  if (executeContent.receiptRecordingSource !== "buyer") {
+    blockers.push(
+      "mcp_gateway_evidence execute response receiptRecordingSource must be buyer",
+    );
+  }
   if (executeContent.executionMode !== "router-live-agent-sdk") {
     blockers.push(
       "mcp_gateway_evidence execute response executionMode must be router-live-agent-sdk",
