@@ -2149,6 +2149,14 @@ function validateJsonSchemaCombinators(
       }
     }
   }
+  if (schema.not !== undefined) {
+    const excluded = readSchemaRecord(schema.not);
+    if (excluded === undefined) {
+      errors.push(`${path} not must be a schema object`);
+    } else if (validateJsonSchemaValue(value, excluded, path).length === 0) {
+      errors.push(`${path} must not match not schema`);
+    }
+  }
   return errors;
 }
 

@@ -1343,6 +1343,106 @@ describe("Split402Router", () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
+  it("executes when input does not match provider not schema", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>().mockResolvedValue({
+      data: { risk: "low" },
+      receipt
+    });
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-not-input",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["wallet"],
+              properties: {
+                wallet: { type: "string" }
+              },
+              not: {
+                type: "object",
+                required: ["sandboxOnly"],
+                properties: {
+                  sandboxOnly: { const: true }
+                }
+              }
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    const input = { wallet: "wallet_1" };
+    const result = await router.execute({
+      capability: "solana.wallet-risk",
+      input,
+      budget: {
+        network: receipt.network,
+        asset: receipt.asset,
+        maxAmountAtomic: receipt.requiredAmountAtomic
+      }
+    });
+
+    expect(result.providerId).toBe("provider-not-input");
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: expect.objectContaining({ providerId: "provider-not-input" }),
+        body: input
+      })
+    );
+  });
+
+  it("rejects before payment when input matches provider not schema", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-not-input",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              required: ["wallet"],
+              properties: {
+                wallet: { type: "string" }
+              },
+              not: {
+                type: "object",
+                required: ["sandboxOnly"],
+                properties: {
+                  sandboxOnly: { const: true }
+                }
+              }
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: { wallet: "wallet_1", sandboxOnly: true },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-not-input",
+          retryable: false,
+          error: expect.stringContaining("input must not match not schema")
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it("rejects malformed provider combinator schemas before payment", async () => {
     const execute = vi.fn<Split402RouterExecutor["execute"]>();
     const router = new Split402Router({
@@ -1378,6 +1478,46 @@ describe("Split402Router", () => {
           error: expect.stringContaining(
             "input anyOf must be a non-empty array of schema objects"
           )
+        })
+      ]
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed provider not schemas before payment", async () => {
+    const execute = vi.fn<Split402RouterExecutor["execute"]>();
+    const router = new Split402Router({
+      providers: [
+        provider({
+          providerId: "provider-malformed-not",
+          metadata: {
+            inputSchema: {
+              type: "object",
+              not: true
+            }
+          }
+        })
+      ],
+      executor: { execute }
+    });
+
+    await expect(
+      router.execute({
+        capability: "solana.wallet-risk",
+        input: { wallet: "wallet_1" },
+        budget: {
+          network: receipt.network,
+          asset: receipt.asset,
+          maxAmountAtomic: receipt.requiredAmountAtomic
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attempts: [
+        expect.objectContaining({
+          providerId: "provider-malformed-not",
+          retryable: false,
+          error: expect.stringContaining("input not must be a schema object")
         })
       ]
     });
