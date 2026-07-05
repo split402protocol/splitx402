@@ -2,10 +2,11 @@ import { fileURLToPath } from "node:url";
 
 export * from "./app.js";
 
-import { createDemoMerchantApp, readDemoMerchantPort } from "./app.js";
+import { createDemoMerchantAppAsync, readDemoMerchantPort } from "./app.js";
 
 if (isMainModule()) {
-  const { app, config, servicePublicKey, merchantPayTo } = createDemoMerchantApp();
+  const { app, config, servicePublicKey, merchantPayTo } =
+    await createDemoMerchantAppAsync();
   const port = readDemoMerchantPort();
 
   app.listen(port, () => {

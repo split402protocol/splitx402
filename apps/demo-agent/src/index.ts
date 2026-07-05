@@ -55,7 +55,10 @@ async function main(): Promise<void> {
     merchantOrigin: MERCHANT_ORIGIN,
     merchantPublicKey: MERCHANT_PUBLIC_KEY,
     signer,
-    network: network.networkId
+    network: network.networkId,
+    ...(process.env.SPLIT402_SOLANA_RPC_URL === undefined
+      ? {}
+      : { svmRpcUrl: process.env.SPLIT402_SOLANA_RPC_URL })
   });
 
   if (network.cluster === "mainnet") {
@@ -91,6 +94,17 @@ async function main(): Promise<void> {
   console.log(JSON.stringify(result.data, null, 2));
   if (result.receipt === undefined) {
     console.log("No Split402 receipt found in payment response header.");
+    console.log(
+      JSON.stringify(
+        {
+          responseStatus: result.status,
+          settlement: result.settlement ?? null,
+          paymentRequired: result.paymentRequired ?? null
+        },
+        null,
+        2
+      )
+    );
     process.exitCode = 1;
     return;
   }

@@ -1,10 +1,14 @@
 import "./env.js";
 
 import express from "express";
+import { x402Facilitator } from "@x402/core/facilitator";
 import { HTTPFacilitatorClient } from "@x402/core/server";
 import type { FacilitatorClient, RoutesConfig } from "@x402/core/server";
 import { paymentMiddleware, x402ResourceServer } from "@x402/express";
 import { ExactSvmScheme } from "@x402/svm/exact/server";
+import { registerExactSvmScheme as registerExactSvmFacilitatorScheme } from "@x402/svm/exact/facilitator";
+import { toFacilitatorSvmSigner } from "@x402/svm";
+import { createKeyPairSignerFromBytes, createKeyPairSignerFromPrivateKeyBytes } from "@solana/kit";
 import { split402RequestContext } from "@split402/express";
 import {
   ControlPlaneReceiptSubmitter,
@@ -14,6 +18,7 @@ import {
   SOLANA_DEVNET_NETWORK_ID,
   SOLANA_DEVNET_USDC_MINT,
   SOLANA_MAINNET_DEMO_MAX_GROSS_AMOUNT_ATOMIC,
+  base58Decode,
   base58Encode,
   deriveEd25519PublicKey,
   hashProtocolObject,
@@ -86,16 +91,37 @@ export function createDemoMerchantApp(
   overrides: DemoMerchantOptions = {}
 ): DemoMerchantRuntime {
   const config = readDemoMerchantConfig(overrides);
+  return createDemoMerchantRuntime(
+    config,
+    overrides,
+    overrides.facilitatorClient ??
+      new HTTPFacilitatorClient({
+        url: config.facilitatorUrl
+      })
+  );
+}
+
+export async function createDemoMerchantAppAsync(
+  overrides: DemoMerchantOptions = {}
+): Promise<DemoMerchantRuntime> {
+  const config = readDemoMerchantConfig(overrides);
+  return createDemoMerchantRuntime(
+    config,
+    overrides,
+    overrides.facilitatorClient ?? (await createFacilitatorClient(config))
+  );
+}
+
+function createDemoMerchantRuntime(
+  config: DemoMerchantConfig,
+  overrides: DemoMerchantOptions,
+  facilitator: FacilitatorClient
+): DemoMerchantRuntime {
   const servicePublicKey = deriveEd25519PublicKey(config.serviceSeed);
   const merchantPayTo = readMerchantPayTo(overrides);
   assertMainnetDemoGuards(config, merchantPayTo, overrides);
   const campaign = createCampaign(config, merchantPayTo);
   const routes = createRoutes(config, merchantPayTo);
-  const facilitator =
-    overrides.facilitatorClient ??
-    new HTTPFacilitatorClient({
-      url: config.facilitatorUrl
-    });
   const split402Extension = createSplit402ResourceServerExtension({
     merchantId: MERCHANT_ID,
     merchantOrigin: config.merchantOrigin,
@@ -198,6 +224,91 @@ export function createDemoMerchantApp(
     servicePublicKey,
     merchantPayTo
   };
+}
+
+async function createFacilitatorClient(
+  config: DemoMerchantConfig
+): Promise<FacilitatorClient> {
+  if (process.env.SPLIT402_LOCAL_X402_FACILITATOR !== "true") {
+    return new HTTPFacilitatorClient({
+      url: config.facilitatorUrl
+    });
+  }
+
+  const signer = await createSvmSignerFromSecret(
+    readDemoFeePayerPrivateKey(
+      "set SPLIT402_DEMO_FEE_PAYER_PRIVATE_KEY for local x402 facilitator mode, or set SPLIT402_USE_BUYER_AS_DEMO_FEE_PAYER=true with SVM_PRIVATE_KEY for local-only demos"
+    )
+  );
+  const facilitator = new x402Facilitator();
+  registerExactSvmFacilitatorScheme(facilitator, {
+    signer: toFacilitatorSvmSigner(signer, {
+      defaultRpcUrl:
+        process.env.SPLIT402_SOLANA_RPC_URL ?? config.network.defaultRpcUrl
+    }),
+    networks: config.network.networkId
+  });
+  return {
+    getSupported: () =>
+      Promise.resolve(
+        facilitator.getSupported() as Awaited<
+          ReturnType<FacilitatorClient["getSupported"]>
+        >
+      ),
+    verify: (paymentPayload, paymentRequirements) =>
+      facilitator.verify(paymentPayload, paymentRequirements),
+    settle: (paymentPayload, paymentRequirements) =>
+      facilitator.settle(paymentPayload, paymentRequirements)
+  };
+}
+
+async function createSvmSignerFromSecret(secret: {
+  encoding: "base58" | "base64";
+  value: string;
+}) {
+  const bytes =
+    secret.encoding === "base58"
+      ? base58Decode(secret.value)
+      : new Uint8Array(Buffer.from(secret.value, "base64"));
+  if (bytes.length === 32) {
+    return await createKeyPairSignerFromPrivateKeyBytes(bytes);
+  }
+  if (bytes.length === 64) {
+    return await createKeyPairSignerFromBytes(bytes);
+  }
+  throw new Error(
+    `local facilitator fee-payer key must decode to 32 private-seed bytes or 64 keypair bytes; got ${bytes.length}`
+  );
+}
+
+function readDemoFeePayerPrivateKey(message: string):
+  | { encoding: "base58"; value: string }
+  | { encoding: "base64"; value: string } {
+  const base58Value =
+    readOptionalEnv("SPLIT402_DEMO_FEE_PAYER_PRIVATE_KEY") ??
+    (process.env.SPLIT402_USE_BUYER_AS_DEMO_FEE_PAYER === "true"
+      ? readOptionalEnv("SVM_PRIVATE_KEY")
+      : undefined);
+  if (base58Value !== undefined) {
+    return { encoding: "base58", value: base58Value };
+  }
+
+  const base64Value = readOptionalEnv(
+    "SPLIT402_DEMO_FEE_PAYER_PRIVATE_KEY_BASE64"
+  );
+  if (base64Value !== undefined) {
+    return { encoding: "base64", value: base64Value };
+  }
+
+  throw new Error(message);
+}
+
+function readOptionalEnv(name: string): string | undefined {
+  const value = process.env[name];
+  if (value === undefined || value.length === 0) {
+    return undefined;
+  }
+  return value;
 }
 
 export function readDemoMerchantPort(): number {

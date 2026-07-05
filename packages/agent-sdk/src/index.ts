@@ -45,6 +45,7 @@ export interface Split402AgentClientOptions {
   evmSigner?: Split402EvmSigner;
   evmNetworks?: `${string}:${string}`[];
   evmSchemeOptions?: Split402EvmSchemeOptions;
+  svmRpcUrl?: string;
   network?: `${string}:${string}`;
   axios?: AxiosInstance;
 }
@@ -117,6 +118,7 @@ export interface PaidJsonRequestInput {
 export interface PaidJsonResult<TData = unknown> {
   data: TData;
   status: number;
+  paymentRequired?: ReturnType<typeof decodePaymentRequiredHeader>;
   receipt?: Split402ReceiptV1;
   receiptVerification:
     | { checked: false; ok: undefined; errors: [] }
@@ -135,6 +137,7 @@ export class Split402AgentClient {
   readonly evmSigner?: Split402EvmSigner;
   readonly evmNetworks?: `${string}:${string}`[];
   readonly evmSchemeOptions?: Split402EvmSchemeOptions;
+  readonly svmRpcUrl?: string;
   readonly network: `${string}:${string}`;
 
   private readonly axios: AxiosInstance;
@@ -164,6 +167,9 @@ export class Split402AgentClient {
     }
     if (options.evmSchemeOptions !== undefined) {
       this.evmSchemeOptions = options.evmSchemeOptions;
+    }
+    if (options.svmRpcUrl !== undefined) {
+      this.svmRpcUrl = options.svmRpcUrl;
     }
   }
 
@@ -238,10 +244,15 @@ export class Split402AgentClient {
         ? await paidAxios.get(input.path, requestOptions)
         : await paidAxios.post(input.path, input.body, requestOptions);
     const settlementHeader = getHeader(response.headers, "payment-response");
+    const paymentRequiredHeader = getHeader(response.headers, "payment-required");
     const settlement =
       settlementHeader === undefined
         ? undefined
         : (decodePaymentResponseHeader(settlementHeader) as unknown);
+    const paymentRequired =
+      paymentRequiredHeader === undefined
+        ? undefined
+        : decodePaymentRequiredHeader(paymentRequiredHeader);
     const receipt = extractReceipt(settlement);
     const receiptVerification = this.verifyReceipt(receipt);
 
@@ -249,6 +260,7 @@ export class Split402AgentClient {
       data: response.data,
       status: response.status,
       receiptVerification,
+      ...(paymentRequired === undefined ? {} : { paymentRequired }),
       ...(receipt === undefined ? {} : { receipt }),
       ...(settlement === undefined ? {} : { settlement })
     };
@@ -298,7 +310,13 @@ export class Split402AgentClient {
       if (this.signer === undefined) {
         throw new Error("a Solana signer is required to make a paid x402 request");
       }
-      client.register(this.network, new ExactSvmScheme(this.signer));
+      client.register(
+        this.network,
+        new ExactSvmScheme(
+          this.signer,
+          this.svmRpcUrl === undefined ? undefined : { rpcUrl: this.svmRpcUrl }
+        )
+      );
     }
     return client.registerExtension(
       createSplit402ClientExtension(split402ExtensionOptions(input))
@@ -418,8 +436,25 @@ function getHeader(headers: unknown, name: string): string | undefined {
   if (typeof headers !== "object" || headers === null || Array.isArray(headers)) {
     return undefined;
   }
-  const value = (headers as Record<string, unknown>)[name];
-  return typeof value === "string" ? value : undefined;
+  const getter = (headers as { get?: unknown }).get;
+  if (typeof getter === "function") {
+    const value = getter.call(headers, name);
+    if (typeof value === "string") {
+      return value;
+    }
+  }
+  const record = headers as Record<string, unknown>;
+  const direct = record[name];
+  if (typeof direct === "string") {
+    return direct;
+  }
+  const lowerName = name.toLowerCase();
+  for (const [key, value] of Object.entries(record)) {
+    if (key.toLowerCase() === lowerName && typeof value === "string") {
+      return value;
+    }
+  }
+  return undefined;
 }
 
 function isEvmNetwork(network: string): boolean {

@@ -207,6 +207,41 @@ describe("Split402 x402 extension", () => {
     });
   });
 
+  it("accepts wrapped route declarations from x402 extension maps", async () => {
+    const receipts: Split402ReceiptV1[] = [];
+    const extension = createServerExtension(receipts);
+    const offer = await advertiseOffer(extension, wrappedRouteDeclaration());
+    const paymentPayload = await createClientPaymentPayload(offer, createClaim());
+
+    const verifyResult = await extension.hooks?.onBeforeVerify?.(
+      wrappedRouteDeclaration(),
+      verifyContext(paymentPayload)
+    );
+    expect(verifyResult).toBeUndefined();
+
+    const settlementExtension = await extension.enrichSettlementResponse?.(
+      wrappedRouteDeclaration(),
+      settleContext(paymentPayload)
+    );
+    const receipt = extractReceipt(settlementExtension);
+
+    expect(receipts).toHaveLength(1);
+    expect(receipt.campaignId).toBe(CAMPAIGN_ID);
+    expect(receipt.operationId).toBe(OPERATION_ID);
+    expect(receipt.referrerCreditAtomic).toBe("1800");
+  });
+
+  it("accepts already-enriched offer info when x402 rebuilds payment-required responses", async () => {
+    const receipts: Split402ReceiptV1[] = [];
+    const extension = createServerExtension(receipts);
+    const offer = await advertiseOffer(extension);
+    const rebuiltOffer = await advertiseOffer(extension, { info: offer });
+
+    expect(rebuiltOffer.campaignId).toBe(CAMPAIGN_ID);
+    expect(rebuiltOffer.operationId).toBe(OPERATION_ID);
+    expect(rebuiltOffer.requiredAmountAtomic).toBe(AMOUNT);
+  });
+
   it("accepts offers signed before service-key rotation and signs receipts with the current key", async () => {
     const receipts: Split402ReceiptV1[] = [];
     let currentKey = {
@@ -534,9 +569,12 @@ function createServerExtension(receipts: Split402ReceiptV1[]): ResourceServerExt
   });
 }
 
-async function advertiseOffer(extension: ResourceServerExtension): Promise<Split402OfferV1> {
+async function advertiseOffer(
+  extension: ResourceServerExtension,
+  declaration: unknown = routeDeclaration()
+): Promise<Split402OfferV1> {
   const response = await extension.enrichPaymentRequiredResponse?.(
-    routeDeclaration(),
+    declaration,
     {
       requirements: [requirement()]
     } as unknown as Parameters<
@@ -609,6 +647,12 @@ function routeDeclaration() {
   return {
     campaignId: CAMPAIGN_ID,
     operationId: OPERATION_ID
+  };
+}
+
+function wrappedRouteDeclaration() {
+  return {
+    [SPLIT402_EXTENSION_KEY]: routeDeclaration()
   };
 }
 
