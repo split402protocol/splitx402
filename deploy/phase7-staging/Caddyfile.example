@@ -1,0 +1,22 @@
+# Split402 Phase 7 hosted-staging reverse proxy example.
+#
+# Replace the placeholder hostnames with staging-only domains that you control,
+# then run Caddy on the VPS host. Keep Docker Compose ports bound to 127.0.0.1.
+# Do not publish tokens, private keys, database URLs, or proof artifacts in this
+# file.
+
+control.staging.example.com {
+  reverse_proxy 127.0.0.1:4021
+}
+
+dashboard.staging.example.com {
+  reverse_proxy 127.0.0.1:4027
+}
+
+merchant.staging.example.com {
+  reverse_proxy 127.0.0.1:4023
+}
+
+webhook.staging.example.com {
+  reverse_proxy 127.0.0.1:4040
+}
