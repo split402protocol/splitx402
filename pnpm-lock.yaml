@@ -136,6 +136,9 @@ importers:
 
   apps/demo-merchant:
     dependencies:
+      '@solana/kit':
+        specifier: 5.5.1
+        version: 5.5.1(typescript@5.7.3)
       '@split402/express':
         specifier: workspace:*
         version: link:../../packages/express

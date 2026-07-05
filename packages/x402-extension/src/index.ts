@@ -590,7 +590,7 @@ function firstRequirement(requirements: readonly PaymentRequirements[]): Payment
 }
 
 function parseDeclaration(value: unknown): Split402RouteDeclaration {
-  const record = asRecord(value);
+  const record = routeDeclarationRecord(value);
   const campaignId = getString(record.campaignId);
   const operationId = getString(record.operationId);
   if (campaignId === undefined || operationId === undefined) {
@@ -603,10 +603,29 @@ function parseDeclarationOrOffer(
   value: unknown,
   offer: Split402OfferV1
 ): Split402RouteDeclaration {
-  const record = asOptionalRecord(value);
+  const record = optionalRouteDeclarationRecord(value);
   const campaignId = getString(record?.campaignId) ?? offer.campaignId;
   const operationId = getString(record?.operationId) ?? offer.operationId;
   return { campaignId, operationId };
+}
+
+function routeDeclarationRecord(value: unknown): Record<string, unknown> {
+  const record = asRecord(value);
+  const nested = asOptionalRecord(record[SPLIT402_EXTENSION_KEY]);
+  const candidate = nested ?? record;
+  return asOptionalRecord(candidate.info) ?? candidate;
+}
+
+function optionalRouteDeclarationRecord(
+  value: unknown
+): Record<string, unknown> | undefined {
+  const record = asOptionalRecord(value);
+  if (record === undefined) {
+    return undefined;
+  }
+  const nested = asOptionalRecord(record[SPLIT402_EXTENSION_KEY]);
+  const candidate = nested ?? record;
+  return asOptionalRecord(candidate.info) ?? candidate;
 }
 
 function extractAdvertisedInfo(value: unknown): Record<string, unknown> {

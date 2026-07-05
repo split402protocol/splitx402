@@ -17,6 +17,7 @@
     "@split402/merchant-sdk": "workspace:*",
     "@split402/protocol": "workspace:*",
     "@split402/x402-extension": "workspace:*",
+    "@solana/kit": "5.5.1",
     "@x402/core": "^2.16.0",
     "@x402/express": "^2.16.0",
     "@x402/svm": "^2.16.0",
