@@ -24,7 +24,8 @@ describe("control-plane migrations", () => {
       "0010_payout_batches.sql",
       "0011_payout_transactions.sql",
       "0012_terminal_accrual_states.sql",
-      "0013_payout_transaction_items.sql"
+      "0013_payout_transaction_items.sql",
+      "0014_drop_legacy_accrual_status_constraint.sql"
     ]);
     expect(
       migrations.every((migration) =>
@@ -32,6 +33,9 @@ describe("control-plane migrations", () => {
       )
     ).toBe(true);
     expect(migrations[0]?.sql).toContain("create table if not exists payment_receipts");
+    expect(migrations[13]?.sql).toContain(
+      "drop constraint if exists commission_accruals_status_v2_check"
+    );
   });
 
   it("applies migrations once and skips matching checksums later", async () => {

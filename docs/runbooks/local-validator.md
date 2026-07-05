@@ -12,6 +12,11 @@ evidence, and not a production custody path.
 - The buyer can make an x402 SVM payment against a local SPL mint.
 - The demo merchant can settle through a local x402 facilitator.
 - The merchant returns signed Split402 receipts.
+- The control plane can ingest those receipts and chain-verify local settlement.
+- The dashboard can render the resulting referrer balance and merchant payout
+  obligation.
+- Payout batches can allocate, release, re-allocate, and close after a verified
+  finalized local SPL-token transfer.
 - Valid referral claims earn commission.
 - Invalid referral claims produce zero commission.
 
@@ -77,6 +82,53 @@ Successful output includes:
 - `split402ReceiptVerified: true`
 - one valid receipt with non-zero `referrerCreditAtomic`
 - one invalid-claim receipt with zero `referrerCreditAtomic`
+
+## Run The Control-Plane Proof
+
+Seed the same IDs and service key that the demo merchant will use:
+
+```bash
+SPLIT402_PHASE7_SEED_CONFIRM=seed-hosted-staging \
+SPLIT402_DATABASE_URL=postgresql://split402:split402@localhost:5432/split402 \
+SPLIT402_DATABASE_SSL=false \
+corepack pnpm phase7:staging:seed > split402-launch-evidence/local-phase7-seed.json
+
+corepack pnpm phase7:staging:apply-seed-env \
+  --seed-output split402-launch-evidence/local-phase7-seed.json
+```
+
+After changing private env files, recreate Docker Compose services instead of
+only restarting them:
+
+```bash
+docker compose --env-file deploy/phase7-staging/phase7-staging.env \
+  -f deploy/phase7-staging/compose.yaml \
+  --profile demo --profile workers up -d --force-recreate \
+  control-plane dashboard demo-merchant chain-worker payout-finality-worker
+```
+
+Verify the proof in this order:
+
+```bash
+corepack pnpm phase7:docker:health --profile demo --profile workers
+corepack pnpm demo:preflight
+corepack pnpm demo:paid-suite split402-launch-evidence/local-validator-paid-suite.log
+```
+
+Then inspect private/local evidence:
+
+- demo merchant `/debug/receipts` shows receipt submissions accepted by the
+  control plane;
+- chain worker logs show the receipt IDs verified;
+- `GET /v1/referrers/:wallet/balances` shows the accrual as available;
+- dashboard `/api/referrers/:wallet/balances` shows the same balance when called
+  with the private viewer token;
+- `POST /v1/merchants/:merchantId/payout-batches` allocates the available
+  accrual;
+- `POST /v1/payout-batches/:batchId/release-allocations` releases it back to
+  available;
+- a finalized local SPL-token transfer plus payout transaction mapping lets
+  `POST /v1/payout-batches/:batchId/close-ledger` mark the accrual paid.
 
 ## Boundary
 
