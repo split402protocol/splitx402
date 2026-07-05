@@ -3308,6 +3308,13 @@ async function markPayoutBatchAllocationsReleased(
         and ca.status = 'allocated'`,
     [batch.id]
   );
+  await client.query(
+    `delete from payout_allocations pa
+      using payout_items pi
+      where pi.id = pa.payout_item_id
+        and pi.payout_batch_id = $1`,
+    [batch.id]
+  );
 }
 
 function insertPayoutTransaction(

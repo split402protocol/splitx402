@@ -981,6 +981,21 @@ describe("PostgresReceiptIngestionStore", () => {
         now: "2026-06-24T00:07:00Z"
       })
     ).resolves.toHaveLength(1);
+    await expect(
+      fixture.store.createPayoutBatchFromAvailableAccruals({
+        merchantId: fixture.batch.merchantId,
+        payoutWalletId: fixture.batch.payoutWalletId,
+        network: fixture.batch.network,
+        asset: fixture.batch.asset,
+        now: "2026-06-24T00:08:00Z"
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        merchantId: fixture.batch.merchantId,
+        status: "planned",
+        totalAmountAtomic: fixture.batch.totalAmountAtomic
+      })
+    );
   });
 
   it("releases allocations with an operator override and records the reason", async () => {
@@ -2480,6 +2495,10 @@ class FakePostgresClient implements PostgresTransactionClient {
       this.database.releaseAccrualsForPayoutBatch(values);
       return result([]);
     }
+    if (normalized.startsWith("delete from payout_allocations")) {
+      this.database.deletePayoutAllocationsForBatch(values);
+      return result([]);
+    }
     if (normalized.startsWith("update commission_accruals")) {
       this.database.markAccrualChainVerified(values);
       return result([]);
@@ -3196,6 +3215,18 @@ class FakePostgresDatabase {
         item.status = "released";
       }
     }
+  }
+
+  deletePayoutAllocationsForBatch(values: readonly unknown[]): void {
+    const batchId = readString(values[0]);
+    const itemIds = new Set(
+      this.payoutItems
+        .filter((item) => item.payout_batch_id === batchId)
+        .map((item) => item.id)
+    );
+    this.payoutAllocations = this.payoutAllocations.filter(
+      (allocation) => !itemIds.has(allocation.payout_item_id)
+    );
   }
 
   insertPayoutTransaction(values: readonly unknown[]): void {

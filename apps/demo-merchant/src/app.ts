@@ -42,8 +42,14 @@ export const DEFAULT_PAY_TO = base58Encode(
 );
 export const MAINNET_DEMO_CONFIRMATION = "split402-mainnet-canary";
 
-export const MERCHANT_ID = "mrc_00000000000000000000000000000001";
-export const CAMPAIGN_ID = "cmp_00000000000000000000000000000002";
+export const MERCHANT_ID =
+  process.env.SPLIT402_PHASE7_MERCHANT_ID ??
+  "mrc_00000000000000000000000000000001";
+export const CAMPAIGN_ID =
+  process.env.SPLIT402_PHASE7_CAMPAIGN_ID ??
+  "cmp_00000000000000000000000000000002";
+export const SERVICE_KID =
+  process.env.SPLIT402_PHASE7_SERVICE_KID ?? "kid_demo_merchant_1";
 export const OPERATION_ID = "wallet-risk-score";
 
 export interface DemoMerchantConfig {
@@ -126,7 +132,7 @@ function createDemoMerchantRuntime(
     merchantId: MERCHANT_ID,
     merchantOrigin: config.merchantOrigin,
     servicePrivateSeed: config.serviceSeed,
-    serviceKid: "kid_demo_merchant_1",
+    serviceKid: SERVICE_KID,
     resolveCampaign: () => campaign,
     receiptSink: (receipt: Split402ReceiptV1) => {
       config.receipts.push(receipt);
