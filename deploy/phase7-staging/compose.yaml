@@ -30,7 +30,7 @@ services:
       timeout: 3s
       retries: 20
     ports:
-      - "${SPLIT402_PHASE7_POSTGRES_PORT:-5432}:5432"
+      - "${SPLIT402_PHASE7_BIND_ADDRESS:-127.0.0.1}:${SPLIT402_PHASE7_POSTGRES_PORT:-5432}:5432"
     volumes:
       - split402-phase7-postgres:/var/lib/postgresql/data
 
@@ -52,7 +52,7 @@ services:
       SPLIT402_DATABASE_SSL: "false"
       SPLIT402_CONTROL_PLANE_AUTH_POLICY: required
     ports:
-      - "${SPLIT402_PHASE7_CONTROL_PLANE_PORT:-4021}:4021"
+      - "${SPLIT402_PHASE7_BIND_ADDRESS:-127.0.0.1}:${SPLIT402_PHASE7_CONTROL_PLANE_PORT:-4021}:4021"
     healthcheck:
       test:
         [
@@ -100,7 +100,7 @@ services:
       SPLIT402_DASHBOARD_CONTROL_PLANE_URL: http://control-plane:4021
       SPLIT402_DASHBOARD_SESSION_COOKIE_SECURE: "false"
     ports:
-      - "${SPLIT402_PHASE7_DASHBOARD_PORT:-4027}:4027"
+      - "${SPLIT402_PHASE7_BIND_ADDRESS:-127.0.0.1}:${SPLIT402_PHASE7_DASHBOARD_PORT:-4027}:4027"
     healthcheck:
       test:
         [
@@ -127,11 +127,11 @@ services:
       - phase7-staging.env
     environment:
       CI: "true"
-      SPLIT402_MERCHANT_ORIGIN: http://localhost:4023
+      SPLIT402_MERCHANT_ORIGIN: ${SPLIT402_PHASE7_MERCHANT_ORIGIN:-http://localhost:4023}
       SPLIT402_MERCHANT_CONTROL_PLANE_URL: http://control-plane:4021
       PORT: "4023"
     ports:
-      - "${SPLIT402_PHASE7_DEMO_MERCHANT_PORT:-4023}:4023"
+      - "${SPLIT402_PHASE7_BIND_ADDRESS:-127.0.0.1}:${SPLIT402_PHASE7_DEMO_MERCHANT_PORT:-4023}:4023"
     healthcheck:
       test:
         [
@@ -159,6 +159,8 @@ services:
       timeout: 3s
       retries: 20
       start_period: 5s
+    ports:
+      - "${SPLIT402_PHASE7_BIND_ADDRESS:-127.0.0.1}:${SPLIT402_PHASE7_WEBHOOK_RECEIVER_PORT:-4040}:4040"
 
   chain-worker:
     profiles: ["workers"]

@@ -4,6 +4,88 @@ Use this runbook to launch a repeatable Split402 staging surface for Phase 7
 proof collection. It is intended for Devnet/public-alpha evidence, not mainnet
 production custody.
 
+## What To Do Next
+
+If local-validator proof is already passing, the next step is not mainnet. The
+next step is one hosted Devnet staging environment with private URLs, private
+tokens, and proof artifacts captured from the same source commit.
+
+Do this in order:
+
+1. Pick the host that will run Docker Compose. The recommended path is a simple
+   Ubuntu VPS with at least 2 vCPU, 4 GB RAM, 40 GB disk, Docker, Docker Compose
+   v2, Node.js/Corepack, Git, and Caddy or another HTTPS reverse proxy. Do not
+   use a public GitHub issue or README for runtime values.
+2. Clone this repository on that host and check out the exact `main` commit you
+   want to prove.
+3. Generate the ignored staging env file:
+
+   ```bash
+   corepack pnpm phase7:docker:env:init --generate-secrets
+   ```
+
+4. Fill only the private ignored files with hosted URLs, tokens, Devnet wallets,
+   service keys, and buyer keys:
+
+   ```text
+   deploy/phase7-staging/phase7-staging.env
+   split402-launch-evidence/phase7-staging.env
+   ```
+
+5. Run the doctor before starting anything:
+
+   ```bash
+   corepack pnpm phase7:docker:doctor --brief --profile demo --profile workers
+   ```
+
+Only continue to proof capture when the doctor is ready and the stack health
+checks are healthy.
+
+On a VPS, keep the Compose services bound to localhost:
+
+```text
+SPLIT402_PHASE7_BIND_ADDRESS=127.0.0.1
+```
+
+Expose only HTTPS through a reverse proxy. The example
+`deploy/phase7-staging/Caddyfile.example` maps staging hostnames to local ports:
+
+```text
+control.staging.example.com   -> 127.0.0.1:4021
+dashboard.staging.example.com -> 127.0.0.1:4027
+merchant.staging.example.com  -> 127.0.0.1:4023
+webhook.staging.example.com   -> 127.0.0.1:4040
+```
+
+Do not expose the PostgreSQL port publicly. A simple VPS firewall should allow
+SSH, HTTP, and HTTPS only:
+
+```bash
+sudo ufw allow OpenSSH
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw enable
+```
+
+Keep these private:
+
+```text
+SPLIT402_DATABASE_URL
+SPLIT402_PHASE7_CONTROL_PLANE_TOKEN
+SPLIT402_DASHBOARD_VIEWER_TOKEN
+SPLIT402_WEBHOOK_WORKER_SECRET
+SPLIT402_SERVICE_SEED_HEX
+SPLIT402_DEMO_FEE_PAYER_PRIVATE_KEY
+SVM_PRIVATE_KEY
+split402-launch-evidence/*
+deploy/phase7-staging/phase7-staging.env
+```
+
+It is safe to publish source code, examples, and redacted proof summaries. It is
+not safe to publish private staging URLs with bearer/session tokens, wallet
+private keys, service seeds, database URLs, or raw proof artifacts that contain
+those values.
+
 ## Stack
 
 ```mermaid
