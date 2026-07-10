@@ -241,12 +241,16 @@ export async function createMcpGatewayContextFromEnv(
           evmSignerSecret,
           readOptionalEnvString(env.SPLIT402_MCP_EVM_RPC_URL)
         ));
+  const svmRpcUrl =
+    readOptionalEnvString(env.SPLIT402_MCP_SVM_RPC_URL) ??
+    readOptionalEnvString(env.SPLIT402_SOLANA_RPC_URL);
   return createMcpGatewayContext(
     bundle,
     new Split402Router({
       providers,
       ...(signer === undefined ? {} : { signer }),
       ...(evmSigner === undefined ? {} : { evmSigner }),
+      ...(svmRpcUrl === undefined ? {} : { svmRpcUrl }),
       ...(controlPlaneUrl === undefined
         ? {}
         : {

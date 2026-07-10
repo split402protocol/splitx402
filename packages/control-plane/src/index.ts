@@ -4373,12 +4373,12 @@ function createRuntimePayoutFinalityMonitor(
     readOptionalNonEmptyEnv(env.SPLIT402_CHAIN_WORKER_SOLANA_RPC_URL) ??
     rpcUrls[0] ??
     "https://api.devnet.solana.com";
-  const retryDelayMs = readOptionalPositiveInteger(
+  const retryDelayMs = readOptionalRuntimePositiveInteger(
     readOptionalNonEmptyEnv(env.SPLIT402_PAYOUT_FINALITY_RETRY_DELAY_MS),
     "SPLIT402_PAYOUT_FINALITY_RETRY_DELAY_MS"
   );
   const unknownOutcomeAfterMs =
-    readOptionalPositiveInteger(
+    readOptionalRuntimePositiveInteger(
       readOptionalNonEmptyEnv(
         env.SPLIT402_PAYOUT_FINALITY_UNKNOWN_OUTCOME_AFTER_MS
       ),

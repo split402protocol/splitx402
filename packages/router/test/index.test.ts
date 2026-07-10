@@ -11,6 +11,7 @@ import type { PaymentRequired } from "@x402/core/types";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  Split402AgentSdkExecutor,
   Split402ControlPlaneDiscoveryClient,
   Split402ControlPlaneReceiptRecorder,
   Split402ExternalX402DiscoveryClient,
@@ -5134,3 +5135,15 @@ function textResponse(
     text: async () => body
   };
 }
+
+describe("Split402AgentSdkExecutor svm rpc override", () => {
+  it("stores the svm rpc override for live payment payload creation", () => {
+    const defaultExecutor = new Split402AgentSdkExecutor();
+    const overriddenExecutor = new Split402AgentSdkExecutor({
+      svmRpcUrl: "http://127.0.0.1:8899"
+    });
+
+    expect(defaultExecutor.options.svmRpcUrl).toBeUndefined();
+    expect(overriddenExecutor.options.svmRpcUrl).toBe("http://127.0.0.1:8899");
+  });
+});
