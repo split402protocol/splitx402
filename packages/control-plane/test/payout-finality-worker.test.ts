@@ -6,9 +6,25 @@ import {
   main,
   readPayoutFinalityWorkerConfig
 } from "../src/payout-finality-worker.js";
+import { createPayoutFinalityMonitorFromEnv } from "../src/index.js";
 import type { PostgresPool, PostgresTransactionClient } from "../src/index.js";
 
 describe("payout finality worker entrypoint", () => {
+  it("builds a finality monitor from string threshold environment values", () => {
+    const monitor = createPayoutFinalityMonitorFromEnv({
+      SPLIT402_PAYOUT_FINALITY_SOLANA_RPC_URL: "http://127.0.0.1:8899",
+      SPLIT402_PAYOUT_FINALITY_NETWORK: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+      SPLIT402_PAYOUT_FINALITY_UNKNOWN_OUTCOME_AFTER_MS: "1",
+      SPLIT402_PAYOUT_FINALITY_RETRY_DELAY_MS: "1000"
+    });
+    expect(monitor).toBeDefined();
+    expect(() =>
+      createPayoutFinalityMonitorFromEnv({
+        SPLIT402_PAYOUT_FINALITY_UNKNOWN_OUTCOME_AFTER_MS: "0"
+      })
+    ).toThrow(/must be a positive integer/u);
+  });
+
   it("reads worker environment and wires the durable runtime", async () => {
     const pool = new ThrowingPostgresPool();
     const createdConfigs: PoolConfig[] = [];

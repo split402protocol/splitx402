@@ -1,0 +1,23 @@
+title = "Split402 gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known public placeholders and sample evidence used in tests/docs"
+regexTarget = "line"
+regexes = [
+  '''SPLIT402_MCP_CONTROL_PLANE_TOKEN''',
+  '''SPLIT402_MCP_CAPABILITY''',
+  '''SPLIT402_PHASE6_KEY_CUSTODY_REVIEW_ID''',
+  '''SPLIT402_PHASE6_EVIDENCE_APPROVAL_DECISION''',
+  '''SPLIT402_PHASE7_APPROVAL_DECISION''',
+  '''key_custody_record''',
+  '''signer_policy_source_token_account''',
+  '''source_token_account''',
+  '''SAMPLE_PAY_TO_ASSOCIATED_TOKEN_ACCOUNT''',
+  '''Merchant service public key''',
+  '''8jYFQwU6P4L3uYJwqN4uJtVq4n5o7x8p9a1b2c3d4e5f''',
+  '''7xYFQwU6P4L3uYJwqN4uJtVq4n5o7x8p9a1b2c3d4e5f''',
+  '''FAe4sisG95oZ42w7buUn5qEE4TAnfTTFPiguZUHmhiF''',
+]

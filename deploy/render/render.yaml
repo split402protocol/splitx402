@@ -1,0 +1,127 @@
+# Split402 public-alpha Devnet stack — Render Blueprint.
+#
+# This deploys the OPEN protocol foundation on Solana Devnet for public-alpha
+# evaluation. It is NOT a production/mainnet deployment: keep
+# SPLIT402_CHAIN_WORKER_NETWORK on Devnet and do not point payout custody at
+# mainnet from here. See docs/COMMERCIAL_READINESS.md and
+# docs/PUBLIC_PRIVATE_BOUNDARY.md.
+#
+# One-click: push this repo to GitHub, then in Render choose
+# "New +" -> "Blueprint" and pick this file. After the first deploy, set the
+# dashboard's SPLIT402_DASHBOARD_CONTROL_PLANE_URL to the control-plane's
+# public https URL (see deploy/render/README.md).
+
+databases:
+  - name: split402-db
+    plan: basic-256mb
+    postgresMajorVersion: "16"
+
+services:
+  # ---- Control plane API (public) ----
+  - type: web
+    name: split402-control-plane
+    runtime: docker
+    dockerfilePath: ./packages/control-plane/Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /v1/health
+    # Runs schema migrations before each new version goes live.
+    preDeployCommand: node packages/control-plane/dist/migrate.js
+    envVars:
+      - key: SPLIT402_DATABASE_URL
+        fromDatabase:
+          name: split402-db
+          property: connectionString
+      - key: SPLIT402_DATABASE_SSL
+        value: "false"
+      - key: SPLIT402_CONTROL_PLANE_AUTH_POLICY
+        value: required
+      # Operator bearer tokens for merchant/origin approval endpoints.
+      # Render generates a strong secret; copy it out of the dashboard to call
+      # the /v1/operator/... routes. Leave unset to keep operator endpoints
+      # disabled (fail-closed).
+      - key: SPLIT402_CONTROL_PLANE_OPERATOR_TOKENS
+        generateValue: true
+
+  # ---- Merchant/referrer dashboard (public, read-only proxy) ----
+  - type: web
+    name: split402-dashboard
+    runtime: docker
+    dockerfilePath: ./apps/dashboard/Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      # Set this to the control-plane's public https URL after the first deploy
+      # (Render cannot template a full URL from another service at build time).
+      - key: SPLIT402_DASHBOARD_CONTROL_PLANE_URL
+        sync: false
+      # Gate the dashboard's read views behind an expiring viewer session.
+      - key: SPLIT402_DASHBOARD_VIEWER_TOKEN
+        generateValue: true
+      - key: SPLIT402_DASHBOARD_SESSION_COOKIE_SECURE
+        value: "true"
+
+  # ---- Chain-verification worker ----
+  # ESSENTIAL for live paid flows: it verifies Devnet settlement and moves
+  # referral accruals from pending -> available. Omit only if you are just
+  # showing the API/dashboard surface with no real payments yet.
+  - type: worker
+    name: split402-chain-worker
+    runtime: docker
+    dockerfilePath: ./packages/control-plane/Dockerfile
+    dockerContext: .
+    dockerCommand: node packages/control-plane/dist/chain-worker.js
+    plan: starter
+    envVars:
+      - key: SPLIT402_DATABASE_URL
+        fromDatabase:
+          name: split402-db
+          property: connectionString
+      - key: SPLIT402_DATABASE_SSL
+        value: "false"
+      - key: SPLIT402_CHAIN_WORKER_NETWORK
+        value: solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1
+      - key: SPLIT402_CHAIN_WORKER_SOLANA_RPC_URL
+        value: https://api.devnet.solana.com
+
+  # ---- Webhook delivery worker (optional) ----
+  # Signs and delivers accepted-receipt and payout-lifecycle webhooks.
+  - type: worker
+    name: split402-webhook-worker
+    runtime: docker
+    dockerfilePath: ./packages/control-plane/Dockerfile
+    dockerContext: .
+    dockerCommand: node packages/control-plane/dist/webhook-worker.js
+    plan: starter
+    envVars:
+      - key: SPLIT402_DATABASE_URL
+        fromDatabase:
+          name: split402-db
+          property: connectionString
+      - key: SPLIT402_DATABASE_SSL
+        value: "false"
+      # Optional shared secret for outbound webhook HMAC signatures.
+      - key: SPLIT402_WEBHOOK_WORKER_SECRET
+        generateValue: true
+
+  # ---- Payout finality worker (optional) ----
+  # Monitors submitted payout transactions to confirmed/finalized/outcome_unknown.
+  - type: worker
+    name: split402-payout-finality-worker
+    runtime: docker
+    dockerfilePath: ./packages/control-plane/Dockerfile
+    dockerContext: .
+    dockerCommand: node packages/control-plane/dist/payout-finality-worker.js
+    plan: starter
+    envVars:
+      - key: SPLIT402_DATABASE_URL
+        fromDatabase:
+          name: split402-db
+          property: connectionString
+      - key: SPLIT402_DATABASE_SSL
+        value: "false"
+      - key: SPLIT402_PAYOUT_FINALITY_NETWORK
+        value: solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1
+      - key: SPLIT402_PAYOUT_FINALITY_SOLANA_RPC_URL
+        value: https://api.devnet.solana.com

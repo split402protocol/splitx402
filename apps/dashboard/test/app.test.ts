@@ -319,6 +319,12 @@ describe("Split402 dashboard app", () => {
     ).toBe(4999);
     expect(
       readDashboardConfig({}, {
+        PORT: "10000",
+        SPLIT402_DASHBOARD_PORT: "4999"
+      }).port
+    ).toBe(10000);
+    expect(
+      readDashboardConfig({}, {
         SPLIT402_DASHBOARD_VIEWER_TOKEN: "viewer-secret",
         SPLIT402_DASHBOARD_SESSION_COOKIE_NAME: "split402_staging",
         SPLIT402_DASHBOARD_SESSION_COOKIE_SECURE: "true",

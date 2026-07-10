@@ -716,6 +716,9 @@ assembled and approved.
 
 ## Documentation
 
+- [Merchant quickstart — add an affiliate program to your x402 API](docs/MERCHANT_QUICKSTART.md)
+- [Landing page source](site/index.html) (host on GitHub Pages / Netlify / Vercel)
+- [Deploy the public-alpha Devnet stack on Render](deploy/render/README.md)
 - [Canonical architecture spec](docs/reference/split402_protocol_architecture_v0.1.md)
 - [Current state](docs/CURRENT_STATE.md)
 - [GitHub public profile](docs/GITHUB_PUBLIC_PROFILE.md)

@@ -126,6 +126,7 @@ export interface Split402RouterOptions {
   evmNetworks?: `${string}:${string}`[];
   evmSchemeOptions?: Split402EvmSchemeOptions;
   executor?: Split402RouterExecutor;
+  svmRpcUrl?: string;
   verifyReceipts?: boolean;
   receiptRecorder?: Split402ReceiptRecorder;
 }
@@ -395,7 +396,11 @@ export class Split402Router {
 
   constructor(options: Split402RouterOptions) {
     this.providers = [...options.providers];
-    this.executor = options.executor ?? new Split402AgentSdkExecutor();
+    this.executor =
+      options.executor ??
+      new Split402AgentSdkExecutor(
+        options.svmRpcUrl === undefined ? {} : { svmRpcUrl: options.svmRpcUrl }
+      );
     this.verifyReceipts = options.verifyReceipts ?? true;
     if (options.receiptRecorder !== undefined) {
       this.receiptRecorder = options.receiptRecorder;
@@ -1230,7 +1235,13 @@ export class Split402ExternalX402DiscoveryClient {
   }
 }
 
+export interface Split402AgentSdkExecutorOptions {
+  svmRpcUrl?: string;
+}
+
 export class Split402AgentSdkExecutor implements Split402RouterExecutor {
+  constructor(readonly options: Split402AgentSdkExecutorOptions = {}) {}
+
   async execute(input: {
     provider: Split402CapabilityProvider;
     body: unknown;
@@ -1243,6 +1254,9 @@ export class Split402AgentSdkExecutor implements Split402RouterExecutor {
     const client = new Split402AgentClient({
       merchantOrigin: input.provider.merchantOrigin,
       network: input.provider.network as `${string}:${string}`,
+      ...(this.options.svmRpcUrl === undefined
+        ? {}
+        : { svmRpcUrl: this.options.svmRpcUrl }),
       ...(input.provider.merchantPublicKey === undefined
         ? {}
         : { merchantPublicKey: input.provider.merchantPublicKey }),

@@ -219,6 +219,7 @@ export function readDashboardConfig(
   );
   const port =
     overrides.port ??
+    readPositiveInteger(env.PORT, "PORT") ??
     readPositiveInteger(env.SPLIT402_DASHBOARD_PORT, "SPLIT402_DASHBOARD_PORT") ??
     4027;
   const defaultMerchantId =
