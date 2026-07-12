@@ -13,11 +13,11 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@solana/kit": "^5.1.0",
+    "@solana/kit": "^7.0.0",
     "@split402/agent-sdk": "workspace:*",
     "@split402/protocol": "workspace:*"
   },
   "devDependencies": {
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.10"
   }
 }

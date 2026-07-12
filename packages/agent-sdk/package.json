@@ -13,13 +13,13 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@solana/kit": "^5.1.0",
+    "@solana/kit": "^7.0.0",
     "@split402/protocol": "workspace:*",
     "@split402/x402-extension": "workspace:*",
-    "@x402/axios": "^2.16.0",
-    "@x402/core": "^2.16.0",
-    "@x402/evm": "^2.16.0",
-    "@x402/svm": "^2.16.0",
+    "@x402/axios": "^2.18.0",
+    "@x402/core": "^2.18.0",
+    "@x402/evm": "^2.18.0",
+    "@x402/svm": "^2.18.0",
     "axios": "^1.18.1"
   }
 }
