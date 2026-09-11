@@ -20,6 +20,6 @@
   "devDependencies": {
     "@split402/x402-extension": "workspace:*",
     "@types/node": "22.20.0",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.11"
   }
 }
