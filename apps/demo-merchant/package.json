@@ -17,10 +17,10 @@
     "@split402/merchant-sdk": "workspace:*",
     "@split402/protocol": "workspace:*",
     "@split402/x402-extension": "workspace:*",
-    "@solana/kit": "5.5.1",
-    "@x402/core": "^2.16.0",
-    "@x402/express": "^2.16.0",
-    "@x402/svm": "^2.16.0",
+    "@solana/kit": "8.3.0",
+    "@x402/core": "^2.26.0",
+    "@x402/express": "^2.26.0",
+    "@x402/svm": "^2.26.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1"
   },
@@ -28,6 +28,6 @@
     "@types/express": "^5.0.6",
     "@types/supertest": "^6.0.3",
     "supertest": "^7.2.2",
-    "vitest": "^4.1.9"
+    "vitest": "^5.0.1"
   }
 }
